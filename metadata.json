@@ -1,0 +1,6 @@
+{
+  "name": "SANAD Verify v3 PWA",
+  "description": "تطبيق التحقق الشخصي من الإشعارات المالية - سند v3 PWA",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

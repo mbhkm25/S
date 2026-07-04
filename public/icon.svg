@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background Shield/Seal -->
+  <rect width="512" height="512" rx="128" fill="#111827" />
+  <circle cx="256" cy="256" r="210" fill="url(#emeraldGrad)" />
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="15,10" opacity="0.6" />
+  
+  <!-- Document Shape -->
+  <path d="M190 160h100l60 60v132c0 11-9 20-20 20H190c-11 0-20-9-20-20V180c0-11 9-20 20-20z" fill="#ffffff" />
+  <path d="M290 160v60h60z" fill="#e2e8f0" />
+  
+  <!-- Document Lines -->
+  <line x1="200" y1="240" x2="260" y2="240" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" />
+  <line x1="200" y1="270" x2="310" y2="270" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" />
+  <line x1="200" y1="300" x2="280" y2="300" stroke="#94a3b8" stroke-width="6" stroke-linecap="round" />
+  
+  <!-- Verified Giant Floating Checkmark -->
+  <circle cx="340" cy="310" r="55" fill="#10b981" stroke="#ffffff" stroke-width="8" />
+  <path d="M315 310l18 18 32-32" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
