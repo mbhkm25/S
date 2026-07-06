@@ -4,6 +4,7 @@ import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, 
 import QRCode from 'qrcode';
 import { toLatinDigits, formatYemeniDisplay, formatArabicDate, formatArabicTime } from '../lib/digits';
 import ProUpgradeModal from './ProUpgradeModal';
+import { callSanadAppFunction } from '../lib/sanadFunctions';
 
 interface DetailsProps {
   token: string;
@@ -14,10 +15,23 @@ interface DetailsProps {
   source?: 'link' | 'qr' | 'search' | 'app';
 }
 
+// Helper to extract file metadata from database field variants
+const getOperationFileMeta = (op: any) => {
+  if (!op) return { fileBucket: 'operation-files', filePath: null, mimeType: 'application/pdf', originalName: 'document', size: null };
+  const fileBucket = op.file_bucket || op.storage_bucket || op.original_file_bucket || 'operation-files';
+  const filePath = op.file_path || op.storage_path || op.original_file_path || null;
+  const mimeType = op.file_mime_type || op.mime_type || 'application/pdf';
+  const originalName = op.file_original_name || op.file_name || op.name || 'document';
+  const size = op.file_size || op.size || null;
+  
+  return { fileBucket, filePath, mimeType, originalName, size };
+};
+
 export default function NotificationDetails({ token, user, onNavigateToLogin, ensureProfileComplete, onNavigate, source }: DetailsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [operation, setOperation] = useState<any | null>(null);
+  const fileMeta = getOperationFileMeta(operation);
   
   // Storage link
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -26,9 +40,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
   // On-demand Secure File Action States
   const [fileActionLoading, setFileActionLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewMimeType, setPreviewMimeType] = useState<string | null>(null);
+  const [fileStatusMessage, setFileStatusMessage] = useState<string | null>(null);
   
   // Verification progress states
   const [verifying, setVerifying] = useState(false);
@@ -161,21 +173,15 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
 
         setVerifiedSuccessMessage('تم تسجيل تحققك من هذا الإشعار.');
 
-        // Trigger n8n webhook notification if operation object exists
+        // Trigger Supabase Edge Function notification if operation object exists
         if (operation) {
-          fetch('https://n8n.sanadflow.com/webhook/sanad-v3-notify-verification', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              operation_id: operation.id,
-              public_token: operation.public_token,
-              source: 'pwa_verify',
-              event: 'operation_verified'
-            })
+          callSanadAppFunction('sanad-v3-app-trigger-notify-verification', {
+            operation_id: operation.id,
+            public_token: operation.public_token,
+            source: 'pwa_verify',
+            event: 'operation_verified'
           }).catch(() => {
-            console.warn('SANAD verification notification webhook failed');
+            console.warn('SANAD verification notification trigger failed');
           });
         }
         
@@ -197,77 +203,212 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     }
   };
 
-  const handleFileAction = async (action: 'inline' | 'download' | 'new_tab') => {
-    if (!operation) return;
+  const fetchBackendSignedUrl = async (
+    publicToken: string,
+    purpose: 'open' | 'download'
+  ): Promise<string> => {
+    const isDev = import.meta.env.DEV;
     
+    if (isDev) {
+      console.log('[file_access_function_start] initiating edge function call');
+      console.log(`[public_token] ${publicToken}`);
+      console.log(`[purpose] ${purpose}`);
+    }
+
+    // Try calling via supabase.functions.invoke first
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('sanad-file-access', {
+        method: 'POST',
+        body: {
+          public_token: publicToken,
+          purpose: purpose
+        }
+      });
+      
+      if (!invokeError && data?.ok && data?.signed_url) {
+        if (isDev) {
+          console.log('[function_success] Edge function call succeeded');
+        }
+        return data.signed_url;
+      }
+      
+      if (invokeError || (data && !data.ok)) {
+        const errorMsg = invokeError?.message || data?.message || data?.error || 'Unknown error';
+        console.warn('supabase.functions.invoke returned error, falling back to manual fetch:', errorMsg);
+      }
+    } catch (invokeCatch) {
+      console.warn('supabase.functions.invoke threw exception, falling back to manual fetch:', invokeCatch);
+    }
+    
+    // Fallback: Manual fetch request
+    const metaEnv = (import.meta as any).env || {};
+    const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://hudbzlgclghlhazlduas.supabase.co';
+    const isJWT = (key: any) => typeof key === 'string' && key.startsWith('eyJ');
+
+    let resolvedKey = '';
+    if (isJWT(metaEnv.VITE_SUPABASE_ANON_KEY)) {
+      resolvedKey = metaEnv.VITE_SUPABASE_ANON_KEY;
+    } else if (isJWT(metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY)) {
+      resolvedKey = metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
+    } else {
+      resolvedKey = metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    }
+
+    if (!resolvedKey || resolvedKey === 'dummy-publishable-key-placeholder') {
+      resolvedKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdjbGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag';
+    }
+
+    let authHeader = `Bearer ${resolvedKey}`;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.access_token) {
+        authHeader = `Bearer ${sessionData.session.access_token}`;
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    const endpointUrl = `${supabaseUrl}/functions/v1/sanad-file-access`;
+    
+    const response = await fetch(endpointUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': resolvedKey,
+        'Authorization': authHeader
+      },
+      body: JSON.stringify({
+        public_token: publicToken,
+        purpose: purpose
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      if (isDev) {
+        console.error('[function_error] manual fetch response status not ok:', response.status, errText);
+      }
+      throw new Error(`تعذر تجهيز رابط الملف الأصلي. (رمز الحالة: ${response.status})`);
+    }
+
+    const resData = await response.json();
+    if (!resData.ok || !resData.signed_url) {
+      if (isDev) {
+        console.error('[function_error] manual fetch returned error in body:', resData);
+      }
+      throw new Error(resData.message || resData.error || 'تعذر تجهيز رابط الملف الأصلي.');
+    }
+
+    if (isDev) {
+      console.log('[function_success] manual fetch succeeded');
+    }
+
+    return resData.signed_url;
+  };
+
+  const openOriginalFile = async () => {
+    if (!operation || !operation.public_token) return;
     setFileError(null);
+    setFileStatusMessage('جاري تجهيز الملف للفتح...');
     setFileActionLoading(true);
     
-    const fileBucket = operation.file_bucket || 'operation-files';
-    const filePath = operation.file_path;
-    
+    const { filePath } = getOperationFileMeta(operation);
     if (!filePath) {
       setFileError('لا يوجد ملف أصلي مرتبط بهذه العملية.');
       setFileActionLoading(false);
+      setFileStatusMessage(null);
       return;
     }
     
-    // Create new tab synchronously for 'new_tab' to avoid popup blocking
+    const isCapacitor = !!(window as any).Capacitor;
+    
+    // Create new tab synchronously for web to avoid popup blockers
     let newTab: Window | null = null;
-    if (action === 'new_tab') {
+    if (!isCapacitor) {
       newTab = window.open('about:blank', '_blank');
     }
     
     try {
-      const { data: signedData, error: signError } = await supabase.storage
-        .from(fileBucket)
-        .createSignedUrl(filePath, 900); // 15 minutes expiration (900 seconds)
-        
-      if (signError || !signedData?.signedUrl) {
-        console.error('Error generating signed URL:', signError);
-        if (newTab) newTab.close();
-        
-        const errMsg = signError?.message || '';
-        const isBucketError = errMsg.toLowerCase().includes('bucket not found') || 
-                              errMsg.toLowerCase().includes('bucket_not_found');
-        
-        if (isBucketError) {
-          setFileError('تعذر الوصول إلى مخزن الملف. يرجى المحاولة لاحقًا أو التواصل مع الدعم.');
-        } else {
-          setFileError('تعذر فتح الملف الأصلي. قد يكون الملف غير متاح أو انتهت صلاحية رابط الوصول. حاول مرة أخرى.');
-        }
-        return;
-      }
+      const targetUrl = await fetchBackendSignedUrl(operation.public_token, 'open');
       
-      const targetUrl = signedData.signedUrl;
-      
-      if (action === 'new_tab') {
+      if (isCapacitor) {
+        // Use '_system' target on Capacitor to open inside Chrome/default browser natively.
+        // This launches Android's app chooser/default viewer for PDF or image gallery cleanly.
+        window.open(targetUrl, '_system');
+        setFileStatusMessage('تم فتح الملف في المتصفح الخارجي');
+      } else {
         if (newTab) {
           newTab.location.href = targetUrl;
+        } else {
+          window.open(targetUrl, '_blank');
         }
-      } else if (action === 'download') {
-        const response = await fetch(targetUrl);
-        if (!response.ok) throw new Error('فشل تحميل الملف للتنزيل.');
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+        setFileStatusMessage('تم فتح الملف في نافذة جديدة');
+      }
+    } catch (err: any) {
+      console.error('Failed to open file:', err);
+      if (newTab) newTab.close();
+      
+      const errMsg = err.message || '';
+      if (errMsg.toLowerCase().includes('expired') || errMsg.toLowerCase().includes('صلاحية')) {
+        setFileError('انتهت صلاحية رابط الملف، حاول مرة أخرى.');
+      } else if (errMsg.toLowerCase().includes('no file') || errMsg.toLowerCase().includes('لا يوجد ملف')) {
+        setFileError('لا يوجد ملف أصلي مرتبط بهذه العملية.');
+      } else {
+        setFileError(errMsg || 'تعذر تجهيز رابط الملف الأصلي.');
+      }
+    } finally {
+      setFileActionLoading(false);
+      // Automatically clear status message after a short delay
+      setTimeout(() => setFileStatusMessage(null), 3000);
+    }
+  };
+
+  const downloadOriginalFile = async () => {
+    if (!operation || !operation.public_token) return;
+    setFileError(null);
+    setFileStatusMessage('جاري تجهيز الملف للتنزيل...');
+    setFileActionLoading(true);
+    
+    const { filePath } = getOperationFileMeta(operation);
+    if (!filePath) {
+      setFileError('لا يوجد ملف أصلي مرتبط بهذه العملية.');
+      setFileActionLoading(false);
+      setFileStatusMessage(null);
+      return;
+    }
+    
+    const isCapacitor = !!(window as any).Capacitor;
+    
+    try {
+      const targetUrl = await fetchBackendSignedUrl(operation.public_token, 'download');
+      
+      if (isCapacitor) {
+        // In Android WebView, trigger default download mechanism inside Chrome/default system browser
+        window.open(targetUrl, '_system');
+        setFileStatusMessage('تم بدء التنزيل في المتصفح الخارجي');
+      } else {
+        // Direct link click: response headers response-content-disposition=attachment will force download
         const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = operation.file_original_name || 'document';
+        link.href = targetUrl;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      } else if (action === 'inline') {
-        setPreviewUrl(targetUrl);
-        setPreviewMimeType(operation.file_mime_type || 'application/pdf');
-        setPreviewOpen(true);
+        setFileStatusMessage('تم بدء التنزيل بنجاح');
       }
     } catch (err: any) {
-      console.error('File action error:', err);
-      if (newTab) newTab.close();
-      setFileError('تعذر فتح الملف الأصلي. قد يكون الملف غير متاح أو انتهت صلاحية رابط الوصول. حاول مرة أخرى.');
+      console.error('Failed to download file:', err);
+      
+      const errMsg = err.message || '';
+      if (errMsg.toLowerCase().includes('expired') || errMsg.toLowerCase().includes('صلاحية')) {
+        setFileError('انتهت صلاحية رابط الملف، حاول مرة أخرى.');
+      } else if (errMsg.toLowerCase().includes('no file') || errMsg.toLowerCase().includes('لا يوجد ملف')) {
+        setFileError('لا يوجد ملف أصلي مرتبط بهذه العملية.');
+      } else {
+        setFileError(errMsg || 'تعذر تجهيز رابط الملف الأصلي.');
+      }
     } finally {
       setFileActionLoading(false);
+      setTimeout(() => setFileStatusMessage(null), 3000);
     }
   };
 
@@ -793,69 +934,71 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
           <span className="text-[10px] font-bold text-emerald-600 block uppercase tracking-wider mb-1 font-arabic">الملف الأصلي</span>
           <h3 className="text-sm font-bold text-slate-900 font-arabic mb-3">مراجعة وتدقيق المستند المالي الأصلي</h3>
           
-          <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-right space-y-2 mb-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-arabic">اسم الملف:</span>
-              <span className="font-mono font-semibold text-slate-800 truncate max-w-[200px]" dir="ltr">
-                {operation.file_original_name || 'document'}
-              </span>
+          {!fileMeta.filePath ? (
+            <div className="p-5 bg-slate-50 border border-slate-150 rounded-2xl text-center text-xs text-slate-500 font-arabic font-semibold">
+              لا يوجد ملف أصلي مرتبط بهذه العملية.
             </div>
-            <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
-              <span className="text-slate-500 font-arabic">نوع الملف:</span>
-              <span className="font-mono text-slate-700">
-                {operation.file_mime_type || 'غير معروف'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
-              <span className="text-slate-500 font-arabic">الحجم:</span>
-              <span className="font-mono text-slate-700">
-                {operation.file_size ? `${(operation.file_size / 1024).toFixed(1)} كيلوبايت` : 'غير معروف'}
-              </span>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 text-right space-y-2 mb-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-arabic">اسم الملف:</span>
+                  <span className="font-mono font-semibold text-slate-800 truncate max-w-[200px]" dir="ltr">
+                    {fileMeta.originalName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
+                  <span className="text-slate-500 font-arabic">نوع الملف:</span>
+                  <span className="font-mono text-slate-700">
+                    {fileMeta.mimeType}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
+                  <span className="text-slate-500 font-arabic">الحجم:</span>
+                  <span className="font-mono text-slate-700">
+                    {fileMeta.size ? `${(fileMeta.size / 1024).toFixed(1)} كيلوبايت` : 'غير معروف'}
+                  </span>
+                </div>
+              </div>
 
-          {fileError && (
-            <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs text-right font-arabic">
-              {fileError}
-            </div>
+              {fileError && (
+                <div className="p-3 mb-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs text-right font-arabic">
+                  {fileError}
+                </div>
+              )}
+
+              {fileStatusMessage && (
+                <div className="flex items-center justify-center gap-2 p-2.5 mb-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 font-arabic font-bold animate-pulse">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span>{fileStatusMessage}</span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={openOriginalFile}
+                  disabled={fileActionLoading}
+                  id="view_original_file_link"
+                  className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-2xl text-xs transition-all inline-flex items-center gap-2 shadow-sm cursor-pointer font-arabic"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>فتح الملف</span>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={downloadOriginalFile}
+                  disabled={fileActionLoading}
+                  id="download_original_file_link"
+                  className="px-5 py-3 bg-slate-50 hover:bg-slate-100 disabled:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-2xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer font-arabic"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>تنزيل الملف</span>
+                </button>
+              </div>
+            </>
           )}
-
-          {fileActionLoading && (
-            <div className="flex items-center justify-center gap-2 p-2 text-xs text-slate-500 font-arabic">
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-              <span>جاري تحضير رابط الوصول الآمن...</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2.5 pt-1">
-          <a
-            href="#"
-            onClick={(e) => { e.preventDefault(); handleFileAction('new_tab'); }}
-            id="view_original_file_link"
-            className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition-all inline-flex items-center gap-2 shadow-sm cursor-pointer font-arabic"
-          >
-            <ExternalLink className="w-4 h-4" />
-            <span>فتح في نافذة جديدة</span>
-          </a>
-          <a
-            href="#"
-            onClick={(e) => { e.preventDefault(); handleFileAction('download'); }}
-            id="download_original_file_link"
-            className="px-5 py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-2xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer font-arabic"
-          >
-            <FileDown className="w-4 h-4" />
-            <span>تنزيل الملف</span>
-          </a>
-          
-          <button
-            onClick={() => handleFileAction('inline')}
-            type="button"
-            className="px-5 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-2xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer font-arabic"
-          >
-            <FileText className="w-4 h-4" />
-            <span>عرض داخل سند</span>
-          </button>
         </div>
       </div>
 
@@ -1009,63 +1152,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
         </div>
       )}
 
-      {/* Inline File Preview Modal */}
-      {previewOpen && previewUrl && (
-        <div className="fixed inset-0 bg-slate-900/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" style={{ direction: 'rtl' }}>
-          <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-up border border-slate-200">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <button
-                type="button"
-                onClick={() => { setPreviewOpen(false); setPreviewUrl(null); }}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-all cursor-pointer"
-                title="إغلاق"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <h4 className="text-sm font-bold text-slate-800 font-arabic truncate max-w-md text-right">
-                {operation.file_original_name || 'عرض المستند الأصلي'}
-              </h4>
-            </div>
-            
-            {/* Modal Content */}
-            <div className="p-4 flex-1 overflow-auto bg-slate-100/50 flex items-center justify-center min-h-[300px]">
-              {previewMimeType?.startsWith('image/') ? (
-                <img
-                  src={previewUrl}
-                  alt={operation.file_original_name || 'document'}
-                  className="max-w-full max-h-[70vh] rounded-2xl object-contain shadow-sm"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <object
-                  data={previewUrl}
-                  type="application/pdf"
-                  className="w-full h-[70vh] rounded-2xl"
-                >
-                  <iframe
-                    src={previewUrl}
-                    className="w-full h-[70vh] rounded-2xl border-none"
-                    title="PDF Viewer"
-                  />
-                </object>
-              )}
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="p-3 border-t border-slate-100 flex justify-end bg-slate-50">
-              <button
-                type="button"
-                onClick={() => { setPreviewOpen(false); setPreviewUrl(null); }}
-                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer font-arabic"
-              >
-                إغلاق
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
     </div>
   );

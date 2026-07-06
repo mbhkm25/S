@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { X, Check, Copy, UploadCloud, Sparkles, Loader2, AlertCircle, CreditCard, CheckCircle2, FileText, Send, PhoneCall } from 'lucide-react';
 import { toLatinDigits } from '../lib/digits';
+import { callSanadAppFunction } from '../lib/sanadFunctions';
 
 interface ProUpgradeModalProps {
   user: any;
@@ -172,42 +173,18 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
 
       if (result) {
         if (result.ok === true) {
-          // Trigger the n8n production webhook
+          // Trigger the intermediate payment gateway function
           let currentWebhookStatus: 'success' | 'failed' = 'success';
           try {
-            console.log('[SANAD Pro Test Log] Sending POST to n8n webhook...');
-            const webhookUrl = import.meta.env.VITE_N8N_PAYMENT_WEBHOOK_URL || 'https://n8n.sanadflow.com/webhook/sanad-pro-payment-verify';
-            const webhookResponse = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                payment_request_id: result.payment_request_id,
-                source: 'pwa',
-                event: 'sanad_pro_payment_submitted'
-              })
+            console.log('[SANAD Pro Test Log] Sending request to triggerProPaymentVerify...');
+            await callSanadAppFunction('sanad-v3-app-trigger-pro-payment-verify', {
+              payment_request_id: result.payment_request_id,
+              source: 'pwa',
+              event: 'sanad_pro_payment_submitted'
             });
-
-            if (!webhookResponse.ok) {
-              const errorText = await webhookResponse.text();
-              console.error('[SANAD Pro Test Log] n8n webhook response/error (failed status):', {
-                status: webhookResponse.status,
-                statusText: webhookResponse.statusText,
-                body: errorText
-              });
-              currentWebhookStatus = 'failed';
-            } else {
-              try {
-                const responseJson = await webhookResponse.json();
-                console.log('[SANAD Pro Test Log] n8n webhook response (success JSON):', responseJson);
-              } catch {
-                console.log('[SANAD Pro Test Log] n8n webhook response (success empty or non-JSON)');
-              }
-              currentWebhookStatus = 'success';
-            }
+            currentWebhookStatus = 'success';
           } catch (error) {
-            console.error('[SANAD Pro Test Log] n8n webhook response/error (catch error):', error);
+            console.error('[SANAD Pro Test Log] triggerProPaymentVerify trigger error:', error);
             currentWebhookStatus = 'failed';
           }
 

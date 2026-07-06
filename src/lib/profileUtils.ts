@@ -33,13 +33,15 @@ export function maskAccountNumber(accountNumber: string | null | undefined): str
 
 /**
  * Verifies if the basic profile fields are complete.
- * Must check: full_name, phone (represented as 967XXXXXXXXX in DB, so its local part has 9 digits), and governorate.
+ * Must check: full_name, phone (represented as 967XXXXXXXXX in DB, so its local part has 9 digits), and email.
  */
-export function isBasicProfileComplete(profile: Profile | null | undefined): boolean {
+export function isBasicProfileComplete(profile: Profile | null | undefined, userEmail?: string | null): boolean {
   if (!profile) return false;
   if (!profile.full_name || !profile.full_name.trim()) return false;
-  if (!profile.governorate || !profile.governorate.trim()) return false;
   if (!profile.phone) return false;
+  
+  const email = userEmail || (profile as any).email;
+  if (!email || !email.trim()) return false;
   
   const localPart = parseYemeniLocalPhone(profile.phone);
   if (localPart.length !== 9) return false;

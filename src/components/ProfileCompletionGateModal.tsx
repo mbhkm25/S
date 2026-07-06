@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { User, Phone, MapPin, AlertCircle, Loader2, CheckCircle, ShieldAlert } from 'lucide-react';
+import { User, Phone, AlertCircle, Loader2, CheckCircle, ShieldAlert } from 'lucide-react';
 import { toLatinDigits, parseYemeniLocalPhone } from '../lib/digits';
 import { normalizeYemenPhone, isValidYemenLocalPhone } from '../lib/profileUtils';
 
@@ -13,16 +13,9 @@ interface ProfileCompletionGateModalProps {
   refreshProfile: () => Promise<Profile | null>;
 }
 
-const GOVERNORATES = [
-  'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة', 
-  'المهرة', 'مأرب', 'الجوف', 'صعدة', 'حجة', 'عمران', 'البيضاء', 
-  'لحج', 'أبين', 'الضالع', 'ريمة', 'سقطرى', 'المحويت'
-];
-
 export default function ProfileCompletionGateModal({ isOpen, profile, onClose, onSuccess, refreshProfile }: ProfileCompletionGateModalProps) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [localPhone, setLocalPhone] = useState(profile?.phone ? parseYemeniLocalPhone(profile.phone) : '');
-  const [governorate, setGovernorate] = useState(profile?.governorate || '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,49 +26,63 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
     if (profile) {
       if (!fullName) setFullName(profile.full_name || '');
       if (!localPhone && profile.phone) setLocalPhone(parseYemeniLocalPhone(profile.phone));
-      if (!governorate && profile.governorate) setGovernorate(profile.governorate);
     }
   }, [profile]);
 
   if (!isOpen) return null;
 
+  const isNameMissing = !profile?.full_name || !profile.full_name.trim();
+  const isPhoneMissing = !profile?.phone || parseYemeniLocalPhone(profile.phone).length !== 9;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const name = fullName.trim();
-    if (!name) {
-      setError('الاسم الكامل مطلوب.');
-      return;
+    const updatePayload: any = {};
+
+    if (isNameMissing) {
+      const name = fullName.trim();
+      if (!name) {
+        setError('الاسم الكامل مطلوب.');
+        return;
+      }
+      if (name.length < 3) {
+        setError('يجب أن يتكون الاسم الكامل من 3 أحرف على الأقل.');
+        return;
+      }
+      updatePayload.full_name = name;
     }
 
-    const cleanPhone = toLatinDigits(localPhone.trim());
-    if (!cleanPhone) {
-      setError('رقم الهاتف مطلوب.');
-      return;
-    }
-
-    if (!isValidYemenLocalPhone(cleanPhone)) {
-      setError('رقم الهاتف يجب أن يتكون من 9 أرقام يمنية صالحة (مثال: 777634971).');
-      return;
-    }
-
-    if (!governorate) {
-      setError('يرجى اختيار محافظة الإقامة.');
-      return;
+    if (isPhoneMissing) {
+      const cleanPhone = toLatinDigits(localPhone.trim());
+      if (!cleanPhone) {
+        setError('رقم الهاتف مطلوب.');
+        return;
+      }
+      if (!isValidYemenLocalPhone(cleanPhone)) {
+        setError('رقم الهاتف يجب أن يتكون من 9 أرقام يمنية صالحة (مثال: 777634971).');
+        return;
+      }
+      updatePayload.phone = normalizeYemenPhone(cleanPhone);
     }
 
     setSaving(true);
     try {
-      const formattedPhone = normalizeYemenPhone(cleanPhone);
-      
-      const { error: rpcError } = await supabase.rpc('upsert_my_basic_profile', {
-        p_full_name: name,
-        p_phone: formattedPhone,
-        p_governorate: governorate
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('لم يتم العثور على جلسة مستخدم نشطة. يرجى تسجيل الدخول.');
+      }
 
-      if (rpcError) throw rpcError;
+      updatePayload.id = session.user.id;
+      updatePayload.profile_completed_at = new Date().toISOString();
+      updatePayload.updated_at = new Date().toISOString();
+
+      // Upsert directly to profiles table to bypass RPC governorate constraints
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .upsert(updatePayload);
+
+      if (updateError) throw updateError;
 
       setSuccess(true);
       await refreshProfile();
@@ -85,7 +92,7 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
         onSuccess();
       }, 1000);
     } catch (err: any) {
-      console.error('upsert_my_basic_profile error in gate:', err);
+      console.error('upsert error in gate:', err);
       setError(err.message || 'فشل حفظ البيانات الشخصية، يرجى إعادة المحاولة.');
     } finally {
       setSaving(false);
@@ -117,7 +124,7 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
             </div>
             <h3 className="text-sm font-bold text-slate-950 font-arabic">تحديث الملف والبيانات الأساسية</h3>
             <p className="text-xs text-rose-600 font-arabic font-medium bg-rose-50/80 px-3 py-1.5 rounded-xl border border-rose-100/50 leading-relaxed">
-              لإتمام هذا الإجراء داخل سند، أكمل بياناتك الأساسية أولًا.
+              لإتمام هذا الإجراء داخل سند، أكمل بياناتك الأساسية أولاً.
             </p>
           </div>
 
@@ -137,74 +144,52 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
               )}
 
               {/* Input: Name */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 block font-arabic">الاسم الكامل</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => {
-                      setFullName(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="اكتب اسمك الكامل"
-                    className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none transition-all"
-                    required
-                  />
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <User className="w-4 h-4" />
+              {isNameMissing && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">الاسم الكامل</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        setError(null);
+                      }}
+                      placeholder="اكتب اسمك الكامل"
+                      className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none transition-all"
+                      required
+                    />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                      <User className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Input: Phone Number */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 block font-arabic">رقم الهاتف (اليمن)</label>
-                <div className="relative flex rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:bg-white focus-within:border-slate-400 transition-all">
-                  <input
-                    type="text"
-                    value={localPhone}
-                    onChange={(e) => {
-                      setLocalPhone(toLatinDigits(e.target.value).replace(/\D/g, '').substring(0, 9));
-                      setError(null);
-                    }}
-                    dir="ltr"
-                    placeholder="777634971"
-                    className="flex-1 text-left text-xs px-3.5 py-3 bg-transparent outline-none border-none font-mono text-slate-800"
-                    required
-                  />
-                  <span className="bg-slate-100 border-r border-slate-200 px-3 py-3 text-xs text-slate-500 font-mono flex items-center select-none" dir="ltr">
-                    +967
-                  </span>
-                </div>
-                <p className="text-[9px] text-slate-400 font-arabic mt-1">اكتب الـ 9 أرقام اليمنية مباشرة بدون مفتاح الدولة.</p>
-              </div>
-
-              {/* Input: Governorate */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 block font-arabic">المحافظة</label>
-                <div className="relative">
-                  <select
-                    value={governorate}
-                    onChange={(e) => {
-                      setGovernorate(e.target.value);
-                      setError(null);
-                    }}
-                    className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none transition-all appearance-none cursor-pointer"
-                    required
-                  >
-                    <option value="">-- اختر محافظة الإقامة --</option>
-                    {GOVERNORATES.map((gov) => (
-                      <option key={gov} value={gov}>
-                        {gov}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <MapPin className="w-4 h-4" />
+              {isPhoneMissing && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">رقم الهاتف (اليمن)</label>
+                  <div className="relative flex rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:bg-white focus-within:border-slate-400 transition-all">
+                    <input
+                      type="text"
+                      value={localPhone}
+                      onChange={(e) => {
+                        setLocalPhone(toLatinDigits(e.target.value).replace(/\D/g, '').substring(0, 9));
+                        setError(null);
+                      }}
+                      dir="ltr"
+                      placeholder="777634971"
+                      className="flex-1 text-left text-xs px-3.5 py-3 bg-transparent outline-none border-none font-mono text-slate-800"
+                      required
+                    />
+                    <span className="bg-slate-100 border-r border-slate-200 px-3 py-3 text-xs text-slate-500 font-mono flex items-center select-none" dir="ltr">
+                      +967
+                    </span>
                   </div>
+                  <p className="text-[9px] text-slate-400 font-arabic mt-1">اكتب الـ 9 أرقام اليمنية مباشرة بدون مفتاح الدولة.</p>
                 </div>
-              </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex gap-2 pt-2">

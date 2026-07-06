@@ -146,11 +146,6 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile }: P
       return;
     }
 
-    if (!governorate) {
-      setProfileError('يرجى اختيار المحافظة.');
-      return;
-    }
-
     setSavingProfile(true);
     try {
       const formattedPhone = normalizeYemenPhone(cleanPhoneInput);
@@ -158,7 +153,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile }: P
       const { error } = await supabase.rpc('upsert_my_basic_profile', {
         p_full_name: name,
         p_phone: formattedPhone,
-        p_governorate: governorate
+        p_governorate: governorate || null
       });
 
       if (error) throw error;

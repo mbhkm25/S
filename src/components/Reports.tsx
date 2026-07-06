@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 import { Loader2, AlertCircle, CheckCircle2, Calendar, Phone, Send, Clock, RefreshCw } from 'lucide-react';
 import { toLatinDigits, parseYemeniLocalPhone, formatYemeniDisplay } from '../lib/digits';
+import { callSanadAppFunction } from '../lib/sanadFunctions';
 
 interface ReportsProps {
   profile: Profile;
@@ -187,30 +188,19 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
           throw new Error('missing_report_request_id');
         }
 
-        // 5. Trigger n8n Production Webhook in background
-        let n8nSuccess = true;
+        // 5. Trigger the intermediate reports gateway function in background
+        let reportTriggerSuccess = true;
         try {
-          const response = await fetch('https://n8n.sanadflow.com/webhook/sanad-v3-process-report', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              report_request_id: reportRequestId
-            })
+          await callSanadAppFunction('sanad-v3-app-trigger-report', {
+            report_request_id: reportRequestId
           });
-
-          if (!response.ok) {
-            n8nSuccess = false;
-            console.warn('SANAD report processing webhook returned non-OK status:', response.status);
-          }
         } catch (webhookError) {
-          n8nSuccess = false;
+          reportTriggerSuccess = false;
           console.warn('SANAD report processing trigger failed:', webhookError);
         }
 
-        // 6. Display appropriate success message based on n8n success
-        if (n8nSuccess) {
+        // 6. Display appropriate success message based on trigger success
+        if (reportTriggerSuccess) {
           setSuccessMessage('تم استلام طلب التقرير. سيصلك التقرير عبر واتساب خلال لحظات.');
         } else {
           setSuccessMessage('تم حفظ طلب التقرير، وقد تتأخر المعالجة قليلاً.');

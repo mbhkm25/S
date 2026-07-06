@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { Upload, FileCode, CheckCircle2, QrCode, Clipboard, Loader2, RefreshCw, FileText, ArrowLeft, Check } from 'lucide-react';
+import { Upload, FileCode, CheckCircle2, QrCode, Clipboard, Loader2, RefreshCw, FileText, ArrowLeft, Check, Share2, ExternalLink, PlusCircle } from 'lucide-react';
 import QRCode from 'qrcode';
+import { callSanadAppFunction } from '../lib/sanadFunctions';
 
 interface UploadProps {
   user: any;
@@ -24,7 +25,7 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
     publicToken: string;
     qrUrl: string;
     localQrCodeDataUrl: string;
-    n8nFailed?: boolean;
+    analysisTriggerFailed?: boolean;
   } | null>(null);
 
   const [copied, setCopied] = useState(false);
@@ -74,19 +75,53 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
       setUploading(true);
       setErrorMessage(null);
 
+      const isDev = import.meta.env.DEV;
+
+      if (isDev) {
+        console.log('[upload_start] notice upload initiated');
+        console.log(`[file_selected] name: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
+      }
+
       try {
+        if (isDev) {
+          console.log('[storage_upload_start] reading file into array buffer');
+        }
+
+        // Convert File to Blob inside memory to bypass Android WebView file reference sandbox restrictions
+        let fileBlob: Blob;
+        try {
+          const fileData = await file.arrayBuffer();
+          fileBlob = new Blob([fileData], { type: file.type });
+        } catch (readErr: any) {
+          console.error('Failed to read file locally:', readErr);
+          throw new Error('تعذر اختيار أو قراءة المستند المالي من جهازك.');
+        }
+
         const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
 
+        if (isDev) {
+          console.log(`[storage_upload_start] uploading blob to path: ${storagePath}`);
+        }
+
+        // Upload the in-memory Blob with explicit contentType to Supabase Storage
         const { data: storageData, error: storageError } = await supabase.storage
           .from('operation-files')
-          .upload(storagePath, file, {
+          .upload(storagePath, fileBlob, {
             cacheControl: '3600',
-            upsert: false
+            upsert: false,
+            contentType: file.type
           });
 
         if (storageError) {
-          throw new Error(`فشل رفع الملف في المخزن: ${storageError.message}`);
+          if (isDev) {
+            console.error('[storage_upload_failure]', storageError);
+          }
+          throw new Error('تعذر رفع الملف إلى مخزن التخزين السحابي. تحقق من الشبكة وحاول مرة أخرى.');
+        }
+
+        if (isDev) {
+          console.log('[storage_upload_success] file uploaded to Supabase Storage', storageData);
         }
 
         const clientMetadata = {
@@ -94,13 +129,18 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           uploadedAt: new Date().toISOString(),
           originalName: file.name,
           size: file.size,
-          type: file.type
+          type: file.type,
+          app_upload: true
         };
+
+        if (isDev) {
+          console.log('[operation_insert_start] inserting operation row to DB');
+        }
 
         const { data: opData, error: dbError } = await supabase
           .from('operations')
           .insert({
-            source: 'pwa_upload',
+            source: 'pwa_upload', // Keeping PWA upload source code literal for DB enum compatibility
             upload_origin: 'pwa',
             submitted_by_user_id: user.id,
             submitted_by_phone: profile.phone,
@@ -120,14 +160,29 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           .single();
 
         if (dbError) {
-          throw new Error(`فشل حفظ السجل في قاعدة البيانات: ${dbError.message}`);
+          if (isDev) {
+            console.error('[operation_insert_failure]', dbError);
+          }
+          throw new Error('تم رفع الملف بنجاح، ولكن تعذر إنشاء سجل العملية المالي في قاعدة البيانات.');
         }
 
         if (!opData) {
           throw new Error('لم يرجع خادم قاعدة البيانات معرف العملية.');
         }
 
-        const operationUrl = `${window.location.origin}/v/${opData.public_token}`;
+        if (isDev) {
+          console.log('[operation_insert_success] operation database row created', opData);
+        }
+
+        // Dynamically resolve target URL. Falling back to production domain if in mobile webview/development environments
+        let baseDomain = window.location.origin;
+        if (baseDomain.includes('localhost') || baseDomain.includes('capacitor') || baseDomain.startsWith('file:')) {
+          baseDomain = 'https://sanadflow.com';
+        }
+        const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+        const cleanBase = base.endsWith('/') ? base : `${base}/`;
+        const operationUrl = `${baseDomain}${cleanBase}v/${opData.public_token}`;
+
         const qrDataUrl = await QRCode.toDataURL(operationUrl, {
           width: 260,
           margin: 2,
@@ -142,33 +197,38 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           publicToken: opData.public_token,
           qrUrl: operationUrl,
           localQrCodeDataUrl: qrDataUrl,
-          n8nFailed: false
+          analysisTriggerFailed: false
         });
 
-        // Background webhook call to n8n
-        fetch('https://n8n.sanadflow.com/webhook/sanad-v3-analyze-operation', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            operation_id: opData.id,
-            public_token: opData.public_token,
-            source: 'pwa_upload'
-          })
-        }).then((res) => {
-          if (!res.ok) {
-            console.warn('n8n response not ok:', res.status);
-            setSuccessData(prev => prev ? { ...prev, n8nFailed: true } : null);
+        if (isDev) {
+          console.log('[analysis_trigger_start] triggering remote analysis function');
+        }
+
+        // Fire-and-forget background analysis gateway call (non-blocking)
+        callSanadAppFunction('sanad-v3-app-trigger-analysis', {
+          operation_id: opData.id,
+          public_token: opData.public_token,
+          source: 'pwa_upload'
+        }).then(() => {
+          if (isDev) {
+            console.log('[analysis_trigger_success] intermediate analysis function triggered successfully');
           }
         }).catch((error) => {
-          console.warn('Analysis trigger failed:', error);
-          setSuccessData(prev => prev ? { ...prev, n8nFailed: true } : null);
+          if (isDev) {
+            console.warn('[analysis_trigger_failure] failed triggering intermediate analysis function:', error);
+          }
+          setSuccessData(prev => prev ? { ...prev, analysisTriggerFailed: true } : null);
         });
 
+        if (isDev) {
+          console.log('[final_success] upload flow completed successfully');
+        }
+
       } catch (err: any) {
-        console.error('File Upload/Insert Error:', err);
-        setErrorMessage(err.message || 'حدث خطأ غير متوقع أثناء الرفع.');
+        if (isDev) {
+          console.error('[final_failure] error inside upload flow:', err);
+        }
+        setErrorMessage(err.message || 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.');
       } finally {
         setUploading(false);
       }
@@ -186,6 +246,23 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
     navigator.clipboard.writeText(successData.qrUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const shareQrUrl = async () => {
+    if (!successData) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'تحقق من إشعار مالي - سند',
+          text: 'يرجى استخدام هذا الرابط للتحقق من تفاصيل وموثوقية الإشعار المالي عبر تطبيق سند.',
+          url: successData.qrUrl,
+        });
+      } catch (err) {
+        console.log('Error sharing via API:', err);
+      }
+    } else {
+      copyQrUrlToClipboard();
+    }
   };
 
   const resetUpload = () => {
@@ -291,9 +368,9 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
             </p>
           </div>
 
-          {successData.n8nFailed && (
+          {successData.analysisTriggerFailed && (
             <div className="p-2.5 bg-amber-50 border border-amber-100 rounded-xl text-[10px] text-amber-800 font-bold font-arabic">
-              تم الرفع بنجاح. قد يتأخر استخراج البيانات التلقائي قليلاً.
+              تم رفع الإشعار بنجاح، لكن تعذر بدء التحليل تلقائياً. يمكنك المحاولة لاحقاً.
             </div>
           )}
 
@@ -340,7 +417,25 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           </div>
 
           {/* Navigation Controls */}
-          <div className="pt-3 border-t border-slate-100 space-y-2">
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={shareQrUrl}
+                className="bg-[#111111] hover:bg-black text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-[11px] font-arabic"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>مشاركة الرابط</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateToDetails(successData.publicToken)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-[11px] font-arabic"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>فتح التفاصيل</span>
+              </button>
+            </div>
+
             <button
               onClick={() => onNavigate('my-operations')}
               className="w-full bg-[#111111] hover:bg-black text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-xs font-arabic"
@@ -351,10 +446,10 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
 
             <button
               onClick={resetUpload}
-              className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-xs font-arabic"
+              className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-xs font-arabic"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>إرسال إشعار جديد</span>
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>رفع إشعار آخر</span>
             </button>
           </div>
         </div>

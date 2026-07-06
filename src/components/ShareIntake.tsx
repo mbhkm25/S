@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 import { Upload, CheckCircle2, Clipboard, Loader2, FileText, Check, AlertTriangle, Share2, PlusCircle, Home } from 'lucide-react';
 import QRCode from 'qrcode';
+import { callSanadAppFunction } from '../lib/sanadFunctions';
 
 interface ShareIntakeProps {
   user: any;
@@ -50,6 +51,39 @@ const deleteShareData = (): Promise<void> => {
     });
   });
 };
+
+function resolveSharedMimeType(name: string, rawType?: string | null): string {
+  const type = (rawType || '').toLowerCase().trim();
+  const lowerName = (name || '').toLowerCase();
+
+  if (type && type !== 'image/*') {
+    return type;
+  }
+
+  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  }
+
+  if (lowerName.endsWith('.png')) {
+    return 'image/png';
+  }
+
+  if (lowerName.endsWith('.webp')) {
+    return 'image/webp';
+  }
+
+  if (lowerName.endsWith('.pdf')) {
+    return 'application/pdf';
+  }
+
+  // Android sometimes sends screenshots as image/*
+  // Fallback to jpeg because most screenshots shared from Android can be safely uploaded as image/jpeg metadata.
+  if (type === 'image/*' || type.startsWith('image/')) {
+    return 'image/jpeg';
+  }
+
+  return 'application/octet-stream';
+}
 
 export default function ShareIntake({ user, profile, onNavigateToDetails, onNavigate, ensureProfileComplete }: ShareIntakeProps) {
   const [loadingShare, setLoadingShare] = useState(true);
@@ -103,6 +137,14 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
           throw new Error('يرجى مشاركة صورة إشعار أو ملف PDF صالح.');
         }
 
+        // Resolve, normalize, and validate MIME type
+        const resolvedMimeType = resolveSharedMimeType(sharedFile.name, sharedFile.type);
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+        if (!allowedTypes.includes(resolvedMimeType)) {
+          throw new Error('الملف غير مدعوم. يرجى مشاركة صورة JPG أو PNG أو WEBP أو ملف PDF.');
+        }
+
         // Validate file size (10MB limit)
         if (sharedFile.size > 10 * 1024 * 1024) {
           throw new Error('حجم الملف كبير جداً. الحد الأقصى المسموح به هو 10 ميجابايت.');
@@ -111,13 +153,19 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
         const safeFileName = sharedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
 
+        // Instantiate safe upload blob with correct type
+        const uploadBlob =
+          sharedFile.blob?.type === resolvedMimeType
+            ? sharedFile.blob
+            : new Blob([sharedFile.blob], { type: resolvedMimeType });
+
         // 1. Upload to storage
         const { data: storageData, error: storageError } = await supabase.storage
           .from('operation-files')
-          .upload(storagePath, sharedFile.blob, {
+          .upload(storagePath, uploadBlob, {
             cacheControl: '3600',
             upsert: false,
-            contentType: sharedFile.type
+            contentType: resolvedMimeType
           });
 
         if (storageError) {
@@ -132,7 +180,8 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
           uploadedAt: new Date().toISOString(),
           originalName: sharedFile.name,
           size: sharedFile.size,
-          type: sharedFile.type,
+          type: resolvedMimeType,
+          originalType: sharedFile.type || null,
           pwa_share_target: true
         };
 
@@ -147,7 +196,7 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
             file_bucket: 'operation-files',
             file_path: storagePath,
             file_original_name: sharedFile.name,
-            file_mime_type: sharedFile.type,
+            file_mime_type: resolvedMimeType,
             file_size: sharedFile.size,
             original_file_status: 'stored',
             qr_status: 'created',
@@ -187,18 +236,11 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
         });
         setStatus('success');
 
-        // 5. Fire-and-forget background analysis webhook call (non-blocking)
-        const analysisWebhookUrl = import.meta.env.VITE_N8N_OPERATION_ANALYSIS_WEBHOOK_URL || 'https://n8n.sanadflow.com/webhook/sanad-v3-analyze-operation';
-        fetch(analysisWebhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            operation_id: opData.id,
-            public_token: opData.public_token,
-            source: 'share_target'
-          })
+        // 5. Fire-and-forget background analysis gateway call (non-blocking)
+        callSanadAppFunction('sanad-v3-app-trigger-analysis', {
+          operation_id: opData.id,
+          public_token: opData.public_token,
+          source: 'share_target'
         }).catch((error) => {
           console.warn("Background analysis trigger failed", error);
         });

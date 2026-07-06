@@ -85,7 +85,9 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             id: user.id,
             full_name: userFullName,
             phone: userPhone,
-            status: 'active'
+            status: 'active',
+            profile_completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           })
           .select()
           .single();

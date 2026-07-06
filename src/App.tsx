@@ -50,7 +50,7 @@ export default function App() {
   };
 
   const ensureProfileComplete = (action: () => void) => {
-    if (isBasicProfileComplete(profile)) {
+    if (isBasicProfileComplete(profile, user?.email)) {
       action();
     } else {
       setGatePendingAction(() => action);
@@ -164,7 +164,9 @@ export default function App() {
                 id: session.user.id,
                 full_name: session.user.user_metadata?.full_name || 'مستخدم سند',
                 phone: session.user.user_metadata?.phone || '',
-                status: 'active'
+                status: 'active',
+                profile_completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               })
               .select()
               .single();
@@ -205,7 +207,9 @@ export default function App() {
                 id: session.user.id,
                 full_name: session.user.user_metadata?.full_name || 'مستخدم سند',
                 phone: session.user.user_metadata?.phone || '',
-                status: 'active'
+                status: 'active',
+                profile_completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               })
               .select()
               .single();
@@ -231,6 +235,121 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // IndexedDB helper for Capacitor share sheet integration
+  const openShareDB = (): Promise<IDBDatabase> => {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('sanad-share-db', 1);
+      request.onupgradeneeded = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('shares')) {
+          db.createObjectStore('shares', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = (e: any) => resolve(e.target.result);
+      request.onerror = (e: any) => reject(e.target.error);
+    });
+  };
+
+  // Check and process files shared from Android Share Sheet
+  useEffect(() => {
+    const checkAndroidShare = async () => {
+      const androidShare = (window as any).AndroidShare;
+      if (androidShare && user && profile) {
+        try {
+          const rawData = androidShare.getSharedData();
+          if (rawData) {
+            const data = JSON.parse(rawData);
+            if (data && data.base64 && data.mimeType && data.name) {
+              const byteCharacters = atob(data.base64);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: data.mimeType });
+
+              const db = await openShareDB();
+              await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction('shares', 'readwrite');
+                const store = tx.objectStore('shares');
+                const req = store.put({
+                  id: 'latest-share',
+                  title: '',
+                  text: '',
+                  url: '',
+                  files: [{
+                    blob: blob,
+                    name: data.name,
+                    type: data.mimeType,
+                    size: blob.size
+                  }],
+                  timestamp: Date.now()
+                });
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => reject(tx.error);
+              });
+
+              androidShare.clearSharedData();
+              navigateTo('share-intake');
+            }
+          }
+        } catch (err) {
+          console.error('Error handling Android share intent:', err);
+        }
+      }
+    };
+
+    // Run when authenticated state resolves
+    if (user && profile) {
+      checkAndroidShare();
+    }
+
+    const handleHotShare = () => {
+      if (user && profile) {
+        checkAndroidShare();
+      }
+    };
+
+    window.addEventListener('androidShareReceived', handleHotShare);
+    return () => {
+      window.removeEventListener('androidShareReceived', handleHotShare);
+    };
+  }, [user, profile]);
+
+  // Handle Capacitor native deep link opens
+  useEffect(() => {
+    let appListener: any = null;
+    const setupDeepLinks = async () => {
+      if ((window as any).Capacitor) {
+        try {
+          const { App: CapApp } = await import('@capacitor/app');
+          appListener = await CapApp.addListener('appUrlOpen', (event: any) => {
+            try {
+              const url = new URL(event.url);
+              const match = url.pathname.match(/\/v\/([^/]+)/);
+              if (match) {
+                const token = match[1];
+                navigateTo('details', token, 'link');
+              }
+            } catch (err) {
+              console.error('Failed to parse deep link URL:', err);
+            }
+          });
+        } catch (err) {
+          console.warn('Capacitor App plugin listener setup failed:', err);
+        }
+      }
+    };
+    setupDeepLinks();
+
+    return () => {
+      if (appListener && typeof appListener.remove === 'function') {
+        appListener.remove();
+      }
+    };
+  }, []);
+
 
   // Render Supabase Key missing alert screen
   if (!hasSupabaseConfig) {
