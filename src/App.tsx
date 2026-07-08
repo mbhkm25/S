@@ -10,6 +10,12 @@ import MyProfile from './components/Profile';
 import VerifyNotice from './components/VerifyNotice';
 import Reports from './components/Reports';
 import ShareIntake from './components/ShareIntake';
+import BusinessCreate from './components/business/BusinessCreate';
+import BusinessManage from './components/business/BusinessManage';
+import BusinessOperations from './components/business/BusinessOperations';
+import BusinessTeam from './components/business/BusinessTeam';
+import BusinessCommunity from './components/business/BusinessCommunity';
+import PublicBusinessProfile from './components/business/PublicBusinessProfile';
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
@@ -20,7 +26,7 @@ export default function App() {
   const [sessionChecked, setSessionChecked] = useState(false);
   
   // Navigation states
-  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-community' | 'public-business-profile'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<'link' | 'qr' | 'search' | 'app'>('link');
 
@@ -58,11 +64,33 @@ export default function App() {
     }
   };
 
-  // Parse path after /v/ or /share-intake
+  // Parse path after /v/, /b/, or business routes
   const parsePath = () => {
     const path = window.location.pathname;
     if (path.includes('/share-intake')) {
       return { type: 'share-intake' };
+    }
+    if (path.includes('/business/create')) {
+      return { type: 'business-create' };
+    }
+    if (path.includes('/business/manage/operations')) {
+      return { type: 'business-operations' };
+    }
+    if (path.includes('/business/manage/team')) {
+      return { type: 'business-team' };
+    }
+    if (path.includes('/business/manage/profile')) {
+      return { type: 'business-manage-profile' };
+    }
+    if (path.includes('/business/manage')) {
+      return { type: 'business-manage' };
+    }
+    if (path.includes('/business-community')) {
+      return { type: 'business-community' };
+    }
+    const bMatch = path.match(/\/b\/([^/]+)/);
+    if (bMatch) {
+      return { type: 'public-business-profile', slug: bMatch[1] };
     }
     const match = path.match(/\/v\/([^/]+)/);
     if (match) {
@@ -73,7 +101,7 @@ export default function App() {
 
   // Safe navigation function
   const navigateTo = (
-    page: 'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake', 
+    page: any, 
     token?: string,
     source?: 'link' | 'qr' | 'search' | 'app'
   ) => {
@@ -91,6 +119,28 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (page === 'business-create') {
+      window.history.pushState({}, '', `${cleanBase}business/create`);
+      setCurrentPage('business-create');
+    } else if (page === 'business-manage') {
+      window.history.pushState({}, '', `${cleanBase}business/manage`);
+      setCurrentPage('business-manage');
+    } else if (page === 'business-operations') {
+      window.history.pushState({}, '', `${cleanBase}business/manage/operations`);
+      setCurrentPage('business-operations');
+    } else if (page === 'business-team') {
+      window.history.pushState({}, '', `${cleanBase}business/manage/team`);
+      setCurrentPage('business-team');
+    } else if (page === 'business-manage-profile') {
+      window.history.pushState({}, '', `${cleanBase}business/manage/profile`);
+      setCurrentPage('business-manage-profile');
+    } else if (page === 'business-community') {
+      window.history.pushState({}, '', `${cleanBase}business-community`);
+      setCurrentPage('business-community');
+    } else if (page === 'public-business-profile' && token) {
+      window.history.pushState({}, '', `${cleanBase}b/${token}`);
+      setActiveToken(token);
+      setCurrentPage('public-business-profile');
     } else {
       window.history.pushState({}, '', cleanBase);
       setActiveToken(null);
@@ -107,6 +157,21 @@ export default function App() {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('share-intake');
+      } else if (parsed.type === 'business-create') {
+        setCurrentPage('business-create');
+      } else if (parsed.type === 'business-manage') {
+        setCurrentPage('business-manage');
+      } else if (parsed.type === 'business-operations') {
+        setCurrentPage('business-operations');
+      } else if (parsed.type === 'business-team') {
+        setCurrentPage('business-team');
+      } else if (parsed.type === 'business-manage-profile') {
+        setCurrentPage('business-manage-profile');
+      } else if (parsed.type === 'business-community') {
+        setCurrentPage('business-community');
+      } else if (parsed.type === 'public-business-profile' && parsed.slug) {
+        setActiveToken(parsed.slug);
+        setCurrentPage('public-business-profile');
       } else if (parsed.type === 'details' && parsed.token) {
         const urlParams = new URLSearchParams(window.location.search);
         const src = (urlParams.get('src') as any) || 'link';
@@ -128,6 +193,21 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (parsed.type === 'business-create') {
+      setCurrentPage('business-create');
+    } else if (parsed.type === 'business-manage') {
+      setCurrentPage('business-manage');
+    } else if (parsed.type === 'business-operations') {
+      setCurrentPage('business-operations');
+    } else if (parsed.type === 'business-team') {
+      setCurrentPage('business-team');
+    } else if (parsed.type === 'business-manage-profile') {
+      setCurrentPage('business-manage-profile');
+    } else if (parsed.type === 'business-community') {
+      setCurrentPage('business-community');
+    } else if (parsed.type === 'public-business-profile' && parsed.slug) {
+      setActiveToken(parsed.slug);
+      setCurrentPage('public-business-profile');
     } else if (parsed.type === 'details' && parsed.token) {
       const urlParams = new URLSearchParams(window.location.search);
       const src = (urlParams.get('src') as any) || 'link';
@@ -505,6 +585,7 @@ export default function App() {
                 profile={profile}
                 onLogout={handleLogoutSuccess}
                 refreshProfile={refreshProfile}
+                onNavigate={(page) => navigateTo(page)}
               />
             )}
 
@@ -524,6 +605,30 @@ export default function App() {
                 onNavigate={(p: any) => navigateTo(p)}
                 ensureProfileComplete={ensureProfileComplete}
               />
+            )}
+
+            {currentPage === 'business-create' && (
+              <BusinessCreate onNavigate={(page) => navigateTo(page)} />
+            )}
+
+            {currentPage === 'business-manage' && (
+              <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
+            )}
+
+            {currentPage === 'business-operations' && (
+              <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
+            )}
+
+            {currentPage === 'business-team' && (
+              <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+            )}
+
+            {currentPage === 'business-community' && (
+              <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
+            )}
+
+            {currentPage === 'public-business-profile' && activeToken && (
+              <PublicBusinessProfile slug={activeToken} onNavigate={(page) => navigateTo(page)} />
             )}
           </div>
         )}

@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X } from 'lucide-react';
+import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store } from 'lucide-react';
 import QRCode from 'qrcode';
 import { toLatinDigits, formatYemeniDisplay, formatArabicDate, formatArabicTime } from '../lib/digits';
 import ProUpgradeModal from './ProUpgradeModal';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
+import { 
+  getLinkableBusinessesForUser, linkOperationToBusiness, 
+  LinkableBusinessItem 
+} from '../lib/businessApi';
 
 interface DetailsProps {
   token: string;
@@ -52,6 +56,13 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
   const [accessReason, setAccessReason] = useState<string | null>(null);
   const [accessUsage, setAccessUsage] = useState<any | null>(null);
   const [showProModal, setShowProModal] = useState(false);
+
+  // Business association state variables
+  const [linkableBusinesses, setLinkableBusinesses] = useState<LinkableBusinessItem[]>([]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkingBusiness, setLinkingBusiness] = useState(false);
+  const [linkSuccess, setLinkSuccess] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const isUploader = user && operation && (user.id === operation.submitted_by_user_id);
 
@@ -188,6 +199,17 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
         // Reload details to get fresh verified status/link counts
         await loadDetails();
 
+        // Check for linkable businesses to associate post-verification
+        try {
+          const linkable = await getLinkableBusinessesForUser();
+          if (linkable && linkable.length > 0) {
+            setLinkableBusinesses(linkable);
+            setShowLinkModal(true);
+          }
+        } catch (linkErr) {
+          console.warn('Failed to fetch linkable businesses:', linkErr);
+        }
+
       } catch (err: any) {
         console.error('Verify Operation Error:', err);
         setError(err.message || 'فشل في إكمال عملية التحقق من الإشعار المالي.');
@@ -200,6 +222,25 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
       ensureProfileComplete(performVerify);
     } else {
       performVerify();
+    }
+  };
+
+  const handleLinkToBusiness = async (businessId: string) => {
+    if (!operation) return;
+    setLinkingBusiness(true);
+    setLinkError(null);
+    setLinkSuccess(false);
+    try {
+      await linkOperationToBusiness(operation.id, businessId);
+      setLinkSuccess(true);
+      setTimeout(() => {
+        setShowLinkModal(false);
+        setLinkSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      setLinkError(err.message || 'تعذر ربط العملية بالنشاط. حاول مرة أخرى.');
+    } finally {
+      setLinkingBusiness(false);
     }
   };
 
@@ -1152,8 +1193,91 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
         </div>
       )}
 
+      {/* Business Linking Modal Overlay */}
+      {showLinkModal && linkableBusinesses.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-arabic animate-fade-in" dir="rtl">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 w-full max-w-sm space-y-4 shadow-xl text-right">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Store className="w-5 h-5 text-slate-900" />
+              <h3 className="text-sm font-bold text-slate-900">ربط العملية بنشاط تجاري</h3>
+            </div>
 
+            {linkSuccess ? (
+              <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs rounded-2xl flex items-center gap-2 justify-center py-6 animate-scale-up">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span className="font-bold">تم ربط العملية بالنشاط التجاري بنجاح.</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {linkError && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-[11px] rounded-xl flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{linkError}</span>
+                  </div>
+                )}
 
+                {/* Case 1: Only 1 linkable business */}
+                {linkableBusinesses.length === 1 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      أنت عضو في فريق <strong className="text-slate-900">{linkableBusinesses[0].name}</strong>. هل تريد ربط هذه العملية بهذا النشاط؟
+                    </p>
+                    <div className="flex gap-2.5 pt-2">
+                      <button
+                        disabled={linkingBusiness}
+                        onClick={() => handleLinkToBusiness(linkableBusinesses[0].business_id)}
+                        className="flex-1 bg-[#111111] hover:bg-black text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {linkingBusiness ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        ) : (
+                          'ربط بالنشاط'
+                        )}
+                      </button>
+                      <button
+                        disabled={linkingBusiness}
+                        onClick={() => setShowLinkModal(false)}
+                        className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
+                      >
+                        لا، عملية شخصية
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Case 2: Multiple linkable businesses */
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      هل تريد ربط هذه العملية بأحد الأنشطة التي تعمل ضمن فريقها؟
+                    </p>
+                    <div className="space-y-2 pt-1 max-h-48 overflow-y-auto">
+                      {linkableBusinesses.map((biz) => (
+                        <button
+                          key={biz.business_id}
+                          disabled={linkingBusiness}
+                          onClick={() => handleLinkToBusiness(biz.business_id)}
+                          className="w-full text-right bg-slate-50 hover:bg-slate-100 border border-slate-200/80 p-3 rounded-xl transition-all flex items-center justify-between text-xs text-slate-800 disabled:opacity-50"
+                        >
+                          <span className="font-bold">{biz.name}</span>
+                          <span className="text-[10px] text-slate-400 font-arabic">({biz.label || 'موظف'})</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        disabled={linkingBusiness}
+                        onClick={() => setShowLinkModal(false)}
+                        className="w-full border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl transition-all"
+                      >
+                        لا، عملية شخصية
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

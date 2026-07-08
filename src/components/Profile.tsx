@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Profile } from '../types';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Shield, Power, Sparkles, Loader2, Landmark, Plus, AlertCircle, EyeOff, Trash2, MapPin, CheckCircle, Clock, CreditCard, ShieldCheck, HelpCircle, Clipboard, Check } from 'lucide-react';
+import { User, Mail, Phone, Shield, Power, Sparkles, Loader2, Landmark, Plus, AlertCircle, EyeOff, Trash2, MapPin, CheckCircle, Clock, CreditCard, ShieldCheck, HelpCircle, Clipboard, Check, Store } from 'lucide-react';
 import { formatYemeniDisplay, parseYemeniLocalPhone, toLatinDigits } from '../lib/digits';
 import { normalizeYemenPhone, isValidYemenLocalPhone, maskAccountNumber } from '../lib/profileUtils';
 import ProUpgradeModal from './ProUpgradeModal';
+import { 
+  getUserBusinessContexts, acceptBusinessInvitation, 
+  BusinessContexts 
+} from '../lib/businessApi';
 
 interface ProfileProps {
   user: any;
   profile: Profile;
   onLogout: () => void;
   refreshProfile: () => Promise<Profile | null>;
+  onNavigate: (page: string) => void;
 }
 
 const GOVERNORATES = [
@@ -35,7 +40,7 @@ const FINANCIAL_ENTITIES = [
   'جهة أخرى'
 ];
 
-export default function MyProfile({ user, profile, onLogout, refreshProfile }: ProfileProps) {
+export default function MyProfile({ user, profile, onLogout, refreshProfile, onNavigate }: ProfileProps) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -73,6 +78,38 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile }: P
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [showProUpgradeModal, setShowProUpgradeModal] = useState(false);
 
+  // Business contexts state
+  const [businessContext, setBusinessContext] = useState<BusinessContexts | null>(null);
+  const [loadingBusiness, setLoadingBusiness] = useState(false);
+  const [businessError, setBusinessError] = useState<string | null>(null);
+  const [acceptingInvite, setAcceptingInvite] = useState(false);
+
+  const loadBusinessContext = async () => {
+    setLoadingBusiness(true);
+    setBusinessError(null);
+    try {
+      const contexts = await getUserBusinessContexts();
+      setBusinessContext(contexts);
+    } catch (e: any) {
+      console.error('Error loading business contexts:', e);
+      setBusinessError(e.message || 'فشل في تحميل سياقات الأعمال.');
+    } finally {
+      setLoadingBusiness(false);
+    }
+  };
+
+  const handleAcceptInvite = async (token: string) => {
+    setAcceptingInvite(true);
+    try {
+      await acceptBusinessInvitation(token);
+      await loadBusinessContext();
+    } catch (e: any) {
+      alert(e.message || 'فشل قبول الدعوة.');
+    } finally {
+      setAcceptingInvite(false);
+    }
+  };
+
   const loadUsage = async () => {
     setLoadingUsage(true);
     try {
@@ -109,6 +146,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile }: P
   useEffect(() => {
     loadAccounts();
     loadUsage();
+    loadBusinessContext();
   }, []);
 
   const handleLogoutClick = async () => {
@@ -273,6 +311,138 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile }: P
           <Sparkles className="w-3 h-3 text-[#111111]" />
           <span>مدقق مالي شخصي</span>
         </div>
+      </div>
+
+      {/* Business Status Card */}
+      <div className="bg-white rounded-3xl border border-slate-200/60 p-5 shadow-sm space-y-4 text-right">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-700">
+              <Store className="w-4 h-4" />
+            </div>
+            <div className="text-right">
+              <h3 className="text-xs font-bold text-slate-800 font-arabic">نشاطي التجاري</h3>
+              <p className="text-[9px] text-slate-400 font-arabic">إدارة المتجر وعمليات التحقق للشركاء</p>
+            </div>
+          </div>
+        </div>
+
+        {loadingBusiness ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 text-slate-800 animate-spin" />
+          </div>
+        ) : businessError ? (
+          <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-2xl flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-500" />
+            <span>{businessError}</span>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* If has owned business */}
+            {businessContext?.owned_businesses && businessContext.owned_businesses.length > 0 ? (
+              <div className="space-y-3">
+                {businessContext.owned_businesses.map((biz) => (
+                  <div key={biz.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-slate-800 font-arabic">{biz.name}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9px] text-slate-400 font-arabic">الحالة:</span>
+                        <span className={`text-[9px] font-bold ${
+                          biz.public_status === 'published' ? 'text-emerald-600' : 'text-amber-600'
+                        }`}>
+                          {biz.public_status === 'published' ? 'منشور' : 'تحت المراجعة'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onNavigate('business-manage')}
+                      className="bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
+                    >
+                      إدارة النشاط
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* If no owned business, render registration button */
+              <div className="text-center py-2 space-y-2">
+                <p className="text-[10px] text-slate-500 font-arabic">لم تقم بتسجيل أي نشاط تجاري حتى الآن.</p>
+                <button
+                  onClick={() => onNavigate('business-create')}
+                  className="inline-flex items-center gap-1.5 bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-2 px-4 rounded-xl transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>سجل نشاطك التجاري الآن</span>
+                </button>
+              </div>
+            )}
+
+            {/* Pending invitations */}
+            {businessContext?.pending_invitations && businessContext.pending_invitations.length > 0 && (
+              <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">دعوات انضمام معلقة</h4>
+                <div className="space-y-2">
+                  {businessContext.pending_invitations.map((invite) => (
+                    <div key={invite.id} className="bg-amber-50/50 border border-amber-100 p-3 rounded-2xl flex items-center justify-between gap-3 text-right">
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-bold text-slate-800 font-arabic">
+                          دعوة من {invite.business_name || 'نشاط تجاري'}
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-arabic font-mono">الدور المطلوب: {invite.role}</p>
+                      </div>
+                      <button
+                        disabled={acceptingInvite}
+                        onClick={() => handleAcceptInvite(invite.token)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-bold py-1.5 px-3 rounded-lg transition-all disabled:opacity-50"
+                      >
+                        {acceptingInvite ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          'قبول الدعوة'
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Team managed businesses list */}
+            {businessContext?.team_businesses && businessContext.team_businesses.length > 0 && (
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">عضو فريق عمل في</h4>
+                <div className="space-y-1.5">
+                  {businessContext.team_businesses.map((biz, idx) => (
+                    <div key={biz.id || biz.business_id || `team-biz-${idx}`} className="flex items-center justify-between text-xs py-1">
+                      <span className="font-bold text-slate-700 font-arabic">{biz.name}</span>
+                      <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-arabic">
+                        {biz.team_role || 'موظف'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Customer businesses list */}
+            {businessContext?.customer_businesses && businessContext.customer_businesses.length > 0 && (
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">مرتبط كعميل لدى</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {businessContext.customer_businesses.map((biz, idx) => (
+                    <span 
+                      key={biz.id || biz.business_id || `cust-biz-${idx}`}
+                      onClick={() => onNavigate('public-business-profile', biz.slug)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded-lg text-[9px] font-bold font-arabic transition-all cursor-pointer"
+                    >
+                      {biz.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Subscription & Access Gate Usage Block */}
