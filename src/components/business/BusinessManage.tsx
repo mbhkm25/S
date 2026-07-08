@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { getUserBusinessContexts, BusinessProfile } from '../../lib/businessApi';
 import { 
   ArrowRight, Store, Settings, Users, FileText, Globe, 
-  ShieldAlert, ShieldCheck, PlusCircle, Loader2, AlertCircle, RefreshCw 
+  ShieldAlert, ShieldCheck, PlusCircle, Loader2, AlertCircle, RefreshCw,
+  Edit3, BookOpen
 } from 'lucide-react';
 
 interface BusinessManageProps {
@@ -41,13 +42,13 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'published':
-        return <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full font-arabic">منشور</span>;
+        return <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">منشور</span>;
       case 'pending_review':
-        return <span className="bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full font-arabic">تحت المراجعة</span>;
+        return <span className="bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">تحت المراجعة</span>;
       case 'suspended':
-        return <span className="bg-rose-50 border border-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full font-arabic">معلق</span>;
+        return <span className="bg-rose-50 border border-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">معلق</span>;
       default:
-        return <span className="bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full font-arabic">مسودة</span>;
+        return <span className="bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">مسودة</span>;
     }
   };
 
@@ -146,17 +147,17 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           {business.verification_status === 'verified' ? (
             <>
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="space-y-0.5">
-                <p className="text-[10px] font-bold leading-tight">حساب نشاطك موثق وشارة الثقة نشطة</p>
-                <p className="text-[9px] text-slate-500 leading-normal">جميع الإشعارات الصادرة عن هذا المتجر تحمل علامة صحة التحقق.</p>
+              <div className="space-y-0.5 text-right">
+                <p className="text-[10px] font-bold leading-tight font-arabic">حساب نشاطك موثق وشارة الثقة نشطة</p>
+                <p className="text-[9px] text-slate-500 leading-normal font-arabic">جميع الإشعارات الصادرة عن هذا المتجر تحمل علامة صحة التحقق.</p>
               </div>
             </>
           ) : (
             <>
               <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
-              <div className="space-y-0.5">
-                <p className="text-[10px] font-bold leading-tight">الملف قيد المراجعة والتوثيق</p>
-                <p className="text-[9px] text-slate-500 leading-normal">إجراءات المراجعة جارية. يمكنك استخدام التطبيق لإرسال وتتبع العمليات.</p>
+              <div className="space-y-0.5 text-right">
+                <p className="text-[10px] font-bold leading-tight font-arabic">الملف قيد المراجعة والتوثيق</p>
+                <p className="text-[9px] text-slate-500 leading-normal font-arabic">إجراءات المراجعة جارية. يمكنك استخدام التطبيق لإرسال وتتبع العمليات.</p>
               </div>
             </>
           )}
@@ -164,18 +165,18 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       </div>
 
       {/* Admin Action Grid Links */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3.5">
         {/* Operations */}
         <button
           onClick={() => onNavigate('business-operations')}
           className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
         >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
             <FileText className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-slate-900 block">العمليات المالية</h3>
-            <span className="text-[9px] text-slate-400">متابعة الإشعارات والتحقق</span>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">العمليات المالية</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">متابعة الإشعارات والتحقق</span>
           </div>
         </button>
 
@@ -184,12 +185,40 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           onClick={() => onNavigate('business-team')}
           className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
         >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
             <Users className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-slate-900 block">فريق العمل</h3>
-            <span className="text-[9px] text-slate-400">إدارة الأعضاء والصلاحيات</span>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">فريق العمل</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">إدارة الأعضاء والصلاحيات</span>
+          </div>
+        </button>
+
+        {/* Edit Profile */}
+        <button
+          onClick={() => onNavigate('business-manage-profile')}
+          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
+            <Edit3 className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">تحرير الملف</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">تحديث معلومات وتفاصيل المتجر</span>
+          </div>
+        </button>
+
+        {/* Catalog */}
+        <button
+          onClick={() => onNavigate('business-manage-profile')}
+          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
+            <BookOpen className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">كتالوج واتساب</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">اربط كتالوج واتساب بزنس بملف نشاطك</span>
           </div>
         </button>
 
@@ -198,12 +227,12 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           onClick={() => onNavigate('public-business-profile', business.slug)}
           className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
         >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
             <Settings className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-slate-900 block">الملف العام</h3>
-            <span className="text-[9px] text-slate-400">عرض صفحة المتجر للعملاء</span>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">الملف العام</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">عرض صفحة المتجر للعملاء</span>
           </div>
         </button>
 
@@ -213,12 +242,12 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           onClick={() => onNavigate('business-community')}
           className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
             <Globe className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-slate-900 block">مجتمع الأعمال</h3>
-            <span className="text-[9px] text-slate-400">استكشاف المتاجر المنشورة</span>
+            <h3 className="text-xs font-bold text-slate-900 block font-arabic">مجتمع الأعمال</h3>
+            <span className="text-[9px] text-slate-400 font-arabic">استكشاف المتاجر المنشورة</span>
           </div>
         </button>
       </div>

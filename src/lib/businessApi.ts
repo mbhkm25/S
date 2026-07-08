@@ -12,6 +12,7 @@ export interface BusinessProfile {
   logo_path: string | null;
   public_status: 'draft' | 'pending_review' | 'published' | 'suspended';
   verification_status: 'unverified' | 'verified';
+  whatsapp_catalog_url?: string | null;
   created_at: string;
 }
 
@@ -68,6 +69,7 @@ export interface PublicBusinessDetail {
   logo_url: string | null;
   whatsapp: string | null;
   verification_status: string;
+  whatsapp_catalog_url?: string | null;
 }
 
 export interface BusinessOperationItem {
@@ -295,4 +297,436 @@ export async function linkOperationToBusiness(operationId: string, businessId: s
     throw new Error(error.message || 'Failed to link operation to business');
   }
   return data;
+}
+
+/**
+ * General Edge Function call handler for business actions.
+ */
+export async function callBusinessAction(action: string, payload: any): Promise<any> {
+  const { data, error } = await supabase.functions.invoke('sanad-v3-business-actions', {
+    body: { action, payload }
+  });
+  if (error) {
+    console.error(`Edge Function error in action [${action}]:`, error);
+    throw new Error(error.message || `Failed to perform action ${action}`);
+  }
+  if (data && typeof data === 'object') {
+    if (data.error) {
+      console.error(`Action [${action}] returned error:`, data.error);
+      throw new Error(data.error || `Action ${action} returned an error`);
+    }
+  }
+  return data;
+}
+
+export async function updateBusinessProfile(payload: {
+  p_business_id?: string;
+  business_id?: string;
+  businessId?: string;
+  p_name?: string;
+  name?: string;
+  p_slug?: string | null;
+  slug?: string | null;
+  p_tagline?: string | null;
+  tagline?: string | null;
+  p_display_tagline?: string | null;
+  display_tagline?: string | null;
+  p_description?: string | null;
+  description?: string | null;
+  p_category_id?: string | null;
+  category_id?: string | null;
+  p_governorate?: string;
+  governorate?: string;
+  p_city?: string;
+  city?: string;
+  p_whatsapp?: string | null;
+  whatsapp?: string | null;
+  p_address_text?: string | null;
+  address_text?: string | null;
+  p_latitude?: number | null;
+  latitude?: number | null;
+  p_longitude?: number | null;
+  longitude?: number | null;
+  p_profile_image_path?: string | null;
+  profile_image_path?: string | null;
+  p_cover_image_path?: string | null;
+  cover_image_path?: string | null;
+  p_gallery_paths?: string[] | null;
+  gallery_paths?: string[] | null;
+  p_working_hours?: any | null;
+  working_hours?: any | null;
+  p_contact_links?: any | null;
+  contact_links?: any | null;
+  p_profile_sections?: any | null;
+  profile_sections?: any | null;
+  p_whatsapp_catalog_url?: string | null;
+  whatsapp_catalog_url?: string | null;
+  p_resubmit_review?: boolean;
+  resubmit_review?: boolean;
+}): Promise<BusinessProfile> {
+  const rpcPayload = {
+    p_business_id: payload.p_business_id ?? payload.business_id ?? payload.businessId,
+    p_name: payload.p_name ?? payload.name ?? null,
+    p_slug: payload.p_slug ?? payload.slug ?? null,
+    p_tagline: payload.p_tagline ?? payload.p_display_tagline ?? payload.tagline ?? payload.display_tagline ?? null,
+    p_display_tagline: payload.p_display_tagline ?? payload.p_tagline ?? payload.display_tagline ?? payload.tagline ?? null,
+    p_description: payload.p_description ?? payload.description ?? null,
+    p_category_id: payload.p_category_id ?? payload.category_id ?? null,
+    p_governorate: payload.p_governorate ?? payload.governorate ?? null,
+    p_city: payload.p_city ?? payload.city ?? null,
+    p_whatsapp: payload.p_whatsapp ?? payload.whatsapp ?? null,
+    p_address_text: payload.p_address_text ?? payload.address_text ?? null,
+    p_latitude: null,
+    p_longitude: null,
+    p_cover_image_path: payload.p_cover_image_path ?? payload.cover_image_path ?? null,
+    p_profile_image_path: payload.p_profile_image_path ?? payload.profile_image_path ?? null,
+    p_gallery_paths: payload.p_gallery_paths ?? payload.gallery_paths ?? null,
+    p_working_hours: payload.p_working_hours ?? payload.working_hours ?? null,
+    p_contact_links: payload.p_contact_links ?? payload.contact_links ?? null,
+    p_profile_sections: payload.p_profile_sections ?? payload.profile_sections ?? null,
+    p_whatsapp_catalog_url: payload.p_whatsapp_catalog_url ?? payload.whatsapp_catalog_url ?? null,
+    p_resubmit_review: payload.p_resubmit_review ?? payload.resubmit_review ?? false
+  };
+
+  const { data, error } = await supabase.rpc('update_business_profile', rpcPayload);
+
+  if (error) {
+    console.error('[updateBusinessProfile rpc failed]', { error, rpcPayload });
+    throw error;
+  }
+
+  const result = data?.business ?? data?.data?.business ?? data?.business_profile ?? data;
+  return result as BusinessProfile;
+}
+
+export async function getBusinessTeam(businessId: string): Promise<BusinessTeamMember[]> {
+  try {
+    const { data, error } = await supabase.rpc('get_business_team', { p_business_id: businessId });
+    if (!error && data) {
+      if (Array.isArray(data)) return data as BusinessTeamMember[];
+      const anyData = data as any;
+      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessTeamMember[];
+      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessTeamMember[];
+    }
+    if (error) {
+      console.warn('RPC get_business_team failed, trying business_action_get_team:', error);
+    }
+  } catch (e) {
+    console.warn('RPC get_business_team exception, trying business_action_get_team:', e);
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('business_action_get_team', { p_payload: { business_id: businessId } });
+    if (!error && data) {
+      let parsed = data;
+      if (typeof data === 'string') {
+        try { parsed = JSON.parse(data); } catch(_) {}
+      }
+      if (Array.isArray(parsed)) return parsed as BusinessTeamMember[];
+      const anyData = parsed as any;
+      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessTeamMember[];
+      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessTeamMember[];
+    }
+    if (error) {
+      console.warn('RPC business_action_get_team failed, trying Edge Function:', error);
+    }
+  } catch (e) {
+    console.warn('RPC business_action_get_team exception, trying Edge Function:', e);
+  }
+
+  try {
+    const res = await callBusinessAction('get_business_team', { p_business_id: businessId });
+    if (res) {
+      if (Array.isArray(res)) return res as BusinessTeamMember[];
+      const anyRes = res as any;
+      if (anyRes.items && Array.isArray(anyRes.items)) return anyRes.items as BusinessTeamMember[];
+      if (anyRes.data && Array.isArray(anyRes.data)) return anyRes.data as BusinessTeamMember[];
+    }
+  } catch (err: any) {
+    console.error('Edge Function get_business_team failed:', err);
+    throw new Error('فشل تحميل أعضاء الفريق من السيرفر. تأكد من اتصالك بالشبكة.');
+  }
+  return [];
+}
+
+export async function updateBusinessTeamMemberStatus(
+  businessId: string,
+  memberUserId: string,
+  action: 'suspended' | 'reactivated' | 'removed',
+  reason?: string | null
+): Promise<boolean> {
+  const res = await callBusinessAction('update_team_member_status', {
+    p_business_id: businessId,
+    p_member_user_id: memberUserId,
+    p_action: action,
+    p_reason: reason || null
+  });
+  return !!res;
+}
+
+export interface BusinessCatalogItem {
+  id: string;
+  business_id: string;
+  item_type: 'product' | 'service';
+  title: string;
+  description: string | null;
+  price: number | null;
+  currency: string | null;
+  image_paths: string[] | null;
+  features: string[] | null;
+  status: 'active' | 'hidden' | 'draft';
+  created_at: string;
+}
+
+export async function upsertBusinessCatalogItem(payload: {
+  id?: string | null;
+  p_business_id: string;
+  p_item_type: 'product' | 'service';
+  p_title: string;
+  p_description?: string | null;
+  p_price?: number | null;
+  p_currency?: string | null;
+  p_image_paths?: string[] | null;
+  p_features?: string[] | null;
+  p_status?: 'active' | 'hidden' | 'draft';
+}): Promise<BusinessCatalogItem> {
+  const res = await callBusinessAction('upsert_catalog_item', payload);
+  return res as BusinessCatalogItem;
+}
+
+export async function getBusinessCatalog(businessId: string, includeHidden = false): Promise<BusinessCatalogItem[]> {
+  try {
+    const { data, error } = await supabase.rpc('get_business_catalog', {
+      p_business_id: businessId,
+      p_include_hidden: includeHidden
+    });
+    if (!error && data) {
+      if (Array.isArray(data)) return data as BusinessCatalogItem[];
+      const anyData = data as any;
+      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessCatalogItem[];
+      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessCatalogItem[];
+    }
+    if (error) {
+      console.warn('RPC get_business_catalog failed, trying business_action_get_catalog:', error);
+    }
+  } catch (e) {
+    console.warn('RPC get_business_catalog exception, trying business_action_get_catalog:', e);
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('business_action_get_catalog', {
+      p_payload: { business_id: businessId, include_hidden: includeHidden }
+    });
+    if (!error && data) {
+      let parsed = data;
+      if (typeof data === 'string') {
+        try { parsed = JSON.parse(data); } catch(_) {}
+      }
+      if (Array.isArray(parsed)) return parsed as BusinessCatalogItem[];
+      const anyData = parsed as any;
+      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessCatalogItem[];
+      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessCatalogItem[];
+    }
+    if (error) {
+      console.warn('RPC business_action_get_catalog failed, trying Edge Function:', error);
+    }
+  } catch (e) {
+    console.warn('RPC business_action_get_catalog exception, trying Edge Function:', e);
+  }
+
+  try {
+    const res = await callBusinessAction('get_business_catalog', {
+      p_business_id: businessId,
+      p_include_hidden: includeHidden
+    });
+    if (res) {
+      if (Array.isArray(res)) return res as BusinessCatalogItem[];
+      const anyRes = res as any;
+      if (anyRes.items && Array.isArray(anyRes.items)) return anyRes.items as BusinessCatalogItem[];
+      if (anyRes.data && Array.isArray(anyRes.data)) return anyRes.data as BusinessCatalogItem[];
+    }
+  } catch (err: any) {
+    console.error('Edge Function get_business_catalog failed:', err);
+    throw new Error('فشل تحميل كتالوج المعروضات من السيرفر. تأكد من اتصالك بالشبكة.');
+  }
+  return [];
+}
+
+export interface BusinessInquiry {
+  id: string;
+  business_id: string;
+  catalog_item_id?: string | null;
+  inquiry_type: string;
+  message: string | null;
+  created_at: string;
+}
+
+export async function createBusinessInquiry(payload: {
+  p_business_id: string;
+  p_catalog_item_id?: string | null;
+  p_inquiry_type: string;
+  p_message?: string | null;
+}): Promise<BusinessInquiry> {
+  const res = await callBusinessAction('create_inquiry', payload);
+  return res as BusinessInquiry;
+}
+
+export interface UploadMediaResult {
+  path: string;
+  signedUrl: string;
+  asset?: any;
+}
+
+export async function uploadBusinessMedia(params: {
+  businessId: string;
+  assetType: 'cover' | 'profile' | 'gallery' | 'catalog';
+  file: File;
+  displayOrder?: number | null;
+  altText?: string | null;
+}): Promise<UploadMediaResult> {
+  const { businessId, assetType, file, displayOrder = 1, altText = null } = params;
+
+  if (!['cover', 'profile', 'gallery'].includes(assetType)) {
+    throw new Error('غير مسموح برفع هذا النوع من الوسائط.');
+  }
+
+  let normalizedMimeType = file.type.toLowerCase();
+  if (normalizedMimeType === 'image/jpg') {
+    normalizedMimeType = 'image/jpeg';
+  }
+
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(normalizedMimeType)) {
+    throw new Error('نوع الملف غير مدعوم. يرجى اختيار صورة بصيغة JPEG أو PNG أو WEBP.');
+  }
+
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw new Error('حجم الملف كبير جداً. الحد الأقصى هو 10 ميجابايت.');
+  }
+
+  const extension = file.name.split('.').pop() || 'jpg';
+  const cleanExt = ['jpg', 'jpeg', 'png', 'webp'].includes(extension.toLowerCase()) ? extension.toLowerCase() : 'jpg';
+  const filename = `${assetType}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${cleanExt}`;
+  const storagePath = `${businessId}/${assetType}/${filename}`;
+
+  console.log('[business-media-upload]', { bucket: 'business-media', path: storagePath, type: normalizedMimeType, size: file.size });
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('business-media')
+    .upload(storagePath, file, {
+      contentType: normalizedMimeType,
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (uploadError) {
+    console.error('Storage upload error:', uploadError);
+    throw new Error(uploadError.message || 'فشل رفع الملف إلى المخزن.');
+  }
+
+  let asset: any = null;
+  try {
+    const rpcParams = {
+      p_business_id: businessId,
+      p_asset_type: assetType,
+      p_storage_path: storagePath,
+      p_mime_type: normalizedMimeType,
+      p_file_name: file.name,
+      p_file_size: file.size,
+      p_alt_text: altText,
+      p_display_order: displayOrder
+    };
+    const { data, error } = await supabase.rpc('register_business_media_asset', rpcParams);
+    if (error) {
+      console.warn('register_business_media_asset failed, trying business_action_register_media_asset:', error);
+      const { data: data2, error: error2 } = await supabase.rpc('business_action_register_media_asset', {
+        p_payload: {
+          business_id: businessId,
+          asset_type: assetType,
+          storage_path: storagePath,
+          mime_type: normalizedMimeType,
+          file_name: file.name,
+          file_size: file.size,
+          alt_text: altText,
+          display_order: displayOrder
+        }
+      });
+      if (error2) {
+        console.error('Fallback register media RPC failed:', error2);
+      } else {
+        asset = data2;
+      }
+    } else {
+      asset = data;
+    }
+  } catch (e) {
+    console.error('Exception during media registration:', e);
+  }
+
+  let signedUrl = '';
+  try {
+    const { data: signData, error: signError } = await supabase.storage
+      .from('business-media')
+      .createSignedUrl(storagePath, 3600);
+    if (!signError && signData) {
+      signedUrl = signData.signedUrl;
+    }
+  } catch (e) {
+    console.error('Failed to create preview signed URL:', e);
+  }
+
+  return {
+    path: storagePath,
+    signedUrl,
+    asset
+  };
+}
+
+export async function setBusinessProfileMedia(payload: {
+  p_business_id: string;
+  p_cover_image_path: string | null;
+  p_profile_image_path: string | null;
+  p_gallery_paths: string[] | null;
+  p_resubmit_review?: boolean;
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc('set_business_profile_media', payload);
+  if (error) {
+    console.warn('set_business_profile_media RPC failed, trying business_action_set_profile_media:', error);
+    const { data: data2, error: error2 } = await supabase.rpc('business_action_set_profile_media', {
+      p_payload: {
+        business_id: payload.p_business_id,
+        cover_image_path: payload.p_cover_image_path,
+        profile_image_path: payload.p_profile_image_path,
+        gallery_paths: payload.p_gallery_paths,
+        resubmit_review: payload.p_resubmit_review || false
+      }
+    });
+    if (error2) {
+      console.error('Fallback set profile media RPC failed:', error2);
+      throw new Error(error2.message || 'فشل تحديث وسائط الملف التعريفي.');
+    }
+    return !!data2;
+  }
+  return !!data;
+}
+
+export async function getBusinessMediaSignedUrl(path: string): Promise<string> {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  try {
+    const { data, error } = await supabase.storage
+      .from('business-media')
+      .createSignedUrl(path, 3600);
+    if (error) {
+      console.error('Error creating signed URL for', path, error);
+      return '';
+    }
+    return data?.signedUrl || '';
+  } catch (e) {
+    console.error('Exception creating signed URL:', e);
+    return '';
+  }
 }

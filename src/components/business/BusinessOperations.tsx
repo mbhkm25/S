@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getBusinessOperations, getUserBusinessContexts, BusinessOperationItem } from '../../lib/businessApi';
 import { ArrowRight, FileText, Calendar, DollarSign, ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { formatArabicDate } from '../../lib/digits';
+import { formatArabicDate, toLatinDigits } from '../../lib/digits';
 
 interface BusinessOperationsProps {
   onNavigate: (page: string, token?: string) => void;
@@ -151,7 +151,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
                         <span>{entity} {type ? `(${type})` : ''}</span>
                       )}
                       {ref && (
-                        <span className="font-mono">مرجع: {ref}</span>
+                        <span className="font-mono">مرجع: {toLatinDigits(ref)}</span>
                       )}
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-slate-300" />
@@ -162,7 +162,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
 
                   <div className="text-left shrink-0">
                     <div className="text-xs font-bold text-emerald-600 flex items-center gap-0.5 justify-end">
-                      <span>{amount?.toLocaleString() || '0'}</span>
+                      <span>{toLatinDigits(amount?.toLocaleString() || '0')}</span>
                       <span className="text-[8px] font-normal text-emerald-500">{currency}</span>
                     </div>
                   </div>

@@ -313,127 +313,172 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
         </div>
       </div>
 
-      {/* Business Status Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/60 p-5 shadow-sm space-y-4 text-right">
+      {/* Redesigned Business Status Section */}
+      <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-sm space-y-5 text-right">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-700">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-800 border border-slate-200/50">
               <Store className="w-4 h-4" />
             </div>
             <div className="text-right">
-              <h3 className="text-xs font-bold text-slate-800 font-arabic">نشاطي التجاري</h3>
-              <p className="text-[9px] text-slate-400 font-arabic">إدارة المتجر وعمليات التحقق للشركاء</p>
+              <h3 className="text-xs font-bold text-slate-900 font-arabic">نشاطي التجاري والشركاء</h3>
+              <p className="text-[10px] text-slate-400 font-arabic">تتبع المتاجر وعضويات فريق العمل وعلاقات العملاء</p>
             </div>
           </div>
         </div>
 
         {loadingBusiness ? (
-          <div className="flex justify-center py-4">
+          <div className="flex justify-center py-6">
             <Loader2 className="w-5 h-5 text-slate-800 animate-spin" />
           </div>
         ) : businessError ? (
           <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-2xl flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-500" />
-            <span>{businessError}</span>
+            <span className="font-arabic">{businessError}</span>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* If has owned business */}
+            {/* 1. Owned Business Card */}
             {businessContext?.owned_businesses && businessContext.owned_businesses.length > 0 ? (
               <div className="space-y-3">
                 {businessContext.owned_businesses.map((biz) => (
-                  <div key={biz.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-slate-800 font-arabic">{biz.name}</span>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9px] text-slate-400 font-arabic">الحالة:</span>
-                        <span className={`text-[9px] font-bold ${
-                          biz.public_status === 'published' ? 'text-emerald-600' : 'text-amber-600'
+                  <div key={biz.id} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex flex-col gap-3 justify-between sm:flex-row sm:items-center">
+                    <div className="text-right space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 font-arabic">{biz.name}</span>
+                        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-md ${
+                          biz.public_status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                         }`}>
                           {biz.public_status === 'published' ? 'منشور' : 'تحت المراجعة'}
                         </span>
                       </div>
+                      <p className="text-[10px] text-slate-400 font-arabic">ملفك التجاري النشط في مجتمع سند</p>
                     </div>
-                    <button
-                      onClick={() => onNavigate('business-manage')}
-                      className="bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
-                    >
-                      إدارة النشاط
-                    </button>
+                    <div className="flex gap-2 justify-end sm:justify-start">
+                      {biz.public_status === 'published' && (
+                        <button
+                          onClick={() => onNavigate('public-business-profile', biz.slug)}
+                          className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
+                        >
+                          الملف العام
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onNavigate('business-manage')}
+                        className="bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
+                      >
+                        إدارة النشاط
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              /* If no owned business, render registration button */
-              <div className="text-center py-2 space-y-2">
-                <p className="text-[10px] text-slate-500 font-arabic">لم تقم بتسجيل أي نشاط تجاري حتى الآن.</p>
+              /* If no owned business, render registration cta */
+              <div className="bg-slate-50/50 border border-dashed border-slate-200 p-5 rounded-2xl text-center space-y-3">
+                <p className="text-xs text-slate-500 font-arabic">هل تمتلك متجراً أو تقدم خدمات مالية؟</p>
+                <p className="text-[10px] text-slate-400 leading-normal max-w-xs mx-auto font-arabic">
+                  سجل نشاطك التجاري الآن لتتيح للعملاء والمستخدمين ربط إشعاراتهم المالية بمتجرك وتوثيق المعاملات رقمياً.
+                </p>
                 <button
                   onClick={() => onNavigate('business-create')}
-                  className="inline-flex items-center gap-1.5 bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-2 px-4 rounded-xl transition-all"
+                  className="inline-flex items-center gap-1.5 bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-2.5 px-4 rounded-xl transition-all"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>سجل نشاطك التجاري الآن</span>
+                  <span className="font-arabic">إنشاء نشاط تجاري جديد</span>
                 </button>
               </div>
             )}
 
-            {/* Pending invitations */}
+            {/* 2. Compact Relationship Indicators */}
+            <div className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3.5 text-center">
+              <div className="bg-slate-50/50 border border-slate-200/50 p-2.5 rounded-xl">
+                <span className="text-[9px] text-slate-400 block font-arabic">أعمل ضمن فريق</span>
+                <span className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                  {toLatinDigits(businessContext?.team_businesses?.length || 0)}
+                </span>
+              </div>
+              <div className="bg-slate-50/50 border border-slate-200/50 p-2.5 rounded-xl">
+                <span className="text-[9px] text-slate-400 block font-arabic">عميل لدى</span>
+                <span className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                  {toLatinDigits(businessContext?.customer_businesses?.length || 0)}
+                </span>
+              </div>
+              <div className="bg-slate-50/50 border border-slate-200/50 p-2.5 rounded-xl">
+                <span className="text-[9px] text-slate-400 block font-arabic">دعوات معلقة</span>
+                <span className={`text-xs font-bold font-mono mt-0.5 ${
+                  (businessContext?.pending_invitations?.length || 0) > 0 ? 'text-amber-600' : 'text-slate-900'
+                }`}>
+                  {toLatinDigits(businessContext?.pending_invitations?.length || 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* 3. Pending invitations lists */}
             {businessContext?.pending_invitations && businessContext.pending_invitations.length > 0 && (
-              <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">دعوات انضمام معلقة</h4>
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic uppercase tracking-wider">دعوات انضمام بانتظار موافقتك</h4>
                 <div className="space-y-2">
-                  {businessContext.pending_invitations.map((invite) => (
-                    <div key={invite.id} className="bg-amber-50/50 border border-amber-100 p-3 rounded-2xl flex items-center justify-between gap-3 text-right">
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-slate-800 font-arabic">
-                          دعوة من {invite.business_name || 'نشاط تجاري'}
-                        </p>
-                        <p className="text-[9px] text-slate-400 font-arabic font-mono">الدور المطلوب: {invite.role}</p>
+                  {businessContext.pending_invitations.map((invite) => {
+                    const translatedRole = invite.role === 'owner' ? 'مالك' : invite.role === 'manager' ? 'مدير' : invite.role === 'cashier' ? 'كاشير' : invite.role;
+                    return (
+                      <div key={invite.id} className="bg-amber-50/30 border border-amber-100/80 p-3 rounded-xl flex items-center justify-between gap-3 text-right">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-slate-800 font-arabic">
+                            دعوة من {invite.business_name || 'نشاط تجاري'}
+                          </p>
+                          <p className="text-[9px] text-slate-500 font-arabic">الدور المقترح: {translatedRole}</p>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            disabled={acceptingInvite}
+                            onClick={() => handleAcceptInvite(invite.token)}
+                            className="bg-amber-650 hover:bg-amber-700 text-white text-[9px] font-bold py-1.5 px-3 rounded-lg transition-all disabled:opacity-50"
+                          >
+                            {acceptingInvite ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              'قبول الدعوة'
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        disabled={acceptingInvite}
-                        onClick={() => handleAcceptInvite(invite.token)}
-                        className="bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-bold py-1.5 px-3 rounded-lg transition-all disabled:opacity-50"
-                      >
-                        {acceptingInvite ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          'قبول الدعوة'
-                        )}
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Team managed businesses list */}
+            {/* 4. Team managed businesses details */}
             {businessContext?.team_businesses && businessContext.team_businesses.length > 0 && (
-              <div className="space-y-2 pt-3 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">عضو فريق عمل في</h4>
-                <div className="space-y-1.5">
-                  {businessContext.team_businesses.map((biz, idx) => (
-                    <div key={biz.id || biz.business_id || `team-biz-${idx}`} className="flex items-center justify-between text-xs py-1">
-                      <span className="font-bold text-slate-700 font-arabic">{biz.name}</span>
-                      <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-arabic">
-                        {biz.team_role || 'موظف'}
-                      </span>
-                    </div>
-                  ))}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic uppercase tracking-wider">أعمل ضمن فريق</h4>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {businessContext.team_businesses.map((biz, idx) => {
+                    const translatedRole = biz.team_role === 'owner' ? 'مالك' : biz.team_role === 'manager' ? 'مدير' : biz.team_role === 'cashier' ? 'كاشير' : biz.team_role;
+                    return (
+                      <div key={biz.id || biz.business_id || `team-biz-${idx}`} className="flex items-center justify-between text-xs py-2 px-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="font-bold text-slate-850 font-arabic">{biz.name}</span>
+                        <span className="text-[8px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-arabic">
+                          {translatedRole || 'موظف'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Customer businesses list */}
+            {/* 5. Customer businesses details */}
             {businessContext?.customer_businesses && businessContext.customer_businesses.length > 0 && (
-              <div className="space-y-2 pt-3 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 font-arabic">مرتبط كعميل لدى</h4>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <h4 className="text-[10px] font-bold text-slate-400 font-arabic uppercase tracking-wider">مرتبط كعميل لدى</h4>
+                <div className="flex flex-wrap gap-2">
                   {businessContext.customer_businesses.map((biz, idx) => (
                     <span 
                       key={biz.id || biz.business_id || `cust-biz-${idx}`}
                       onClick={() => onNavigate('public-business-profile', biz.slug)}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded-lg text-[9px] font-bold font-arabic transition-all cursor-pointer"
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/85 px-3 py-1 rounded-xl text-[9px] font-bold font-arabic transition-all cursor-pointer"
                     >
                       {biz.name}
                     </span>
