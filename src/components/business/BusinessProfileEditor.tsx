@@ -248,7 +248,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
           <div className="bg-white rounded-3xl border border-slate-200/80 p-5 space-y-5 shadow-xs">
             <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
               <Image className="w-4.5 h-4.5 text-slate-700" />
-              <h2 className="text-xs font-bold text-slate-900">الهوية البصرية للمتجر</h2>
+              <h2 className="text-xs font-bold text-slate-900">الهوية البصرية للنشاط</h2>
             </div>
 
             {/* Cover Image Upload */}
@@ -323,7 +323,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
 
               {/* Gallery List (up to 3) */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-500 block">معرض صور المتجر ({toLatinDigits(galleryPaths.length)}/3)</label>
+                <label className="text-[11px] font-bold text-slate-500 block">معرض صور النشاط ({toLatinDigits(galleryPaths.length)}/3)</label>
                 <div className="flex gap-2">
                   {galleryPreviews.map((url, index) => (
                     <div key={index} className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 relative group overflow-hidden shadow-2xs">

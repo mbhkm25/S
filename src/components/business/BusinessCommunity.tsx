@@ -59,7 +59,7 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
         </button>
         <div>
           <h1 className="text-sm font-bold text-slate-900">مجتمع أعمال سند</h1>
-          <p className="text-[10px] text-slate-500">استكشف المتاجر والمؤسسات المالية الموثقة للتحقق الآمن</p>
+          <p className="text-[10px] text-slate-500">استكشف الأنشطة والمؤسسات المالية الموثقة للتحقق الآمن</p>
         </div>
       </div>
 

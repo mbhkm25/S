@@ -89,7 +89,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
         <div className="space-y-2">
           <h2 className="text-sm font-bold text-slate-900">ليس لديك أي نشاط تجاري مسجل</h2>
           <p className="text-[11px] text-slate-500 leading-relaxed px-4">
-            سند للأعمال يتيح لك ربط فروع متجرك، ومشاركة الإشعارات المالية الموثقة مع عملائك مباشرة وتتبع صحتها.
+            سند للأعمال يتيح لك ربط نشاطك التجاري، ومشاركة الإشعارات المالية الموثقة مع عملائك مباشرة وتتبع صحتها.
           </p>
         </div>
         <button
@@ -115,7 +115,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
         </button>
         <div>
           <h1 className="text-sm font-bold text-slate-900">إدارة النشاط التجاري</h1>
-          <p className="text-[10px] text-slate-500">لوحة التحكم والتنسيق الخاص بمتجرك</p>
+          <p className="text-[10px] text-slate-500">لوحة التحكم والتنسيق الخاص بنشاطك التجاري</p>
         </div>
       </div>
 
@@ -149,7 +149,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <div className="space-y-0.5 text-right">
                 <p className="text-[10px] font-bold leading-tight font-arabic">حساب نشاطك موثق وشارة الثقة نشطة</p>
-                <p className="text-[9px] text-slate-500 leading-normal font-arabic">جميع الإشعارات الصادرة عن هذا المتجر تحمل علامة صحة التحقق.</p>
+                <p className="text-[9px] text-slate-500 leading-normal font-arabic">جميع الإشعارات الصادرة عن هذا النشاط تحمل علامة صحة التحقق.</p>
               </div>
             </>
           ) : (
@@ -204,11 +204,11 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-900 block font-arabic">تحرير الملف</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">تحديث معلومات وتفاصيل المتجر</span>
+            <span className="text-[9px] text-slate-400 font-arabic">تحديث معلومات وتفاصيل ملف النشاط</span>
           </div>
         </button>
 
-        {/* Catalog */}
+        {/* WhatsApp Catalog */}
         <button
           onClick={() => onNavigate('business-manage-profile')}
           className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
@@ -218,7 +218,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-900 block font-arabic">كتالوج واتساب</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">اربط كتالوج واتساب بزنس بملف نشاطك</span>
+            <span className="text-[9px] text-slate-400 font-arabic">اربط كتالوج واتساب بزنس بملف نشاطك ليصل إليه العملاء من سند.</span>
           </div>
         </button>
 
@@ -232,7 +232,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-900 block font-arabic">الملف العام</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">عرض صفحة المتجر للعملاء</span>
+            <span className="text-[9px] text-slate-400 font-arabic">عرض ملف النشاط للعملاء</span>
           </div>
         </button>
 
@@ -247,7 +247,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-900 block font-arabic">مجتمع الأعمال</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">استكشاف المتاجر المنشورة</span>
+            <span className="text-[9px] text-slate-400 font-arabic">استكشاف الأنشطة المنشورة</span>
           </div>
         </button>
       </div>

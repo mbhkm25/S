@@ -321,8 +321,8 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
               <Store className="w-4 h-4" />
             </div>
             <div className="text-right">
-              <h3 className="text-xs font-bold text-slate-900 font-arabic">نشاطي التجاري والشركاء</h3>
-              <p className="text-[10px] text-slate-400 font-arabic">تتبع المتاجر وعضويات فريق العمل وعلاقات العملاء</p>
+              <h3 className="text-xl font-bold text-slate-900 font-arabic leading-tight">نشاطي التجاري والشركاء</h3>
+              <p className="text-[10px] text-slate-400 font-arabic">تتبع ملفات الأعمال وعضويات فريق العمل وعلاقات العملاء</p>
             </div>
           </div>
         </div>
@@ -345,7 +345,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
                   <div key={biz.id} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex flex-col gap-3 justify-between sm:flex-row sm:items-center">
                     <div className="text-right space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-900 font-arabic">{biz.name}</span>
+                        <span className="text-2xl font-bold text-slate-900 font-arabic leading-tight">{biz.name}</span>
                         <span className={`text-[8px] font-bold px-2 py-0.5 rounded-md ${
                           biz.public_status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
                         }`}>
@@ -358,14 +358,14 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
                       {biz.public_status === 'published' && (
                         <button
                           onClick={() => onNavigate('public-business-profile', biz.slug)}
-                          className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
+                          className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-[13px] font-bold py-2 px-4 rounded-lg transition-all"
                         >
                           الملف العام
                         </button>
                       )}
                       <button
                         onClick={() => onNavigate('business-manage')}
-                        className="bg-[#111111] hover:bg-black text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-all"
+                        className="bg-[#111111] hover:bg-black text-white text-[13px] font-bold py-2 px-4 rounded-lg transition-all"
                       >
                         إدارة النشاط
                       </button>
@@ -376,9 +376,9 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
             ) : (
               /* If no owned business, render registration cta */
               <div className="bg-slate-50/50 border border-dashed border-slate-200 p-5 rounded-2xl text-center space-y-3">
-                <p className="text-xs text-slate-500 font-arabic">هل تمتلك متجراً أو تقدم خدمات مالية؟</p>
+                <p className="text-xs text-slate-500 font-arabic">هل تمتلك نشاطًا تجاريًا أو تقدم خدمات مالية؟</p>
                 <p className="text-[10px] text-slate-400 leading-normal max-w-xs mx-auto font-arabic">
-                  سجل نشاطك التجاري الآن لتتيح للعملاء والمستخدمين ربط إشعاراتهم المالية بمتجرك وتوثيق المعاملات رقمياً.
+                  سجل نشاطك التجاري الآن لتتيح للعملاء والمستخدمين ربط إشعاراتهم المالية بملف نشاطك وتوثيق المعاملات رقمياً.
                 </p>
                 <button
                   onClick={() => onNavigate('business-create')}
@@ -449,43 +449,6 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
               </div>
             )}
 
-            {/* 4. Team managed businesses details */}
-            {businessContext?.team_businesses && businessContext.team_businesses.length > 0 && (
-              <div className="space-y-3 pt-3 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 font-arabic uppercase tracking-wider">أعمل ضمن فريق</h4>
-                <div className="grid grid-cols-1 gap-2.5">
-                  {businessContext.team_businesses.map((biz, idx) => {
-                    const translatedRole = biz.team_role === 'owner' ? 'مالك' : biz.team_role === 'manager' ? 'مدير' : biz.team_role === 'cashier' ? 'كاشير' : biz.team_role;
-                    return (
-                      <div key={biz.id || biz.business_id || `team-biz-${idx}`} className="flex items-center justify-between text-xs py-2 px-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="font-bold text-slate-850 font-arabic">{biz.name}</span>
-                        <span className="text-[8px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-arabic">
-                          {translatedRole || 'موظف'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 5. Customer businesses details */}
-            {businessContext?.customer_businesses && businessContext.customer_businesses.length > 0 && (
-              <div className="space-y-3 pt-3 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 font-arabic uppercase tracking-wider">مرتبط كعميل لدى</h4>
-                <div className="flex flex-wrap gap-2">
-                  {businessContext.customer_businesses.map((biz, idx) => (
-                    <span 
-                      key={biz.id || biz.business_id || `cust-biz-${idx}`}
-                      onClick={() => onNavigate('public-business-profile', biz.slug)}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/85 px-3 py-1 rounded-xl text-[9px] font-bold font-arabic transition-all cursor-pointer"
-                    >
-                      {biz.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
