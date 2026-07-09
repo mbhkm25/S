@@ -158,19 +158,37 @@ export async function getPublicBusinesses(filters: {
   });
   if (error) {
     console.error('Error in getPublicBusinesses:', error);
+    const fallback = await getPublicBusinessesFallback(filters);
+    if (fallback.length > 0) {
+      return fallback;
+    }
     throw new Error(error.message || 'Failed to fetch public businesses');
   }
   
   if (data) {
     if (Array.isArray(data)) {
-      return data as PublicBusinessListItem[];
+      return data.map(normalizePublicBusinessListItem);
     }
     const anyData = data as any;
     if (anyData.items && Array.isArray(anyData.items)) {
-      return anyData.items as PublicBusinessListItem[];
+      return anyData.items.map(normalizePublicBusinessListItem);
     }
   }
   return [];
+}
+
+function normalizePublicBusinessListItem(item: any): PublicBusinessListItem {
+  return {
+    id: item.id,
+    name: item.name,
+    slug: item.slug,
+    category_name: item.category_name || item.category?.name_ar || item.category?.name || null,
+    governorate: item.governorate,
+    city: item.city,
+    description: item.description || null,
+    logo_url: item.profile_image_path || item.logo_path || item.logo_url || null,
+    whatsapp: item.whatsapp || null
+  };
 }
 
 /**
@@ -180,9 +198,69 @@ export async function getPublicBusinessProfile(slug: string): Promise<PublicBusi
   const { data, error } = await supabase.rpc('get_public_business_profile', { p_slug: slug });
   if (error) {
     console.error('Error in getPublicBusinessProfile:', error);
-    throw new Error(error.message || 'Failed to fetch business profile');
+    return getPublicBusinessProfileFallback(slug, error.message || 'Failed to fetch business profile');
   }
   return data as PublicBusinessDetail;
+}
+
+async function getPublicBusinessesFallback(filters: {
+  p_search?: string | null;
+  p_governorate?: string | null;
+  p_city?: string | null;
+  p_limit?: number;
+  p_offset?: number;
+}): Promise<PublicBusinessListItem[]> {
+  try {
+    let query = supabase
+      .from('business_profiles')
+      .select('*')
+      .eq('public_status', 'published')
+      .order('created_at', { ascending: false })
+      .range(filters.p_offset ?? 0, (filters.p_offset ?? 0) + (filters.p_limit ?? 20) - 1);
+
+    if (filters.p_search) {
+      query = query.or(`name.ilike.%${filters.p_search}%,city.ilike.%${filters.p_search}%,governorate.ilike.%${filters.p_search}%`);
+    }
+    if (filters.p_governorate) {
+      query = query.eq('governorate', filters.p_governorate);
+    }
+    if (filters.p_city) {
+      query = query.eq('city', filters.p_city);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) {
+      console.warn('Fallback public businesses query failed:', error);
+      return [];
+    }
+
+    return data.map(normalizePublicBusinessListItem);
+  } catch (fallbackError) {
+    console.warn('Fallback public businesses exception:', fallbackError);
+    return [];
+  }
+}
+
+async function getPublicBusinessProfileFallback(slug: string, originalMessage: string): Promise<PublicBusinessDetail> {
+  const { data, error } = await supabase
+    .from('business_profiles')
+    .select('*')
+    .eq('slug', slug)
+    .eq('public_status', 'published')
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error('Fallback getPublicBusinessProfile failed:', error);
+    throw new Error(error?.message || originalMessage);
+  }
+
+  const item = data as any;
+  return {
+    ...item,
+    category_name: item.category_name || null,
+    logo_url: item.profile_image_path || item.logo_path || item.logo_url || null,
+    whatsapp_catalog_url: item.whatsapp_catalog_url || null
+  } as PublicBusinessDetail;
 }
 
 /**

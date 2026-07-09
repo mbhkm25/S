@@ -74,7 +74,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
       setWhatsappCatalogUrl((current as any).whatsapp_catalog_url || '');
       
       // Load current cover & profile preview URLs
-      const profilePath = current.logo_path || '';
+      const profilePath = (current as any).profile_image_path || current.logo_path || '';
       setProfileImagePath(profilePath);
       if (profilePath) {
         const signUrl = await getBusinessMediaSignedUrl(profilePath);
@@ -447,22 +447,6 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
               />
             </div>
 
-            {/* Input: WhatsApp Catalog URL */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-500 block">رابط كتالوج واتساب بزنس</label>
-              <input
-                type="text"
-                value={whatsappCatalogUrl}
-                onChange={(e) => setWhatsappCatalogUrl(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white px-3 py-2.5 rounded-xl text-xs text-slate-850 font-mono outline-none transition-all text-left"
-                placeholder="https://wa.me/c/967..."
-                dir="ltr"
-              />
-              <p className="text-[9px] text-slate-400 font-arabic">
-                ألصق رابط كتالوج واتساب بزنس الخاص بنشاطك. سيظهر للزوار داخل ملفك التجاري في سند.
-              </p>
-            </div>
-
             {/* Input: Address text */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 block">العنوان النصي المفصل</label>
@@ -506,7 +490,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
             ) : (
               <Save className="w-4 h-4" />
             )}
-            <span>حفظ وحفظ التغييرات الهوية</span>
+            <span>حفظ التغييرات</span>
           </button>
         </form>
       </div>

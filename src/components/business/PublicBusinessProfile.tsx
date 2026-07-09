@@ -37,7 +37,7 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
       setProfile(data);
 
       // Resolve profile & cover signed URLs
-      const profilePath = (data as any).profile_image_path || data.logo_url || '';
+      const profilePath = (data as any).profile_image_path || (data as any).logo_path || data.logo_url || '';
       if (profilePath) {
         const sign = await getBusinessMediaSignedUrl(profilePath);
         setLogoUrl(sign);
@@ -116,8 +116,6 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
 
   const isVerified = profile.verification_status === 'verified';
   const tagline = (profile as any).tagline || '';
-  const gallery = (profile as any).gallery_paths || [];
-
   return (
     <div className="space-y-5 font-arabic text-right pb-10" dir="rtl">
       {/* Header */}

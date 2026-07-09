@@ -6,7 +6,7 @@ import { formatYemeniDisplay, parseYemeniLocalPhone, toLatinDigits } from '../li
 import { normalizeYemenPhone, isValidYemenLocalPhone, maskAccountNumber } from '../lib/profileUtils';
 import ProUpgradeModal from './ProUpgradeModal';
 import { 
-  getUserBusinessContexts, acceptBusinessInvitation, 
+  getUserBusinessContexts, acceptBusinessInvitation, getBusinessMediaSignedUrl,
   BusinessContexts 
 } from '../lib/businessApi';
 
@@ -83,6 +83,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
   const [loadingBusiness, setLoadingBusiness] = useState(false);
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [acceptingInvite, setAcceptingInvite] = useState(false);
+  const [businessLogoUrls, setBusinessLogoUrls] = useState<Record<string, string>>({});
 
   const loadBusinessContext = async () => {
     setLoadingBusiness(true);
@@ -90,6 +91,15 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
     try {
       const contexts = await getUserBusinessContexts();
       setBusinessContext(contexts);
+      const ownedBusinesses = contexts.owned_businesses || [];
+      const logoEntries = await Promise.all(
+        ownedBusinesses.map(async (biz) => {
+          const logoPath = (biz as any).profile_image_path || biz.logo_path || (biz as any).logo_url || '';
+          if (!logoPath) return [biz.id, ''] as const;
+          return [biz.id, await getBusinessMediaSignedUrl(logoPath)] as const;
+        })
+      );
+      setBusinessLogoUrls(Object.fromEntries(logoEntries));
     } catch (e: any) {
       console.error('Error loading business contexts:', e);
       setBusinessError(e.message || 'فشل في تحميل سياقات الأعمال.');
@@ -343,7 +353,15 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
               <div className="space-y-3">
                 {businessContext.owned_businesses.map((biz) => (
                   <div key={biz.id} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex flex-col gap-3 justify-between sm:flex-row sm:items-center">
-                    <div className="text-right space-y-1">
+                    <div className="flex items-center gap-3 text-right min-w-0">
+                      <div className="w-14 h-14 rounded-xl bg-slate-950 text-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                        {businessLogoUrls[biz.id] ? (
+                          <img src={businessLogoUrls[biz.id]} alt={`شعار ${biz.name}`} className="w-full h-full object-cover" />
+                        ) : (
+                          <Store className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-slate-900 font-arabic leading-tight">{biz.name}</span>
                         <span className={`text-[8px] font-bold px-2 py-0.5 rounded-md ${
@@ -353,6 +371,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-arabic">ملفك التجاري النشط في مجتمع سند</p>
+                      </div>
                     </div>
                     <div className="flex gap-2 justify-end sm:justify-start">
                       {biz.public_status === 'published' && (

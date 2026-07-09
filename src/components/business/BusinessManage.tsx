@@ -1,33 +1,73 @@
-import { useState, useEffect } from 'react';
-import { getUserBusinessContexts, BusinessProfile } from '../../lib/businessApi';
-import { 
-  ArrowRight, Store, Settings, Users, FileText, Globe, 
-  ShieldAlert, ShieldCheck, PlusCircle, Loader2, AlertCircle, RefreshCw,
-  Edit3, BookOpen
+import { ElementType, useEffect, useState } from 'react';
+import { getBusinessMediaSignedUrl, getUserBusinessContexts, BusinessProfile } from '../../lib/businessApi';
+import {
+  AlertCircle,
+  ArrowRight,
+  BookOpen,
+  CheckCircle2,
+  Edit3,
+  Eye,
+  FileText,
+  Globe,
+  Image as ImageIcon,
+  Loader2,
+  MapPin,
+  PlusCircle,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  Store,
+  Users
 } from 'lucide-react';
 
 interface BusinessManageProps {
   onNavigate: (page: string, token?: string) => void;
 }
 
+type ActionItem = {
+  title: string;
+  description: string;
+  icon: ElementType;
+  onClick: () => void;
+  disabled?: boolean;
+  meta?: string;
+};
+
 export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
+  const [logoUrl, setLogoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [galleryCount, setGalleryCount] = useState(0);
 
   const loadBusinessData = async () => {
     setLoading(true);
     setError(null);
     try {
       const contexts = await getUserBusinessContexts();
-      if (contexts.owned_businesses && contexts.owned_businesses.length > 0) {
-        setBusiness(contexts.owned_businesses[0]);
-      } else if (contexts.team_businesses && contexts.team_businesses.length > 0) {
-        // Fallback to managed team business if they don't own one but are part of a team
-        setBusiness(contexts.team_businesses[0]);
-      } else {
-        setBusiness(null);
+      const current = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0] || null;
+      setBusiness(current);
+
+      if (!current) {
+        setLogoUrl('');
+        setCoverUrl('');
+        setGalleryCount(0);
+        return;
       }
+
+      const logoPath = (current as any).profile_image_path || current.logo_path || (current as any).logo_url || '';
+      const coverPath = (current as any).cover_image_path || '';
+      const galleryPaths = Array.isArray((current as any).gallery_paths) ? (current as any).gallery_paths : [];
+
+      const [resolvedLogo, resolvedCover] = await Promise.all([
+        logoPath ? getBusinessMediaSignedUrl(logoPath) : Promise.resolve(''),
+        coverPath ? getBusinessMediaSignedUrl(coverPath) : Promise.resolve('')
+      ]);
+
+      setLogoUrl(resolvedLogo);
+      setCoverUrl(resolvedCover);
+      setGalleryCount(galleryPaths.length);
     } catch (err: any) {
       setError(err.message || 'فشل في تحميل بيانات الأعمال الخاصة بك.');
     } finally {
@@ -39,16 +79,16 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     loadBusinessData();
   }, []);
 
-  const getStatusBadge = (status: string) => {
+  const statusLabel = (status?: string) => {
     switch (status) {
       case 'published':
-        return <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">منشور</span>;
+        return { text: 'منشور', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
       case 'pending_review':
-        return <span className="bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">تحت المراجعة</span>;
+        return { text: 'تحت المراجعة', className: 'bg-amber-50 text-amber-700 border-amber-100' };
       case 'suspended':
-        return <span className="bg-rose-50 border border-rose-100 text-rose-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">معلق</span>;
+        return { text: 'معلق', className: 'bg-rose-50 text-rose-700 border-rose-100' };
       default:
-        return <span className="bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full font-arabic">مسودة</span>;
+        return { text: 'مسودة', className: 'bg-slate-100 text-slate-600 border-slate-200' };
     }
   };
 
@@ -63,7 +103,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   if (error) {
     return (
-      <div className="bg-white rounded-3xl border border-slate-200/60 p-5 space-y-4 shadow-sm font-arabic text-center">
+      <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-4 shadow-sm font-arabic text-center">
         <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
         <div className="space-y-1">
           <h2 className="text-sm font-bold text-slate-900">حدث خطأ أثناء تحميل البيانات</h2>
@@ -71,7 +111,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
         </div>
         <button
           onClick={loadBusinessData}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-black font-bold border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition-all"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-black font-bold border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-lg transition-all"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>إعادة المحاولة</span>
@@ -82,19 +122,19 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   if (!business) {
     return (
-      <div className="bg-white rounded-3xl border border-slate-200/60 p-6 text-center space-y-5 font-arabic">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-slate-50 text-slate-600 border border-slate-100">
+      <div className="bg-white rounded-lg border border-slate-200 p-6 text-center space-y-5 font-arabic">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-slate-50 text-slate-600 border border-slate-100">
           <Store className="w-7 h-7" />
         </div>
         <div className="space-y-2">
           <h2 className="text-sm font-bold text-slate-900">ليس لديك أي نشاط تجاري مسجل</h2>
           <p className="text-[11px] text-slate-500 leading-relaxed px-4">
-            سند للأعمال يتيح لك ربط نشاطك التجاري، ومشاركة الإشعارات المالية الموثقة مع عملائك مباشرة وتتبع صحتها.
+            سجل نشاطك التجاري لربطه بعمليات التحقق، وإظهار ملف عام موثوق لعملائك.
           </p>
         </div>
         <button
           onClick={() => onNavigate('business-create')}
-          className="w-full bg-[#111111] hover:bg-black text-white text-xs font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+          className="w-full bg-[#111111] hover:bg-black text-white text-xs font-bold py-3 px-4 rounded-lg transition-all shadow-sm flex items-center justify-center gap-2"
         >
           <PlusCircle className="w-4 h-4" />
           <span>سجل نشاطك التجاري الآن</span>
@@ -103,154 +143,185 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     );
   }
 
+  const publicStatus = statusLabel(business.public_status);
+  const isVerified = business.verification_status === 'verified';
+  const hasCatalog = Boolean((business as any).whatsapp_catalog_url);
+  const location = [business.city, business.governorate].filter(Boolean).join('، ');
+  const mediaReady = [Boolean(logoUrl), Boolean(coverUrl), galleryCount > 0].filter(Boolean).length;
+
+  const actions: ActionItem[] = [
+    {
+      title: 'العمليات المالية',
+      description: 'متابعة الإشعارات المرتبطة بالنشاط والتحقق منها.',
+      icon: FileText,
+      onClick: () => onNavigate('business-operations')
+    },
+    {
+      title: 'فريق العمل',
+      description: 'إدارة الأعضاء والصلاحيات التشغيلية.',
+      icon: Users,
+      onClick: () => onNavigate('business-team')
+    },
+    {
+      title: 'تحرير الملف',
+      description: 'تحديث بيانات النشاط، الشعار، الغلاف ومعرض الصور.',
+      icon: Edit3,
+      onClick: () => onNavigate('business-manage-profile'),
+      meta: `${mediaReady}/3 وسائط جاهزة`
+    },
+    {
+      title: 'كتالوج واتساب',
+      description: 'إضافة أو تعديل رابط كتالوج واتساب بزنس فقط.',
+      icon: BookOpen,
+      onClick: () => onNavigate('business-whatsapp-catalog'),
+      meta: hasCatalog ? 'مرتبط' : 'غير مرتبط'
+    },
+    {
+      title: 'الملف العام',
+      description: 'معاينة الصفحة التي تظهر للعملاء والزوار.',
+      icon: Eye,
+      onClick: () => onNavigate('public-business-profile', business.slug)
+    },
+    {
+      title: 'مجتمع الأعمال',
+      description: business.public_status === 'published' ? 'عرض النشاط ضمن الأنشطة المنشورة.' : 'يظهر بعد نشر الملف واعتماده.',
+      icon: Globe,
+      onClick: () => onNavigate('business-community'),
+      disabled: business.public_status !== 'published'
+    }
+  ];
+
   return (
-    <div className="space-y-5 font-arabic" dir="rtl">
-      {/* Header */}
+    <div className="space-y-4 font-arabic" dir="rtl">
       <div className="flex items-center gap-2">
-        <button 
-          onClick={() => onNavigate('profile')} 
-          className="p-2 bg-white rounded-xl border border-slate-200/60 hover:bg-slate-50 transition-all"
+        <button
+          onClick={() => onNavigate('profile')}
+          className="p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+          aria-label="رجوع"
         >
           <ArrowRight className="w-4 h-4" />
         </button>
         <div>
-          <h1 className="text-sm font-bold text-slate-900">إدارة النشاط التجاري</h1>
-          <p className="text-[10px] text-slate-500">لوحة التحكم والتنسيق الخاص بنشاطك التجاري</p>
+          <h1 className="text-lg font-bold text-slate-950 leading-tight">إدارة النشاط التجاري</h1>
+          <p className="text-[11px] text-slate-500">مركز التحكم بالهوية، الفريق، العمليات والظهور العام</p>
         </div>
       </div>
 
-      {/* Business Status Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/60 p-5 space-y-4 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 text-white flex items-center justify-center">
-              <Store className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-xs font-bold text-slate-950">{business.name}</h2>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] text-slate-400 font-normal">{business.city}، {business.governorate}</span>
-              </div>
-            </div>
-          </div>
-          <div>
-            {getStatusBadge(business.public_status)}
-          </div>
-        </div>
-
-        {/* Verification Status Banner */}
-        <div className={`p-3 rounded-2xl flex items-center gap-3 border ${
-          business.verification_status === 'verified'
-            ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800'
-            : 'bg-amber-50/50 border-amber-100 text-amber-800'
-        }`}>
-          {business.verification_status === 'verified' ? (
-            <>
-              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="space-y-0.5 text-right">
-                <p className="text-[10px] font-bold leading-tight font-arabic">حساب نشاطك موثق وشارة الثقة نشطة</p>
-                <p className="text-[9px] text-slate-500 leading-normal font-arabic">جميع الإشعارات الصادرة عن هذا النشاط تحمل علامة صحة التحقق.</p>
-              </div>
-            </>
+      <section className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+        <div className="relative h-28 bg-slate-900">
+          {coverUrl ? (
+            <img src={coverUrl} alt="غلاف النشاط" className="w-full h-full object-cover" />
           ) : (
-            <>
-              <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
-              <div className="space-y-0.5 text-right">
-                <p className="text-[10px] font-bold leading-tight font-arabic">الملف قيد المراجعة والتوثيق</p>
-                <p className="text-[9px] text-slate-500 leading-normal font-arabic">إجراءات المراجعة جارية. يمكنك استخدام التطبيق لإرسال وتتبع العمليات.</p>
-              </div>
-            </>
+            <div className="w-full h-full bg-[linear-gradient(135deg,#111827,#0f766e,#475569)]" />
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+          <span className={`absolute top-3 left-3 border text-[10px] font-bold px-2.5 py-1 rounded-full ${publicStatus.className}`}>
+            {publicStatus.text}
+          </span>
         </div>
+
+        <div className="px-4 pb-4 -mt-8 relative space-y-4">
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex items-end gap-3 min-w-0">
+              <div className="w-16 h-16 rounded-lg bg-white p-1 border border-slate-200 shadow-sm shrink-0">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="شعار النشاط" className="w-full h-full rounded-md object-cover" />
+                ) : (
+                  <div className="w-full h-full rounded-md bg-slate-950 text-white flex items-center justify-center text-xl font-bold">
+                    {business.name.slice(0, 1)}
+                  </div>
+                )}
+              </div>
+              <div className="pb-1 min-w-0">
+                <h2 className="text-base font-bold text-slate-950 truncate">{business.name}</h2>
+                {location && (
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{location}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className={`p-3 rounded-lg flex items-start gap-3 border ${
+            isVerified
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-800'
+              : 'bg-amber-50 border-amber-100 text-amber-800'
+          }`}>
+            {isVerified ? (
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-0.5 text-right">
+              <p className="text-[11px] font-bold leading-tight">
+                {isVerified ? 'النشاط موثق وشارة الثقة نشطة' : 'الملف يحتاج مراجعة أو اعتماد'}
+              </p>
+              <p className="text-[10px] text-slate-600 leading-normal">
+                {isVerified
+                  ? 'ستظهر هوية النشاط الموثقة في الملف العام ومجتمع الأعمال وواجهات العملاء.'
+                  : 'أكمل الهوية والوسائط ثم تابع حالة النشر من هذه اللوحة.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <StatusTile label="الشعار" ready={Boolean(logoUrl)} />
+            <StatusTile label="الغلاف" ready={Boolean(coverUrl)} />
+            <StatusTile label="المعرض" ready={galleryCount > 0} value={galleryCount ? `${galleryCount}` : undefined} />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {actions.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.title}
+              onClick={item.onClick}
+              disabled={item.disabled}
+              className="bg-white hover:bg-slate-50 border border-slate-200 p-3 rounded-lg text-right transition-all shadow-sm disabled:opacity-45 disabled:cursor-not-allowed"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-slate-50 text-slate-800 flex items-center justify-center border border-slate-200 shrink-0">
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold text-slate-950">{item.title}</h3>
+                    {item.meta && (
+                      <span className="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 shrink-0">
+                        {item.meta}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">{item.description}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
+function StatusTile({ label, ready, value }: { label: string; ready: boolean; value?: string }) {
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-center space-y-1">
+      <div className="flex items-center justify-center gap-1 text-[10px] text-slate-500">
+        {ready ? (
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+        ) : (
+          <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+        )}
+        <span>{label}</span>
       </div>
-
-      {/* Admin Action Grid Links */}
-      <div className="grid grid-cols-2 gap-3.5">
-        {/* Operations */}
-        <button
-          onClick={() => onNavigate('business-operations')}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">العمليات المالية</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">متابعة الإشعارات والتحقق</span>
-          </div>
-        </button>
-
-        {/* Team Members */}
-        <button
-          onClick={() => onNavigate('business-team')}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <Users className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">فريق العمل</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">إدارة الأعضاء والصلاحيات</span>
-          </div>
-        </button>
-
-        {/* Edit Profile */}
-        <button
-          onClick={() => onNavigate('business-manage-profile')}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <Edit3 className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">تحرير الملف</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">تحديث معلومات وتفاصيل ملف النشاط</span>
-          </div>
-        </button>
-
-        {/* WhatsApp Catalog */}
-        <button
-          onClick={() => onNavigate('business-manage-profile')}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">كتالوج واتساب</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">اربط كتالوج واتساب بزنس بملف نشاطك ليصل إليه العملاء من سند.</span>
-          </div>
-        </button>
-
-        {/* Public Profile View */}
-        <button
-          onClick={() => onNavigate('public-business-profile', business.slug)}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <Settings className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">الملف العام</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">عرض ملف النشاط للعملاء</span>
-          </div>
-        </button>
-
-        {/* View in Community if published */}
-        <button
-          disabled={business.public_status !== 'published'}
-          onClick={() => onNavigate('business-community')}
-          className="bg-white hover:bg-slate-50 border border-slate-200/60 p-4 rounded-3xl text-right space-y-2 transition-all flex flex-col justify-between shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-center border border-slate-200/50">
-            <Globe className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 block font-arabic">مجتمع الأعمال</h3>
-            <span className="text-[9px] text-slate-400 font-arabic">استكشاف الأنشطة المنشورة</span>
-          </div>
-        </button>
-      </div>
+      <p className={`text-xs font-bold ${ready ? 'text-slate-950' : 'text-slate-400'}`}>
+        {value || (ready ? 'جاهز' : 'ناقص')}
+      </p>
     </div>
   );
 }

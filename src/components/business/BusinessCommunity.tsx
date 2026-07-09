@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getPublicBusinesses, PublicBusinessListItem } from '../../lib/businessApi';
+import { getBusinessMediaSignedUrl, getPublicBusinesses, PublicBusinessListItem } from '../../lib/businessApi';
 import { 
   ArrowRight, Search, Store, MapPin, PhoneCall, 
   MessageSquare, Loader2, AlertCircle, RefreshCw 
@@ -14,6 +14,7 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
   const [error, setError] = useState<string | null>(null);
   
   const [businesses, setBusinesses] = useState<PublicBusinessListItem[]>([]);
+  const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
 
   const loadData = async (query = '') => {
@@ -21,7 +22,16 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
     setError(null);
     try {
       const data = await getPublicBusinesses({ p_search: query || null });
-      setBusinesses(Array.isArray(data) ? data : []);
+      const items = Array.isArray(data) ? data : [];
+      setBusinesses(items);
+      const resolvedEntries = await Promise.all(
+        items.map(async (item) => {
+          const path = (item as any).profile_image_path || item.logo_url || '';
+          if (!path) return [item.id, ''] as const;
+          return [item.id, await getBusinessMediaSignedUrl(path)] as const;
+        })
+      );
+      setLogoUrls(Object.fromEntries(resolvedEntries));
     } catch (err: any) {
       console.error('[BusinessCommunity] Failed loading public businesses:', err);
       setError(err.message || 'فشل في تحميل مجتمع الأعمال.');
@@ -133,8 +143,12 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
             >
               <div className="flex items-start justify-between gap-3 text-right">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-slate-950 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                    {biz.name.slice(0, 1)}
+                  <div className="w-11 h-11 rounded-lg bg-slate-950 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden border border-slate-100">
+                    {logoUrls[biz.id] ? (
+                      <img src={logoUrls[biz.id]} alt={`شعار ${biz.name}`} className="w-full h-full object-cover" />
+                    ) : (
+                      biz.name.slice(0, 1)
+                    )}
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-slate-950 leading-snug">{biz.name}</h3>
