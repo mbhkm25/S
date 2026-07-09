@@ -110,7 +110,7 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
         </button>
         <div>
           <h1 className="text-sm font-bold text-slate-900">إنشاء نشاط تجاري جديد</h1>
-          <p className="text-[10px] text-slate-500">سجل متجرك أو شركتك للتوثيق والتحقق</p>
+          <p className="text-[10px] text-slate-500">سجل نشاطك التجاري للتوثيق والتحقق</p>
         </div>
       </div>
 
@@ -157,7 +157,7 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
             />
           </div>
           <p className="text-[9px] text-slate-400 leading-normal">
-            سيتم استخدامه في رابط متجرك العام: <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[8px]">/b/slug</code>
+            سيتم استخدامه في رابط ملف النشاط العام: <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[8px]">/b/slug</code>
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
         <div className="space-y-1">
           <label className="text-[11px] font-bold text-slate-700 block">وصف مختصر للنشاط <span className="text-slate-400 font-normal">(اختياري)</span></label>
           <textarea
-            placeholder="اكتب وصفًا للخدمات التي يقدمها متجرك..."
+            placeholder="اكتب وصفًا مختصرًا لما يقدمه نشاطك..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}

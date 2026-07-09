@@ -158,19 +158,37 @@ export async function getPublicBusinesses(filters: {
   });
   if (error) {
     console.error('Error in getPublicBusinesses:', error);
+    const fallback = await getPublicBusinessesFallback(filters);
+    if (fallback.length > 0) {
+      return fallback;
+    }
     throw new Error(error.message || 'Failed to fetch public businesses');
   }
   
   if (data) {
     if (Array.isArray(data)) {
-      return data as PublicBusinessListItem[];
+      return data.map(normalizePublicBusinessListItem);
     }
     const anyData = data as any;
     if (anyData.items && Array.isArray(anyData.items)) {
-      return anyData.items as PublicBusinessListItem[];
+      return anyData.items.map(normalizePublicBusinessListItem);
     }
   }
   return [];
+}
+
+function normalizePublicBusinessListItem(item: any): PublicBusinessListItem {
+  return {
+    id: item.id,
+    name: item.name,
+    slug: item.slug,
+    category_name: item.category_name || item.category?.name_ar || item.category?.name || null,
+    governorate: item.governorate,
+    city: item.city,
+    description: item.description || null,
+    logo_url: item.profile_image_path || item.logo_path || item.logo_url || null,
+    whatsapp: item.whatsapp || null
+  };
 }
 
 /**
@@ -180,9 +198,69 @@ export async function getPublicBusinessProfile(slug: string): Promise<PublicBusi
   const { data, error } = await supabase.rpc('get_public_business_profile', { p_slug: slug });
   if (error) {
     console.error('Error in getPublicBusinessProfile:', error);
-    throw new Error(error.message || 'Failed to fetch business profile');
+    return getPublicBusinessProfileFallback(slug, error.message || 'Failed to fetch business profile');
   }
   return data as PublicBusinessDetail;
+}
+
+async function getPublicBusinessesFallback(filters: {
+  p_search?: string | null;
+  p_governorate?: string | null;
+  p_city?: string | null;
+  p_limit?: number;
+  p_offset?: number;
+}): Promise<PublicBusinessListItem[]> {
+  try {
+    let query = supabase
+      .from('business_profiles')
+      .select('*')
+      .eq('public_status', 'published')
+      .order('created_at', { ascending: false })
+      .range(filters.p_offset ?? 0, (filters.p_offset ?? 0) + (filters.p_limit ?? 20) - 1);
+
+    if (filters.p_search) {
+      query = query.or(`name.ilike.%${filters.p_search}%,city.ilike.%${filters.p_search}%,governorate.ilike.%${filters.p_search}%`);
+    }
+    if (filters.p_governorate) {
+      query = query.eq('governorate', filters.p_governorate);
+    }
+    if (filters.p_city) {
+      query = query.eq('city', filters.p_city);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) {
+      console.warn('Fallback public businesses query failed:', error);
+      return [];
+    }
+
+    return data.map(normalizePublicBusinessListItem);
+  } catch (fallbackError) {
+    console.warn('Fallback public businesses exception:', fallbackError);
+    return [];
+  }
+}
+
+async function getPublicBusinessProfileFallback(slug: string, originalMessage: string): Promise<PublicBusinessDetail> {
+  const { data, error } = await supabase
+    .from('business_profiles')
+    .select('*')
+    .eq('slug', slug)
+    .eq('public_status', 'published')
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error('Fallback getPublicBusinessProfile failed:', error);
+    throw new Error(error?.message || originalMessage);
+  }
+
+  const item = data as any;
+  return {
+    ...item,
+    category_name: item.category_name || null,
+    logo_url: item.profile_image_path || item.logo_path || item.logo_url || null,
+    whatsapp_catalog_url: item.whatsapp_catalog_url || null
+  } as PublicBusinessDetail;
 }
 
 /**
@@ -464,113 +542,6 @@ export async function updateBusinessTeamMemberStatus(
   return !!res;
 }
 
-export interface BusinessCatalogItem {
-  id: string;
-  business_id: string;
-  item_type: 'product' | 'service';
-  title: string;
-  description: string | null;
-  price: number | null;
-  currency: string | null;
-  image_paths: string[] | null;
-  features: string[] | null;
-  status: 'active' | 'hidden' | 'draft';
-  created_at: string;
-}
-
-export async function upsertBusinessCatalogItem(payload: {
-  id?: string | null;
-  p_business_id: string;
-  p_item_type: 'product' | 'service';
-  p_title: string;
-  p_description?: string | null;
-  p_price?: number | null;
-  p_currency?: string | null;
-  p_image_paths?: string[] | null;
-  p_features?: string[] | null;
-  p_status?: 'active' | 'hidden' | 'draft';
-}): Promise<BusinessCatalogItem> {
-  const res = await callBusinessAction('upsert_catalog_item', payload);
-  return res as BusinessCatalogItem;
-}
-
-export async function getBusinessCatalog(businessId: string, includeHidden = false): Promise<BusinessCatalogItem[]> {
-  try {
-    const { data, error } = await supabase.rpc('get_business_catalog', {
-      p_business_id: businessId,
-      p_include_hidden: includeHidden
-    });
-    if (!error && data) {
-      if (Array.isArray(data)) return data as BusinessCatalogItem[];
-      const anyData = data as any;
-      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessCatalogItem[];
-      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessCatalogItem[];
-    }
-    if (error) {
-      console.warn('RPC get_business_catalog failed, trying business_action_get_catalog:', error);
-    }
-  } catch (e) {
-    console.warn('RPC get_business_catalog exception, trying business_action_get_catalog:', e);
-  }
-
-  try {
-    const { data, error } = await supabase.rpc('business_action_get_catalog', {
-      p_payload: { business_id: businessId, include_hidden: includeHidden }
-    });
-    if (!error && data) {
-      let parsed = data;
-      if (typeof data === 'string') {
-        try { parsed = JSON.parse(data); } catch(_) {}
-      }
-      if (Array.isArray(parsed)) return parsed as BusinessCatalogItem[];
-      const anyData = parsed as any;
-      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as BusinessCatalogItem[];
-      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as BusinessCatalogItem[];
-    }
-    if (error) {
-      console.warn('RPC business_action_get_catalog failed, trying Edge Function:', error);
-    }
-  } catch (e) {
-    console.warn('RPC business_action_get_catalog exception, trying Edge Function:', e);
-  }
-
-  try {
-    const res = await callBusinessAction('get_business_catalog', {
-      p_business_id: businessId,
-      p_include_hidden: includeHidden
-    });
-    if (res) {
-      if (Array.isArray(res)) return res as BusinessCatalogItem[];
-      const anyRes = res as any;
-      if (anyRes.items && Array.isArray(anyRes.items)) return anyRes.items as BusinessCatalogItem[];
-      if (anyRes.data && Array.isArray(anyRes.data)) return anyRes.data as BusinessCatalogItem[];
-    }
-  } catch (err: any) {
-    console.error('Edge Function get_business_catalog failed:', err);
-    throw new Error('فشل تحميل كتالوج المعروضات من السيرفر. تأكد من اتصالك بالشبكة.');
-  }
-  return [];
-}
-
-export interface BusinessInquiry {
-  id: string;
-  business_id: string;
-  catalog_item_id?: string | null;
-  inquiry_type: string;
-  message: string | null;
-  created_at: string;
-}
-
-export async function createBusinessInquiry(payload: {
-  p_business_id: string;
-  p_catalog_item_id?: string | null;
-  p_inquiry_type: string;
-  p_message?: string | null;
-}): Promise<BusinessInquiry> {
-  const res = await callBusinessAction('create_inquiry', payload);
-  return res as BusinessInquiry;
-}
-
 export interface UploadMediaResult {
   path: string;
   signedUrl: string;
@@ -579,7 +550,7 @@ export interface UploadMediaResult {
 
 export async function uploadBusinessMedia(params: {
   businessId: string;
-  assetType: 'cover' | 'profile' | 'gallery' | 'catalog';
+  assetType: 'cover' | 'profile' | 'gallery';
   file: File;
   displayOrder?: number | null;
   altText?: string | null;

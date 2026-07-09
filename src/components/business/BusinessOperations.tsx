@@ -107,7 +107,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
           <div className="space-y-1">
             <h2 className="text-xs font-bold text-slate-900">لا توجد عمليات مسجلة بعد</h2>
             <p className="text-[10px] text-slate-400 leading-relaxed px-4">
-              عند رفع إشعارات دفع وتعيين هذا المتجر كطرف، ستظهر جميع المعاملات وتفاصيلها هنا.
+              عند رفع إشعارات دفع وتعيين هذا النشاط كطرف، ستظهر جميع المعاملات وتفاصيلها هنا.
             </p>
           </div>
         </div>

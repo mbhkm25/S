@@ -222,7 +222,7 @@ export default function BusinessTeam({ onNavigate }: BusinessTeamProps) {
           <div className="space-y-3.5">
             {membersList.map((member) => {
               const isOwner = member.role === 'owner';
-              const nameDisplay = member.profile?.full_name || 'موظف في متجر';
+              const nameDisplay = member.profile?.full_name || 'عضو في فريق النشاط';
               const phoneDisplay = member.profile?.phone ? formatYemeniDisplay(member.profile.phone) : '—';
               const roleDisplay = member.role === 'owner' ? 'المالك' : member.role === 'manager' ? 'مدير' : 'كاشير';
 

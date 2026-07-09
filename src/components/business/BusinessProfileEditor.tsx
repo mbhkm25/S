@@ -74,7 +74,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
       setWhatsappCatalogUrl((current as any).whatsapp_catalog_url || '');
       
       // Load current cover & profile preview URLs
-      const profilePath = current.logo_path || '';
+      const profilePath = (current as any).profile_image_path || current.logo_path || '';
       setProfileImagePath(profilePath);
       if (profilePath) {
         const signUrl = await getBusinessMediaSignedUrl(profilePath);
@@ -248,7 +248,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
           <div className="bg-white rounded-3xl border border-slate-200/80 p-5 space-y-5 shadow-xs">
             <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
               <Image className="w-4.5 h-4.5 text-slate-700" />
-              <h2 className="text-xs font-bold text-slate-900">الهوية البصرية للمتجر</h2>
+              <h2 className="text-xs font-bold text-slate-900">الهوية البصرية للنشاط</h2>
             </div>
 
             {/* Cover Image Upload */}
@@ -323,7 +323,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
 
               {/* Gallery List (up to 3) */}
               <div className="space-y-2">
-                <label className="text-[11px] font-bold text-slate-500 block">معرض صور المتجر ({toLatinDigits(galleryPaths.length)}/3)</label>
+                <label className="text-[11px] font-bold text-slate-500 block">معرض صور النشاط ({toLatinDigits(galleryPaths.length)}/3)</label>
                 <div className="flex gap-2">
                   {galleryPreviews.map((url, index) => (
                     <div key={index} className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 relative group overflow-hidden shadow-2xs">
@@ -447,22 +447,6 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
               />
             </div>
 
-            {/* Input: WhatsApp Catalog URL */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-500 block">رابط كتالوج واتساب بزنس</label>
-              <input
-                type="text"
-                value={whatsappCatalogUrl}
-                onChange={(e) => setWhatsappCatalogUrl(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white px-3 py-2.5 rounded-xl text-xs text-slate-850 font-mono outline-none transition-all text-left"
-                placeholder="https://wa.me/c/967..."
-                dir="ltr"
-              />
-              <p className="text-[9px] text-slate-400 font-arabic">
-                ألصق رابط كتالوج واتساب بزنس الخاص بنشاطك. سيظهر للزوار داخل ملفك التجاري في سند.
-              </p>
-            </div>
-
             {/* Input: Address text */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 block">العنوان النصي المفصل</label>
@@ -506,7 +490,7 @@ export default function BusinessProfileEditor({ onNavigate }: BusinessProfileEdi
             ) : (
               <Save className="w-4 h-4" />
             )}
-            <span>حفظ وحفظ التغييرات الهوية</span>
+            <span>حفظ التغييرات</span>
           </button>
         </form>
       </div>
