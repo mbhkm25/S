@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   getPublicBusinessProfile, joinBusinessAsCustomer, 
-  getBusinessMediaSignedUrl,
+  getBusinessMediaSignedUrl, getUserBusinessContexts,
   PublicBusinessDetail
 } from '../../lib/businessApi';
 import { 
@@ -23,6 +23,7 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
   
   const [profile, setProfile] = useState<PublicBusinessDetail | null>(null);
   const [linkedSuccess, setLinkedSuccess] = useState(false);
+  const [isCustomer, setIsCustomer] = useState(false);
 
   // Resolved Signed Media URLs
   const [logoUrl, setLogoUrl] = useState('');
@@ -35,6 +36,9 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
     try {
       const data = await getPublicBusinessProfile(slug);
       setProfile(data);
+
+      const contexts = await getUserBusinessContexts().catch(() => null);
+      setIsCustomer(!!contexts?.customer_businesses?.find((biz: any) => biz.id === data.id));
 
       // Resolve profile & cover signed URLs
       const profilePath = (data as any).profile_image_path || (data as any).logo_path || data.logo_url || '';
@@ -62,6 +66,7 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
       }
     } catch (err: any) {
       setError(err.message || 'فشل في تحميل الملف التجاري.');
+      setIsCustomer(false);
     } finally {
       setLoading(false);
     }
@@ -78,6 +83,7 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
     try {
       await joinBusinessAsCustomer(profile.id, 'profile');
       setLinkedSuccess(true);
+      setIsCustomer(true);
     } catch (err: any) {
       setError(err.message || 'فشل الارتباط بالنشاط التجاري.');
     } finally {
@@ -177,6 +183,12 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
               <MapPin className="w-3 h-3 text-slate-300" />
               <span>{profile.city}، {profile.governorate}</span>
             </div>
+            {profile.address_text && (
+              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                <MapPin className="w-3 h-3 text-slate-300" />
+                <span>{profile.address_text}</span>
+              </div>
+            )}
           </div>
 
           {profile.description && (
@@ -196,27 +208,34 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-            {linkedSuccess ? (
-              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-[10px] text-emerald-800 font-bold flex items-center justify-center gap-1.5 animate-scale-up">
+          <div className="flex flex-col gap-3 pt-2 border-t border-slate-100">
+            {isCustomer || linkedSuccess ? (
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-[10px] text-emerald-800 font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
-                <span>تم الارتباط بنجاح كعميل مسجل للنشاط.</span>
+                <div>
+                  {isCustomer ? 'أنت عميل مسجل لدى هذا النشاط.' : 'تم الارتباط بنجاح كعميل مسجل للنشاط.'}
+                </div>
               </div>
             ) : (
-              <button
-                onClick={handleJoinAsCustomer}
-                disabled={linking}
-                className="w-full bg-[#111111] hover:bg-black text-white text-xs font-bold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {linking ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <UserCheck className="w-4 h-4" />
-                    <span>الارتباط كعميل مسجل</span>
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="text-[10px] text-slate-500">
+                  سجل كعميل مسجل للحفاظ على سجل ارتباطك مع النشاط.
+                </div>
+                <button
+                  onClick={handleJoinAsCustomer}
+                  disabled={linking}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-950 hover:bg-black text-white text-xs font-bold py-2.5 px-4 transition-all shadow-sm disabled:opacity-50"
+                >
+                  {linking ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      <span>سجل كعميل مسجل</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
 
             <div className="flex gap-2">

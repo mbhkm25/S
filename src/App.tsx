@@ -18,6 +18,7 @@ import BusinessCommunity from './components/business/BusinessCommunity';
 import PublicBusinessProfile from './components/business/PublicBusinessProfile';
 import BusinessProfileEditor from './components/business/BusinessProfileEditor';
 import BusinessWhatsAppCatalog from './components/business/BusinessWhatsAppCatalog';
+import BusinessCustomers from './components/business/BusinessCustomers';
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
@@ -28,7 +29,7 @@ export default function App() {
   const [sessionChecked, setSessionChecked] = useState(false);
   
   // Navigation states
-  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<'link' | 'qr' | 'search' | 'app'>('link');
 
@@ -86,6 +87,9 @@ export default function App() {
     }
     if (path.includes('/business/manage/whatsapp-catalog')) {
       return { type: 'business-whatsapp-catalog' };
+    }
+    if (path.includes('/business/manage/customers')) {
+      return { type: 'business-customers' };
     }
     if (path.includes('/business/manage/catalog')) {
       const base = import.meta.env.VITE_APP_BASE_PATH || '/';
@@ -183,6 +187,8 @@ export default function App() {
         setCurrentPage('business-manage-profile');
       } else if (parsed.type === 'business-whatsapp-catalog') {
         setCurrentPage('business-whatsapp-catalog');
+      } else if (parsed.type === 'business-customers') {
+        setCurrentPage('business-customers');
       } else if (parsed.type === 'business-community') {
         setCurrentPage('business-community');
       } else if (parsed.type === 'public-business-profile' && parsed.slug) {
@@ -221,6 +227,8 @@ export default function App() {
       setCurrentPage('business-manage-profile');
     } else if (parsed.type === 'business-whatsapp-catalog') {
       setCurrentPage('business-whatsapp-catalog');
+      } else if (parsed.type === 'business-customers') {
+        setCurrentPage('business-customers');
     } else if (parsed.type === 'business-community') {
       setCurrentPage('business-community');
     } else if (parsed.type === 'public-business-profile' && parsed.slug) {
@@ -603,7 +611,7 @@ export default function App() {
                 profile={profile}
                 onLogout={handleLogoutSuccess}
                 refreshProfile={refreshProfile}
-                onNavigate={(page) => navigateTo(page)}
+                onNavigate={(page, token) => navigateTo(page, token)}
               />
             )}
 
@@ -647,6 +655,10 @@ export default function App() {
 
             {currentPage === 'business-whatsapp-catalog' && (
               <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
+            )}
+
+            {currentPage === 'business-customers' && (
+              <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
             )}
 
             {currentPage === 'business-community' && (
