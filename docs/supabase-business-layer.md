@@ -16,26 +16,41 @@ This document records the current SANAD MVP business-layer contract as used by t
 
 ## Business Workspace Foundation
 
+Implementation status: `Workspace Foundation v2` is prepared for review on the
+`experimental` branch and has not been applied to the production Supabase
+project. The production database still has no workspace tables or
+`business_profiles.workspace_id` until the migration is explicitly approved.
+
 `business_workspaces` is the internal operations layer for a business owner and their team. It is separate from the public business profile:
 
 - The workspace owns operational concepts such as team access and financial-account references.
 - `business_profiles.workspace_id` links the public profile to its internal workspace.
 - Existing `business_profiles.id` flows remain supported for backwards compatibility.
 - Customers stay linked through `business_customers`; they do not receive workspace access.
-- Owners and active team members are represented in `business_workspace_members`.
+- Workspace owners and explicitly granted workspace members are represented in
+  `business_workspace_members`; business-level team membership is not promoted
+  automatically.
 
-The first workspace migration backfills one workspace per existing `business_profiles` row, links the profile to that workspace, and creates owner/team workspace membership from the existing profile owner and `business_team_members` records.
+The v2 migration backfills one default workspace per existing owner, links all
+business profiles owned by that user to the same workspace, and creates only the
+owner membership. Existing business team members remain business-scoped; they
+do not receive workspace access automatically.
 
-Workspace RLS uses two narrow `SECURITY DEFINER` helper functions:
+Workspace RLS uses narrow `SECURITY DEFINER` helper functions in the non-exposed
+`private` schema:
 
-- `is_business_workspace_owner(workspace_id)`
-- `is_business_workspace_member(workspace_id)`
+- `private.is_business_workspace_member(workspace_id)`
+- `private.can_manage_business_workspace(workspace_id)`
+- `private.can_create_business_in_workspace(workspace_id)`
 
 They return booleans only, are granted to `authenticated`, and exist to avoid recursive RLS policies when checking membership across workspace tables.
 
 The corresponding migration is:
 
-- `supabase/migrations/20260709_business_workspace_foundation.sql`
+- `supabase/migrations/20260710130348_business_workspace_foundation_v2.sql`
+
+The rejected `20260709_business_workspace_foundation.sql` migration is not part
+of the repository and must not be applied.
 
 ## WhatsApp Catalog Pivot
 
