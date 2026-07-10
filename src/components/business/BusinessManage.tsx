@@ -1,8 +1,9 @@
 import { ElementType, useEffect, useState } from 'react';
-import { getBusinessMediaSignedUrl, getUserBusinessContexts, BusinessProfile } from '../../lib/businessApi';
+import { getBusinessMediaSignedUrl, getUserBusinessContexts, BusinessProfile, BusinessContexts } from '../../lib/businessApi';
 import {
   AlertCircle,
   ArrowRight,
+  Briefcase,
   BookOpen,
   CheckCircle2,
   Edit3,
@@ -37,6 +38,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
+  const [businessContexts, setBusinessContexts] = useState<BusinessContexts | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [galleryCount, setGalleryCount] = useState(0);
@@ -46,6 +48,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     setError(null);
     try {
       const contexts = await getUserBusinessContexts();
+        setBusinessContexts(contexts);
       const current = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0] || null;
       setBusiness(current);
 
@@ -146,8 +149,15 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   const publicStatus = statusLabel(business.public_status);
   const isVerified = business.verification_status === 'verified';
   const hasCatalog = Boolean((business as any).whatsapp_catalog_url);
+  const workspaceId = (business as any).workspace_id || null;
+  const workspaceRole = (business as any).workspace_role || (businessContexts?.owned_businesses?.some((item) => item.id === business.id) ? 'owner' : 'team_member');
+  const workspaceStatus = (business as any).workspace_status || (workspaceId ? 'active' : null);
   const location = [business.city, business.governorate].filter(Boolean).join('، ');
   const mediaReady = [Boolean(logoUrl), Boolean(coverUrl), galleryCount > 0].filter(Boolean).length;
+  const customerCount = businessContexts?.customer_businesses?.length || 0;
+  const customerSectionText = business.public_status === 'published'
+    ? 'الملف العام منشور، ويمكن للعملاء تسجيل أنفسهم كعملاء مسجلين.'
+    : 'الملف العام غير منشور بعد. انشر الملف أولاً حتى يتمكن العملاء من التسجيل.';
 
   const actions: ActionItem[] = [
     {
@@ -181,6 +191,12 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       description: 'معاينة الصفحة التي تظهر للعملاء والزوار.',
       icon: Eye,
       onClick: () => onNavigate('public-business-profile', business.slug)
+    },
+    {
+      title: 'إدارة العملاء',
+      description: 'عرض وإدارة قائمة العملاء المسجلين المرتبطين بالنشاط.',
+      icon: Users,
+      onClick: () => onNavigate('business-customers', business.id)
     },
     {
       title: 'مجتمع الأعمال',
@@ -220,7 +236,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
           </span>
         </div>
 
-        <div className="px-4 pb-4 -mt-8 relative space-y-4">
+        <div className="px-4 pt-4 pb-4 relative space-y-4">
           <div className="flex items-end justify-between gap-3">
             <div className="flex items-end gap-3 min-w-0">
               <div className="w-16 h-16 rounded-lg bg-white p-1 border border-slate-200 shadow-sm shrink-0">
@@ -271,8 +287,39 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
             <StatusTile label="الغلاف" ready={Boolean(coverUrl)} />
             <StatusTile label="المعرض" ready={galleryCount > 0} value={galleryCount ? `${galleryCount}` : undefined} />
           </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-800 flex items-center justify-center shrink-0">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1 text-right">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-bold text-slate-950">مساحة العمل التشغيلية</h3>
+                  <span className={`text-[9px] rounded-full px-2 py-0.5 border ${
+                    workspaceId ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'
+                  }`}>
+                    {workspaceId ? 'مربوطة' : 'بانتظار التحديث'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  هذه مساحة العمل الداخلية لإدارة العمليات والفريق والحسابات التشغيلية. الملف العام يبقى واجهة ثقة اختيارية للعملاء.
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="text-[9px] bg-white text-slate-600 border border-slate-200 rounded-full px-2 py-0.5">
+                    الدور: {workspaceRole === 'owner' ? 'مالك' : 'عضو فريق'}
+                  </span>
+                  <span className="text-[9px] bg-white text-slate-600 border border-slate-200 rounded-full px-2 py-0.5">
+                    الحالة: {workspaceStatus === 'active' ? 'نشطة' : 'غير مفعلة'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
+
+        {/* Customer management moved to action cards */}
 
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {actions.map((item) => {

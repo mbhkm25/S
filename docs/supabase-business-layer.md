@@ -4,12 +4,38 @@ This document records the current SANAD MVP business-layer contract as used by t
 
 ## Core Tables
 
+- `business_workspaces`: internal operational workspace owned by an individual user.
+- `business_workspace_members`: workspace membership for owners and team members.
+- `business_workspace_financial_accounts`: operational financial-account references linked to a workspace.
 - `business_profiles`: public and private business profile metadata.
 - `business_team_members`: team membership and roles for a business.
 - `business_customers`: user-to-business customer relationships.
 - `business_invitations`: pending and completed team invitations.
 - `business_operation_links`: links between financial operations and businesses.
 - `business_media_assets`: metadata for uploaded business media.
+
+## Business Workspace Foundation
+
+`business_workspaces` is the internal operations layer for a business owner and their team. It is separate from the public business profile:
+
+- The workspace owns operational concepts such as team access and financial-account references.
+- `business_profiles.workspace_id` links the public profile to its internal workspace.
+- Existing `business_profiles.id` flows remain supported for backwards compatibility.
+- Customers stay linked through `business_customers`; they do not receive workspace access.
+- Owners and active team members are represented in `business_workspace_members`.
+
+The first workspace migration backfills one workspace per existing `business_profiles` row, links the profile to that workspace, and creates owner/team workspace membership from the existing profile owner and `business_team_members` records.
+
+Workspace RLS uses two narrow `SECURITY DEFINER` helper functions:
+
+- `is_business_workspace_owner(workspace_id)`
+- `is_business_workspace_member(workspace_id)`
+
+They return booleans only, are granted to `authenticated`, and exist to avoid recursive RLS policies when checking membership across workspace tables.
+
+The corresponding migration is:
+
+- `supabase/migrations/20260709_business_workspace_foundation.sql`
 
 ## WhatsApp Catalog Pivot
 

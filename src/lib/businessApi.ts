@@ -2,6 +2,9 @@ import { supabase } from './supabase';
 
 export interface BusinessProfile {
   id: string;
+  workspace_id?: string | null;
+  workspace_status?: 'active' | 'suspended' | 'archived' | string | null;
+  workspace_role?: 'owner' | 'team_member' | string | null;
   name: string;
   slug: string;
   category_id: string | null;
@@ -41,9 +44,27 @@ export interface BusinessInvitation {
 
 export interface BusinessContexts {
   owned_businesses: BusinessProfile[];
-  team_businesses: (BusinessProfile & { team_role: string })[];
-  customer_businesses: BusinessProfile[];
+  team_businesses: (BusinessProfile & {
+    team_role?: string | null;
+    membership_id?: string | null;
+    membership_status?: string | null;
+  })[];
+  customer_businesses: (BusinessProfile & {
+    customer_id?: string | null;
+    customer_status?: string | null;
+    customer_source?: string | null;
+  })[];
   pending_invitations: BusinessInvitation[];
+}
+
+export interface BusinessWorkspace {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  status: 'active' | 'suspended' | 'archived';
+  default_business_profile_id?: string | null;
+  created_at: string;
+  updated_at?: string | null;
 }
 
 export interface PublicBusinessListItem {
@@ -70,6 +91,13 @@ export interface PublicBusinessDetail {
   whatsapp: string | null;
   verification_status: string;
   whatsapp_catalog_url?: string | null;
+  display_tagline?: string | null;
+  address_text?: string | null;
+  cover_image_path?: string | null;
+  profile_image_path?: string | null;
+  logo_path?: string | null;
+  gallery_paths?: string[] | null;
+  public_status?: string;
 }
 
 export interface BusinessOperationItem {
@@ -113,7 +141,51 @@ export async function getUserBusinessContexts(): Promise<BusinessContexts> {
     console.error('Error in getUserBusinessContexts:', error);
     throw new Error(error.message || 'Failed to fetch business contexts');
   }
-  return data as BusinessContexts;
+  return normalizeBusinessContexts(data);
+}
+
+function normalizeBusinessContexts(data: any): BusinessContexts {
+  const owned = Array.isArray(data?.owned_businesses) ? data.owned_businesses : [];
+  const team = Array.isArray(data?.team_businesses) ? data.team_businesses : [];
+  const customers = Array.isArray(data?.customer_businesses) ? data.customer_businesses : [];
+
+  return {
+    owned_businesses: owned.map(normalizeBusinessProfileContext),
+    team_businesses: team.map((row: any) => {
+      const business = normalizeBusinessProfileContext(row?.business || row);
+      return {
+        ...business,
+        membership_id: row?.membership_id || row?.id || null,
+        membership_status: row?.status || row?.membership_status || null,
+        team_role: row?.workspace_role || row?.team_role || row?.label || 'team_member',
+        workspace_id: row?.workspace_id || business.workspace_id || null,
+        workspace_status: row?.workspace_status || business.workspace_status || null,
+        workspace_role: row?.workspace_role || business.workspace_role || 'team_member'
+      };
+    }),
+    customer_businesses: customers.map((row: any) => {
+      const business = normalizeBusinessProfileContext(row?.business || row);
+      return {
+        ...business,
+        customer_id: row?.customer_id || row?.id || null,
+        customer_status: row?.status || row?.customer_status || null,
+        customer_source: row?.source || row?.customer_source || null,
+        workspace_id: row?.workspace_id || business.workspace_id || null,
+        workspace_status: row?.workspace_status || business.workspace_status || null,
+        workspace_role: row?.workspace_role || business.workspace_role || 'customer'
+      };
+    }),
+    pending_invitations: Array.isArray(data?.pending_invitations) ? data.pending_invitations : []
+  };
+}
+
+function normalizeBusinessProfileContext(item: any): BusinessProfile {
+  return {
+    ...item,
+    workspace_id: item?.workspace_id || item?.workspace?.id || null,
+    workspace_status: item?.workspace_status || item?.workspace?.status || null,
+    workspace_role: item?.workspace_role || item?.workspace?.role || null
+  } as BusinessProfile;
 }
 
 /**
@@ -134,7 +206,8 @@ export async function createBusinessProfile(payload: {
     console.error('Error in createBusinessProfile:', error);
     throw new Error(error.message || 'Failed to create business profile');
   }
-  return data as BusinessProfile;
+  const result = (data as any)?.business ?? (data as any)?.data?.business ?? data;
+  return normalizeBusinessProfileContext(result);
 }
 
 /**
@@ -335,6 +408,9 @@ export async function getBusinessOperations(businessId: string): Promise<Busines
 
 export interface LinkableBusinessItem {
   business_id: string;
+  workspace_id?: string | null;
+  workspace_status?: string | null;
+  workspace_role?: string | null;
   name: string;
   slug: string;
   label: string | null;
@@ -524,6 +600,44 @@ export async function getBusinessTeam(businessId: string): Promise<BusinessTeamM
     console.error('Edge Function get_business_team failed:', err);
     throw new Error('فشل تحميل أعضاء الفريق من السيرفر. تأكد من اتصالك بالشبكة.');
   }
+  return [];
+}
+
+/**
+ * Get customers for a specific business.
+ */
+export async function getBusinessCustomers(businessId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.rpc('get_business_customers', { p_business_id: businessId });
+    if (!error && data) {
+      if (Array.isArray(data)) return data as any[];
+      const anyData = data as any;
+      if (anyData.items && Array.isArray(anyData.items)) return anyData.items as any[];
+      if (anyData.data && Array.isArray(anyData.data)) return anyData.data as any[];
+    }
+  } catch (e) {
+    // ignore and fallback
+  }
+
+  // Fallback: try direct table join to profiles
+  try {
+    const { data, error } = await supabase
+      .from('business_customers')
+      .select(`id, user_id, created_at, profiles:profiles(full_name, phone)`)
+      .eq('business_id', businessId);
+    if (!error && data) {
+      return (data as any[]).map((row: any) => ({
+        id: row.id,
+        user_id: row.user_id,
+        created_at: row.created_at,
+        full_name: row.profiles?.full_name || null,
+        phone: row.profiles?.phone || null
+      }));
+    }
+  } catch (e) {
+    console.error('Fallback getBusinessCustomers failed:', e);
+  }
+
   return [];
 }
 

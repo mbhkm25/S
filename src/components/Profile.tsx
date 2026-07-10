@@ -15,7 +15,7 @@ interface ProfileProps {
   profile: Profile;
   onLogout: () => void;
   refreshProfile: () => Promise<Profile | null>;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, token?: string) => void;
 }
 
 const GOVERNORATES = [
