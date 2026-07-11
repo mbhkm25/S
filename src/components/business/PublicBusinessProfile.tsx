@@ -35,13 +35,23 @@ import {
 
 interface PublicBusinessProfileProps {
   slug: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, token?: string) => void;
+  initialTab?: TabType;
 }
 
 type TabType = 'overview' | 'products' | 'services' | 'financial' | 'complaints';
 
 // Sub-component for product card to comply with React Hooks Rules
-function PublicProductCardItem({ prod, whatsapp }: { prod: any; whatsapp: string; key?: any }) {
+function PublicProductCardItem({ 
+  prod, 
+  businessSlug, 
+  onNavigate 
+}: { 
+  prod: any; 
+  businessSlug: string; 
+  onNavigate: (page: string, token?: string) => void;
+  key?: any;
+}) {
   const [imgUrl, setImgUrl] = useState('');
 
   useEffect(() => {
@@ -58,41 +68,45 @@ function PublicProductCardItem({ prod, whatsapp }: { prod: any; whatsapp: string
     };
   }, [prod.image_path]);
 
-  const rawMsg = `مرحباً، أود الاستفسار عن شراء المنتج: ${prod.name} المعروض في صفحتكم على سند.`;
-  const askUrl = prod.whatsapp_url || `https://wa.me/${whatsapp}?text=${encodeURIComponent(rawMsg)}`;
-
   return (
-    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex gap-3 shadow-2xs hover:border-slate-350 transition-all">
-      <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 shrink-0 overflow-hidden shadow-3xs flex items-center justify-center">
+    <button
+      onClick={() => onNavigate('public-product-detail', `${businessSlug}/${prod.id}`)}
+      className="w-full bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-right transition-all flex flex-col hover:border-slate-350 active:scale-[0.98] shadow-3xs hover:shadow-2xs text-slate-800"
+    >
+      <div className="w-full aspect-square bg-slate-50 border-b border-slate-100 relative shrink-0">
         {imgUrl ? (
-          <img src={imgUrl} alt={prod.name} className="w-full h-full object-cover" />
+          <img 
+            src={imgUrl} 
+            alt={prod.name} 
+            className="w-full h-full object-cover object-center" 
+            loading="lazy" 
+          />
         ) : (
-          <ImageIcon className="w-5 h-5 text-slate-350" />
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="w-6 h-6 text-slate-300" />
+          </div>
         )}
       </div>
 
-      <div className="flex-1 space-y-1 text-right min-w-0 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-900 truncate">{prod.name}</h4>
-            {prod.price && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded shrink-0">{prod.price}</span>}
-          </div>
-          <p className="text-[10px] text-slate-500 line-clamp-1">{prod.description}</p>
+      <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5 w-full min-w-0">
+        <div className="space-y-0.5 min-w-0">
+          <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight">
+            {prod.name}
+          </h4>
+          {prod.description && (
+            <p className="text-[10px] text-slate-450 line-clamp-1 leading-normal">
+              {prod.description}
+            </p>
+          )}
         </div>
 
-        <div className="pt-2 flex justify-end">
-          <a
-            href={askUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-white rounded-lg hover:bg-black text-[9px] font-bold transition-all shadow-sm"
-          >
-            <MessageSquare className="w-3 h-3" />
-            <span>استفسار وطلب</span>
-          </a>
+        <div className="flex items-baseline justify-between gap-1 flex-wrap pt-0.5 border-t border-slate-50 w-full">
+          <span className="text-xs font-extrabold text-indigo-700 font-mono">
+            {prod.price ? `${prod.price}` : 'السعر عند الطلب'}
+          </span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -152,7 +166,7 @@ function PublicServiceCardItem({ serv, whatsapp }: { serv: any; whatsapp: string
   );
 }
 
-export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusinessProfileProps) {
+export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: PublicBusinessProfileProps) {
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +182,13 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Working Status
   const [openStatus, setOpenStatus] = useState<{ open: boolean; text: string } | null>(null);
@@ -621,9 +641,14 @@ export default function PublicBusinessProfile({ slug, onNavigate }: PublicBusine
               {products.length === 0 ? (
                 <div className="p-12 text-center text-slate-400 text-xs">لا توجد منتجات مسجلة حالياً.</div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 px-1">
                   {products.map((prod: any) => (
-                    <PublicProductCardItem key={prod.id} prod={prod} whatsapp={profile.whatsapp || ''} />
+                    <PublicProductCardItem 
+                      key={prod.id} 
+                      prod={prod} 
+                      businessSlug={profile.slug} 
+                      onNavigate={onNavigate} 
+                    />
                   ))}
                 </div>
               )}

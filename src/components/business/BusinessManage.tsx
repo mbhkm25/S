@@ -258,7 +258,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     saturday: 'السبت',
     sunday: 'الأحد',
     monday: 'الاثنين',
-    tuesday: 'التعداد',
+    tuesday: 'الثلاثاء',
     wednesday: 'الأربعاء',
     thursday: 'الخميس',
     friday: 'الجمعة'
@@ -672,19 +672,14 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   };
 
   const loadBusinessData = async () => {
-    console.log('[SANAD DEBUG] loadBusinessData started');
     setLoading(true);
     setError(null);
     try {
-      console.log('[SANAD DEBUG] calling getUserBusinessContexts...');
       const contexts = await getUserBusinessContexts();
-      console.log('[SANAD DEBUG] contexts fetched successfully:', contexts);
       setBusinessContexts(contexts);
       const current = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0] || null;
-      console.log('[SANAD DEBUG] current business determined:', current);
 
       if (!current) {
-        console.log('[SANAD DEBUG] no business found for user. resolving...');
         setBusiness(null);
         setLogoUrl('');
         setCoverUrl('');
@@ -692,14 +687,11 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
         return;
       }
 
-      console.log('[SANAD DEBUG] calling getPublicBusinessProfile for slug:', current.slug);
       const fullBiz = await getPublicBusinessProfile(current.slug).catch((err) => {
-        console.warn('[SANAD DEBUG] getPublicBusinessProfile failed or caught:', err);
+        console.error('getPublicBusinessProfile failed:', err);
         return null;
       });
-      console.log('[SANAD DEBUG] fullBiz fetched:', fullBiz);
       const mergedBusiness = fullBiz ? { ...current, ...fullBiz } : current;
-      console.log('[SANAD DEBUG] mergedBusiness:', mergedBusiness);
       setBusiness(mergedBusiness);
 
       // Map Info fields
@@ -729,51 +721,43 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       const complaints = sections.complaints || [];
       setComplaintsList(complaints);
 
-      console.log('[SANAD DEBUG] generating QRCode for slug:', mergedBusiness.slug);
       // Generate Public Profile Link QR Code
       const profileUrl = `${window.location.origin}/b/${mergedBusiness.slug}`;
       const qrDataUrl = await QRCode.toDataURL(profileUrl, { width: 250, margin: 2 }).catch((e) => {
-        console.warn('[SANAD DEBUG] QRCode generation failed:', e);
+        console.error('QRCode generation failed:', e);
         return '';
       });
       setQrCodeUrl(qrDataUrl);
-      console.log('[SANAD DEBUG] QRCode generated:', !!qrDataUrl);
 
       // Resolve logo & cover images
       const logoPath = (mergedBusiness as any).profile_image_path || mergedBusiness.logo_path || (mergedBusiness as any).logo_url || '';
       const coverPath = (mergedBusiness as any).cover_image_path || '';
       const galleryPaths = Array.isArray((mergedBusiness as any).gallery_paths) ? (mergedBusiness as any).gallery_paths : [];
 
-      console.log('[SANAD DEBUG] resolving logo and cover signed URLs...');
       const [resolvedLogo, resolvedCover] = await Promise.all([
         logoPath ? getBusinessMediaSignedUrl(logoPath) : Promise.resolve(''),
         coverPath ? getBusinessMediaSignedUrl(coverPath) : Promise.resolve('')
       ]).catch((e) => {
-        console.warn('[SANAD DEBUG] Image URL resolution failed:', e);
+        console.error('Image URL resolution failed:', e);
         return ['', ''];
       });
 
       setLogoUrl(resolvedLogo);
       setCoverUrl(resolvedCover);
       setGalleryCount(galleryPaths.length);
-      console.log('[SANAD DEBUG] resolved signed URLs successfully');
 
-      console.log('[SANAD DEBUG] loadBusinessData successfully completed');
     } catch (err: any) {
-      console.error('[SANAD DEBUG] loadBusinessData caught exception:', err);
+      console.error('loadBusinessData caught exception:', err);
       setError(err.message || 'فشل في تحميل بيانات الأعمال الخاصة بك.');
     } finally {
-      console.log('[SANAD DEBUG] loadBusinessData finally setting loading to false');
       setLoading(false);
     }
   };
 
   const loadReportsData = async (businessId: string) => {
-    console.log('[SANAD DEBUG] loadReportsData started for:', businessId);
     setLoadingReports(true);
     try {
       const ops = await getBusinessOperations(businessId);
-      console.log('[SANAD DEBUG] operations fetched successfully:', ops.length);
       setRealOps(ops);
 
       // Aggregate reports dynamically by currency
@@ -802,7 +786,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       });
       setReportSummary(sumMap);
     } catch (opsErr) {
-      console.warn('[SANAD DEBUG] Failed to load real business operations for reports:', opsErr);
+      console.error('Failed to load real business operations for reports:', opsErr);
     } finally {
       setLoadingReports(false);
     }
