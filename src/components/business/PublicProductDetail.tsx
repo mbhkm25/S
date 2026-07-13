@@ -16,6 +16,7 @@ import {
   getPublicBusinessProfile, 
   getBusinessMediaSignedUrl 
 } from '../../lib/businessApi';
+import { buildPublicProductUrl } from '../../lib/urlUtils';
 
 interface PublicProductDetailProps {
   businessSlug: string;
@@ -125,7 +126,7 @@ export default function PublicProductDetail({
     };
   }, [businessSlug, productId]);
 
-  const productUrl = `${window.location.origin}/b/${businessSlug}/p/${productId}`;
+  const productUrl = buildPublicProductUrl(businessSlug, productId);
 
   const handleShare = async () => {
     if (navigator.share) {

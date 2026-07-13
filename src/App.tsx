@@ -23,6 +23,7 @@ import BusinessCustomers from './components/business/BusinessCustomers';
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
+import { INTERNAL_BUSINESS_CATALOG_ENABLED } from './lib/urlUtils';
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
@@ -108,6 +109,9 @@ export default function App() {
     }
     const bpMatch = path.match(/\/b\/([^/]+)\/p\/([^/]+)/);
     if (bpMatch) {
+      if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
+        return { type: 'public-business-profile', slug: bpMatch[1] };
+      }
       return { type: 'public-product-detail', slug: bpMatch[1], productId: bpMatch[2] };
     }
     const bMatch = path.match(/\/b\/([^/]+)/);
@@ -168,11 +172,17 @@ export default function App() {
       setCurrentPage('public-business-profile');
     } else if (page === 'public-product-detail' && token) {
       const [bSlug, pId] = token.split('/');
-      window.history.pushState({}, '', `${cleanBase}b/${bSlug}/p/${pId}`);
-      setActiveToken(bSlug);
-      setActiveProductToken(pId);
-      setProfileInitialTab('products');
-      setCurrentPage('public-product-detail');
+      if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
+        window.history.pushState({}, '', `${cleanBase}b/${bSlug}`);
+        setActiveToken(bSlug);
+        setCurrentPage('public-business-profile');
+      } else {
+        window.history.pushState({}, '', `${cleanBase}b/${bSlug}/p/${pId}`);
+        setActiveToken(bSlug);
+        setActiveProductToken(pId);
+        setProfileInitialTab('products');
+        setCurrentPage('public-product-detail');
+      }
     } else {
       window.history.pushState({}, '', cleanBase);
       setActiveToken(null);
@@ -184,6 +194,16 @@ export default function App() {
   // Listen to browser Back/Forward pops
   useEffect(() => {
     const handlePopState = () => {
+      if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
+        const path = window.location.pathname;
+        const bpMatch = path.match(/\/b\/([^/]+)\/p\/([^/]+)/);
+        if (bpMatch) {
+          const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+          const cleanBase = base.endsWith('/') ? base : `${base}/`;
+          window.history.replaceState({}, '', `${cleanBase}b/${bpMatch[1]}`);
+        }
+      }
+
       const parsed = parsePath();
       if (parsed.type === 'share-intake') {
         setActiveToken(null);
@@ -209,10 +229,15 @@ export default function App() {
         setActiveToken(parsed.slug);
         setCurrentPage('public-business-profile');
       } else if (parsed.type === 'public-product-detail' && parsed.slug && parsed.productId) {
-        setActiveToken(parsed.slug);
-        setActiveProductToken(parsed.productId);
-        setProfileInitialTab('products');
-        setCurrentPage('public-product-detail');
+        if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
+          setActiveToken(parsed.slug);
+          setCurrentPage('public-business-profile');
+        } else {
+          setActiveToken(parsed.slug);
+          setActiveProductToken(parsed.productId);
+          setProfileInitialTab('products');
+          setCurrentPage('public-product-detail');
+        }
       } else if (parsed.type === 'details' && parsed.token) {
         const urlParams = new URLSearchParams(window.location.search);
         const src = (urlParams.get('src') as any) || 'link';
@@ -229,6 +254,16 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     
     // Initial parse
+    if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
+      const path = window.location.pathname;
+      const bpMatch = path.match(/\/b\/([^/]+)\/p\/([^/]+)/);
+      if (bpMatch) {
+        const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+        const cleanBase = base.endsWith('/') ? base : `${base}/`;
+        window.history.replaceState({}, '', `${cleanBase}b/${bpMatch[1]}`);
+      }
+    }
+
     const parsed = parsePath();
     if (parsed.type === 'share-intake') {
       setActiveToken(null);
@@ -246,8 +281,8 @@ export default function App() {
       setCurrentPage('business-manage-profile');
     } else if (parsed.type === 'business-whatsapp-catalog') {
       setCurrentPage('business-whatsapp-catalog');
-      } else if (parsed.type === 'business-customers') {
-        setCurrentPage('business-customers');
+    } else if (parsed.type === 'business-customers') {
+      setCurrentPage('business-customers');
     } else if (parsed.type === 'business-community') {
       setCurrentPage('business-community');
     } else if (parsed.type === 'public-business-profile' && parsed.slug) {
