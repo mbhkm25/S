@@ -8,6 +8,7 @@ import {
   updateBusinessProfile,
   PublicBusinessDetail
 } from '../../lib/businessApi';
+import { INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
 import { 
   ArrowRight, 
   Store, 
@@ -182,11 +183,17 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState<TabType>(
+    initialTab === 'products' && !INTERNAL_BUSINESS_CATALOG_ENABLED ? 'overview' : (initialTab || 'overview')
+  );
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      if (initialTab === 'products' && !INTERNAL_BUSINESS_CATALOG_ENABLED) {
+        setActiveTab('overview');
+      } else {
+        setActiveTab(initialTab);
+      }
     }
   }, [initialTab]);
 
@@ -479,7 +486,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
           </p>
 
           {/* Social Media Link Buttons (NEW) */}
-          {(socials.facebook || socials.instagram || socials.twitter || socials.website || profile.whatsapp) && (
+          {(socials.facebook || socials.instagram || socials.twitter || socials.website || profile.whatsapp || profile.whatsapp_catalog_url) && (
             <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100 justify-center sm:justify-start">
               {socials.facebook && (
                 <a
@@ -536,6 +543,17 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
                   <span>تواصل سريع</span>
                 </a>
               )}
+              {profile.whatsapp_catalog_url && (
+                <a
+                  href={profile.whatsapp_catalog_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100/70 rounded-xl text-[10px] font-bold transition-all"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>كتالوج واتساب</span>
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -548,7 +566,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
             { id: 'services', label: 'الخدمات المتاحة للطلب', icon: Wrench },
             { id: 'financial', label: 'الحسابات المالية للتحويل', icon: Globe },
             { id: 'complaints', label: 'صندوق الشكاوى والملاحظات', icon: AlertTriangle }
-          ].map((tab) => {
+          ].filter(tab => tab.id !== 'products' || INTERNAL_BUSINESS_CATALOG_ENABLED).map((tab) => {
             const Icon = tab.icon;
             const isSelected = activeTab === tab.id;
             return (
@@ -621,7 +639,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
         )}
 
         {/* TAB: PRODUCTS */}
-        {activeTab === 'products' && (
+        {activeTab === 'products' && INTERNAL_BUSINESS_CATALOG_ENABLED && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
               <div className="pb-3 border-b border-slate-100 flex items-center justify-between">

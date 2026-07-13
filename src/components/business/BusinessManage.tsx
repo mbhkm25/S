@@ -10,6 +10,7 @@ import {
   BusinessProfile, 
   BusinessContexts 
 } from '../../lib/businessApi';
+import { buildPublicBusinessUrl, INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
 import {
   LayoutDashboard,
   Store,
@@ -722,7 +723,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       setComplaintsList(complaints);
 
       // Generate Public Profile Link QR Code
-      const profileUrl = `${window.location.origin}/b/${mergedBusiness.slug}`;
+      const profileUrl = buildPublicBusinessUrl(mergedBusiness.slug);
       const qrDataUrl = await QRCode.toDataURL(profileUrl, { width: 250, margin: 2 }).catch((e) => {
         console.error('QRCode generation failed:', e);
         return '';
@@ -806,7 +807,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   const handleCopyLink = () => {
     if (!business) return;
-    const profileUrl = `${window.location.origin}/b/${business.slug}`;
+    const profileUrl = buildPublicBusinessUrl(business.slug);
     navigator.clipboard.writeText(profileUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -1244,7 +1245,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     { label: 'الوصف التفصيلي', completed: Boolean(description) },
     { label: 'العبارة الترويجية', completed: Boolean(tagline) },
     { label: 'ساعات العمل الأسبوعية', completed: Boolean(hasHours) },
-    { label: 'المنتجات المعروضة', completed: products.length > 0 },
+    ...(INTERNAL_BUSINESS_CATALOG_ENABLED ? [{ label: 'المنتجات المعروضة', completed: products.length > 0 }] : []),
     { label: 'الخدمات المتاحة', completed: services.length > 0 },
     { label: 'الحسابات المالية للنشاط', completed: financialAccounts.length > 0 }
   ];
@@ -1309,7 +1310,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
               { id: 'team', label: 'فريق العمل والصلاحيات', icon: UserCheck },
               { id: 'complaints', label: `صندوق الشكاوى والملاحظات (${complaintsList.filter(c => c.status === 'pending').length})`, icon: MessageSquare },
               { id: 'reports', label: 'تقارير الأداء المالي الحقيقي', icon: FileText }
-            ].map((tab) => {
+            ].filter(tab => tab.id !== 'products' || INTERNAL_BUSINESS_CATALOG_ENABLED).map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
               return (
@@ -1411,7 +1412,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   <h3 className="text-xs font-bold text-slate-800 text-right">مؤشرات حالة وجاهزية النشاط</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                      { 
+                      ...(INTERNAL_BUSINESS_CATALOG_ENABLED ? [{
                         id: 'products', 
                         label: 'المنتجات المصورة', 
                         value: products.length,
@@ -1419,7 +1420,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                         icon: ShoppingBag, 
                         color: 'text-indigo-600 bg-indigo-50 border-indigo-100',
                         desc: 'أضف سلع الكتالوج وعينات البيع' 
-                      },
+                      }] : []),
                       { 
                         id: 'services', 
                         label: 'الخدمات والحلول', 
@@ -1555,7 +1556,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
             )}
 
             {/* TAB: PRODUCTS */}
-            {activeTab === 'products' && (
+            {activeTab === 'products' && INTERNAL_BUSINESS_CATALOG_ENABLED && (
               <div className="space-y-6 animate-fade-in">
                 <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-5 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
