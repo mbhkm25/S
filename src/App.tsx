@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { supabase, hasSupabaseConfig } from './lib/supabase';
 import { Profile } from './types';
 import Auth from './components/Auth';
@@ -8,18 +8,20 @@ import NotificationDetails from './components/Details';
 import MyOperations from './components/MyOperations';
 import MyProfile from './components/Profile';
 import VerifyNotice from './components/VerifyNotice';
-import Reports from './components/Reports';
 import ShareIntake from './components/ShareIntake';
-import BusinessCreate from './components/business/BusinessCreate';
-import BusinessManage from './components/business/BusinessManage';
-import BusinessOperations from './components/business/BusinessOperations';
-import BusinessTeam from './components/business/BusinessTeam';
-import BusinessCommunity from './components/business/BusinessCommunity';
-import PublicBusinessProfile from './components/business/PublicBusinessProfile';
-import PublicProductDetail from './components/business/PublicProductDetail';
-import BusinessProfileEditor from './components/business/BusinessProfileEditor';
-import BusinessWhatsAppCatalog from './components/business/BusinessWhatsAppCatalog';
-import BusinessCustomers from './components/business/BusinessCustomers';
+import ChunkErrorBoundary from './components/ChunkErrorBoundary';
+
+const Reports = lazy(() => import('./components/Reports'));
+const BusinessCreate = lazy(() => import('./components/business/BusinessCreate'));
+const BusinessManage = lazy(() => import('./components/business/BusinessManage'));
+const BusinessOperations = lazy(() => import('./components/business/BusinessOperations'));
+const BusinessTeam = lazy(() => import('./components/business/BusinessTeam'));
+const BusinessCommunity = lazy(() => import('./components/business/BusinessCommunity'));
+const PublicBusinessProfile = lazy(() => import('./components/business/PublicBusinessProfile'));
+const PublicProductDetail = lazy(() => import('./components/business/PublicProductDetail'));
+const BusinessProfileEditor = lazy(() => import('./components/business/BusinessProfileEditor'));
+const BusinessWhatsAppCatalog = lazy(() => import('./components/business/BusinessWhatsAppCatalog'));
+const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
@@ -799,11 +801,15 @@ export default function App() {
 
             {currentPage === 'reports' && (
               profile ? (
-                <Reports
-                  profile={profile}
-                  standalone={true}
-                  ensureProfileComplete={ensureProfileComplete}
-                />
+                <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                  <Suspense fallback={<ContentSkeleton />}>
+                    <Reports
+                      profile={profile}
+                      standalone={true}
+                      ensureProfileComplete={ensureProfileComplete}
+                    />
+                  </Suspense>
+                </ChunkErrorBoundary>
               ) : (
                 <ContentSkeleton />
               )
@@ -824,56 +830,96 @@ export default function App() {
             )}
 
             {currentPage === 'business-create' && (
-              <BusinessCreate onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCreate onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-manage' && (
-              <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-operations' && (
-              <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-team' && (
-              <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-manage-profile' && (
-              <BusinessProfileEditor onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessProfileEditor onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-whatsapp-catalog' && (
-              <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-customers' && (
-              <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-community' && (
-              <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'public-business-profile' && activeToken && (
-              <PublicBusinessProfile 
-                slug={activeToken} 
-                initialTab={profileInitialTab}
-                onNavigate={(page, token) => {
-                  if (page !== 'public-product-detail') {
-                    setProfileInitialTab('overview');
-                  }
-                  navigateTo(page, token);
-                }} 
-              />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <PublicBusinessProfile
+                    slug={activeToken}
+                    initialTab={profileInitialTab}
+                    onNavigate={(page, token) => {
+                      if (page !== 'public-product-detail') {
+                        setProfileInitialTab('overview');
+                      }
+                      navigateTo(page, token);
+                    }}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'public-product-detail' && activeToken && activeProductToken && (
-              <PublicProductDetail 
-                businessSlug={activeToken} 
-                productId={activeProductToken} 
-                onNavigate={(page, token) => navigateTo(page, token)} 
-              />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <PublicProductDetail
+                    businessSlug={activeToken}
+                    productId={activeProductToken}
+                    onNavigate={(page, token) => navigateTo(page, token)}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
           </div>
         )}
