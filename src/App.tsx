@@ -22,10 +22,13 @@ const PublicProductDetail = lazy(() => import('./components/business/PublicProdu
 const BusinessProfileEditor = lazy(() => import('./components/business/BusinessProfileEditor'));
 const BusinessWhatsAppCatalog = lazy(() => import('./components/business/BusinessWhatsAppCatalog'));
 const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
+const NotificationCenter = lazy(() => import('./components/notifications/NotificationCenter'));
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
 import { INTERNAL_BUSINESS_CATALOG_ENABLED } from './lib/urlUtils';
+import { NotificationProvider } from './features/notifications/NotificationProvider';
+import NotificationBell from './components/notifications/NotificationBell';
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 
@@ -41,7 +44,7 @@ export default function App() {
   const requestGenerationRef = useRef(0);
   
   // Navigation states
-  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
   const [activeProductToken, setActiveProductToken] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<'link' | 'qr' | 'search' | 'app'>('link');
@@ -86,6 +89,9 @@ export default function App() {
     const path = window.location.pathname;
     if (path.includes('/share-intake')) {
       return { type: 'share-intake' };
+    }
+    if (path.includes('/notifications')) {
+      return { type: 'notifications' };
     }
     if (path.includes('/business/create')) {
       return { type: 'business-create' };
@@ -155,6 +161,11 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (page === 'notifications') {
+      window.history.pushState({}, '', `${cleanBase}notifications`);
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('notifications');
     } else if (page === 'business-create') {
       window.history.pushState({}, '', `${cleanBase}business/create`);
       setCurrentPage('business-create');
@@ -219,6 +230,10 @@ export default function App() {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('share-intake');
+      } else if (parsed.type === 'notifications') {
+        setActiveToken(null);
+        setActiveSource('link');
+        setCurrentPage('notifications');
       } else if (parsed.type === 'business-create') {
         setCurrentPage('business-create');
       } else if (parsed.type === 'business-manage') {
@@ -279,6 +294,10 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (parsed.type === 'notifications') {
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('notifications');
     } else if (parsed.type === 'business-create') {
       setCurrentPage('business-create');
     } else if (parsed.type === 'business-manage') {
@@ -685,7 +704,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
+    <NotificationProvider userId={user?.id || null} isAuthenticated={isAuthenticated}>
+      <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
       
       {/* Top Brand Navbar */}
       <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
@@ -710,14 +730,17 @@ export default function App() {
 
           <div>
             {isAuthenticated && (
-              <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
-                <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
-                  {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
-                </div>
-                <div className="text-right hidden sm:block">
-                  <p className="text-[10px] font-bold leading-none text-slate-800">
-                    {profile ? profile.full_name : 'جاري التحميل...'}
-                  </p>
+              <div className="flex items-center gap-2">
+                <NotificationBell onNavigate={() => navigateTo('notifications')} />
+                <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
+                  <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
+                    {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
+                  </div>
+                  <div className="text-right hidden sm:block">
+                    <p className="text-[10px] font-bold leading-none text-slate-800">
+                      {profile ? profile.full_name : 'جاري التحميل...'}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -827,6 +850,17 @@ export default function App() {
               ) : (
                 <ContentSkeleton />
               )
+            )}
+
+            {currentPage === 'notifications' && (
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <NotificationCenter
+                    userId={user?.id || null}
+                    onNavigate={(page, token, source) => navigateTo(page, token, source)}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-create' && (
@@ -1009,6 +1043,7 @@ export default function App() {
         refreshProfile={refreshProfile}
       />
 
-    </div>
+      </div>
+    </NotificationProvider>
   );
 }
