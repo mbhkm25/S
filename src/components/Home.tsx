@@ -5,7 +5,7 @@ import { UploadCloud, FileText, CheckCircle2, FileBarChart2, ArrowUpRight } from
 import { formatArabicDate, formatArabicTime, toLatinDigits, getOperationCardDetails } from '../lib/digits';
 
 interface HomeProps {
-  profile: Profile;
+  profile: Profile | null;
   onNavigate: (page: string, token?: string) => void;
 }
 
@@ -17,6 +17,9 @@ export default function Home({ profile, onNavigate }: HomeProps) {
 
   useEffect(() => {
     async function fetchDashboardData() {
+      if (import.meta.env.DEV) {
+        performance.mark('home_data_load_start');
+      }
       setLoading(true);
       try {
         // Fetch operations uploaded by user
@@ -86,6 +89,10 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         console.error('Error fetching dashboard counts:', err);
       } finally {
         setLoading(false);
+        if (import.meta.env.DEV) {
+          performance.mark('home_data_load_end');
+          performance.measure('Home Data Load Time', 'home_data_load_start', 'home_data_load_end');
+        }
       }
     }
 
@@ -99,7 +106,9 @@ export default function Home({ profile, onNavigate }: HomeProps) {
       <div className="bg-[#111111] text-white rounded-3xl p-5 shadow-sm space-y-4" id="home_overview_card">
         <div>
           <span className="text-[10px] text-slate-400 font-medium font-arabic">مرحباً بك في سند للتحقق</span>
-          <h2 className="text-lg font-bold text-white font-arabic mt-0.5">{profile.full_name}</h2>
+          <h2 className="text-lg font-bold text-white font-arabic mt-0.5">
+            {profile ? profile.full_name : <span className="h-5 w-24 bg-slate-800 rounded animate-pulse inline-block mt-1"></span>}
+          </h2>
           <p className="text-[10px] text-slate-400 font-arabic mt-1 leading-relaxed">
             نظام التحقق المالي الشخصي الآمن لإثبات ومطابقة الإشعارات الفورية.
           </p>

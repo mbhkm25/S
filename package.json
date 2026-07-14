@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build --configLoader native",
+    "build": "vite build --configLoader bundle",
     "build:android": "vite build --mode android",
     "cap:sync": "npx cap sync android",
     "preview": "vite preview",
