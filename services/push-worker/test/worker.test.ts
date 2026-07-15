@@ -51,6 +51,15 @@ function state(overrides: Partial<PushOutboxDeliveryState> = {}): PushOutboxDeli
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise; reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 class MockDatabase implements PushDatabase {
   claims: ClaimedOutboxItem[][] = [];
   targets: PushDeliveryTarget[] = [];
@@ -65,6 +74,8 @@ class MockDatabase implements PushDatabase {
   stateValue: PushOutboxDeliveryState = state();
   getTargetsError: Error | null = null;
   reserveDelayMs = 0;
+  reserveGate: Promise<void> | null = null;
+  reserveStarted: (() => void) | null = null;
   failLockRenewal = false;
   failReservationRenewal = false;
   recordError: Error | null = null;
@@ -73,6 +84,8 @@ class MockDatabase implements PushDatabase {
   async getDeliveryTargets() { if (this.getTargetsError) throw this.getTargetsError; return this.targets; }
   async reserveDelivery(): Promise<PushReservationResult> {
     this.reservations += 1;
+    this.reserveStarted?.();
+    if (this.reserveGate) await this.reserveGate;
     if (this.reserveDelayMs) await new Promise((resolve) => setTimeout(resolve, this.reserveDelayMs));
     return this.reservationResult;
   }
@@ -234,7 +247,11 @@ test('ReservationController does not overlap renewal requests', async () => {
   const controller = new ReservationController(ID.token, 90, {
     database: db, workerId: config.workerInstanceId, logger: createLogger('test', () => undefined), heartbeatIntervalMs: 5
   });
-  controller.start(); await new Promise((resolve) => setTimeout(resolve, 20)); release(); await controller.stop();
+  try {
+    controller.start(); await new Promise((resolve) => setTimeout(resolve, 20));
+  } finally {
+    release(); await controller.stop();
+  }
   assert.equal(maximum, 1);
 });
 
@@ -347,14 +364,36 @@ test('permanent-only state finalizes dead', async () => {
   assert.equal(db.finalizations[0]?.status, 'dead'); assert.equal(db.finalizations[0]?.errorCode, 'all_targets_permanently_failed');
 });
 
-test('graceful shutdown waits for send and shutdown timeout marks uncertain', async () => {
+test('graceful shutdown waits for an active send', async () => {
+  const db = new MockDatabase(); db.claims = [[item()]]; db.targets = [target()]; db.stateValue = state({ sentCount: 1, activeSubscriptionCount: 1 });
+  const sendStarted = deferred<void>(); const blocked = deferred<void>();
+  const sender: PushSender = { async send() { sendStarted.resolve(undefined); await blocked.promise; return { statusCode: 201 }; } };
+  const instance = worker(db, sender);
+  const running = instance.runOnce(); await sendStarted.promise;
+  const stopping = instance.stop();
+  try {
+    blocked.resolve(undefined);
+    assert.equal(await stopping, true); await running;
+  } finally {
+    blocked.resolve(undefined);
+    await Promise.allSettled([stopping, running]);
+  }
+});
+
+test('shutdown timeout resolves when it is the only referenced event-loop handle', async () => {
   const db = new MockDatabase(); db.claims = [[item()]]; db.targets = [target()]; db.stateValue = state({ uncertainCount: 1, activeSubscriptionCount: 1, activeUnsentCount: 1 });
-  let release!: () => void; const blocked = new Promise<void>((resolve) => { release = resolve; });
-  const sender: PushSender = { async send() { await blocked; return { statusCode: 201 }; } };
+  const sendStarted = deferred<void>(); const blocked = deferred<void>();
+  const sender: PushSender = { async send() { sendStarted.resolve(undefined); await blocked.promise; return { statusCode: 201 }; } };
   const instance = worker(db, sender, { shutdownTimeoutMs: 10 });
-  const running = instance.runOnce(); await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal(await instance.stop(), false); assert.equal(db.uncertain[0]?.code, 'shutdown_timeout');
-  release(); await running; assert.equal(db.finalizations.length, 0);
+  const running = instance.runOnce(); await sendStarted.promise;
+  const stopping = instance.stop();
+  try {
+    assert.equal(await stopping, false); assert.equal(db.uncertain[0]?.code, 'shutdown_timeout');
+  } finally {
+    blocked.resolve(undefined);
+    await Promise.allSettled([stopping, running]);
+  }
+  assert.equal(db.finalizations.length, 0);
 });
 
 test('stop before run prevents claim', async () => {
@@ -363,23 +402,36 @@ test('stop before run prevents claim', async () => {
 });
 
 test('shutdown after reserve and before send releases reservation', async () => {
-  const db = new MockDatabase(); db.claims = [[item()]]; db.targets = [target()]; db.reserveDelayMs = 25;
+  const db = new MockDatabase(); db.claims = [[item()]]; db.targets = [target()];
+  const reserveStarted = deferred<void>(); const reserveGate = deferred<void>();
+  db.reserveStarted = () => reserveStarted.resolve(undefined); db.reserveGate = reserveGate.promise;
   const calls: string[] = []; const instance = worker(db, statusSender(new Map(), 0, calls));
-  const running = instance.runOnce(); await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal(await instance.stop(), true); await running;
+  const running = instance.runOnce(); await reserveStarted.promise;
+  const stopping = instance.stop();
+  try {
+    reserveGate.resolve(undefined);
+    assert.equal(await stopping, true); await running;
+  } finally {
+    reserveGate.resolve(undefined);
+    await Promise.allSettled([stopping, running]);
+  }
   assert.equal(calls.length, 0); assert.ok(db.releases.some((release) => release.reason === 'shutdown_before_send'));
   assert.equal(db.finalizations.length, 0);
 });
 
 test('health/readiness expose no secrets and endpoint hash is one-way', async () => {
-  const db = new MockDatabase(); let releaseSleep!: () => void;
-  const sleeping = new Promise<void>((resolve) => { releaseSleep = resolve; });
-  const instance = new PushWorker({ config, database: db, sender: statusSender(), logger: createLogger('test', () => undefined), sleep: () => sleeping });
+  const db = new MockDatabase(); const sleeping = deferred<void>();
+  const instance = new PushWorker({ config, database: db, sender: statusSender(), logger: createLogger('test', () => undefined), sleep: () => sleeping.promise });
   const running = instance.start(); await new Promise((resolve) => setImmediate(resolve));
-  const server = await startHealthServer(config, instance, createLogger('test', () => undefined));
+  let server: Awaited<ReturnType<typeof startHealthServer>> | undefined;
   try {
+    server = await startHealthServer(config, instance, createLogger('test', () => undefined));
     const ready = await fetch('http://127.0.0.1:3002/ready'); const body = JSON.stringify(await ready.json());
     assert.equal(ready.status, 200); assert.doesNotMatch(body, /supabase\.co|service_role|vapid|endpoint|secret/);
     assert.equal(hashEndpoint('https://push.example.test/private').length, 16);
-  } finally { await instance.stop(); releaseSleep(); await running; await server.close(); }
+  } finally {
+    sleeping.resolve(undefined);
+    await Promise.allSettled([instance.stop(), running]);
+    if (server) await server.close();
+  }
 });

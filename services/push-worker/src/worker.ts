@@ -131,10 +131,14 @@ export class PushWorker {
     if (!batch) return true;
     let timer: NodeJS.Timeout | undefined;
     const timedOut = new Promise<false>((resolve) => {
-      timer = setTimeout(() => resolve(false), this.config.shutdownTimeoutMs); timer.unref();
+      timer = setTimeout(() => resolve(false), this.config.shutdownTimeoutMs);
     });
-    const graceful = await Promise.race([batch.then(() => true, () => true), timedOut]);
-    if (timer) clearTimeout(timer);
+    let graceful: boolean;
+    try {
+      graceful = await Promise.race([batch.then(() => true, () => true), timedOut]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (!graceful) {
       const cleanup = Promise.allSettled([
         ...Array.from(this.activeSends.values(), (send) => send.forceUncertain('shutdown_timeout')),
@@ -142,10 +146,13 @@ export class PushWorker {
       ]);
       let cleanupTimer: NodeJS.Timeout | undefined;
       const cleanupDeadline = new Promise<void>((resolve) => {
-        cleanupTimer = setTimeout(resolve, 1000); cleanupTimer.unref();
+        cleanupTimer = setTimeout(resolve, 1000);
       });
-      await Promise.race([cleanup.then(() => undefined), cleanupDeadline]);
-      if (cleanupTimer) clearTimeout(cleanupTimer);
+      try {
+        await Promise.race([cleanup.then(() => undefined), cleanupDeadline]);
+      } finally {
+        if (cleanupTimer) clearTimeout(cleanupTimer);
+      }
       await Promise.allSettled(Array.from(this.activeLeases, (lease) => lease.stop(false)));
     }
     return graceful;
@@ -292,13 +299,17 @@ export class PushWorker {
       lease.assertOwned(); reservation.assertOwned();
       let timeoutHandle: NodeJS.Timeout | undefined;
       const timeout = new Promise<{ kind: 'timeout' }>((resolve) => {
-        timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), this.config.sendTimeoutMs); timeoutHandle.unref();
+        timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), this.config.sendTimeoutMs);
       });
       const delivery = this.sender.send(target, built.serialized, options)
         .then((response) => ({ kind: 'response' as const, response }))
         .catch((error: unknown) => ({ kind: 'error' as const, error }));
-      const result = await Promise.race([delivery, timeout]);
-      if (timeoutHandle) clearTimeout(timeoutHandle);
+      let result: Awaited<typeof delivery> | { kind: 'timeout' };
+      try {
+        result = await Promise.race([delivery, timeout]);
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
       if (result.kind === 'timeout') { await markUncertain('send_timeout'); return; }
       if (uncertainMarked) return;
       if (lease.lost || reservation.lost) { await markUncertain('delivery_ownership_lost'); return; }
