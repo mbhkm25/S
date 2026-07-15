@@ -36,6 +36,16 @@ export const hasSupabaseConfig = !!supabaseKey && supabaseKey !== '';
 // Create the Supabase Client
 export const supabase = createClient(
   supabaseUrl,
-  supabaseKey
+  supabaseKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      experimental: {
+        passkey: true,
+      },
+    },
+  },
 );
 

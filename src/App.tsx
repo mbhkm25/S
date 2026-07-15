@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase, hasSupabaseConfig } from './lib/supabase';
 import { Profile } from './types';
 import Auth from './components/Auth';
@@ -29,11 +30,13 @@ import ProfileCompletionGateModal from './components/ProfileCompletionGateModal'
 import { INTERNAL_BUSINESS_CATALOG_ENABLED } from './lib/urlUtils';
 import { NotificationProvider } from './features/notifications/NotificationProvider';
 import NotificationBell from './components/notifications/NotificationBell';
+import PasskeyEnrollmentPrompt from './features/passkeys/PasskeyEnrollmentPrompt';
+import { logAuthDiagnostic } from './lib/authDiagnostics';
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 
 export default function App() {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [authState, setAuthState] = useState<'booting_shell' | 'session_pending' | 'authenticated' | 'unauthenticated' | 'auth_error'>('booting_shell');
   const [connectivity, setConnectivity] = useState<'online' | 'offline' | 'slow'>('online');
@@ -42,6 +45,7 @@ export default function App() {
   const [showStatusBanner, setShowStatusBanner] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const requestGenerationRef = useRef(0);
+  const [passkeyEnrollmentUser, setPasskeyEnrollmentUser] = useState<SupabaseUser | null>(null);
   
   // Navigation states
   const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications'>('home');
@@ -70,7 +74,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error('Error refreshing profile:', err);
+      logAuthDiagnostic('profile_refresh_failed', err);
     }
     return null;
   };
@@ -365,7 +369,7 @@ export default function App() {
       });
     }, 1500);
 
-    const loadProfileBackground = async (userId: string, metadata: any) => {
+    const loadProfileBackground = async (userId: string, metadata: SupabaseUser['user_metadata']) => {
       const thisGen = requestGenerationRef.current;
       setProfileStatus('loading');
       setProfileError(null);
@@ -436,7 +440,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Error fetching profile in background:', err);
+        logAuthDiagnostic('profile_bootstrap_failed', err);
         if (thisGen === requestGenerationRef.current) {
           setProfileStatus('degraded');
           setProfileError('Network error loading profile');
@@ -477,13 +481,13 @@ export default function App() {
           setProfileStatus('idle');
           setAuthState('unauthenticated');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (thisGen !== requestGenerationRef.current) {
           return;
         }
 
         clearTimeout(slowConnectionTimer);
-        console.error('Session verification error:', err);
+        logAuthDiagnostic('session_verification_failed', err);
 
         if (!navigator.onLine) {
           setConnectivity('offline');
@@ -528,6 +532,7 @@ export default function App() {
       requestGenerationRef.current += 1;
 
       if (session?.user) {
+        setPasskeyEnrollmentUser(candidate => candidate?.id === session.user.id ? candidate : null);
         setUser(prevUser => {
           if (prevUser?.id === session.user.id) {
             // User did not change, likely a TOKEN_REFRESHED event, skip profile reload
@@ -539,6 +544,7 @@ export default function App() {
         setAuthState('authenticated');
       } else {
         // Safe clean up user data only, keep App Shell caches
+        setPasskeyEnrollmentUser(null);
         setUser(null);
         setProfile(null);
         setProfileStatus('idle');
@@ -723,14 +729,20 @@ export default function App() {
   const isAuthenticated = authState === 'authenticated';
   const shouldShowAuth = authState === 'unauthenticated' && !isDetailsView;
 
-  const handleAuthSuccess = (sessionUser: any, userProfile: Profile) => {
+  const handleAuthSuccess = (sessionUser: SupabaseUser, userProfile: Profile) => {
     setUser(sessionUser);
     setProfile(userProfile);
     setAuthState('authenticated');
+    setPasskeyEnrollmentUser(sessionUser);
     navigateTo('home');
   };
 
+  const closePasskeyEnrollment = () => {
+    setPasskeyEnrollmentUser(null);
+  };
+
   const handleLogoutSuccess = () => {
+    setPasskeyEnrollmentUser(null);
     setUser(null);
     setProfile(null);
     setAuthState('unauthenticated');
@@ -1076,6 +1088,13 @@ export default function App() {
         }}
         refreshProfile={refreshProfile}
       />
+
+      {passkeyEnrollmentUser && (
+        <PasskeyEnrollmentPrompt
+          user={passkeyEnrollmentUser}
+          onDone={closePasskeyEnrollment}
+        />
+      )}
 
       </div>
     </NotificationProvider>
