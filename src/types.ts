@@ -2,7 +2,7 @@ export interface Profile {
   id: string;
   full_name: string;
   phone: string;
-  governorate?: string;
+  governorate?: string | null;
   profile_completed_at?: string;
   status: 'active' | 'inactive';
   created_at?: string;

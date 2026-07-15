@@ -374,7 +374,24 @@ export default function App() {
         }
 
         if (!error && prof) {
-          setProfile(prof as Profile);
+          const missingSignupData: Partial<Profile> = {};
+          if (!prof.full_name && metadata?.full_name) missingSignupData.full_name = metadata.full_name;
+          if (!prof.phone && metadata?.phone) missingSignupData.phone = metadata.phone;
+          if (!prof.governorate && metadata?.governorate) missingSignupData.governorate = metadata.governorate;
+
+          let resolvedProfile = prof as Profile;
+          if (Object.keys(missingSignupData).length > 0) {
+            const { data: reconciledProfile, error: reconcileError } = await supabase
+              .from('profiles')
+              .update({ ...missingSignupData, updated_at: new Date().toISOString() })
+              .eq('id', userId)
+              .select()
+              .single();
+            if (reconcileError) throw reconcileError;
+            resolvedProfile = reconciledProfile as Profile;
+          }
+
+          setProfile(resolvedProfile);
           setProfileStatus('ready');
         } else {
           // Attempt upsert in background
@@ -384,6 +401,7 @@ export default function App() {
               id: userId,
               full_name: metadata?.full_name || 'مستخدم سند',
               phone: metadata?.phone || '',
+              governorate: metadata?.governorate || null,
               status: 'active',
               profile_completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()

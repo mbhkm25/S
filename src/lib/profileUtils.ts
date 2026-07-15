@@ -14,11 +14,7 @@ export function normalizeYemenPhone(localPart: string): string {
  */
 export function isValidYemenLocalPhone(value: string): boolean {
   const cleaned = parseYemeniLocalPhone(toLatinDigits(value));
-  if (cleaned.length !== 9) return false;
-  
-  // Yemeni telecommunication prefixes (70, 71, 73, 77, 78, 01, 02, 03, 04, 05, 06, 07)
-  const validPrefixes = ['70', '71', '73', '77', '78', '01', '02', '03', '04', '05', '06', '07'];
-  return validPrefixes.some(prefix => cleaned.startsWith(prefix));
+  return /^7\d{8}$/.test(cleaned);
 }
 
 /**
@@ -39,6 +35,7 @@ export function isBasicProfileComplete(profile: Profile | null | undefined, user
   if (!profile) return false;
   if (!profile.full_name || !profile.full_name.trim()) return false;
   if (!profile.phone) return false;
+  if (!profile.governorate || !profile.governorate.trim()) return false;
   
   const email = userEmail || (profile as any).email;
   if (!email || !email.trim()) return false;
