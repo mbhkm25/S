@@ -6,6 +6,68 @@ import { registerRoute, NavigationRoute } from 'workbox-routing';
 import { StaleWhileRevalidate, CacheFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { isNotificationActionType, type NotificationActionType } from './features/notifications/types';
+import {
+  buildSafeNotificationPath,
+  isValidNotificationId,
+  sanitizeActionPayload
+} from './features/push/pushNavigation';
+
+const PRODUCTION_ORIGIN = 'https://app.sanadflow.com';
+const APP_BASE_PATH = import.meta.env.VITE_APP_BASE_PATH || '/';
+const DEFAULT_PUSH_TITLE = 'إشعار جديد من سند';
+const DEFAULT_PUSH_BODY = 'لديك تحديث جديد. افتح سند لعرض التفاصيل بأمان.';
+
+interface SafePushData {
+  notificationId: string | null;
+  title: string;
+  body: string;
+  actionType: NotificationActionType;
+  actionPayload: Record<string, string>;
+}
+
+function safePushText(value: unknown, fallback: string, maxLength: number): string {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.replace(/[\x00-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return fallback;
+  return normalized
+    .replace(/https?:\/\/\S+/gi, '[رابط محمي]')
+    .replace(/\beyJ[A-Za-z0-9._-]+\b/g, '[بيانات محمية]')
+    .replace(/\d{6,}/g, '[بيانات محمية]')
+    .slice(0, maxLength);
+}
+
+function parsePushData(data: PushMessageData | null): SafePushData {
+  let raw: unknown = null;
+  let fallbackBody = DEFAULT_PUSH_BODY;
+  if (data) {
+    try {
+      raw = data.json();
+    } catch {
+      try { fallbackBody = safePushText(data.text(), DEFAULT_PUSH_BODY, 180); } catch { /* Use safe fallback. */ }
+    }
+  }
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {
+      notificationId: null,
+      title: DEFAULT_PUSH_TITLE,
+      body: fallbackBody,
+      actionType: 'none',
+      actionPayload: {}
+    };
+  }
+
+  const payload = raw as Record<string, unknown>;
+  const actionType = isNotificationActionType(payload.action_type) ? payload.action_type : 'none';
+  return {
+    notificationId: isValidNotificationId(payload.notification_id) ? payload.notification_id : null,
+    title: safePushText(payload.title, DEFAULT_PUSH_TITLE, 80),
+    body: safePushText(payload.body, DEFAULT_PUSH_BODY, 180),
+    actionType,
+    actionPayload: sanitizeActionPayload(actionType, payload.action_payload)
+  };
+}
 
 // 1. Precache all App Shell files generated during build
 precacheAndRoute(self.__WB_MANIFEST || []);
@@ -16,6 +78,62 @@ cleanupOutdatedCaches();
 // Force immediate activation
 self.addEventListener('install', () => {
   self.skipWaiting();
+});
+
+self.addEventListener('push', (event: PushEvent) => {
+  const payload = parsePushData(event.data);
+  event.waitUntil(self.registration.showNotification(payload.title, {
+    body: payload.body,
+    icon: '/icon-192.png',
+    badge: '/icon-96.png',
+    tag: payload.notificationId ? `sanad-notification-${payload.notificationId}` : 'sanad-notification',
+    requireInteraction: false,
+    data: {
+      notificationId: payload.notificationId,
+      actionType: payload.actionType,
+      actionPayload: payload.actionPayload
+    }
+  }));
+});
+
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close();
+  const rawData: unknown = event.notification.data;
+  const data = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+    ? rawData as Record<string, unknown>
+    : {};
+  const actionType = isNotificationActionType(data.actionType) ? data.actionType : 'none';
+  const actionPayload = sanitizeActionPayload(actionType, data.actionPayload);
+  const notificationId = isValidNotificationId(data.notificationId) ? data.notificationId : null;
+  const internalPath = buildSafeNotificationPath(actionType, actionPayload, notificationId, APP_BASE_PATH);
+  const internalUrl = new URL(internalPath, PRODUCTION_ORIGIN).toString();
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const appWindow = windows.find(client => {
+      try { return new URL(client.url).origin === PRODUCTION_ORIGIN; } catch { return false; }
+    });
+    if (appWindow) {
+      appWindow.postMessage({
+        type: 'SANAD_NOTIFICATION_CLICK',
+        notificationId,
+        actionType,
+        actionPayload
+      });
+      await appWindow.focus();
+      return;
+    }
+    await self.clients.openWindow(internalUrl);
+  })());
+});
+
+self.addEventListener('pushsubscriptionchange', (event: ExtendableEvent) => {
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      client.postMessage({ type: 'SANAD_PUSH_SUBSCRIPTION_REFRESH_REQUIRED' });
+    }
+  })());
 });
 
 // IndexedDB Helper for share target
