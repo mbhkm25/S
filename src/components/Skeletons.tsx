@@ -91,3 +91,34 @@ export function NotificationListSkeleton() {
     </div>
   );
 }
+
+export function BusinessCardSkeleton() {
+  return <div className="h-36 rounded-2xl border border-slate-100 bg-white animate-pulse" aria-hidden="true" />;
+}
+
+export function SubscriptionCardSkeleton() {
+  return <div className="h-32 rounded-2xl border border-slate-100 bg-white animate-pulse" aria-hidden="true" />;
+}
+
+export function SettingsListSkeleton() {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white divide-y divide-slate-100 animate-pulse" aria-hidden="true">
+      {[1, 2, 3, 4].map((item) => (
+        <div key={item} className="h-14 px-4 flex items-center">
+          <div className="h-3 w-1/2 rounded bg-slate-200" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ProfileDashboardSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse" aria-hidden="true">
+      <div className="h-24 rounded-2xl bg-white border border-slate-100" />
+      <BusinessCardSkeleton />
+      <SubscriptionCardSkeleton />
+      <SettingsListSkeleton />
+    </div>
+  );
+}
