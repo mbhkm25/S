@@ -15,6 +15,7 @@ import {
   acceptBusinessInvitation, BusinessContexts, getBusinessMediaSignedUrl,
   getUserBusinessContexts
 } from '../lib/businessApi';
+import PasskeyManagement from '../features/passkeys/PasskeyManagement';
 
 interface ProfileProps {
   user: { id: string; email?: string | null };
@@ -450,7 +451,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
 
   const renderInfoPage = () => {
     const content = {
-      security: { title: 'الأمان وتسجيل الدخول', icon: <Lock />, body: <><InfoLine label="البريد الإلكتروني" value={user.email || 'غير متوفر'} /><p className="text-xs text-slate-500 leading-6">تدار كلمة المرور والجلسة عبر نظام تسجيل الدخول الآمن في سند. لا تتوفر إعدادات أمان إضافية من هذه الصفحة حاليًا.</p><button type="button" disabled={loggingOut} onClick={handleLogout} className="w-full min-h-12 rounded-xl border border-rose-200 text-rose-600 text-sm font-bold">تسجيل الخروج</button></> },
+      security: { title: 'الأمان وتسجيل الدخول', icon: <Lock />, body: <><InfoLine label="البريد الإلكتروني" value={user.email || 'غير متوفر'} /><PasskeyManagement key={user.id} userId={user.id} /><p className="text-xs text-slate-500 leading-6">يبقى البريد وكلمة المرور متاحين دائمًا كخيار احتياطي واسترداد للحساب.</p><button type="button" disabled={loggingOut} onClick={handleLogout} className="w-full min-h-12 rounded-xl border border-rose-200 text-rose-600 text-sm font-bold">تسجيل الخروج</button></> },
       privacy: { title: 'الخصوصية', icon: <Shield />, body: <p className="text-xs text-slate-600 leading-7">يعرض هذا القسم بيانات حسابك أنت فقط. لا يعرض سند المعرّفات الداخلية أو الرموز السرية، وتظل الحسابات المالية مرتبطة بحسابك المحمي.</p> },
       support: { title: 'الدعم والمساعدة', icon: <HelpCircle />, body: <p className="text-xs text-slate-600 leading-7">إذا واجهت مشكلة، استخدم قناة الدعم الرسمية المتاحة لك خارج التطبيق مع وصف الخطوات التي أدت إلى المشكلة. لا توجد قناة دعم مدمجة داخل التطبيق حاليًا.</p> },
       about: { title: 'حول سند', icon: <Info />, body: <p className="text-xs text-slate-600 leading-7">سند منصة لتنظيم الإشعارات والعمليات المالية والتحقق منها، مع أدوات للحسابات الشخصية والأنشطة التجارية.</p> }

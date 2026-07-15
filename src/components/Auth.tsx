@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { Lock, Mail, User, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { Profile } from '../types';
 import { parseYemeniLocalPhone } from '../lib/digits';
 import { isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
 import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
+import PasskeySignInButton from '../features/passkeys/PasskeySignInButton';
+import { logAuthDiagnostic } from '../lib/authDiagnostics';
 
 interface AuthProps {
-  onAuthSuccess: (sessionUser: any, userProfile: Profile) => void;
+  onAuthSuccess: (sessionUser: SupabaseUser, userProfile: Profile) => void;
 }
 
 export default function Auth({ onAuthSuccess }: AuthProps) {
@@ -27,8 +30,12 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Translate standard Supabase auth/db errors to friendly Arabic
-  const getArabicErrorMessage = (err: any): string => {
-    const msg = err?.message || '';
+  const getArabicErrorMessage = (err: unknown): string => {
+    const details = typeof err === 'object' && err !== null
+      ? err as { message?: unknown; name?: unknown }
+      : {};
+    const msg = typeof details.message === 'string' ? details.message : '';
+    const errorName = typeof details.name === 'string' ? details.name : '';
     
     // Distinguish between critical database/system errors and standard user authentication errors
     const isSystemError = msg.includes('Database error saving new user') || 
@@ -37,9 +44,9 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
                           msg.includes('database_error');
                           
     if (isSystemError) {
-      console.error('Critical auth/database error details:', err);
+      logAuthDiagnostic('database_error', err);
     } else {
-      console.warn('Standard user auth flow info:', msg);
+      logAuthDiagnostic('auth_flow', err);
     }
     
     if (isSystemError) {
@@ -57,15 +64,15 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
     if (msg.includes('Email not confirmed') || msg.toLowerCase().includes('email_not_confirmed') || msg.toLowerCase().includes('email not confirmed')) {
       return 'يرجى تأكيد بريدك الإلكتروني أولًا عن طريق الرابط المرسل إليك.';
     }
-    if (msg.includes('Failed to fetch') || err.name === 'TypeError') {
-      console.warn('Network or config error details:', err);
+    if (msg.includes('Failed to fetch') || errorName === 'TypeError') {
+      logAuthDiagnostic('network_error', err);
       return 'فشل الاتصال بالخادم الآمن لسند. يرجى التحقق من اتصالك بالإنترنت وتأكيد صحة تهيئة مفاتيح Supabase في لوحة الإعدادات.';
     }
     return msg || 'تعذر إتمام العملية حاليًا. يرجى المحاولة مرة أخرى.';
   };
 
   // Helper to ensure profile exists
-  const ensureProfileExists = async (user: any) => {
+  const ensureProfileExists = async (user: SupabaseUser) => {
     try {
       const { data: profile, error: fetchError } = await supabase
         .from('profiles')
@@ -74,7 +81,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         .maybeSingle();
 
       if (fetchError) {
-        console.warn('Error fetching profile, attempting creation:', fetchError);
+        logAuthDiagnostic('profile_fetch_fallback', fetchError);
       }
 
       if (!profile) {
@@ -104,8 +111,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
       }
       
       return profile as Profile;
-    } catch (err: any) {
-      console.error('ensureProfileExists error:', err);
+    } catch (err: unknown) {
+      logAuthDiagnostic('profile_ensure_failed', err);
       throw new Error('تعذر إنشاء ملف المستخدم في قاعدة سند. أعد المحاولة.');
     }
   };
@@ -218,8 +225,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         const userProfile = await ensureProfileExists(authData.user);
         onAuthSuccess(authData.user, userProfile!);
       }
-    } catch (err: any) {
-      console.error('Authentication Error:', err);
+    } catch (err: unknown) {
+      logAuthDiagnostic('authentication_failed', err);
       setErrorMessage(getArabicErrorMessage(err));
     } finally {
       setLoading(false);
@@ -268,6 +275,12 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
             <span>{successMessage}</span>
           </div>
+        )}
+
+        {!isSignUp && (
+          <PasskeySignInButton
+            onError={(message) => setErrorMessage(message || null)}
+          />
         )}
 
         {/* Auth Form */}
