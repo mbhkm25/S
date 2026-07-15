@@ -87,6 +87,9 @@ export default function App() {
   // Parse path after /v/, /b/, or business routes
   const parsePath = () => {
     const path = window.location.pathname;
+    if (!path.includes('/business/') && /\/profile(?:\/|$)/.test(path)) {
+      return { type: 'profile' };
+    }
     if (path.includes('/share-intake')) {
       return { type: 'share-intake' };
     }
@@ -161,6 +164,11 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (page === 'profile') {
+      window.history.pushState({}, '', `${cleanBase}profile`);
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('profile');
     } else if (page === 'notifications') {
       window.history.pushState({}, '', `${cleanBase}notifications`);
       setActiveToken(null);
@@ -226,7 +234,11 @@ export default function App() {
       }
 
       const parsed = parsePath();
-      if (parsed.type === 'share-intake') {
+      if (parsed.type === 'profile') {
+        setActiveToken(null);
+        setActiveSource('link');
+        setCurrentPage('profile');
+      } else if (parsed.type === 'share-intake') {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('share-intake');
@@ -290,7 +302,11 @@ export default function App() {
     }
 
     const parsed = parsePath();
-    if (parsed.type === 'share-intake') {
+    if (parsed.type === 'profile') {
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('profile');
+    } else if (parsed.type === 'share-intake') {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
