@@ -32,6 +32,14 @@ import { NotificationProvider } from './features/notifications/NotificationProvi
 import NotificationBell from './components/notifications/NotificationBell';
 import PasskeyEnrollmentPrompt from './features/passkeys/PasskeyEnrollmentPrompt';
 import { logAuthDiagnostic } from './lib/authDiagnostics';
+import { handleNotificationAction } from './features/notifications/notificationActions';
+import { markNotificationRead } from './features/notifications/notificationApi';
+import {
+  isValidNotificationId,
+  parseNotificationClickMessage
+} from './features/push/pushNavigation';
+import { reportPushError } from './features/push/pushErrors';
+import { syncExistingPushSubscription } from './features/push/pushSubscription';
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 
@@ -45,6 +53,7 @@ export default function App() {
   const [showStatusBanner, setShowStatusBanner] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const requestGenerationRef = useRef(0);
+  const processedPushNotificationIdsRef = useRef(new Set<string>());
   const [passkeyEnrollmentUser, setPasskeyEnrollmentUser] = useState<SupabaseUser | null>(null);
   
   // Navigation states
@@ -99,6 +108,9 @@ export default function App() {
     }
     if (path.includes('/notifications')) {
       return { type: 'notifications' };
+    }
+    if (path.includes('/reports')) {
+      return { type: 'reports' };
     }
     if (path.includes('/business/create')) {
       return { type: 'business-create' };
@@ -224,6 +236,88 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!user?.id) return;
+    void syncExistingPushSubscription(user.id).catch(error => {
+      reportPushError(error);
+    });
+
+    const syncOnResume = () => {
+      if (document.visibilityState === 'visible') {
+        void syncExistingPushSubscription(user.id).catch(error => {
+          reportPushError(error);
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', syncOnResume);
+    return () => document.removeEventListener('visibilitychange', syncOnResume);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const url = new URL(window.location.href);
+    const notificationId = url.searchParams.get('notification');
+    if (!notificationId) return;
+
+    const removeIntentFromUrl = () => {
+      const current = new URL(window.location.href);
+      current.searchParams.delete('notification');
+      window.history.replaceState({}, '', `${current.pathname}${current.search}${current.hash}`);
+    };
+
+    if (!isValidNotificationId(notificationId)) {
+      removeIntentFromUrl();
+      return;
+    }
+    if (processedPushNotificationIdsRef.current.has(notificationId)) {
+      removeIntentFromUrl();
+      return;
+    }
+    processedPushNotificationIdsRef.current.add(notificationId);
+    void markNotificationRead(notificationId).catch(() => undefined).finally(removeIntentFromUrl);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent<unknown>) => {
+      if (event.origin && event.origin !== window.location.origin) return;
+      if (event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+          && (event.data as Record<string, unknown>).type === 'SANAD_PUSH_SUBSCRIPTION_REFRESH_REQUIRED') {
+        if (user?.id) {
+          void syncExistingPushSubscription(user.id, true).catch(error => {
+            reportPushError(error);
+          });
+        }
+        return;
+      }
+
+      const message = parseNotificationClickMessage(event.data);
+      if (!message) return;
+      const navigated = handleNotificationAction(
+        message.actionType,
+        message.actionPayload,
+        navigateTo,
+        () => undefined
+      );
+      if (!navigated) navigateTo('notifications');
+
+      if (message.notificationId) {
+        if (user?.id) {
+          processedPushNotificationIdsRef.current.add(message.notificationId);
+          void markNotificationRead(message.notificationId).catch(() => undefined);
+        } else {
+          const url = new URL(window.location.href);
+          url.searchParams.set('notification', message.notificationId);
+          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        }
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+  }, [user?.id]);
+
   // Listen to browser Back/Forward pops
   useEffect(() => {
     const handlePopState = () => {
@@ -250,6 +344,8 @@ export default function App() {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('notifications');
+      } else if (parsed.type === 'reports') {
+        setCurrentPage('reports');
       } else if (parsed.type === 'business-create') {
         setCurrentPage('business-create');
       } else if (parsed.type === 'business-manage') {
@@ -318,6 +414,8 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('notifications');
+    } else if (parsed.type === 'reports') {
+      setCurrentPage('reports');
     } else if (parsed.type === 'business-create') {
       setCurrentPage('business-create');
     } else if (parsed.type === 'business-manage') {
@@ -734,7 +832,8 @@ export default function App() {
     setProfile(userProfile);
     setAuthState('authenticated');
     setPasskeyEnrollmentUser(sessionUser);
-    navigateTo('home');
+    const notificationIntent = new URL(window.location.href).searchParams.get('notification');
+    if (!isValidNotificationId(notificationIntent)) navigateTo('home');
   };
 
   const closePasskeyEnrollment = () => {

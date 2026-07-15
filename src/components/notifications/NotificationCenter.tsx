@@ -18,6 +18,7 @@ import { useNotifications } from '../../features/notifications/useNotifications'
 import { NotificationItem, NotificationCursor } from '../../features/notifications/types';
 import NotificationItemComponent from './NotificationItem';
 import { NotificationListSkeleton } from '../Skeletons';
+import PushNotificationSettings from '../../features/push/PushNotificationSettings';
 
 interface NotificationCenterProps {
   userId: string | null;
@@ -391,6 +392,8 @@ export default function NotificationCenter({ userId, onNavigate }: NotificationC
           </button>
         )}
       </div>
+
+      <PushNotificationSettings userId={userId} />
 
       {/* Floating Error Alert Banner */}
       {localError && (
