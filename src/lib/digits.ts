@@ -22,17 +22,12 @@ export function parseYemeniLocalPhone(input: string): string {
   let digits = normalized.replace(/\D/g, '');
 
   // 3. Extract the local 9-digit Yemeni part
-  if (digits.startsWith('00967') && digits.length === 14) {
+  if (digits.startsWith('00967')) {
     digits = digits.substring(5);
-  } else if (digits.startsWith('967') && digits.length === 12) {
+  } else if (digits.startsWith('967')) {
     digits = digits.substring(3);
-  } else if (digits.startsWith('0') && digits.length === 10) {
+  } else if (digits.startsWith('0')) {
     digits = digits.substring(1);
-  }
-
-  // Limit to 9 digits maximum
-  if (digits.length > 9) {
-    digits = digits.substring(0, 9);
   }
 
   return digits;

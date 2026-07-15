@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, Phone, User, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { Lock, Mail, User, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { Profile } from '../types';
-import { toLatinDigits } from '../lib/digits';
+import { parseYemeniLocalPhone } from '../lib/digits';
+import { isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
+import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 
 interface AuthProps {
   onAuthSuccess: (sessionUser: any, userProfile: Profile) => void;
@@ -17,6 +19,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [governorate, setGovernorate] = useState('');
   
   // Status states
   const [loading, setLoading] = useState(false);
@@ -77,7 +80,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
       if (!profile) {
         // Profile does not exist, insert/upsert it
         const userFullName = user.user_metadata?.full_name || fullName || 'مستخدم سند';
-        const userPhone = user.user_metadata?.phone || phone || '';
+        const userPhone = user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : '');
+        const userGovernorate = user.user_metadata?.governorate || governorate || null;
         
         const { data: newProfile, error: insertError } = await supabase
           .from('profiles')
@@ -85,6 +89,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             id: user.id,
             full_name: userFullName,
             phone: userPhone,
+            governorate: userGovernorate,
             status: 'active',
             profile_completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -125,7 +130,17 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         return;
       }
       if (!phone) {
-        setErrorMessage('يرجى كتابة رقم الهاتف.');
+        setErrorMessage('يرجى إدخال رقم الجوال.');
+        setLoading(false);
+        return;
+      }
+      if (!isValidYemenLocalPhone(phone)) {
+        setErrorMessage(phone.length !== 9 ? 'رقم الجوال يجب أن يتكون من 9 أرقام.' : 'رقم الجوال اليمني يجب أن يبدأ بالرقم 7.');
+        setLoading(false);
+        return;
+      }
+      if (!isYemenGovernorate(governorate)) {
+        setErrorMessage('يرجى اختيار المحافظة');
         setLoading(false);
         return;
       }
@@ -152,7 +167,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             emailRedirectTo: cleanRedirectUrl,
             data: {
               full_name: fullName,
-              phone: phone
+              phone: normalizeYemenPhone(phone),
+              governorate
             }
           }
         });
@@ -278,21 +294,34 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
               {/* Phone Number */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 block">رقم الهاتف (مع رمز الدولة)</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-400">
-                    <Phone className="w-4 h-4" />
-                  </span>
+                <label className="text-xs font-medium text-slate-700 block">رقم الجوال</label>
+                <div className="flex rounded-xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500">
                   <input
                     type="tel"
                     required
                     value={phone}
-                    onChange={(e) => setPhone(toLatinDigits(e.target.value))}
-                    className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-left"
-                    placeholder="+966500000000"
+                    inputMode="numeric"
+                    onChange={(e) => setPhone(parseYemeniLocalPhone(e.target.value).slice(0, 9))}
+                    className="min-w-0 flex-1 px-3.5 py-3 bg-transparent text-slate-900 text-sm focus:outline-none text-left font-mono"
+                    placeholder="771234567"
                     dir="ltr"
                   />
+                  <span className="bg-slate-100 border-r border-slate-200 px-3.5 py-3 text-sm text-slate-600 font-mono select-none" dir="ltr">+967</span>
                 </div>
+                <p className="text-[10px] text-slate-400">أدخل رقم الجوال المكوّن من 9 أرقام</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-700 block">المحافظة</label>
+                <select
+                  required
+                  value={governorate}
+                  onChange={(e) => setGovernorate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="">اختر المحافظة</option>
+                  {YEMEN_GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
               </div>
             </>
           )}

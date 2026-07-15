@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { User, Phone, AlertCircle, Loader2, CheckCircle, ShieldAlert } from 'lucide-react';
+import { User, AlertCircle, Loader2, CheckCircle, ShieldAlert, MapPin } from 'lucide-react';
 import { toLatinDigits, parseYemeniLocalPhone } from '../lib/digits';
 import { normalizeYemenPhone, isValidYemenLocalPhone } from '../lib/profileUtils';
+import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 
 interface ProfileCompletionGateModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface ProfileCompletionGateModalProps {
 export default function ProfileCompletionGateModal({ isOpen, profile, onClose, onSuccess, refreshProfile }: ProfileCompletionGateModalProps) {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [localPhone, setLocalPhone] = useState(profile?.phone ? parseYemeniLocalPhone(profile.phone) : '');
+  const [governorate, setGovernorate] = useState(profile?.governorate || '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
     if (profile) {
       if (!fullName) setFullName(profile.full_name || '');
       if (!localPhone && profile.phone) setLocalPhone(parseYemeniLocalPhone(profile.phone));
+      if (!governorate && profile.governorate) setGovernorate(profile.governorate);
     }
   }, [profile]);
 
@@ -33,6 +36,7 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
 
   const isNameMissing = !profile?.full_name || !profile.full_name.trim();
   const isPhoneMissing = !profile?.phone || parseYemeniLocalPhone(profile.phone).length !== 9;
+  const isGovernorateMissing = !profile?.governorate || !profile.governorate.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +68,14 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
         return;
       }
       updatePayload.phone = normalizeYemenPhone(cleanPhone);
+    }
+
+    if (isGovernorateMissing) {
+      if (!isYemenGovernorate(governorate)) {
+        setError('يرجى اختيار المحافظة');
+        return;
+      }
+      updatePayload.governorate = governorate;
     }
 
     setSaving(true);
@@ -188,6 +200,27 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
                     </span>
                   </div>
                   <p className="text-[9px] text-slate-400 font-arabic mt-1">اكتب الـ 9 أرقام اليمنية مباشرة بدون مفتاح الدولة.</p>
+                </div>
+              )}
+
+              {isGovernorateMissing && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">المحافظة</label>
+                  <div className="relative">
+                    <select
+                      required
+                      value={governorate}
+                      onChange={(e) => {
+                        setGovernorate(e.target.value);
+                        setError(null);
+                      }}
+                      className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none appearance-none"
+                    >
+                      <option value="">اختر المحافظة</option>
+                      {YEMEN_GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
               )}
 

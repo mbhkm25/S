@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Shield, Power, Sparkles, Loader2, Landmark, Plus, AlertCircle, EyeOff, Trash2, MapPin, CheckCircle, Clock, CreditCard, ShieldCheck, HelpCircle, Clipboard, Check, Store } from 'lucide-react';
 import { formatYemeniDisplay, parseYemeniLocalPhone, toLatinDigits } from '../lib/digits';
 import { normalizeYemenPhone, isValidYemenLocalPhone, maskAccountNumber } from '../lib/profileUtils';
+import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 import ProUpgradeModal from './ProUpgradeModal';
 import { 
   getUserBusinessContexts, acceptBusinessInvitation, getBusinessMediaSignedUrl,
@@ -18,11 +19,6 @@ interface ProfileProps {
   onNavigate: (page: string, token?: string) => void;
 }
 
-const GOVERNORATES = [
-  'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة', 
-  'المهرة', 'مأرب', 'الجوف', 'صعدة', 'حجة', 'عمران', 'البيضاء', 
-  'لحج', 'أبين', 'الضالع', 'ريمة', 'سقطرى', 'المحويت'
-];
 
 const FINANCIAL_ENTITIES = [
   'العمقي موبايل',
@@ -191,6 +187,11 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
 
     if (!isValidYemenLocalPhone(cleanPhoneInput)) {
       setProfileError('رقم الهاتف يجب أن يتكون من 9 أرقام يمنية صالحة (مثال: 777634971).');
+      return;
+    }
+
+    if (!isYemenGovernorate(governorate)) {
+      setProfileError('يرجى اختيار المحافظة');
       return;
     }
 
@@ -659,7 +660,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
                 required
               >
                 <option value="">-- اختر محافظة الإقامة --</option>
-                {GOVERNORATES.map((gov) => (
+                {YEMEN_GOVERNORATES.map((gov) => (
                   <option key={gov} value={gov}>
                     {gov}
                   </option>

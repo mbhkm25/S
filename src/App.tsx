@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { supabase, hasSupabaseConfig } from './lib/supabase';
 import { Profile } from './types';
 import Auth from './components/Auth';
@@ -8,30 +8,43 @@ import NotificationDetails from './components/Details';
 import MyOperations from './components/MyOperations';
 import MyProfile from './components/Profile';
 import VerifyNotice from './components/VerifyNotice';
-import Reports from './components/Reports';
 import ShareIntake from './components/ShareIntake';
-import BusinessCreate from './components/business/BusinessCreate';
-import BusinessManage from './components/business/BusinessManage';
-import BusinessOperations from './components/business/BusinessOperations';
-import BusinessTeam from './components/business/BusinessTeam';
-import BusinessCommunity from './components/business/BusinessCommunity';
-import PublicBusinessProfile from './components/business/PublicBusinessProfile';
-import PublicProductDetail from './components/business/PublicProductDetail';
-import BusinessProfileEditor from './components/business/BusinessProfileEditor';
-import BusinessWhatsAppCatalog from './components/business/BusinessWhatsAppCatalog';
-import BusinessCustomers from './components/business/BusinessCustomers';
+import ChunkErrorBoundary from './components/ChunkErrorBoundary';
+
+const Reports = lazy(() => import('./components/Reports'));
+const BusinessCreate = lazy(() => import('./components/business/BusinessCreate'));
+const BusinessManage = lazy(() => import('./components/business/BusinessManage'));
+const BusinessOperations = lazy(() => import('./components/business/BusinessOperations'));
+const BusinessTeam = lazy(() => import('./components/business/BusinessTeam'));
+const BusinessCommunity = lazy(() => import('./components/business/BusinessCommunity'));
+const PublicBusinessProfile = lazy(() => import('./components/business/PublicBusinessProfile'));
+const PublicProductDetail = lazy(() => import('./components/business/PublicProductDetail'));
+const BusinessProfileEditor = lazy(() => import('./components/business/BusinessProfileEditor'));
+const BusinessWhatsAppCatalog = lazy(() => import('./components/business/BusinessWhatsAppCatalog'));
+const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
+const NotificationCenter = lazy(() => import('./components/notifications/NotificationCenter'));
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
 import { INTERNAL_BUSINESS_CATALOG_ENABLED } from './lib/urlUtils';
+import { NotificationProvider } from './features/notifications/NotificationProvider';
+import NotificationBell from './components/notifications/NotificationBell';
+
+import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 
 export default function App() {
   const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [authState, setAuthState] = useState<'booting_shell' | 'session_pending' | 'authenticated' | 'unauthenticated' | 'auth_error'>('booting_shell');
+  const [connectivity, setConnectivity] = useState<'online' | 'offline' | 'slow'>('online');
+  const [profileStatus, setProfileStatus] = useState<'idle' | 'loading' | 'ready' | 'missing' | 'degraded'>('idle');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [showStatusBanner, setShowStatusBanner] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const requestGenerationRef = useRef(0);
   
   // Navigation states
-  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
   const [activeProductToken, setActiveProductToken] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<'link' | 'qr' | 'search' | 'app'>('link');
@@ -76,6 +89,9 @@ export default function App() {
     const path = window.location.pathname;
     if (path.includes('/share-intake')) {
       return { type: 'share-intake' };
+    }
+    if (path.includes('/notifications')) {
+      return { type: 'notifications' };
     }
     if (path.includes('/business/create')) {
       return { type: 'business-create' };
@@ -145,6 +161,11 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (page === 'notifications') {
+      window.history.pushState({}, '', `${cleanBase}notifications`);
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('notifications');
     } else if (page === 'business-create') {
       window.history.pushState({}, '', `${cleanBase}business/create`);
       setCurrentPage('business-create');
@@ -209,6 +230,10 @@ export default function App() {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('share-intake');
+      } else if (parsed.type === 'notifications') {
+        setActiveToken(null);
+        setActiveSource('link');
+        setCurrentPage('notifications');
       } else if (parsed.type === 'business-create') {
         setCurrentPage('business-create');
       } else if (parsed.type === 'business-manage') {
@@ -269,6 +294,10 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('share-intake');
+    } else if (parsed.type === 'notifications') {
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('notifications');
     } else if (parsed.type === 'business-create') {
       setCurrentPage('business-create');
     } else if (parsed.type === 'business-manage') {
@@ -306,98 +335,206 @@ export default function App() {
 
   // Check auth session on startup and subscribe to auth changes
   useEffect(() => {
-    const checkSessionAndProfile = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          
-          // Get profile
-          const { data: prof, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
+    // Transition to session_pending immediately on mount
+    setAuthState('session_pending');
 
-          if (!error && prof) {
-            setProfile(prof as Profile);
-          } else {
-            // Force create/upsert profile using metadata if missing in DB
-            const { data: newProf, error: insError } = await supabase
+    const slowConnectionTimer = setTimeout(() => {
+      setAuthState(prev => {
+        if (prev === 'session_pending') {
+          setConnectivity('slow');
+          setStatusMessage('جاري الاتصال بالخادم، يرجى الانتظار...');
+          setShowStatusBanner(true);
+        }
+        return prev;
+      });
+    }, 1500);
+
+    const loadProfileBackground = async (userId: string, metadata: any) => {
+      const thisGen = requestGenerationRef.current;
+      setProfileStatus('loading');
+      setProfileError(null);
+
+      if (import.meta.env.DEV) {
+        performance.mark('profile_load_start');
+      }
+
+      try {
+        const { data: prof, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+
+        // Check if user changed or session reset since request started (race condition guard)
+        if (thisGen !== requestGenerationRef.current) {
+          if (import.meta.env.DEV) {
+            console.warn('[SW/Auth] Aborted profile state application: generation mismatch.');
+          }
+          return;
+        }
+
+        if (!error && prof) {
+          const missingSignupData: Partial<Profile> = {};
+          if (!prof.full_name && metadata?.full_name) missingSignupData.full_name = metadata.full_name;
+          if (!prof.phone && metadata?.phone) missingSignupData.phone = metadata.phone;
+          if (!prof.governorate && metadata?.governorate) missingSignupData.governorate = metadata.governorate;
+
+          let resolvedProfile = prof as Profile;
+          if (Object.keys(missingSignupData).length > 0) {
+            const { data: reconciledProfile, error: reconcileError } = await supabase
               .from('profiles')
-              .upsert({
-                id: session.user.id,
-                full_name: session.user.user_metadata?.full_name || 'مستخدم سند',
-                phone: session.user.user_metadata?.phone || '',
-                status: 'active',
-                profile_completed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
+              .update({ ...missingSignupData, updated_at: new Date().toISOString() })
+              .eq('id', userId)
               .select()
               .single();
+            if (reconcileError) throw reconcileError;
+            resolvedProfile = reconciledProfile as Profile;
+          }
 
-            if (!insError && newProf) {
-              setProfile(newProf as Profile);
-            } else {
-              setProfile(null);
-            }
+          setProfile(resolvedProfile);
+          setProfileStatus('ready');
+        } else {
+          // Attempt upsert in background
+          const { data: newProf, error: insError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: userId,
+              full_name: metadata?.full_name || 'مستخدم سند',
+              phone: metadata?.phone || '',
+              governorate: metadata?.governorate || null,
+              status: 'active',
+              profile_completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (thisGen !== requestGenerationRef.current) return;
+
+          if (!insError && newProf) {
+            setProfile(newProf as Profile);
+            setProfileStatus('ready');
+          } else {
+            setProfileStatus('missing');
+            setProfileError('Failed to fetch profile');
           }
         }
       } catch (err) {
-        console.error('Session verification error:', err);
-        setProfile(null);
+        console.error('Error fetching profile in background:', err);
+        if (thisGen === requestGenerationRef.current) {
+          setProfileStatus('degraded');
+          setProfileError('Network error loading profile');
+        }
       } finally {
-        setSessionChecked(true);
+        if (thisGen === requestGenerationRef.current && import.meta.env.DEV) {
+          performance.mark('profile_load_end');
+          performance.measure('Profile Load Time', 'profile_load_start', 'profile_load_end');
+        }
       }
     };
 
-    checkSessionAndProfile();
+    const verifySession = async () => {
+      requestGenerationRef.current += 1;
+      const thisGen = requestGenerationRef.current;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (import.meta.env.DEV) {
+        performance.mark('session_restore_start');
+      }
+
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (thisGen !== requestGenerationRef.current) {
+          return;
+        }
+
+        clearTimeout(slowConnectionTimer);
+        setShowStatusBanner(false);
+
         if (session?.user) {
           setUser(session.user);
-          const { data: prof, error: getError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          if (!getError && prof) {
-            setProfile(prof as Profile);
-          } else {
-            // Force create/upsert profile using metadata if missing in DB
-            const { data: newProf, error: insError } = await supabase
-              .from('profiles')
-              .upsert({
-                id: session.user.id,
-                full_name: session.user.user_metadata?.full_name || 'مستخدم سند',
-                phone: session.user.user_metadata?.phone || '',
-                status: 'active',
-                profile_completed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-            if (!insError && newProf) {
-              setProfile(newProf as Profile);
-            } else {
-              setProfile(null);
-            }
-          }
+          setAuthState('authenticated');
+          loadProfileBackground(session.user.id, session.user.user_metadata);
         } else {
           setUser(null);
           setProfile(null);
+          setProfileStatus('idle');
+          setAuthState('unauthenticated');
         }
-      } catch (err) {
-        console.error('Error in auth state change subscriber:', err);
+      } catch (err: any) {
+        if (thisGen !== requestGenerationRef.current) {
+          return;
+        }
+
+        clearTimeout(slowConnectionTimer);
+        console.error('Session verification error:', err);
+
+        if (!navigator.onLine) {
+          setConnectivity('offline');
+          setStatusMessage('أنت غير متصل بالإنترنت حالياً');
+          setShowStatusBanner(true);
+        } else {
+          setAuthState('auth_error');
+        }
       } finally {
-        setSessionChecked(true);
+        clearTimeout(slowConnectionTimer);
+        if (thisGen === requestGenerationRef.current && import.meta.env.DEV) {
+          performance.mark('session_restore_end');
+          performance.measure('Session Restoration Time', 'session_restore_start', 'session_restore_end');
+        }
+      }
+    };
+
+    verifySession();
+
+    // Listen to network status changes to auto-retry
+    const handleOnline = () => {
+      setConnectivity('online');
+      setStatusMessage('تم استعادة الاتصال. جاري التحديث...');
+      verifySession();
+      setTimeout(() => {
+        setConnectivity(prev => prev === 'online' ? 'online' : prev);
+        setShowStatusBanner(false);
+      }, 2000);
+    };
+
+    const handleOffline = () => {
+      setConnectivity('offline');
+      setStatusMessage('أنت غير متصل بالإنترنت حالياً');
+      setShowStatusBanner(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      requestGenerationRef.current += 1;
+
+      if (session?.user) {
+        setUser(prevUser => {
+          if (prevUser?.id === session.user.id) {
+            // User did not change, likely a TOKEN_REFRESHED event, skip profile reload
+            return prevUser;
+          }
+          loadProfileBackground(session.user.id, session.user.user_metadata);
+          return session.user;
+        });
+        setAuthState('authenticated');
+      } else {
+        // Safe clean up user data only, keep App Shell caches
+        setUser(null);
+        setProfile(null);
+        setProfileStatus('idle');
+        setAuthState('unauthenticated');
       }
     });
 
     return () => {
+      clearTimeout(slowConnectionTimer);
       subscription.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -540,46 +677,53 @@ export default function App() {
     );
   }
 
-  // Render Loader during session check
-  if (!sessionChecked) {
+  // Booting and session pending states render ShellSkeleton
+  if (authState === 'booting_shell' || authState === 'session_pending') {
+    return <ShellSkeleton />;
+  }
+
+  // Render Authentication Connection Error screen
+  if (authState === 'auth_error') {
     return (
       <div className="min-h-screen bg-[#F7F7F5] flex flex-col items-center justify-center p-6 text-center space-y-6">
-        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100/80 inline-flex items-center justify-center mb-2">
-          <img 
-            src={`${import.meta.env.BASE_URL}logo.png`} 
-            alt="شعار سند" 
-            className="h-12 object-contain" 
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
-        <div className="flex flex-col items-center space-y-2">
-          <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
-          <span className="text-xs text-slate-500 font-medium font-arabic">جاري التحقق الفوري والآمن...</span>
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100/80 max-w-sm space-y-4">
+          <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
+          <h2 className="text-base font-bold font-arabic text-slate-800">حدث خطأ أثناء الاتصال</h2>
+          <p className="text-xs text-slate-500 font-arabic leading-relaxed">
+            تعذر تأكيد حالتك الأمنية أو الاتصال بالخادم الرئيسي حالياً. يرجى التحقق من الشبكة وإعادة المحاولة.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-[#111111] hover:bg-slate-800 text-white font-arabic py-2 rounded-2xl text-xs font-bold transition-all shadow-sm"
+          >
+            إعادة المحاولة
+          </button>
         </div>
       </div>
     );
   }
 
   const isDetailsView = currentPage === 'details' && activeToken;
-  const isAuthenticated = !!user && !!profile;
-  const shouldShowAuth = !isAuthenticated && !isDetailsView;
+  const isAuthenticated = authState === 'authenticated';
+  const shouldShowAuth = authState === 'unauthenticated' && !isDetailsView;
 
   const handleAuthSuccess = (sessionUser: any, userProfile: Profile) => {
     setUser(sessionUser);
     setProfile(userProfile);
+    setAuthState('authenticated');
     navigateTo('home');
   };
 
   const handleLogoutSuccess = () => {
     setUser(null);
     setProfile(null);
+    setAuthState('unauthenticated');
     navigateTo('home');
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
+    <NotificationProvider userId={user?.id || null} isAuthenticated={isAuthenticated}>
+      <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
       
       {/* Top Brand Navbar */}
       <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
@@ -604,12 +748,17 @@ export default function App() {
 
           <div>
             {isAuthenticated && (
-              <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
-                <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
-                  {profile?.full_name?.slice(0, 1) || 'أ'}
-                </div>
-                <div className="text-right hidden sm:block">
-                  <p className="text-[10px] font-bold leading-none text-slate-800">{profile?.full_name}</p>
+              <div className="flex items-center gap-2">
+                <NotificationBell onNavigate={() => navigateTo('notifications')} />
+                <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
+                  <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
+                    {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
+                  </div>
+                  <div className="text-right hidden sm:block">
+                    <p className="text-[10px] font-bold leading-none text-slate-800">
+                      {profile ? profile.full_name : 'جاري التحميل...'}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -617,24 +766,37 @@ export default function App() {
         </div>
       </header>
 
+      {showStatusBanner && (
+        <div className={`text-white text-[11px] font-bold py-1.5 px-4 text-center font-arabic animate-slide-down flex items-center justify-center gap-2 shadow-sm sticky top-[53px] z-40 ${
+          connectivity === 'offline' ? 'bg-rose-600' : 'bg-amber-500'
+        }`}>
+          <span className="w-2 h-2 bg-white rounded-full animate-ping"></span>
+          <span>{statusMessage}</span>
+        </div>
+      )}
+
       {/* Main Container Area */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 pb-24" id="app_main">
         {shouldShowAuth ? (
           <Auth onAuthSuccess={handleAuthSuccess} />
         ) : (
           <div className="animate-fade-in">
-             {currentPage === 'home' && profile && (
+             {currentPage === 'home' && (
               <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
             )}
             
-            {currentPage === 'upload' && user && profile && (
-              <UploadNotification
-                user={user}
-                profile={profile}
-                onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
-                onNavigate={(p: any) => navigateTo(p)}
-                ensureProfileComplete={ensureProfileComplete}
-              />
+            {currentPage === 'upload' && user && (
+              profile ? (
+                <UploadNotification
+                  user={user}
+                  profile={profile}
+                  onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
+                  onNavigate={(p: any) => navigateTo(p)}
+                  ensureProfileComplete={ensureProfileComplete}
+                />
+              ) : (
+                <ContentSkeleton />
+              )
             )}
 
             {currentPage === 'details' && activeToken && (
@@ -664,85 +826,152 @@ export default function App() {
               />
             )}
 
-            {currentPage === 'profile' && user && profile && (
-              <MyProfile
-                user={user}
-                profile={profile}
-                onLogout={handleLogoutSuccess}
-                refreshProfile={refreshProfile}
-                onNavigate={(page, token) => navigateTo(page, token)}
-              />
+            {currentPage === 'profile' && user && (
+              profile ? (
+                <MyProfile
+                  user={user}
+                  profile={profile}
+                  onLogout={handleLogoutSuccess}
+                  refreshProfile={refreshProfile}
+                  onNavigate={(page, token) => navigateTo(page, token)}
+                />
+              ) : (
+                <ContentSkeleton />
+              )
             )}
 
-            {currentPage === 'reports' && profile && (
-              <Reports 
-                profile={profile} 
-                standalone={true} 
-                ensureProfileComplete={ensureProfileComplete}
-              />
+            {currentPage === 'reports' && (
+              profile ? (
+                <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                  <Suspense fallback={<ContentSkeleton />}>
+                    <Reports
+                      profile={profile}
+                      standalone={true}
+                      ensureProfileComplete={ensureProfileComplete}
+                    />
+                  </Suspense>
+                </ChunkErrorBoundary>
+              ) : (
+                <ContentSkeleton />
+              )
             )}
 
-            {currentPage === 'share-intake' && user && profile && (
-              <ShareIntake
-                user={user}
-                profile={profile}
-                onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
-                onNavigate={(p: any) => navigateTo(p)}
-                ensureProfileComplete={ensureProfileComplete}
-              />
+            {currentPage === 'share-intake' && user && (
+              profile ? (
+                <ShareIntake
+                  user={user}
+                  profile={profile}
+                  onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
+                  onNavigate={(p: any) => navigateTo(p)}
+                  ensureProfileComplete={ensureProfileComplete}
+                />
+              ) : (
+                <ContentSkeleton />
+              )
+            )}
+
+            {currentPage === 'notifications' && (
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <NotificationCenter
+                    userId={user?.id || null}
+                    onNavigate={(page, token, source) => navigateTo(page, token, source)}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-create' && (
-              <BusinessCreate onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCreate onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-manage' && (
-              <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-operations' && (
-              <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-team' && (
-              <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-manage-profile' && (
-              <BusinessProfileEditor onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessProfileEditor onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-whatsapp-catalog' && (
-              <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-customers' && (
-              <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'business-community' && (
-              <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'public-business-profile' && activeToken && (
-              <PublicBusinessProfile 
-                slug={activeToken} 
-                initialTab={profileInitialTab}
-                onNavigate={(page, token) => {
-                  if (page !== 'public-product-detail') {
-                    setProfileInitialTab('overview');
-                  }
-                  navigateTo(page, token);
-                }} 
-              />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <PublicBusinessProfile
+                    slug={activeToken}
+                    initialTab={profileInitialTab}
+                    onNavigate={(page, token) => {
+                      if (page !== 'public-product-detail') {
+                        setProfileInitialTab('overview');
+                      }
+                      navigateTo(page, token);
+                    }}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
 
             {currentPage === 'public-product-detail' && activeToken && activeProductToken && (
-              <PublicProductDetail 
-                businessSlug={activeToken} 
-                productId={activeProductToken} 
-                onNavigate={(page, token) => navigateTo(page, token)} 
-              />
+              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <PublicProductDetail
+                    businessSlug={activeToken}
+                    productId={activeProductToken}
+                    onNavigate={(page, token) => navigateTo(page, token)}
+                  />
+                </Suspense>
+              </ChunkErrorBoundary>
             )}
           </div>
         )}
@@ -832,6 +1061,7 @@ export default function App() {
         refreshProfile={refreshProfile}
       />
 
-    </div>
+      </div>
+    </NotificationProvider>
   );
 }
