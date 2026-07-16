@@ -91,7 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
     vapidSubject: validateSubject(required(env, 'WEB_PUSH_SUBJECT')),
     workerInstanceId,
     batchSize: integer(env, 'PUSH_WORKER_BATCH_SIZE', 20, 1, 100),
-    pollIntervalMs: integer(env, 'PUSH_WORKER_POLL_INTERVAL_MS', 5000, 1000, 60_000),
+    pollIntervalMs: integer(env, 'PUSH_WORKER_POLL_INTERVAL_MS', 30_000, 5_000, 60_000),
     maxAttempts: integer(env, 'PUSH_WORKER_MAX_ATTEMPTS', 5, 1, 20),
     lockSeconds: integer(env, 'PUSH_WORKER_LOCK_SECONDS', 120, 30, 900),
     concurrency: integer(env, 'PUSH_WORKER_CONCURRENCY', 5, 1, 20),
