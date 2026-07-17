@@ -44,13 +44,13 @@ import {
   Database,
   PlusCircle,
   Puzzle,
-  Download,
   AlertTriangle,
   UserCheck
 } from 'lucide-react';
 
 import BusinessCustomers from './BusinessCustomers';
 import BusinessTeam from './BusinessTeam';
+import BusinessReports from './reports/BusinessReports';
 
 interface BusinessManageProps {
   onNavigate: (page: string, token?: string) => void;
@@ -279,398 +279,9 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   // Reports State (Real database operations)
   const [realOps, setRealOps] = useState<any[]>([]);
-  const [reportSummary, setReportSummary] = useState<Record<string, { total: number; verified: number; count: number }>>({});
   const [loadingReports, setLoadingReports] = useState(false);
 
-  // Custom filters state
-  const [filterCurrency, setFilterCurrency] = useState<string>('ALL');
-  const [filterPeriod, setFilterPeriod] = useState<string>('ALL');
-  const [filterUser, setFilterUser] = useState<string>('ALL');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
 
-  const getUniqueVerifiers = () => {
-    const usersSet = new Set<string>();
-    realOps.forEach((item) => {
-      const uName = item.linked_by?.full_name || item.linked_by?.phone;
-      if (uName) {
-        usersSet.add(uName);
-      }
-      const vName = item.verified_by?.full_name || item.verified_by?.phone;
-      if (vName) {
-        usersSet.add(vName);
-      }
-    });
-    return Array.from(usersSet);
-  };
-
-  const getFilteredOperations = () => {
-    return realOps.filter((item) => {
-      const op = item.operation;
-      if (!op) return false;
-
-      // 1. Currency filter
-      if (filterCurrency !== 'ALL' && op.currency !== filterCurrency) {
-        return false;
-      }
-
-      // 2. Status filter
-      const isVerified = op.status === 'verified' || item.link_status === 'verified';
-      if (filterStatus === 'verified' && !isVerified) return false;
-      if (filterStatus === 'pending' && isVerified) return false;
-
-      // 3. User filter
-      if (filterUser !== 'ALL') {
-        const linkedName = item.linked_by?.full_name || item.linked_by?.phone || '';
-        const verifiedName = item.verified_by?.full_name || item.verified_by?.phone || '';
-        if (linkedName !== filterUser && verifiedName !== filterUser) {
-          return false;
-        }
-      }
-
-      // 4. Period filter
-      if (filterPeriod !== 'ALL') {
-        const opDate = new Date(op.transaction_datetime || op.created_at || item.linked_at);
-        const now = new Date();
-
-        if (filterPeriod === 'TODAY') {
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (opDate < today) return false;
-        } else if (filterPeriod === 'WEEK') {
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          if (opDate < weekAgo) return false;
-        } else if (filterPeriod === 'MONTH') {
-          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          if (opDate < monthAgo) return false;
-        } else if (filterPeriod === 'CUSTOM') {
-          if (customStartDate) {
-            const start = new Date(customStartDate);
-            if (opDate < start) return false;
-          }
-          if (customEndDate) {
-            const end = new Date(customEndDate);
-            end.setHours(23, 59, 59, 999);
-            if (opDate > end) return false;
-          }
-        }
-      }
-
-      return true;
-    });
-  };
-
-  const handleDownloadPDF = () => {
-    if (!business) return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('الرجاء السماح للنوافذ المنبثقة لتوليد ملف الـ PDF.');
-      return;
-    }
-
-    const filteredOps = getFilteredOperations();
-
-    // Aggregates for filtered ops
-    const yerSum = filteredOps.filter(o => o.operation?.currency === 'YER').reduce((acc, o) => acc + (o.operation?.amount || 0), 0);
-    const sarSum = filteredOps.filter(o => o.operation?.currency === 'SAR').reduce((acc, o) => acc + (o.operation?.amount || 0), 0);
-    const usdSum = filteredOps.filter(o => o.operation?.currency === 'USD').reduce((acc, o) => acc + (o.operation?.amount || 0), 0);
-
-    const rowsHtml = filteredOps.map((item, idx) => {
-      const op = item.operation;
-      const linkedUser = item.linked_by?.full_name || item.linked_by?.phone || 'غير حدد';
-      const statusText = item.link_status === 'verified' || op?.status === 'verified' ? 'موثق' : 'معلق';
-
-      return `
-        <tr>
-          <td>${idx + 1}</td>
-          <td>${op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }) : '-'}</td>
-          <td>${op?.financial_entity || '-'}</td>
-          <td>${op?.reference_number || '-'}</td>
-          <td style="font-family: monospace; font-weight: bold;">${(op?.amount || 0).toLocaleString('en-US', { numberingSystem: 'latn' })} ${op?.currency}</td>
-          <td>${linkedUser}</td>
-          <td>
-            <span class="status-badge ${statusText === 'موثق' ? 'status-verified' : 'status-pending'}">
-              ${statusText}
-            </span>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>تقرير العمليات المالية - ${business.name}</title>
-        <style>
-          @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-          body {
-            font-family: 'Cairo', sans-serif;
-            color: #1e293b;
-            margin: 0;
-            padding: 40px;
-            direction: rtl;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-          }
-          .header img {
-            height: 50px;
-          }
-          .header-info {
-            text-align: right;
-          }
-          .header-info h1 {
-            font-size: 20px;
-            margin: 0;
-            color: #0f172a;
-          }
-          .header-info p {
-            font-size: 11px;
-            color: #64748b;
-            margin: 5px 0 0 0;
-          }
-          .meta-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 30px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 15px;
-            font-size: 12px;
-          }
-          .meta-item {
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px dashed #e2e8f0;
-            padding-bottom: 5px;
-          }
-          .meta-item:last-child {
-            border-bottom: none;
-          }
-          .meta-label {
-            font-weight: bold;
-            color: #475569;
-          }
-          .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-          }
-          .card {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-          }
-          .card-title {
-            font-size: 11px;
-            color: #64748b;
-            margin-bottom: 5px;
-          }
-          .card-val {
-            font-size: 18px;
-            font-weight: bold;
-            color: #4f46e5;
-            font-family: monospace;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 40px;
-            font-size: 11px;
-          }
-          th {
-            background-color: #f1f5f9;
-            color: #334155;
-            font-weight: 700;
-            text-align: right;
-            padding: 10px;
-            border-bottom: 2px solid #cbd5e1;
-          }
-          td {
-            padding: 10px;
-            border-bottom: 1px solid #e2e8f0;
-          }
-          .status-badge {
-            font-size: 9px;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 9999px;
-            display: inline-block;
-          }
-          .status-verified {
-            background-color: #d1fae5;
-            color: #065f46;
-          }
-          .status-pending {
-            background-color: #fef3c7;
-            color: #92400e;
-          }
-          .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 10px;
-            color: #94a3b8;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 15px;
-          }
-          @media print {
-            body {
-              padding: 0;
-            }
-            .no-print {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="header-info">
-            <h1>تقرير العمليات المالية الموثقة</h1>
-            <p>${business.name} | شريك التحقق المالي سند</p>
-          </div>
-          <img src="/logo.png" alt="شعار سند" onerror="this.style.display='none'">
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
-          <div class="meta-grid" style="margin-bottom: 0;">
-            <div class="meta-item">
-              <span class="meta-label">النشاط التجاري:</span>
-              <span>${business.name}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">الموقع:</span>
-              <span>${business.city}، ${business.governorate}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">تاريخ توليد التقرير:</span>
-              <span>${new Date().toLocaleString('ar-YE-u-nu-latn', { numberingSystem: 'latn' })}</span>
-            </div>
-          </div>
-
-          <div class="meta-grid" style="margin-bottom: 0;">
-            <div class="meta-item">
-              <span class="meta-label">عدد العمليات بالتقرير:</span>
-              <span>${filteredOps.length} عملية</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">الحالة العامة للنشاط:</span>
-              <span>${business.verification_status === 'verified' ? 'موثق ومعتمد' : 'تحت التحقق'}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">عملة التصفية:</span>
-              <span>${filterCurrency === 'ALL' ? 'كل العملات' : filterCurrency}</span>
-            </div>
-          </div>
-        </div>
-
-        <h3 style="font-size: 13px; color: #0f172a; margin-bottom: 15px; border-right: 3px solid #4f46e5; padding-right: 8px;">إجمالي المبيعات المفلترة حسب العملات</h3>
-        <div class="summary-cards">
-          <div class="card">
-            <div class="card-title">إجمالي الريال اليمني (YER)</div>
-            <div class="card-val">${yerSum.toLocaleString('en-US', { numberingSystem: 'latn' })} YER</div>
-          </div>
-          <div class="card">
-            <div class="card-title">إجمالي الريال السعودي (SAR)</div>
-            <div class="card-val">${sarSum.toLocaleString('en-US', { numberingSystem: 'latn' })} SAR</div>
-          </div>
-          <div class="card">
-            <div class="card-title">إجمالي الدولار الأمريكي (USD)</div>
-            <div class="card-val">${usdSum.toLocaleString('en-US', { numberingSystem: 'latn' })} USD</div>
-          </div>
-        </div>
-
-        <h3 style="font-size: 13px; color: #0f172a; margin-bottom: 15px; border-right: 3px solid #4f46e5; padding-right: 8px;">تفاصيل العمليات المالية</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>التاريخ</th>
-              <th>الجهة المالية</th>
-              <th>رقم المرجع</th>
-              <th>المبلغ والعملة</th>
-              <th>بواسطة</th>
-              <th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">لا توجد عمليات تطابق الفلترة المحددة.</td></tr>'}
-          </tbody>
-        </table>
-
-        <div style="display: flex; justify-content: space-between; margin-top: 60px; font-size: 12px; padding: 0 20px;">
-          <div style="text-align: center;">
-            <p style="font-weight: bold; margin-bottom: 40px;">توقيع وختم النشاط التجاري</p>
-            <p style="color: #94a3b8;">_______________________</p>
-          </div>
-          <div style="text-align: center;">
-            <p style="font-weight: bold; margin-bottom: 40px;">تدقيق ومصادقة منصة سند</p>
-            <p style="color: #4f46e5; font-weight: bold;">✓ نظام سند الرقمي للتحقق المالي</p>
-          </div>
-        </div>
-
-        <div class="footer">
-          <p>صدر هذا التقرير آلياً عبر منصة سند للتحقق المالي والأنشطة الموثقة.</p>
-          <p>الصفحة 1 من 1</p>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const handleDownloadCSV = () => {
-    if (!business) return;
-    const filteredOps = getFilteredOperations();
-
-    let csvContent = '\uFEFF'; // UTF-8 BOM for Excel Arabic encoding support
-    csvContent += 'الرقم,التاريخ,الجهة المالية,المرجع,المبلغ,العملة,التحقق بواسطة,الحالة\n';
-
-    filteredOps.forEach((item, idx) => {
-      const op = item.operation;
-      const date = op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }) : '-';
-      const entity = op?.financial_entity || '-';
-      const ref = op?.reference_number || '-';
-      const amt = op?.amount || 0;
-      const cur = op?.currency || '-';
-      const user = item.linked_by?.full_name || item.linked_by?.phone || 'غير محدد';
-      const status = item.link_status === 'verified' || op?.status === 'verified' ? 'موثق' : 'معلق';
-
-      csvContent += `${idx + 1},"${date}","${entity}","${ref}",${amt},"${cur}","${user}","${status}"\n`;
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `financial_report_${business.slug}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const loadBusinessData = async () => {
     setLoading(true);
@@ -760,32 +371,6 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     try {
       const ops = await getBusinessOperations(businessId);
       setRealOps(ops);
-
-      // Aggregate reports dynamically by currency
-      const sumMap: Record<string, { total: number; verified: number; count: number }> = {
-        YER: { total: 0, verified: 0, count: 0 },
-        USD: { total: 0, verified: 0, count: 0 },
-        SAR: { total: 0, verified: 0, count: 0 }
-      };
-
-      ops.forEach((item) => {
-        const op = item.operation;
-        if (op) {
-          const currency = op.currency || 'YER';
-          const amount = op.amount || 0;
-          const isVerified = op.status === 'verified' || item.link_status === 'verified';
-
-          if (!sumMap[currency]) {
-            sumMap[currency] = { total: 0, verified: 0, count: 0 };
-          }
-          sumMap[currency].total += amount;
-          sumMap[currency].count += 1;
-          if (isVerified) {
-            sumMap[currency].verified += amount;
-          }
-        }
-      });
-      setReportSummary(sumMap);
     } catch (opsErr) {
       console.error('Failed to load real business operations for reports:', opsErr);
     } finally {
@@ -1309,7 +894,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
               { id: 'customers', label: 'إدارة العملاء والشركاء', icon: Users },
               { id: 'team', label: 'فريق العمل والصلاحيات', icon: UserCheck },
               { id: 'complaints', label: `صندوق الشكاوى والملاحظات (${complaintsList.filter(c => c.status === 'pending').length})`, icon: MessageSquare },
-              { id: 'reports', label: 'تقارير الأداء المالي الحقيقي', icon: FileText }
+              { id: 'reports', label: 'التقارير', icon: FileText }
             ].filter(tab => tab.id !== 'products' || INTERNAL_BUSINESS_CATALOG_ENABLED).map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -2295,325 +1880,18 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
               <div className="space-y-6 animate-fade-in">
                 <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-5 shadow-xs space-y-4">
                   <div className="pb-3 border-b border-slate-100 text-right">
-                    <h3 className="text-xs font-bold text-slate-900">صندوق الشكاوى والملاحظات الواردة</h3>
-                    <p className="text-[10px] text-slate-400">تلقي ومعالجة ملاحظات وشكاوى العملاء الموثقة لتعزيز الثقة</p>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    {complaintsList.length === 0 ? (
-                      <div className="p-10 border border-dashed border-slate-200 rounded-2xl text-center space-y-2">
-                        <MessageSquare className="w-8 h-8 text-slate-300 mx-auto" />
-                        <p className="text-[10px] text-slate-400">لا يوجد شكاوى مستلمة حالياً.</p>
-                      </div>
-                    ) : (
-                      complaintsList.map((comp: any) => (
-                        <div key={comp.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-right">
-                          <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-900">{comp.name}</h4>
-                              <span className="text-[9px] text-slate-400 block font-mono">رقم التواصل: {comp.phone}</span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border ${
-                                comp.status === 'resolved'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                  : 'bg-amber-50 text-amber-700 border-amber-100'
-                              }`}>
-                                {comp.status === 'resolved' ? 'تم الحل' : 'قيد الانتظار'}
-                              </span>
-
-                              <button
-                                onClick={() => handleToggleComplaintStatus(comp.id, comp.status)}
-                                className="text-[9px] font-bold bg-white text-slate-700 border border-slate-250 px-2 py-0.5 rounded hover:bg-slate-100"
-                              >
-                                {comp.status === 'resolved' ? 'تغيير لانتظار' : 'اعتماد كتم الحل'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <p className="text-[11px] text-slate-750 leading-relaxed pt-1">
-                            {comp.text}
-                          </p>
-                          <span className="text-[8px] text-slate-400 block font-mono text-left pt-1">
-                            بتاريخ: {new Date(comp.created_at).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', numberingSystem: 'latn' })}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB: REPORTS */}
+                    <h3 className="text-xs font-bold text-slate-900">صن�            {/* TAB: REPORTS */}
             {activeTab === 'reports' && (
               <div className="space-y-6 animate-fade-in text-right">
-                {/* Advanced Reports Panel */}
-                <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-5 shadow-xs space-y-5">
-                  <div className="pb-3 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-900">التقارير المالية المتقدمة للتحقق</h3>
-                      <p className="text-[10px] text-slate-400">احصل على كشوفات مفصلة، صَفِّ العمليات، ونزّل التقارير الرسمية كملفات PDF و Excel</p>
-                    </div>
-
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={handleDownloadCSV}
-                        className="bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 text-[10px] font-bold py-2.5 px-4 rounded-xl transition-all shadow-3xs flex items-center gap-1.5"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-slate-500" />
-                        <span>تصدير Excel (CSV)</span>
-                      </button>
-
-                      <button
-                        onClick={handleDownloadPDF}
-                        className="bg-slate-900 hover:bg-black text-white text-[10px] font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>تحميل التقرير PDF</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Filters Grid */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-4">
-                    <h4 className="text-[10px] font-bold text-slate-800">أدوات تصفية وتحديد التقارير</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
-                      {/* Currency Filter */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 block">العملة</label>
-                        <select
-                          value={filterCurrency}
-                          onChange={(e) => setFilterCurrency(e.target.value)}
-                          className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                        >
-                          <option value="ALL">كل العملات</option>
-                          <option value="YER">الريال اليمني (YER)</option>
-                          <option value="SAR">الريال السعودي (SAR)</option>
-                          <option value="USD">الدولار الأمريكي (USD)</option>
-                        </select>
-                      </div>
-
-                      {/* Status Filter */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 block">حالة التحقق</label>
-                        <select
-                          value={filterStatus}
-                          onChange={(e) => setFilterStatus(e.target.value)}
-                          className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                        >
-                          <option value="ALL">كل الحالات</option>
-                          <option value="verified">موثقة ومحققة</option>
-                          <option value="pending">معلقة وقيد المراجعة</option>
-                        </select>
-                      </div>
-
-                      {/* User Filter */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 block">التحقق بواسطة (الموظف)</label>
-                        <select
-                          value={filterUser}
-                          onChange={(e) => setFilterUser(e.target.value)}
-                          className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                        >
-                          <option value="ALL">كل أعضاء الفريق</option>
-                          {getUniqueVerifiers().map((uName) => (
-                            <option key={uName} value={uName}>{uName}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Period Filter */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 block">الفترة الزمنية</label>
-                        <select
-                          value={filterPeriod}
-                          onChange={(e) => setFilterPeriod(e.target.value)}
-                          className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                        >
-                          <option value="ALL">كل الفترات</option>
-                          <option value="TODAY">اليوم</option>
-                          <option value="WEEK">آخر 7 أيام</option>
-                          <option value="MONTH">آخر 30 يوم</option>
-                          <option value="CUSTOM">فترة مخصصة...</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Custom Date Picker Range */}
-                    {filterPeriod === 'CUSTOM' && (
-                      <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-slate-200/50 animate-scale-up">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500">تاريخ البدء</label>
-                          <input
-                            type="date"
-                            value={customStartDate}
-                            onChange={(e) => setCustomStartDate(e.target.value)}
-                            className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500">تاريخ الانتهاء</label>
-                          <input
-                            type="date"
-                            value={customEndDate}
-                            onChange={(e) => setCustomEndDate(e.target.value)}
-                            className="w-full bg-white border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Filtered Dynamic Aggregates */}
-                  {(() => {
-                    const filtered = getFilteredOperations();
-                    const filteredSummary: Record<string, { total: number; verified: number; count: number }> = {
-                      YER: { total: 0, verified: 0, count: 0 },
-                      USD: { total: 0, verified: 0, count: 0 },
-                      SAR: { total: 0, verified: 0, count: 0 }
-                    };
-
-                    filtered.forEach((item) => {
-                      const op = item.operation;
-                      if (op) {
-                        const cur = op.currency || 'YER';
-                        const isVerified = op.status === 'verified' || item.link_status === 'verified';
-                        if (!filteredSummary[cur]) {
-                          filteredSummary[cur] = { total: 0, verified: 0, count: 0 };
-                        }
-                        filteredSummary[cur].total += op.amount || 0;
-                        filteredSummary[cur].count += 1;
-                        if (isVerified) {
-                          filteredSummary[cur].verified += op.amount || 0;
-                        }
-                      }
-                    });
-
-                    return (
-                      <div className="space-y-5">
-                        {/* Dynamic totals cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {['YER', 'SAR', 'USD'].map((cur) => {
-                            const sum = filteredSummary[cur] || { total: 0, verified: 0, count: 0 };
-                            return (
-                              <div key={cur} className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-2 text-right shadow-3xs hover:border-slate-300 transition-all">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[9px] bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold px-2 py-0.5 rounded-full inline-block">{cur}</span>
-                                  <span className="text-[8px] text-slate-450 font-bold">{sum.count} عمليات مفلترة</span>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="text-[10px] text-slate-550 block">المبيعات الموثقة المفلترة</span>
-                                  <span className="text-base font-bold text-slate-900 block font-mono">{(sum.verified).toLocaleString('en-US', { numberingSystem: 'latn' })} {cur}</span>
-                                  <span className="text-[8px] text-slate-400 block">إجمالي المسجل: {(sum.total).toLocaleString('en-US', { numberingSystem: 'latn' })} {cur}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Top Verifiers Leaderboard & Visual Ratios */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Leaderboard */}
-                          <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-white">
-                            <h4 className="text-[10px] font-bold text-slate-800 flex items-center gap-1.5">
-                              <Users className="w-3.5 h-3.5 text-indigo-650" />
-                              <span>ترتيب أعضاء الفريق الأكثر تحقيقاً للعمليات</span>
-                            </h4>
-
-                            {(() => {
-                              // Calculate verifications count per user
-                              const stats: Record<string, { verified: number; total: number }> = {};
-                              filtered.forEach((item) => {
-                                const uName = item.linked_by?.full_name || item.linked_by?.phone || 'غير محدد';
-                                if (!stats[uName]) {
-                                  stats[uName] = { verified: 0, total: 0 };
-                                }
-                                stats[uName].total += 1;
-                                if (item.link_status === 'verified' || item.operation?.status === 'verified') {
-                                  stats[uName].verified += 1;
-                                }
-                              });
-
-                              const sortedStats = Object.entries(stats).sort((a, b) => b[1].verified - a[1].verified);
-
-                              if (sortedStats.length === 0) {
-                                return <p className="text-[9px] text-slate-400 text-center py-4">لا توجد عمليات كافية لاستخراج الترتيب.</p>;
-                              }
-
-                              return (
-                                <div className="space-y-2">
-                                  {sortedStats.map(([name, stat], idx) => (
-                                    <div key={name} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-xl text-[10px]">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[9px] ${
-                                          idx === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
-                                        }`}>
-                                          {idx + 1}
-                                        </span>
-                                        <span className="font-bold text-slate-800 truncate max-w-[120px]">{name}</span>
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">{stat.verified} موثقة</span>
-                                        <span className="text-slate-455">من {stat.total} إجمالي</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Visual Ratio SVG Pie/Bar */}
-                          <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-white flex flex-col justify-between">
-                            <h4 className="text-[10px] font-bold text-slate-800">تحليل نسب التحقق والمطابقة</h4>
-
-                            {(() => {
-                              const totalCount = filtered.length;
-                              const verifiedCount = filtered.filter(item => item.link_status === 'verified' || item.operation?.status === 'verified').length;
-                              const pendingCount = totalCount - verifiedCount;
-                              const percent = totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0;
-
-                              return (
-                                <div className="space-y-4">
-                                  <div className="flex items-center justify-around gap-4 py-2">
-                                    <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
-                                      <svg className="w-full h-full transform -rotate-90">
-                                        <circle cx="40" cy="40" r="32" className="stroke-slate-100 fill-none" strokeWidth="6" />
-                                        <circle cx="40" cy="40" r="32" className="stroke-indigo-650 fill-none" strokeWidth="6"
-                                          strokeDasharray={2 * Math.PI * 32}
-                                          strokeDashoffset={2 * Math.PI * 32 * (1 - percent / 100)}
-                                          strokeLinecap="round"
-                                        />
-                                      </svg>
-                                      <span className="absolute text-[11px] font-bold text-indigo-700">{percent}%</span>
-                                    </div>
-
-                                    <div className="space-y-2 text-right">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-650" />
-                                        <span className="text-[10px] text-slate-700">عمليات موثقة: <strong>{verifiedCount}</strong></span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-                                        <span className="text-[10px] text-slate-700">عمليات معلقة: <strong>{pendingCount}</strong></span>
-                                      </div>
-                                      <div className="text-[9px] text-slate-400">إجمالي العمليات المفلترة: {totalCount} عملية</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-
-                        {/* List of operations filtered */}
-                        <div className="space-y-2.5">
-                          <h4 className="text-[10px] font-bold text-slate-800">تفاصيل العمليات المطابقة للفلتر ({filtered.length})</h4>
-                          {filtered.length === 0 ? (
-                            <div className="p-10 border border-dashed border-slate-200 rounded-2xl text-center">
-                              <p className="text-[10px] text-slate-400">لا توجد عمليات تطابق معايير الفرز المحددة.</p>
+                {business && (
+                  <BusinessReports
+                    business={business}
+                    operations={realOps}
+                    onNavigate={onNavigate}
+                  />
+                )}
+              </div>
+            )}">لا توجد عمليات تطابق معايير الفرز المحددة.</p>
                             </div>
                           ) : (
                             <div className="divide-y divide-slate-100 bg-white border border-slate-200/50 rounded-2xl overflow-hidden shadow-3xs">
