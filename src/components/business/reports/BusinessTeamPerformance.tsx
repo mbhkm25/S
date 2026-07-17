@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Users, Award, Shield, Clock } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Users } from 'lucide-react';
+import type { BusinessOperationItem } from '../../../lib/businessApi';
 import { toLatinDigits } from '../../../lib/digits';
-import { formatNumberLatin, formatPercentLatin } from '../../../utils/numerals';
+import { formatNumberLatin, formatPercentLatin, formatYemenDate } from '../../../utils/numerals';
+import { getOperationVerificationState } from './businessReportUtils';
 
 interface BusinessTeamPerformanceProps {
-  operations: any[];
+  operations: BusinessOperationItem[];
 }
 
 interface MemberStats {
@@ -27,7 +29,7 @@ export default function BusinessTeamPerformance({ operations }: BusinessTeamPerf
       const op = item.operation;
       if (!op) return;
 
-      const isVerified = op.status === 'verified' || item.link_status === 'verified';
+      const isVerified = getOperationVerificationState(item) === 'verified';
       const activityTime = op.transaction_datetime || op.created_at || item.linked_at;
 
       // 1. Credit for verification
@@ -123,7 +125,7 @@ export default function BusinessTeamPerformance({ operations }: BusinessTeamPerf
                   {/* Member Name and Rank */}
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-800 text-[11px] truncate max-w-[120px]">
-                      {member.name}
+                      {toLatinDigits(member.name)}
                     </span>
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[9px] shrink-0 ${
                       idx === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-650'
@@ -137,16 +139,16 @@ export default function BusinessTeamPerformance({ operations }: BusinessTeamPerf
                   <div>
                     {member.lastActivityAt ? (
                       <span className="font-mono" dir="ltr">
-                        آخر نشاط: {toLatinDigits(new Date(member.lastActivityAt).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }))}
+                        آخر نشاط: {formatYemenDate(member.lastActivityAt)}
                       </span>
                     ) : (
                       <span>لا يوجد نشاط مؤخراً</span>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <span>العمليات المضافة: {formatNumberLatin(member.pendingCount)} معلقة</span>
+                    <span>أضافها للنشاط: {formatNumberLatin(member.pendingCount)} معلقة</span>
                     <span>•</span>
-                    <span>الإجمالي: {formatNumberLatin(member.totalCount)}</span>
+                    <span>عدد العمليات: {formatNumberLatin(member.totalCount)}</span>
                   </div>
                 </div>
               </div>

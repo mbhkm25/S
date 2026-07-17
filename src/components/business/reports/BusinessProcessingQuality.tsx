@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
-import { ShieldCheck, Percent, HelpCircle, Ban, AlertTriangle, Clock } from 'lucide-react';
-import { toLatinDigits } from '../../../lib/digits';
+import { useMemo } from 'react';
+import { ShieldCheck, Percent } from 'lucide-react';
+import type { BusinessOperationItem } from '../../../lib/businessApi';
 import { formatNumberLatin, formatPercentLatin } from '../../../utils/numerals';
+import { getOperationVerificationState } from './businessReportUtils';
 
 interface BusinessProcessingQualityProps {
-  operations: any[];
+  operations: BusinessOperationItem[];
 }
 
 export default function BusinessProcessingQuality({ operations }: BusinessProcessingQualityProps) {
@@ -19,26 +20,20 @@ export default function BusinessProcessingQuality({ operations }: BusinessProces
       const op = item.operation;
       if (!op) return;
 
-      const status = op.status;
-      const isVerified = status === 'verified' || item.link_status === 'verified';
-      const isNeedsReview = status === 'needs_review' || item.link_status === 'needs_review';
-      const isFailed = status === 'failed';
-
-      if (isVerified) {
+      const state = getOperationVerificationState(item);
+      if (state === 'verified') {
         verifiedCount++;
-      } else if (isNeedsReview) {
+      } else if (state === 'needs_review') {
         needsReviewCount++;
-      } else if (isFailed) {
-        failedCount++;
       } else {
         pendingCount++;
       }
+      if (op.ai_status === 'failed') failedCount++;
     });
 
     const verificationRate = total > 0 ? Math.round((verifiedCount / total) * 100) : 0;
     
-    // Completion rate is percentage of operations that did not fail analysis
-    const completedCount = total - failedCount;
+    const completedCount = operations.filter(({ operation }) => operation?.ai_status === 'completed').length;
     const completionRate = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
     return {

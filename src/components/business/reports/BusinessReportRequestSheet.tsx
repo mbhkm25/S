@@ -1,13 +1,36 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar, Phone, User, Globe, Activity, CheckSquare, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getBusinessTeam, BusinessTeamMember } from '../../../lib/businessApi';
-import { createBusinessReportRequest, triggerBusinessReportProcessing, BusinessReportFilters } from '../../../lib/businessReportsApi';
+import { useRef, useState, useEffect, useMemo } from 'react';
+import type { FormEvent } from 'react';
+import { X, Calendar, Phone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getBusinessTeam, type BusinessProfile, type BusinessTeamMember, type BusinessOperationItem } from '../../../lib/businessApi';
+import { createBusinessReportRequest, triggerBusinessReportProcessing, type BusinessReportFilters } from '../../../lib/businessReportsApi';
 import { parseYemeniLocalPhone, toLatinDigits } from '../../../lib/digits';
-import { formatNumberLatin } from '../../../utils/numerals';
+
+type ReportPeriod = 'today' | 'this_week' | 'this_month' | 'last_month' | 'last_30_days' | 'custom';
+
+function getAdenDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Aden',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    numberingSystem: 'latn'
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value || 0);
+  return { year: value('year'), month: value('month'), day: value('day') };
+}
+
+function adenDayRange(year: number, month: number, day: number) {
+  const startMs = Date.UTC(year, month - 1, day) - 3 * 60 * 60 * 1000;
+  return {
+    from: new Date(startMs).toISOString(),
+    to: new Date(startMs + 24 * 60 * 60 * 1000 - 1).toISOString()
+  };
+}
 
 interface BusinessReportRequestSheetProps {
-  business: any;
-  operations: any[];
+  business: BusinessProfile;
+  operations: BusinessOperationItem[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -19,13 +42,12 @@ export default function BusinessReportRequestSheet({
   onSuccess
 }: BusinessReportRequestSheetProps) {
   // Form states
-  const [reportTitle, setReportTitle] = useState('تقرير عمليات النشاط');
-  const [period, setPeriod] = useState<'today' | 'this_week' | 'this_month' | 'last_month' | 'last_30_days' | 'custom'>('last_30_days');
+  const [period, setPeriod] = useState<ReportPeriod>('last_30_days');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   
   const [currency, setCurrency] = useState<'ALL' | 'YER' | 'SAR' | 'USD'>('ALL');
-  const [status, setStatus] = useState<string>('all');
+  const [status, setStatus] = useState<BusinessReportFilters['status']>('all');
   const [teamMemberId, setTeamMemberId] = useState<string>('ALL');
   const [financialEntity, setFinancialEntity] = useState<string>('ALL');
   
@@ -47,6 +69,7 @@ export default function BusinessReportRequestSheet({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const submissionLock = useRef(false);
 
   // Set default WhatsApp phone from business
   useEffect(() => {
@@ -84,57 +107,59 @@ export default function BusinessReportRequestSheet({
 
   // Calculate standard date range ISO strings
   const calculateDates = () => {
-    const now = new Date();
+    const today = getAdenDateParts();
+    const todayUtc = new Date(Date.UTC(today.year, today.month - 1, today.day));
+    const rangeForUtcDate = (value: Date) =>
+      adenDayRange(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
+    const todayRange = adenDayRange(today.year, today.month, today.day);
     switch (period) {
-      case 'today': {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        return { from: start.toISOString(), to: end.toISOString() };
-      }
+      case 'today':
+        return todayRange;
       case 'this_week': {
-        const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return { from: start.toISOString(), to: now.toISOString() };
+        const daysSinceSaturday = (todayUtc.getUTCDay() + 1) % 7;
+        const start = new Date(todayUtc.getTime() - daysSinceSaturday * 86400000);
+        return { from: rangeForUtcDate(start).from, to: todayRange.to };
       }
-      case 'this_month': {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        return { from: start.toISOString(), to: now.toISOString() };
-      }
+      case 'this_month':
+        return { from: adenDayRange(today.year, today.month, 1).from, to: todayRange.to };
       case 'last_month': {
-        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        return { from: start.toISOString(), to: end.toISOString() };
+        const start = new Date(Date.UTC(today.year, today.month - 2, 1));
+        const end = new Date(Date.UTC(today.year, today.month - 1, 0));
+        return { from: rangeForUtcDate(start).from, to: rangeForUtcDate(end).to };
       }
       case 'last_30_days': {
-        const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        return { from: start.toISOString(), to: now.toISOString() };
+        const start = new Date(todayUtc.getTime() - 29 * 86400000);
+        return { from: rangeForUtcDate(start).from, to: todayRange.to };
       }
       case 'custom': {
         if (!customFrom) return { from: null, to: null };
-        const start = new Date(customFrom);
-        start.setHours(0, 0, 0, 0);
-        const end = customTo ? new Date(customTo) : new Date();
-        end.setHours(23, 59, 59, 999);
-        return { from: start.toISOString(), to: end.toISOString() };
+        const [fromYear, fromMonth, fromDay] = customFrom.split('-').map(Number);
+        const endValue = customTo || customFrom;
+        const [toYear, toMonth, toDay] = endValue.split('-').map(Number);
+        return {
+          from: adenDayRange(fromYear, fromMonth, fromDay).from,
+          to: adenDayRange(toYear, toMonth, toDay).to
+        };
       }
       default:
         return { from: null, to: null };
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || submissionLock.current) return;
 
     setErrorMsg(null);
     setSuccessMsg(null);
 
     // Validate phone
-    const cleanedPhone = toLatinDigits(whatsappPhone.trim()).replace(/\D/g, '');
+    const cleanedPhone = parseYemeniLocalPhone(whatsappPhone.trim());
     if (!cleanedPhone) {
       setErrorMsg('يرجى إدخال رقم واتساب مستلم.');
       return;
     }
-    if (cleanedPhone.length !== 9) {
+    if (!/^7\d{8}$/.test(cleanedPhone)) {
       setErrorMsg('رقم الهاتف المحلي اليمني يجب أن يتكون من 9 أرقام بالضبط (مثال: 777634971).');
       return;
     }
@@ -145,7 +170,12 @@ export default function BusinessReportRequestSheet({
       setErrorMsg('يرجى اختيار تاريخ بدء الفترة المخصصة.');
       return;
     }
+    if (from && to && new Date(from) > new Date(to)) {
+      setErrorMsg('تاريخ نهاية الفترة يجب ألا يسبق تاريخ البداية.');
+      return;
+    }
 
+    submissionLock.current = true;
     setSubmitting(true);
 
     try {
@@ -167,8 +197,7 @@ export default function BusinessReportRequestSheet({
         dateFrom: from,
         dateTo: to,
         filters: filtersPayload,
-        destinationPhone,
-        reportTitle: reportTitle.trim() || 'تقرير عمليات النشاط'
+        destinationPhone
       });
 
       // Trigger Webhook Function
@@ -183,10 +212,11 @@ export default function BusinessReportRequestSheet({
       setTimeout(() => {
         onSuccess();
       }, 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setErrorMsg(err.message || 'تعذر معالجة طلب التقرير. تأكد من اتصال الشبكة.');
+      setErrorMsg(err instanceof Error ? err.message : 'تعذر معالجة طلب التقرير. تأكد من اتصال الشبكة.');
     } finally {
+      submissionLock.current = false;
       setSubmitting(false);
     }
   };
@@ -226,19 +256,6 @@ export default function BusinessReportRequestSheet({
             </div>
           )}
 
-          {/* Report Title */}
-          <div className="space-y-1">
-            <label className="block text-[11px] font-bold text-slate-550">عنوان التقرير</label>
-            <input
-              type="text"
-              value={reportTitle}
-              onChange={(e) => setReportTitle(e.target.value.substring(0, 80))}
-              placeholder="مثال: تقرير عمليات النشاط"
-              className="w-full text-right p-2.5 bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white rounded-xl text-xs outline-none transition-all"
-              required
-            />
-          </div>
-
           {/* Period Selection */}
           <div className="space-y-1.5">
             <label className="block text-[11px] font-bold text-slate-550">الفترة الزمنية</label>
@@ -254,7 +271,7 @@ export default function BusinessReportRequestSheet({
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => setPeriod(p.id as any)}
+                  onClick={() => setPeriod(p.id as ReportPeriod)}
                   className={`py-2 px-1 rounded-xl text-[10px] font-bold border transition-all text-center ${
                     period === p.id
                       ? 'bg-slate-900 border-slate-900 text-white shadow-3xs'
@@ -304,7 +321,7 @@ export default function BusinessReportRequestSheet({
               <label className="block text-[11px] font-bold text-slate-550">العملة</label>
               <select
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value as any)}
+                onChange={(e) => setCurrency(e.target.value as BusinessReportFilters['currency'])}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none"
               >
                 <option value="ALL">كل العملات</option>
@@ -319,13 +336,15 @@ export default function BusinessReportRequestSheet({
               <label className="block text-[11px] font-bold text-slate-550">حالة التحقق</label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={(e) => setStatus(e.target.value as BusinessReportFilters['status'])}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none"
               >
                 <option value="all">كل الحالات</option>
                 <option value="verified">موثق ومعتمد</option>
-                <option value="pending">معلق</option>
+                <option value="ready">جاهز</option>
                 <option value="stored">تم الرفع</option>
+                <option value="received">تم الاستلام</option>
+                <option value="matched">مطابق</option>
                 <option value="failed">فشل التحليل</option>
               </select>
             </div>
@@ -437,7 +456,7 @@ export default function BusinessReportRequestSheet({
                 type="tel"
                 value={whatsappPhone}
                 onChange={(e) => {
-                  const val = toLatinDigits(e.target.value).replace(/\D/g, '');
+                  const val = parseYemeniLocalPhone(e.target.value);
                   setWhatsappPhone(val.substring(0, 9));
                   setErrorMsg(null);
                 }}

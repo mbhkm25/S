@@ -9,9 +9,28 @@ export type BusinessReportStatus =
   | 'failed'
   | 'cancelled';
 
+export type BusinessReportBackendOperationStatus =
+  | 'all'
+  | 'verified'
+  | 'ready'
+  | 'stored'
+  | 'received'
+  | 'matched'
+  | 'failed';
+
+const SUPPORTED_OPERATION_STATUSES: readonly BusinessReportBackendOperationStatus[] = [
+  'all',
+  'verified',
+  'ready',
+  'stored',
+  'received',
+  'matched',
+  'failed'
+];
+
 export interface BusinessReportFilters {
   currency: 'ALL' | 'YER' | 'SAR' | 'USD';
-  status: string; // 'all' or actual operation status
+  status: BusinessReportBackendOperationStatus;
   team_member_user_id: string | null;
   financial_entity: string | null;
   include_details: boolean;
@@ -38,7 +57,8 @@ export interface BusinessReportHistoryItem {
   error_message: string | null;
   result_metrics: {
     total_operations_count?: number;
-    [key: string]: any;
+    operation_count?: number;
+    [key: string]: unknown;
   } | null;
   attempt_count: number;
 }
@@ -52,23 +72,32 @@ export async function createBusinessReportRequest(params: {
   dateTo: string | null;
   filters: Partial<BusinessReportFilters>;
   destinationPhone: string;
-  reportTitle: string;
 }): Promise<string> {
+  const requestedStatus = params.filters.status;
+  const safeStatus =
+    requestedStatus && SUPPORTED_OPERATION_STATUSES.includes(requestedStatus)
+      ? requestedStatus
+      : 'all';
+
   const { data, error } = await supabase.rpc('create_business_report_request', {
     p_business_id: params.businessId,
     p_date_from: params.dateFrom,
     p_date_to: params.dateTo,
-    p_filters: params.filters,
+    p_filters: { ...params.filters, status: safeStatus },
     p_destination_phone: params.destinationPhone,
-    p_report_title: params.reportTitle,
   });
 
   if (error) {
     console.error('Error invoking create_business_report_request RPC:', error);
-    throw new Error(error.message || 'فشل استدعاء خدمة طلب تقرير النشاط.');
+    throw new Error('تعذر إرسال طلب التقرير. تحقق من البيانات والاتصال ثم أعد المحاولة.');
   }
 
-  const reportRequestId = data?.[0]?.report_request_id || (data as any)?.report_request_id;
+  const rows = Array.isArray(data) ? data : [data];
+  const firstRow = rows[0];
+  const reportRequestId =
+    firstRow && typeof firstRow === 'object' && 'report_request_id' in firstRow
+      ? String(firstRow.report_request_id || '')
+      : '';
 
   if (!reportRequestId) {
     throw new Error('لم يتم استرجاع رقم معرف طلب التقرير من الخادم.');
@@ -124,7 +153,7 @@ export async function getBusinessReportRequests(
 
   if (error) {
     console.error('Error fetching business report requests:', error);
-    throw new Error(error.message || 'تعذر تحميل سجل طلبات التقارير.');
+    throw new Error('تعذر تحميل سجل طلبات التقارير.');
   }
 
   return (data || []) as BusinessReportHistoryItem[];

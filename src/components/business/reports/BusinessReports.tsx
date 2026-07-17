@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, FileText, CheckCircle2, AlertCircle, RefreshCw, Filter, Trash2, Calendar, Shield, Users, Activity, Loader2, ArrowLeft } from 'lucide-react';
-import { getBusinessReportRequests, BusinessReportHistoryItem, BusinessReportFilters } from '../../../lib/businessReportsApi';
+import { useCallback, useState, useEffect, useMemo } from 'react';
+import { PlusCircle, AlertCircle, RefreshCw, Filter, Trash2, Loader2, ArrowLeft } from 'lucide-react';
+import type { BusinessOperationItem, BusinessProfile } from '../../../lib/businessApi';
+import { getBusinessReportRequests, type BusinessReportHistoryItem } from '../../../lib/businessReportsApi';
 import { formatYemeniDisplay, toLatinDigits } from '../../../lib/digits';
 import { formatYemenDate, formatYemenTime } from '../../../utils/numerals';
 
@@ -11,16 +12,26 @@ import BusinessOperationsSummary from './BusinessOperationsSummary';
 import BusinessTeamPerformance from './BusinessTeamPerformance';
 import BusinessProcessingQuality from './BusinessProcessingQuality';
 import BusinessRecentOperations from './BusinessRecentOperations';
+import BusinessCurrencyDistribution from './BusinessCurrencyDistribution';
+import { getOperationDate, getOperationVerificationState } from './businessReportUtils';
+
+type ReportBusiness = BusinessProfile & { team_role?: string | null };
 
 interface BusinessReportsProps {
-  business: any;
-  operations: any[];
+  business: ReportBusiness;
+  operations: BusinessOperationItem[];
+  loading: boolean;
+  operationsError: string | null;
+  onRefreshOperations: () => void;
   onNavigate: (page: string, token?: string) => void;
 }
 
 export default function BusinessReports({
   business,
   operations,
+  loading,
+  operationsError,
+  onRefreshOperations,
   onNavigate
 }: BusinessReportsProps) {
   // State for request modal
@@ -42,24 +53,24 @@ export default function BusinessReports({
   const [localCustomTo, setLocalCustomTo] = useState('');
 
   // Fetch report requests history
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     if (!business?.id) return;
     setLoadingRequests(true);
     setRequestsError(null);
     try {
       const data = await getBusinessReportRequests(business.id);
       setRequests(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setRequestsError(err.message || 'تعذر تحميل سجل التقارير.');
+      setRequestsError('تعذر تحميل التقارير. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
       setLoadingRequests(false);
     }
-  };
+  }, [business.id]);
 
   useEffect(() => {
     loadRequests();
-  }, [business?.id]);
+  }, [loadRequests]);
 
   // Handle successful report creation
   const handleRequestSuccess = () => {
@@ -82,18 +93,16 @@ export default function BusinessReports({
       }
 
       // 2. Status filter
-      const isVerified = op.status === 'verified' || item.link_status === 'verified';
-      const isNeedsReview = op.status === 'needs_review' || item.link_status === 'needs_review';
+      const state = getOperationVerificationState(item);
       
       if (localStatus !== 'ALL') {
-        if (localStatus === 'verified' && !isVerified) return false;
-        if (localStatus === 'pending' && (isVerified || isNeedsReview)) return false;
-        if (localStatus === 'needs_review' && !isNeedsReview) return false;
+        if (localStatus !== state) return false;
       }
 
       // 3. Period filter
       if (localPeriod !== 'ALL') {
-        const opDate = new Date(op.transaction_datetime || op.created_at || item.linked_at);
+        const opDate = getOperationDate(item);
+        if (!opDate) return false;
         const now = new Date();
 
         if (localPeriod === 'today') {
@@ -151,6 +160,11 @@ export default function BusinessReports({
   };
 
   const hasActiveFilters = localPeriod !== 'last_30_days' || localCurrency !== 'ALL' || localStatus !== 'ALL';
+  const canRequestReports =
+    business.workspace_role === 'owner' ||
+    business.workspace_role === 'manager' ||
+    business.team_role === 'manager' ||
+    (!business.workspace_role && !business.team_role);
 
   const clearFilters = () => {
     setLocalPeriod('last_30_days');
@@ -197,17 +211,21 @@ export default function BusinessReports({
       {/* Button: Request Report Card */}
       <div className="bg-white border border-slate-250/60 rounded-3xl p-4.5 shadow-3xs flex items-center justify-between gap-4">
         <div className="text-right">
-          <h4 className="text-xs font-bold text-slate-800">إعداد كشف تقارير النشاط</h4>
-          <p className="text-[9px] text-slate-450 mt-1">توليد تقرير كامل بالفترات والفلاتر وإرساله لواتساب مباشرة.</p>
+          <h4 className="text-xs font-bold text-slate-800">طلب تقرير جديد</h4>
+          <p className="text-[9px] text-slate-450 mt-1">حدد الفترة والفلاتر، وسيتم إعداد التقرير وإرساله إلى واتساب.</p>
         </div>
         <button
           onClick={() => setShowRequestSheet(true)}
-          className="bg-slate-900 hover:bg-black text-white text-xs font-bold py-2.5 px-4.5 rounded-2xl transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer"
+          disabled={!canRequestReports}
+          className="bg-slate-900 hover:bg-black text-white text-xs font-bold py-2.5 px-4.5 rounded-2xl transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PlusCircle className="w-3.5 h-3.5" />
           <span>إعداد التقرير</span>
         </button>
       </div>
+      {!canRequestReports && (
+        <p className="text-[10px] text-slate-500">طلب التقارير متاح لمالك النشاط أو المدير المصرح فقط.</p>
+      )}
 
       {/* Last Report Status Card */}
       <div className="bg-slate-50 border border-slate-200 rounded-3xl p-4.5 shadow-3xs space-y-2">
@@ -228,9 +246,11 @@ export default function BusinessReports({
               <span className="font-mono" dir="ltr">
                 {formatYemeniDisplay(lastReport.destination_phone)}
               </span>
-              <span className="font-mono" dir="ltr">
-                بتاريخ: {formatYemenDate(lastReport.requested_at)} — {formatYemenTime(lastReport.requested_at)}
-              </span>
+              <span className="font-mono" dir="ltr">{formatYemenDate(lastReport.date_from)} — {formatYemenDate(lastReport.date_to)}</span>
+            </div>
+            <div className="text-[9px] text-slate-400">
+              طُلب: {formatYemenDate(lastReport.requested_at)} — {formatYemenTime(lastReport.requested_at)}
+              {lastReport.sent_at ? ` | أُرسل: ${formatYemenDate(lastReport.sent_at)} — ${formatYemenTime(lastReport.sent_at)}` : ''}
             </div>
           </div>
         ) : (
@@ -238,6 +258,7 @@ export default function BusinessReports({
             <span className="text-[10px] text-slate-500">لم يتم طلب أي تقرير بعد.</span>
             <button
               onClick={() => setShowRequestSheet(true)}
+              disabled={!canRequestReports}
               className="text-[9px] font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl hover:bg-slate-100 transition-all cursor-pointer"
             >
               طلب أول تقرير
@@ -268,22 +289,34 @@ export default function BusinessReports({
           )}
         </div>
         
-        <span className="text-slate-600 font-bold truncate max-w-[200px]" dir="ltr">
+        <span className="text-slate-600 font-bold truncate max-w-[200px]">
           {getFilterText()}
         </span>
       </div>
 
-      {/* Dynamic Summary Stats */}
-      <BusinessOperationsSummary operations={filteredOperations} />
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-8 text-[10px] text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل عمليات النشاط...
+        </div>
+      ) : operationsError ? (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-[10px] text-rose-700">
+          <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" />{operationsError}</div>
+          <button onClick={onRefreshOperations} className="mt-3 inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-3 py-1.5 font-bold">
+            <RefreshCw className="h-3 w-3" /> إعادة المحاولة
+          </button>
+        </div>
+      ) : (
+        <>
+          <BusinessOperationsSummary operations={filteredOperations} />
+          <BusinessCurrencyDistribution operations={filteredOperations} />
 
-      {/* Team performance list */}
-      <BusinessTeamPerformance operations={filteredOperations} />
+          <BusinessTeamPerformance operations={filteredOperations} />
 
-      {/* Processing Quality stats */}
-      <BusinessProcessingQuality operations={filteredOperations} />
+          <BusinessProcessingQuality operations={filteredOperations} />
 
-      {/* Recent operations */}
-      <BusinessRecentOperations operations={filteredOperations} onNavigate={onNavigate} />
+          <BusinessRecentOperations operations={filteredOperations} onNavigate={onNavigate} />
+        </>
+      )}
 
       {/* History log */}
       <BusinessReportHistory
@@ -295,7 +328,7 @@ export default function BusinessReports({
 
       {/* Modals/Sheets */}
       {/* 1. Request Report Sheet */}
-      {showRequestSheet && (
+      {showRequestSheet && canRequestReports && (
         <BusinessReportRequestSheet
           business={business}
           operations={operations}

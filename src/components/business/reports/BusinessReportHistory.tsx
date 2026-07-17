@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Clock, RefreshCw, AlertCircle, Phone, Calendar, Loader2, CheckCircle2 } from 'lucide-react';
-import { BusinessReportHistoryItem, triggerBusinessReportProcessing } from '../../../lib/businessReportsApi';
+import { useState } from 'react';
+import { Clock, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import type { BusinessReportHistoryItem } from '../../../lib/businessReportsApi';
 import { formatYemeniDisplay, toLatinDigits } from '../../../lib/digits';
 import { formatYemenDate, formatYemenTime } from '../../../utils/numerals';
 
@@ -18,8 +18,6 @@ export default function BusinessReportHistory({
   onRefresh
 }: BusinessReportHistoryProps) {
   const [showAll, setShowAll] = useState(false);
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [retryStatus, setRetryStatus] = useState<{ id: string; success: boolean; msg: string } | null>(null);
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -59,25 +57,6 @@ export default function BusinessReportHistory({
     }
   };
 
-  const handleRetry = async (requestId: string) => {
-    setRetryingId(requestId);
-    setRetryStatus(null);
-    try {
-      const ok = await triggerBusinessReportProcessing(requestId);
-      if (ok) {
-        setRetryStatus({ id: requestId, success: true, msg: 'تمت إعادة تشغيل إعداد وإرسال التقرير.' });
-        onRefresh();
-      } else {
-        setRetryStatus({ id: requestId, success: false, msg: 'لم نتمكن من تشغيل التقرير حالياً.' });
-      }
-    } catch (err) {
-      setRetryStatus({ id: requestId, success: false, msg: 'فشل في الاتصال بالخادم لإعادة المحاولة.' });
-    } finally {
-      setRetryingId(null);
-      setTimeout(() => setRetryStatus(null), 4000);
-    }
-  };
-
   const visibleRequests = showAll ? requests : requests.slice(0, 3);
 
   return (
@@ -112,9 +91,6 @@ export default function BusinessReportHistory({
       ) : (
         <div className="space-y-3">
           {visibleRequests.map((req) => {
-            const isRetrying = retryingId === req.id;
-            const statusMsg = retryStatus?.id === req.id ? retryStatus : null;
-
             return (
               <div
                 key={req.id}
@@ -151,53 +127,20 @@ export default function BusinessReportHistory({
                   </div>
                 )}
 
-                {req.result_metrics?.total_operations_count !== undefined && (
+                {(req.result_metrics?.total_operations_count !== undefined || req.result_metrics?.operation_count !== undefined) && (
                   <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-400">
                     <div className="text-right">العمليات المشمولة:</div>
                     <div className="text-left font-mono" dir="ltr">
-                      {toLatinDigits(req.result_metrics.total_operations_count)} عملية
+                      {toLatinDigits(req.result_metrics.total_operations_count ?? req.result_metrics.operation_count)} عملية
                     </div>
                   </div>
                 )}
 
                 {/* Error message */}
-                {req.status === 'failed' && req.error_message && (
+                {req.status === 'failed' && (
                   <div className="flex items-start gap-1.5 p-2 bg-rose-50/60 border border-rose-100 text-[9px] text-rose-600 rounded-lg leading-relaxed">
                     <AlertCircle className="w-3 h-3 text-rose-450 shrink-0 mt-0.5" />
-                    <span>ملاحظة: {toLatinDigits(req.error_message)}</span>
-                  </div>
-                )}
-
-                {/* Status action message */}
-                {statusMsg && (
-                  <div className={`p-2 rounded-lg text-[9px] leading-relaxed border ${
-                    statusMsg.success ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'
-                  }`}>
-                    {statusMsg.msg}
-                  </div>
-                )}
-
-                {/* Retry action button */}
-                {req.status === 'failed' && (
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="button"
-                      disabled={isRetrying}
-                      onClick={() => handleRetry(req.id)}
-                      className="bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 text-[9px] font-bold py-1 px-3 rounded-lg transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      {isRetrying ? (
-                        <>
-                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                          <span>جاري المحاولة...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-2.5 h-2.5" />
-                          <span>إعادة المحاولة</span>
-                        </>
-                      )}
-                    </button>
+                    <span>تعذر إكمال التقرير. تحقق من الاتصال أو حاول طلب تقرير جديد لاحقًا.</span>
                   </div>
                 )}
               </div>

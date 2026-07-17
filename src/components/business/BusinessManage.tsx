@@ -8,7 +8,8 @@ import {
   getPublicBusinessProfile,
   getBusinessOperations,
   BusinessProfile,
-  BusinessContexts
+  BusinessContexts,
+  type BusinessOperationItem
 } from '../../lib/businessApi';
 import { buildPublicBusinessUrl, INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
 import {
@@ -44,6 +45,7 @@ import {
   Database,
   PlusCircle,
   Puzzle,
+  Download,
   AlertTriangle,
   UserCheck
 } from 'lucide-react';
@@ -277,11 +279,10 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   // Complaints State (No mock data allowed)
   const [complaintsList, setComplaintsList] = useState<any[]>([]);
 
-  // Reports State (Real database operations)
-  const [realOps, setRealOps] = useState<any[]>([]);
+  // Reports State (real database operations)
+  const [realOps, setRealOps] = useState<BusinessOperationItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
-
-
+  const [reportsError, setReportsError] = useState<string | null>(null);
 
   const loadBusinessData = async () => {
     setLoading(true);
@@ -368,11 +369,13 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   const loadReportsData = async (businessId: string) => {
     setLoadingReports(true);
+    setReportsError(null);
     try {
       const ops = await getBusinessOperations(businessId);
       setRealOps(ops);
     } catch (opsErr) {
       console.error('Failed to load real business operations for reports:', opsErr);
+      setReportsError('تعذر تحميل عمليات النشاط. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
       setLoadingReports(false);
     }
@@ -1880,72 +1883,68 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
               <div className="space-y-6 animate-fade-in">
                 <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-5 shadow-xs space-y-4">
                   <div className="pb-3 border-b border-slate-100 text-right">
-                    <h3 className="text-xs font-bold text-slate-900">صن�            {/* TAB: REPORTS */}
-            {activeTab === 'reports' && (
-              <div className="space-y-6 animate-fade-in text-right">
-                {business && (
-                  <BusinessReports
-                    business={business}
-                    operations={realOps}
-                    onNavigate={onNavigate}
-                  />
-                )}
-              </div>
-            )}">لا توجد عمليات تطابق معايير الفرز المحددة.</p>
-                            </div>
-                          ) : (
-                            <div className="divide-y divide-slate-100 bg-white border border-slate-200/50 rounded-2xl overflow-hidden shadow-3xs">
-                              {filtered.map((item, index) => {
-                                const op = item.operation;
-                                if (!op) return null;
-                                const isVerified = item.link_status === 'verified' || op.status === 'verified';
-                                const linkedUser = item.linked_by?.full_name || item.linked_by?.phone || 'غير محدد';
+                    <h3 className="text-xs font-bold text-slate-900">صندوق الشكاوى والملاحظات الواردة</h3>
+                    <p className="text-[10px] text-slate-400">تلقي ومعالجة ملاحظات وشكاوى العملاء الموثقة لتعزيز الثقة</p>
+                  </div>
 
-                                return (
-                                  <div key={index} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between text-right gap-3.5 hover:bg-slate-50/50 transition-all">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
-                                        <FileText className="w-4.5 h-4.5 text-slate-450" />
-                                      </div>
-                                      <div>
-                                        <span className="text-xs font-bold text-slate-900 block font-mono">{(op.amount || 0).toLocaleString('en-US', { numberingSystem: 'latn' })} {op.currency}</span>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                          <span className="text-[9px] text-slate-555 font-bold bg-slate-100 px-1.5 py-0.5 rounded">{op.financial_entity}</span>
-                                          <span className="text-[9px] text-slate-400 font-mono">المرجع: {op.reference_number || 'غير متوفر'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between sm:justify-start gap-4">
-                                      <div className="text-[9px] text-slate-500 text-left">
-                                        <span className="block font-bold text-slate-700">بواسطة: {linkedUser}</span>
-                                        <span className="block font-mono text-slate-450 mt-0.5">
-                                          {op.transaction_datetime ? new Date(op.transaction_datetime).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', numberingSystem: 'latn' }) : ''}
-                                        </span>
-                                      </div>
-
-                                      <span className={`text-[9px] font-bold px-3 py-1 rounded-full border shrink-0 ${
-                                        isVerified
-                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                          : 'bg-amber-50 text-amber-700 border-amber-100'
-                                      }`}>
-                                        {isVerified ? 'موثق ومعتمد' : 'قيد الانتظار'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                  <div className="space-y-3.5">
+                    {complaintsList.length === 0 ? (
+                      <div className="p-10 border border-dashed border-slate-200 rounded-2xl text-center space-y-2">
+                        <MessageSquare className="w-8 h-8 text-slate-300 mx-auto" />
+                        <p className="text-[10px] text-slate-400">لا يوجد شكاوى مستلمة حالياً.</p>
                       </div>
-                    );
-                  })()}
+                    ) : (
+                      complaintsList.map((comp: any) => (
+                        <div key={comp.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-right">
+                          <div className="flex items-start justify-between border-b border-slate-200/60 pb-2">
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900">{comp.name}</h4>
+                              <span className="text-[9px] text-slate-400 block font-mono">رقم التواصل: {comp.phone}</span>
+                            </div>
 
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border ${
+                                comp.status === 'resolved'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : 'bg-amber-50 text-amber-700 border-amber-100'
+                              }`}>
+                                {comp.status === 'resolved' ? 'تم الحل' : 'قيد الانتظار'}
+                              </span>
+
+                              <button
+                                onClick={() => handleToggleComplaintStatus(comp.id, comp.status)}
+                                className="text-[9px] font-bold bg-white text-slate-700 border border-slate-250 px-2 py-0.5 rounded hover:bg-slate-100"
+                              >
+                                {comp.status === 'resolved' ? 'تغيير لانتظار' : 'اعتماد كتم الحل'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-slate-750 leading-relaxed pt-1">
+                            {comp.text}
+                          </p>
+                          <span className="text-[8px] text-slate-400 block font-mono text-left pt-1">
+                            بتاريخ: {new Date(comp.created_at).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', numberingSystem: 'latn' })}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* TAB: REPORTS */}
+            {activeTab === 'reports' && business && (
+              <BusinessReports
+                business={business}
+                operations={realOps}
+                loading={loadingReports}
+                operationsError={reportsError}
+                onRefreshOperations={() => loadReportsData(business.id)}
+                onNavigate={onNavigate}
+              />
+            )}
             {/* TAB: INTEGRATIONS */}
             {activeTab === 'integrations' && (
               <div className="space-y-6 animate-fade-in">

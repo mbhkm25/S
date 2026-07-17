@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
-import { toLatinDigits } from '../../../lib/digits';
+import { useMemo } from 'react';
+import type { BusinessOperationItem } from '../../../lib/businessApi';
 import { formatNumberLatin, formatPercentLatin } from '../../../utils/numerals';
+import { getOperationVerificationState } from './businessReportUtils';
 
 interface BusinessOperationsSummaryProps {
-  operations: any[];
+  operations: BusinessOperationItem[];
 }
 
 export default function BusinessOperationsSummary({ operations }: BusinessOperationsSummaryProps) {
@@ -18,23 +19,18 @@ export default function BusinessOperationsSummary({ operations }: BusinessOperat
       const op = item.operation;
       if (!op) return;
 
-      const isVerified = op.status === 'verified' || item.link_status === 'verified';
-      const isFailed = op.status === 'failed';
-      const isNeedsReview = op.status === 'needs_review' || item.link_status === 'needs_review';
-
-      if (isVerified) {
+      const state = getOperationVerificationState(item);
+      if (state === 'verified') {
         verified++;
-      } else if (isNeedsReview) {
+      } else if (state === 'needs_review') {
         needsReview++;
       } else {
         pending++;
       }
 
       // Track active team members
-      const verifierId = item.verified_by?.id || item.linked_by?.id;
-      if (verifierId) {
-        activeVerifiers.add(verifierId);
-      }
+      if (item.verified_by?.id) activeVerifiers.add(item.verified_by.id);
+      if (item.linked_by?.id) activeVerifiers.add(item.linked_by.id);
     });
 
     const verificationRate = total > 0 ? Math.round((verified / total) * 100) : 0;
@@ -57,7 +53,7 @@ export default function BusinessOperationsSummary({ operations }: BusinessOperat
       <div className="grid grid-cols-2 gap-3">
         {/* Total ops */}
         <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 shadow-3xs">
-          <span className="text-[9px] text-slate-450 block font-bold">إجمالي العمليات</span>
+          <span className="text-[9px] text-slate-450 block font-bold">عدد العمليات</span>
           <span className="text-xl font-bold text-slate-800 block mt-1 font-mono">
             {formatNumberLatin(stats.total)}
           </span>
@@ -93,7 +89,7 @@ export default function BusinessOperationsSummary({ operations }: BusinessOperat
         <div className="text-right">
           <span className="text-[9px] text-slate-400 block font-bold">نسبة التحقق والمطابقة</span>
           <span className="text-[8px] text-slate-500 block mt-0.5 font-mono">
-            نشاط {toLatinDigits(stats.activeMembersCount)} من أعضاء الفريق
+            {formatNumberLatin(stats.activeMembersCount)} أعضاء نشطين ضمن النتائج
           </span>
         </div>
         <span className="text-2xl font-black text-emerald-400 font-mono">

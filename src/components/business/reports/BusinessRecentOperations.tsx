@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Eye, FileText, ChevronLeft } from 'lucide-react';
+import type { BusinessOperationItem } from '../../../lib/businessApi';
 import { toLatinDigits } from '../../../lib/digits';
 import { formatNumberLatin, formatYemenDate, formatYemenTime } from '../../../utils/numerals';
+import { getOperationDate, getOperationVerificationState } from './businessReportUtils';
 
 interface BusinessRecentOperationsProps {
-  operations: any[];
+  operations: BusinessOperationItem[];
   onNavigate: (page: string, token?: string) => void;
 }
 
@@ -16,16 +18,14 @@ export default function BusinessRecentOperations({
   const recentOps = useMemo(() => {
     return [...operations]
       .sort((a, b) => {
-        const dateA = new Date(a.operation?.transaction_datetime || a.operation?.created_at || a.linked_at);
-        const dateB = new Date(b.operation?.transaction_datetime || b.operation?.created_at || b.linked_at);
-        return dateB.getTime() - dateA.getTime();
+        return (getOperationDate(b)?.getTime() || 0) - (getOperationDate(a)?.getTime() || 0);
       })
       .slice(0, 5);
   }, [operations]);
 
-  const getStatusBadge = (status: string, linkStatus: string) => {
-    const isVerified = status === 'verified' || linkStatus === 'verified';
-    if (isVerified) {
+  const getStatusBadge = (item: BusinessOperationItem) => {
+    const state = getOperationVerificationState(item);
+    if (state === 'verified') {
       return (
         <span className="bg-emerald-50 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-emerald-100">
           موثق ومعتمد
@@ -33,13 +33,7 @@ export default function BusinessRecentOperations({
       );
     }
     
-    switch (status) {
-      case 'failed':
-        return (
-          <span className="bg-rose-50 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-rose-100">
-            فشل التحليل
-          </span>
-        );
+    switch (state) {
       case 'needs_review':
         return (
           <span className="bg-amber-50 text-amber-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-amber-100">
@@ -114,7 +108,7 @@ export default function BusinessRecentOperations({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {getStatusBadge(op.status, item.link_status)}
+                    {getStatusBadge(item)}
                     
                     {op.public_token && (
                       <button
