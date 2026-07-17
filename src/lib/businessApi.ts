@@ -129,6 +129,8 @@ export interface BusinessOperationItem {
     currency: string | null;
     reference_number: string | null;
     transaction_datetime: string | null;
+    verified_at?: string | null;
+    verified_by_user_id?: string | null;
   } | null;
 }
 

@@ -397,7 +397,7 @@ export default function MyProfile({ user, profile, onLogout, refreshProfile, onN
               <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${isPro ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isPro ? 'فعال' : 'مجاني'}</span>
             </div>
             {limit > 0 && <><div className="flex justify-between text-[11px] text-slate-500"><span>الاستخدام الشهري</span><span>{toLatinDigits(used)} من {limit >= 999999 ? 'غير محدود' : toLatinDigits(limit)} عملية</span></div>{limit < 999999 && <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-slate-900 rounded-full" style={{ width: `${usagePercent}%` }} /></div>}</>}
-            {usage.expires_at && <p className="text-[10px] text-slate-500">ينتهي الاشتراك: {new Date(usage.expires_at).toLocaleDateString('ar-YE', { year: 'numeric', month: 'long', day: 'numeric' })}</p>}
+            {usage.expires_at && <p className="text-[10px] text-slate-500">ينتهي الاشتراك: {toLatinDigits(new Date(usage.expires_at).toLocaleDateString('ar-YE-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric', numberingSystem: 'latn' }))}</p>}
             {!isPro && <button type="button" onClick={() => setShowProUpgradeModal(true)} className="min-h-11 w-full rounded-xl bg-[#111] text-white text-xs font-bold flex items-center justify-center gap-2"><Sparkles className="w-4 h-4" />الترقية إلى سند Pro</button>}
           </section>
         )}

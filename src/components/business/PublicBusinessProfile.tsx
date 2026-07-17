@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { 
-  getPublicBusinessProfile, 
-  joinBusinessAsCustomer, 
-  getBusinessMediaSignedUrl, 
+import {
+  getPublicBusinessProfile,
+  joinBusinessAsCustomer,
+  getBusinessMediaSignedUrl,
   getUserBusinessContexts,
   updateBusinessProfile,
   PublicBusinessDetail
 } from '../../lib/businessApi';
 import { INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
-import { 
-  ArrowRight, 
-  Store, 
-  MapPin, 
-  MessageSquare, 
-  UserCheck, 
-  Loader2, 
-  AlertCircle, 
-  RefreshCw, 
+import {
+  ArrowRight,
+  Store,
+  MapPin,
+  MessageSquare,
+  UserCheck,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
   CheckCircle2,
   ShieldCheck,
   ShoppingBag,
@@ -43,13 +43,13 @@ interface PublicBusinessProfileProps {
 type TabType = 'overview' | 'products' | 'services' | 'financial' | 'complaints';
 
 // Sub-component for product card to comply with React Hooks Rules
-function PublicProductCardItem({ 
-  prod, 
-  businessSlug, 
-  onNavigate 
-}: { 
-  prod: any; 
-  businessSlug: string; 
+function PublicProductCardItem({
+  prod,
+  businessSlug,
+  onNavigate
+}: {
+  prod: any;
+  businessSlug: string;
   onNavigate: (page: string, token?: string) => void;
   key?: any;
 }) {
@@ -76,11 +76,11 @@ function PublicProductCardItem({
     >
       <div className="w-full aspect-square bg-slate-50 border-b border-slate-100 relative shrink-0">
         {imgUrl ? (
-          <img 
-            src={imgUrl} 
-            alt={prod.name} 
-            className="w-full h-full object-cover object-center" 
-            loading="lazy" 
+          <img
+            src={imgUrl}
+            alt={prod.name}
+            className="w-full h-full object-cover object-center"
+            loading="lazy"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -172,7 +172,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+
   const [profile, setProfile] = useState<PublicBusinessDetail | null>(null);
   const [linkedSuccess, setLinkedSuccess] = useState(false);
   const [isCustomer, setIsCustomer] = useState(false);
@@ -221,7 +221,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
     setError(null);
     try {
       const data = await getPublicBusinessProfile(slug);
-      
+
       const mergedProfile = data;
       setProfile(mergedProfile);
 
@@ -279,12 +279,12 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
     const now = new Date();
     const dayName = daysEn[now.getDay()];
     const todayHours = hours[dayName];
-    
+
     if (!todayHours || todayHours.closed) return { open: false, text: 'مغلق حالياً' };
-    
+
     const currentTimeStr = now.toTimeString().slice(0, 5); // "HH:MM"
     const { open, close } = todayHours;
-    
+
     if (currentTimeStr >= open && currentTimeStr <= close) {
       return { open: true, text: `مفتوح الآن (حتى ${close})` };
     }
@@ -406,7 +406,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
         ) : (
           <div className="w-full h-full bg-gradient-to-r from-slate-100 to-slate-200" />
         )}
-        
+
         {/* Back navigation */}
         <button
           onClick={() => onNavigate('business-community')}
@@ -419,8 +419,8 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
         {openStatus && (
           <div className="absolute bottom-4 right-4">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-md border ${
-              openStatus.open 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+              openStatus.open
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                 : 'bg-rose-50 text-rose-700 border-rose-100'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${openStatus.open ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
@@ -443,7 +443,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
                   <Store className="w-8 h-8 text-slate-400" />
                 )}
               </div>
-              
+
               <div className="space-y-1">
                 <div className="flex items-center justify-center sm:justify-start gap-1.5">
                   <h1 className="text-base font-bold text-slate-900 leading-tight">{profile.name}</h1>
@@ -574,8 +574,8 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold transition-all shrink-0 ${
-                  isSelected 
-                    ? 'bg-slate-900 text-white shadow-sm' 
+                  isSelected
+                    ? 'bg-slate-900 text-white shadow-sm'
                     : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
                 }`}
               >
@@ -617,7 +617,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
                 <Clock className="w-4 h-4 text-slate-700" />
                 <span>مواعيد وساعات العمل الأسبوعية</span>
               </h3>
-              
+
               {profile.working_hours && Object.keys(profile.working_hours).length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                   {Object.entries(profile.working_hours).map(([day, val]: [string, any]) => (
@@ -661,11 +661,11 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 px-1">
                   {products.map((prod: any) => (
-                    <PublicProductCardItem 
-                      key={prod.id} 
-                      prod={prod} 
-                      businessSlug={profile.slug} 
-                      onNavigate={onNavigate} 
+                    <PublicProductCardItem
+                      key={prod.id}
+                      prod={prod}
+                      businessSlug={profile.slug}
+                      onNavigate={onNavigate}
                     />
                   ))}
                 </div>
@@ -679,7 +679,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
           <div className="space-y-6 animate-fade-in">
             <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
               <h3 className="text-xs font-bold text-slate-900 pb-3 border-b border-slate-100">قائمة الخدمات والحلول المتاحة</h3>
-              
+
               {services.length === 0 ? (
                 <div className="p-12 text-center text-slate-400 text-xs">لا توجد خدمات مسجلة حالياً.</div>
               ) : (
@@ -840,7 +840,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
                       </div>
                       <p className="text-[10px] text-slate-600 leading-relaxed">{comp.text}</p>
                       <span className="text-[8px] text-slate-400 font-mono block text-left">
-                        {new Date(comp.created_at).toLocaleString('ar-YE', { dateStyle: 'short' })}
+                        {new Date(comp.created_at).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', numberingSystem: 'latn' })}
                       </span>
                     </div>
                   ))}
@@ -849,7 +849,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
             )}
           </div>
         )}
-        
+
       </div>
     </div>
   );

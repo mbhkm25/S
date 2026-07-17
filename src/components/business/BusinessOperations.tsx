@@ -19,7 +19,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
     try {
       const contexts = await getUserBusinessContexts();
       const currentBusiness = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0];
-      
+
       if (!currentBusiness) {
         throw new Error('لم يتم العثور على نشاط تجاري نشط.');
       }
@@ -87,8 +87,8 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
     <div className="space-y-5 font-arabic" dir="rtl">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <button 
-          onClick={() => onNavigate('business-manage')} 
+        <button
+          onClick={() => onNavigate('business-manage')}
           className="p-2 bg-white rounded-xl border border-slate-200/60 hover:bg-slate-50 transition-all"
         >
           <ArrowRight className="w-4 h-4" />
@@ -124,12 +124,12 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
             const currency = op.currency || 'ر.ي';
             const ref = op.reference_number;
             const date = op.transaction_datetime || op.created_at;
-            
+
             const linkedBy = item.linked_by?.full_name || item.linked_by?.phone || '';
             const verifiedBy = item.verified_by?.full_name || item.verified_by?.phone || '';
 
             return (
-              <div 
+              <div
                 key={item.link_id || op.id}
                 onClick={() => onNavigate('details', op.public_token)}
                 className="bg-white hover:border-slate-300 border border-slate-200/60 p-4 rounded-3xl transition-all shadow-xs flex flex-col gap-3 cursor-pointer text-right"
@@ -145,7 +145,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
                         <span className="bg-indigo-50 text-indigo-700 text-[8px] font-bold px-1.5 py-0.5 rounded font-arabic">تحليل ذكي</span>
                       )}
                     </div>
-                    
+
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400 font-arabic">
                       {entity && (
                         <span>{entity} {type ? `(${type})` : ''}</span>
@@ -162,7 +162,7 @@ export default function BusinessOperations({ onNavigate }: BusinessOperationsPro
 
                   <div className="text-left shrink-0">
                     <div className="text-xs font-bold text-emerald-600 flex items-center gap-0.5 justify-end">
-                      <span>{toLatinDigits(amount?.toLocaleString() || '0')}</span>
+                      <span>{toLatinDigits(amount?.toLocaleString('en-US', { numberingSystem: 'latn' }) || '0')}</span>
                       <span className="text-[8px] font-normal text-emerald-500">{currency}</span>
                     </div>
                   </div>
