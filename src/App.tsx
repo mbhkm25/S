@@ -853,47 +853,49 @@ export default function App() {
       <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
       
       {/* Top Brand Navbar */}
-      <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center">
-            <img 
-              src={`${import.meta.env.BASE_URL}logo.png`} 
-              alt="شعار سند" 
-              className="h-10 w-auto object-contain" 
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                const parent = e.currentTarget.parentElement;
-                if (parent) {
-                  const span = document.createElement('span');
-                  span.className = "text-lg font-bold text-slate-900 font-arabic";
-                  span.innerText = "سند للتحقق";
-                  parent.appendChild(span);
-                }
-              }} 
-            />
-          </div>
+      {currentPage !== 'scan-qr' && (
+        <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
+          <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center">
+              <img
+                src={`${import.meta.env.BASE_URL}logo.png`}
+                alt="شعار سند"
+                className="h-10 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent) {
+                    const span = document.createElement('span');
+                    span.className = "text-lg font-bold text-slate-900 font-arabic";
+                    span.innerText = "سند للتحقق";
+                    parent.appendChild(span);
+                  }
+                }}
+              />
+            </div>
 
-          <div>
-            {isAuthenticated && (
-              <div className="flex items-center gap-2">
-                <NotificationBell onNavigate={() => navigateTo('notifications')} />
-                <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
-                  <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
-                    {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
-                  </div>
-                  <div className="text-right hidden sm:block">
-                    <p className="text-[10px] font-bold leading-none text-slate-800">
-                      {profile ? profile.full_name : 'جاري التحميل...'}
-                    </p>
+            <div>
+              {isAuthenticated && (
+                <div className="flex items-center gap-2">
+                  <NotificationBell onNavigate={() => navigateTo('notifications')} />
+                  <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
+                    <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
+                      {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
+                    </div>
+                    <div className="text-right hidden sm:block">
+                      <p className="text-[10px] font-bold leading-none text-slate-800">
+                        {profile ? profile.full_name : 'جاري التحميل...'}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      {showStatusBanner && (
+      {showStatusBanner && currentPage !== 'scan-qr' && (
         <div className={`text-white text-[11px] font-bold py-1.5 px-4 text-center font-arabic animate-slide-down flex items-center justify-center gap-2 shadow-sm sticky top-[53px] z-40 ${
           connectivity === 'offline' ? 'bg-rose-600' : 'bg-amber-500'
         }`}>
@@ -1105,7 +1107,7 @@ export default function App() {
       </main>
 
       {/* Bottom Sticky Tab Navigation */}
-      {isAuthenticated && (
+      {isAuthenticated && currentPage !== 'scan-qr' && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 py-2 px-3 shadow-md z-50 animate-fade-in" id="bottom_nav">
           <div className="max-w-2xl mx-auto flex items-center justify-between">
             {/* Tab: Home */}

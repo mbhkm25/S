@@ -29,11 +29,11 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
   const [period, setPeriod] = useState<'today' | '7_days' | '30_days' | 'custom'>('7_days');
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
-  
+
   // Delivery phone mode: 'registered' (profile.phone) or 'other' (custom inputs)
   const [phoneMode, setPhoneMode] = useState<'registered' | 'other'>(profile.phone ? 'registered' : 'other');
   const [localPhone, setLocalPhone] = useState(profile.phone ? parseYemeniLocalPhone(profile.phone) : '');
-  
+
   // Status states
   const [requesting, setRequesting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
   // Calculate parameters based on period selection
   const calculateDates = (): { dateFrom: string | null; dateTo: string | null } => {
     const now = new Date();
-    
+
     switch (period) {
       case 'today': {
         const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -255,7 +255,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
 
   return (
     <div className="space-y-5" id="reports_view">
-      
+
       {standalone && (
         <div className="text-right">
           <h2 className="text-base font-bold text-slate-950 font-arabic">طلب كشف حساب مالي</h2>
@@ -264,7 +264,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
           </p>
         </div>
       )}
-      
+
       {/* Main Request Form */}
       <div className="bg-white border border-slate-200/60 rounded-3xl p-4.5 shadow-sm space-y-4">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-right font-arabic">
@@ -272,7 +272,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
         </h3>
 
         <form onSubmit={handleSubmitRequest} className="space-y-4">
-          
+
           {/* Form Error Alert */}
           {formError && (
             <div className="flex items-start gap-2 text-xs text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-100 text-right leading-relaxed">
@@ -468,7 +468,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
                 <Phone className="w-3 h-3 text-slate-400" />
                 <span>رقم واتساب المستلم للتقرير</span>
               </label>
-              
+
               <div className="relative flex items-center rounded-2xl border border-slate-200 bg-slate-50 focus-within:bg-white focus-within:border-slate-400 transition-all overflow-hidden" dir="ltr">
                 <span className="px-3.5 py-3 bg-slate-100 border-r border-slate-200 text-slate-500 font-mono font-bold text-xs select-none">
                   +967
@@ -479,9 +479,9 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
                   onChange={(e) => {
                     const val = e.target.value;
                     let latin = toLatinDigits(val);
-                    
+
                     const cleanedDigits = latin.replace(/\D/g, '');
-                    
+
                     let localPart = '';
                     if (cleanedDigits.startsWith('00967') && cleanedDigits.length >= 14) {
                       localPart = cleanedDigits.substring(5, 14);
@@ -492,11 +492,11 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
                     } else {
                       localPart = cleanedDigits;
                     }
-                    
+
                     if (localPart.length > 9) {
                       localPart = localPart.substring(0, 9);
                     }
-                    
+
                     const onlyDigits = localPart.replace(/\D/g, '');
                     setLocalPhone(onlyDigits);
                     setFormError(null);
@@ -579,7 +579,7 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
                   <div className="text-right">
                     <span className="text-[11px] font-bold text-slate-800 font-arabic">{translateScope(req.report_scope)}</span>
                     <span className="block text-[8px] text-slate-400 font-mono mt-0.5" dir="ltr">
-                      {toLatinDigits(new Date(req.created_at).toLocaleString('ar-EG', { hour12: true }))}
+                      {toLatinDigits(new Date(req.created_at).toLocaleString('ar-EG-u-nu-latn', { hour12: true, numberingSystem: 'latn' }))}
                     </span>
                   </div>
                 </div>
@@ -596,10 +596,10 @@ export default function Reports({ profile, standalone, ensureProfileComplete }: 
                 {(req.date_from || req.date_to) && (
                   <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-400 font-mono">
                     <div className="text-left" dir="ltr">
-                      إلى: {req.date_to ? toLatinDigits(new Date(req.date_to).toLocaleDateString('ar-EG')) : 'الآن'}
+                      إلى: {req.date_to ? toLatinDigits(new Date(req.date_to).toLocaleDateString('ar-EG-u-nu-latn', { numberingSystem: 'latn' })) : 'الآن'}
                     </div>
                     <div className="text-right" dir="ltr">
-                      من: {req.date_from ? toLatinDigits(new Date(req.date_from).toLocaleDateString('ar-EG')) : 'البداية'}
+                      من: {req.date_from ? toLatinDigits(new Date(req.date_from).toLocaleDateString('ar-EG-u-nu-latn', { numberingSystem: 'latn' })) : 'البداية'}
                     </div>
                   </div>
                 )}

@@ -32,7 +32,6 @@ const getOperationFileMeta = (op: any) => {
   return { fileBucket, filePath, mimeType, originalName, size };
 };
 
-
 // Time discrepancy warning helper
 const calculateTimeDiscrepancy = (txTimeStr: string, verifiedTimeStr: string) => {
   if (!txTimeStr) return { diffMinutes: 0, text: 'وقت العملية غير متوفر', isWarning: false, isFuture: false };

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  getUserBusinessContexts, createBusinessTeamInvitation, 
+import {
+  getUserBusinessContexts, createBusinessTeamInvitation,
   getBusinessTeam, updateBusinessTeamMemberStatus,
-  BusinessTeamMember, BusinessInvitation 
+  BusinessTeamMember, BusinessInvitation
 } from '../../lib/businessApi';
-import { 
-  ArrowRight, Users, Plus, Loader2, AlertTriangle, 
+import {
+  ArrowRight, Users, Plus, Loader2, AlertTriangle,
   CheckCircle2, Clock, Phone, UserPlus, RefreshCw, UserCheck, ShieldAlert
 } from 'lucide-react';
 import { toLatinDigits, formatYemeniDisplay } from '../../lib/digits';
@@ -18,16 +18,16 @@ export default function BusinessTeam({ onNavigate }: BusinessTeamProps) {
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  
+
   const [businessId, setBusinessId] = useState('');
   const [businessName, setBusinessName] = useState('');
-  
+
   const [teamMembers, setTeamMembers] = useState<BusinessTeamMember[]>([]);
   const [pendingInvites, setPendingInvites] = useState<BusinessInvitation[]>([]);
 
   const [phone, setPhone] = useState('');
   const [label, setLabel] = useState('');
-  
+
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -37,7 +37,7 @@ export default function BusinessTeam({ onNavigate }: BusinessTeamProps) {
     try {
       const contexts = await getUserBusinessContexts();
       const currentBusiness = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0];
-      
+
       if (!currentBusiness) {
         throw new Error('لم يتم العثور على نشاط تجاري نشط.');
       }
@@ -125,9 +125,9 @@ export default function BusinessTeam({ onNavigate }: BusinessTeamProps) {
       {/* Visual Workspace Header */}
       <div className="bg-slate-900 text-white p-6 rounded-b-[2rem] shadow-md space-y-4">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             type="button"
-            onClick={() => onNavigate('business-manage')} 
+            onClick={() => onNavigate('business-manage')}
             className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/5 text-white"
           >
             <ArrowRight className="w-4 h-4" />
@@ -240,7 +240,7 @@ export default function BusinessTeam({ onNavigate }: BusinessTeamProps) {
                     <div className="flex items-center gap-3 text-[10px] text-slate-400">
                       <span className="font-mono">{toLatinDigits(phoneDisplay)}</span>
                       {member.joined_at && (
-                        <span>انضم في: {toLatinDigits(new Date(member.joined_at).toLocaleDateString())}</span>
+                        <span>انضم في: {toLatinDigits(new Date(member.joined_at).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }))}</span>
                       )}
                     </div>
                   </div>

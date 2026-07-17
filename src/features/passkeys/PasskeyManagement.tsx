@@ -21,7 +21,7 @@ function formatDate(value?: string) {
   if (!value) return 'غير متوفر';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'غير متوفر';
-  return date.toLocaleDateString('ar-YE', { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('ar-YE-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric', numberingSystem: 'latn' });
 }
 
 export default function PasskeyManagement({ userId }: PasskeyManagementProps) {

@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { supabase } from '../../lib/supabase';
-import { 
-  getBusinessMediaSignedUrl, 
-  getUserBusinessContexts, 
-  updateBusinessProfile, 
+import {
+  getBusinessMediaSignedUrl,
+  getUserBusinessContexts,
+  updateBusinessProfile,
   getPublicBusinessProfile,
   getBusinessOperations,
-  BusinessProfile, 
-  BusinessContexts 
+  BusinessProfile,
+  BusinessContexts
 } from '../../lib/businessApi';
 import { buildPublicBusinessUrl, INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
 import {
@@ -59,16 +59,16 @@ interface BusinessManageProps {
 type TabType = 'overview' | 'products' | 'services' | 'hours' | 'accounts' | 'complaints' | 'reports' | 'integrations' | 'addons' | 'customers' | 'team';
 
 // Sub-component for product card to comply with React Hooks Rules
-function ProductCardItem({ 
-  prod, 
-  idx, 
-  onEdit, 
-  onDelete 
-}: { 
-  prod: any; 
-  idx: number; 
-  onEdit: (idx: number, imgUrl: string) => void; 
-  onDelete: (idx: number) => void; 
+function ProductCardItem({
+  prod,
+  idx,
+  onEdit,
+  onDelete
+}: {
+  prod: any;
+  idx: number;
+  onEdit: (idx: number, imgUrl: string) => void;
+  onDelete: (idx: number) => void;
   key?: any;
 }) {
   const [imgUrl, setImgUrl] = useState('');
@@ -103,7 +103,7 @@ function ProductCardItem({
           {prod.price && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded shrink-0">{prod.price}</span>}
         </div>
         <p className="text-[10px] text-slate-550 line-clamp-1">{prod.description}</p>
-        
+
         <div className="flex justify-end gap-1.5 pt-1.5 border-t border-slate-100">
           <button
             onClick={() => onEdit(idx, imgUrl)}
@@ -124,16 +124,16 @@ function ProductCardItem({
 }
 
 // Sub-component for service card to comply with React Hooks Rules
-function ServiceCardItem({ 
-  serv, 
-  idx, 
-  onEdit, 
-  onDelete 
-}: { 
-  serv: any; 
-  idx: number; 
-  onEdit: (idx: number, imgUrl: string) => void; 
-  onDelete: (idx: number) => void; 
+function ServiceCardItem({
+  serv,
+  idx,
+  onEdit,
+  onDelete
+}: {
+  serv: any;
+  idx: number;
+  onEdit: (idx: number, imgUrl: string) => void;
+  onDelete: (idx: number) => void;
   key?: any;
 }) {
   const [imgUrl, setImgUrl] = useState('');
@@ -168,7 +168,7 @@ function ServiceCardItem({
           {serv.price && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded shrink-0">{serv.price}</span>}
         </div>
         <p className="text-[10px] text-slate-550 line-clamp-1">{serv.description}</p>
-        
+
         <div className="flex justify-end gap-1.5 pt-1.5 border-t border-slate-100">
           <button
             onClick={() => onEdit(idx, imgUrl)}
@@ -193,7 +193,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
   const [businessContexts, setBusinessContexts] = useState<BusinessContexts | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
@@ -333,7 +333,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       if (filterPeriod !== 'ALL') {
         const opDate = new Date(op.transaction_datetime || op.created_at || item.linked_at);
         const now = new Date();
-        
+
         if (filterPeriod === 'TODAY') {
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           if (opDate < today) return false;
@@ -370,7 +370,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
     }
 
     const filteredOps = getFilteredOperations();
-    
+
     // Aggregates for filtered ops
     const yerSum = filteredOps.filter(o => o.operation?.currency === 'YER').reduce((acc, o) => acc + (o.operation?.amount || 0), 0);
     const sarSum = filteredOps.filter(o => o.operation?.currency === 'SAR').reduce((acc, o) => acc + (o.operation?.amount || 0), 0);
@@ -380,14 +380,14 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
       const op = item.operation;
       const linkedUser = item.linked_by?.full_name || item.linked_by?.phone || 'غير حدد';
       const statusText = item.link_status === 'verified' || op?.status === 'verified' ? 'موثق' : 'معلق';
-      
+
       return `
         <tr>
           <td>${idx + 1}</td>
-          <td>${op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE') : '-'}</td>
+          <td>${op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }) : '-'}</td>
           <td>${op?.financial_entity || '-'}</td>
           <td>${op?.reference_number || '-'}</td>
-          <td style="font-family: monospace; font-weight: bold;">${(op?.amount || 0).toLocaleString()} ${op?.currency}</td>
+          <td style="font-family: monospace; font-weight: bold;">${(op?.amount || 0).toLocaleString('en-US', { numberingSystem: 'latn' })} ${op?.currency}</td>
           <td>${linkedUser}</td>
           <td>
             <span class="status-badge ${statusText === 'موثق' ? 'status-verified' : 'status-pending'}">
@@ -558,10 +558,10 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
             </div>
             <div class="meta-item">
               <span class="meta-label">تاريخ توليد التقرير:</span>
-              <span>${new Date().toLocaleString('ar-YE')}</span>
+              <span>${new Date().toLocaleString('ar-YE-u-nu-latn', { numberingSystem: 'latn' })}</span>
             </div>
           </div>
-          
+
           <div class="meta-grid" style="margin-bottom: 0;">
             <div class="meta-item">
               <span class="meta-label">عدد العمليات بالتقرير:</span>
@@ -582,15 +582,15 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
         <div class="summary-cards">
           <div class="card">
             <div class="card-title">إجمالي الريال اليمني (YER)</div>
-            <div class="card-val">${yerSum.toLocaleString()} YER</div>
+            <div class="card-val">${yerSum.toLocaleString('en-US', { numberingSystem: 'latn' })} YER</div>
           </div>
           <div class="card">
             <div class="card-title">إجمالي الريال السعودي (SAR)</div>
-            <div class="card-val">${sarSum.toLocaleString()} SAR</div>
+            <div class="card-val">${sarSum.toLocaleString('en-US', { numberingSystem: 'latn' })} SAR</div>
           </div>
           <div class="card">
             <div class="card-title">إجمالي الدولار الأمريكي (USD)</div>
-            <div class="card-val">${usdSum.toLocaleString()} USD</div>
+            <div class="card-val">${usdSum.toLocaleString('en-US', { numberingSystem: 'latn' })} USD</div>
           </div>
         </div>
 
@@ -650,7 +650,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
     filteredOps.forEach((item, idx) => {
       const op = item.operation;
-      const date = op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE') : '-';
+      const date = op?.transaction_datetime ? new Date(op.transaction_datetime).toLocaleDateString('ar-YE-u-nu-latn', { numberingSystem: 'latn' }) : '-';
       const entity = op?.financial_entity || '-';
       const ref = op?.reference_number || '-';
       const amt = op?.amount || 0;
@@ -1322,8 +1322,8 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                     setError(null);
                   }}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[11px] font-bold text-right transition-all shrink-0 whitespace-nowrap lg:w-full ${
-                    isSelected 
-                      ? 'bg-slate-900 text-white shadow-md' 
+                    isSelected
+                      ? 'bg-slate-900 text-white shadow-md'
                       : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
                   }`}
                 >
@@ -1350,8 +1350,8 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                     setError(null);
                   }}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[11px] font-bold text-right transition-all shrink-0 whitespace-nowrap lg:w-full ${
-                    isSelected 
-                      ? 'bg-slate-900 text-white shadow-md' 
+                    isSelected
+                      ? 'bg-slate-900 text-white shadow-md'
                       : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
                   }`}
                 >
@@ -1364,7 +1364,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
           {/* Main Content Area */}
           <main className="flex-1 w-full space-y-6">
-            
+
             {/* TAB: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6 animate-fade-in">
@@ -1393,7 +1393,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                     <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
                       <svg className="w-full h-full transform -rotate-90">
                         <circle cx="24" cy="24" r="20" className="stroke-slate-100 fill-none" strokeWidth="4" />
-                        <circle cx="24" cy="24" r="20" className="stroke-indigo-600 fill-none" strokeWidth="4" 
+                        <circle cx="24" cy="24" r="20" className="stroke-indigo-600 fill-none" strokeWidth="4"
                           strokeDasharray={2 * Math.PI * 20}
                           strokeDashoffset={2 * Math.PI * 20 * (1 - completenessPercent / 100)}
                         />
@@ -1413,40 +1413,40 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       ...(INTERNAL_BUSINESS_CATALOG_ENABLED ? [{
-                        id: 'products', 
-                        label: 'المنتجات المصورة', 
+                        id: 'products',
+                        label: 'المنتجات المصورة',
                         value: products.length,
                         unit: 'منتج معروض',
-                        icon: ShoppingBag, 
+                        icon: ShoppingBag,
                         color: 'text-indigo-600 bg-indigo-50 border-indigo-100',
-                        desc: 'أضف سلع الكتالوج وعينات البيع' 
+                        desc: 'أضف سلع الكتالوج وعينات البيع'
                       }] : []),
-                      { 
-                        id: 'services', 
-                        label: 'الخدمات والحلول', 
+                      {
+                        id: 'services',
+                        label: 'الخدمات والحلول',
                         value: services.length,
                         unit: 'خدمة نشطة',
-                        icon: Wrench, 
+                        icon: Wrench,
                         color: 'text-emerald-600 bg-emerald-50 border-emerald-100',
-                        desc: 'اعرض الخدمات المهنية وحلول الدفع' 
+                        desc: 'اعرض الخدمات المهنية وحلول الدفع'
                       },
-                      { 
-                        id: 'accounts', 
-                        label: 'الحسابات البنكية', 
+                      {
+                        id: 'accounts',
+                        label: 'الحسابات البنكية',
                         value: financialAccounts.length,
                         unit: 'قناة دفع معتمدة',
-                        icon: Database, 
+                        icon: Database,
                         color: 'text-amber-600 bg-amber-50 border-amber-100',
-                        desc: 'حسابات الدفع متعددة العملات للتحويل' 
+                        desc: 'حسابات الدفع متعددة العملات للتحويل'
                       },
-                      { 
-                        id: 'complaints', 
-                        label: 'الشكاوى والملاحظات', 
+                      {
+                        id: 'complaints',
+                        label: 'الشكاوى والملاحظات',
                         value: complaintsList.filter((c: any) => c.status === 'pending').length,
                         unit: 'شكوى معلقة',
-                        icon: MessageSquare, 
+                        icon: MessageSquare,
                         color: 'text-rose-600 bg-rose-50 border-rose-100',
-                        desc: 'ملاحظات العملاء التي تحتاج لمعالجة' 
+                        desc: 'ملاحظات العملاء التي تحتاج لمعالجة'
                       }
                     ].map((metric) => {
                       const Icon = metric.icon;
@@ -1462,7 +1462,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                             </div>
                             <span className="text-[10px] text-slate-400 group-hover:text-slate-600 transition-colors">←</span>
                           </div>
-                          
+
                           <div className="space-y-1 mt-2">
                             <div className="flex items-baseline gap-1">
                               <span className="text-lg font-bold text-slate-900 leading-none font-mono">
@@ -1492,7 +1492,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                     <p className="text-[10px] text-slate-555 leading-relaxed">
                       شارك الرابط العام الموثق لعملائك لتمكينهم من استعراض المنتجات والخدمات والحسابات المالية للتسديد الآمن.
                     </p>
-                    
+
                     <div className="flex gap-2">
                       <button
                         onClick={handleCopyLink}
@@ -1587,7 +1587,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   {showProductForm && (
                     <form onSubmit={handleProductSubmit} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5 text-right">
                       <h4 className="text-xs font-bold text-slate-900">{editProductIndex !== null ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد للكتالوج'}</h4>
-                      
+
                       {/* Image Upload Input */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 block">صورة المنتج</label>
@@ -1604,7 +1604,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                               </div>
                             )}
                           </div>
-                          
+
                           <div className="relative">
                             <button
                               type="button"
@@ -1756,7 +1756,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   {showServiceForm && (
                     <form onSubmit={handleServiceSubmit} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5 text-right">
                       <h4 className="text-xs font-bold text-slate-900">{editServiceIndex !== null ? 'تعديل بيانات الخدمة' : 'إضافة خدمة جديدة'}</h4>
-                      
+
                       {/* Image Upload Input */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 block">صورة الخدمة</label>
@@ -1773,7 +1773,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                               </div>
                             )}
                           </div>
-                          
+
                           <div className="relative">
                             <button
                               type="button"
@@ -2085,7 +2085,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   {showAccountForm && (
                     <form onSubmit={handleAccountSubmit} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5 text-right">
                       <h4 className="text-xs font-bold text-slate-900">{editAccountIndex !== null ? 'تعديل بيانات الحساب' : 'إضافة حساب جديد'}</h4>
-                      
+
                       <div className="space-y-2.5">
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-500">اسم الجهة المالية (البنك أو المحفظة)</label>
@@ -2313,16 +2313,16 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                               <h4 className="text-xs font-bold text-slate-900">{comp.name}</h4>
                               <span className="text-[9px] text-slate-400 block font-mono">رقم التواصل: {comp.phone}</span>
                             </div>
-                            
+
                             <div className="flex items-center gap-2">
                               <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border ${
-                                comp.status === 'resolved' 
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                comp.status === 'resolved'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                   : 'bg-amber-50 text-amber-700 border-amber-100'
                               }`}>
                                 {comp.status === 'resolved' ? 'تم الحل' : 'قيد الانتظار'}
                               </span>
-                              
+
                               <button
                                 onClick={() => handleToggleComplaintStatus(comp.id, comp.status)}
                                 className="text-[9px] font-bold bg-white text-slate-700 border border-slate-250 px-2 py-0.5 rounded hover:bg-slate-100"
@@ -2336,7 +2336,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                             {comp.text}
                           </p>
                           <span className="text-[8px] text-slate-400 block font-mono text-left pt-1">
-                            بتاريخ: {new Date(comp.created_at).toLocaleString('ar-YE', { dateStyle: 'short', timeStyle: 'short' })}
+                            بتاريخ: {new Date(comp.created_at).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', numberingSystem: 'latn' })}
                           </span>
                         </div>
                       ))
@@ -2356,7 +2356,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                       <h3 className="text-xs font-bold text-slate-900">التقارير المالية المتقدمة للتحقق</h3>
                       <p className="text-[10px] text-slate-400">احصل على كشوفات مفصلة، صَفِّ العمليات، ونزّل التقارير الرسمية كملفات PDF و Excel</p>
                     </div>
-                    
+
                     <div className="flex gap-2 shrink-0">
                       <button
                         onClick={handleDownloadCSV}
@@ -2365,7 +2365,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                         <FileText className="w-3.5 h-3.5 text-slate-500" />
                         <span>تصدير Excel (CSV)</span>
                       </button>
-                      
+
                       <button
                         onClick={handleDownloadPDF}
                         className="bg-slate-900 hover:bg-black text-white text-[10px] font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center gap-1.5"
@@ -2505,8 +2505,8 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                 </div>
                                 <div className="space-y-1">
                                   <span className="text-[10px] text-slate-550 block">المبيعات الموثقة المفلترة</span>
-                                  <span className="text-base font-bold text-slate-900 block font-mono">{(sum.verified).toLocaleString()} {cur}</span>
-                                  <span className="text-[8px] text-slate-400 block">إجمالي المسجل: {(sum.total).toLocaleString()} {cur}</span>
+                                  <span className="text-base font-bold text-slate-900 block font-mono">{(sum.verified).toLocaleString('en-US', { numberingSystem: 'latn' })} {cur}</span>
+                                  <span className="text-[8px] text-slate-400 block">إجمالي المسجل: {(sum.total).toLocaleString('en-US', { numberingSystem: 'latn' })} {cur}</span>
                                 </div>
                               </div>
                             );
@@ -2521,7 +2521,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                               <Users className="w-3.5 h-3.5 text-indigo-650" />
                               <span>ترتيب أعضاء الفريق الأكثر تحقيقاً للعمليات</span>
                             </h4>
-                            
+
                             {(() => {
                               // Calculate verifications count per user
                               const stats: Record<string, { verified: number; total: number }> = {};
@@ -2568,7 +2568,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                           {/* Visual Ratio SVG Pie/Bar */}
                           <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-white flex flex-col justify-between">
                             <h4 className="text-[10px] font-bold text-slate-800">تحليل نسب التحقق والمطابقة</h4>
-                            
+
                             {(() => {
                               const totalCount = filtered.length;
                               const verifiedCount = filtered.filter(item => item.link_status === 'verified' || item.operation?.status === 'verified').length;
@@ -2581,7 +2581,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                     <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
                                       <svg className="w-full h-full transform -rotate-90">
                                         <circle cx="40" cy="40" r="32" className="stroke-slate-100 fill-none" strokeWidth="6" />
-                                        <circle cx="40" cy="40" r="32" className="stroke-indigo-650 fill-none" strokeWidth="6" 
+                                        <circle cx="40" cy="40" r="32" className="stroke-indigo-650 fill-none" strokeWidth="6"
                                           strokeDasharray={2 * Math.PI * 32}
                                           strokeDashoffset={2 * Math.PI * 32 * (1 - percent / 100)}
                                           strokeLinecap="round"
@@ -2589,7 +2589,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                       </svg>
                                       <span className="absolute text-[11px] font-bold text-indigo-700">{percent}%</span>
                                     </div>
-                                    
+
                                     <div className="space-y-2 text-right">
                                       <div className="flex items-center gap-1.5">
                                         <span className="w-2.5 h-2.5 rounded-full bg-indigo-650" />
@@ -2622,7 +2622,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                 if (!op) return null;
                                 const isVerified = item.link_status === 'verified' || op.status === 'verified';
                                 const linkedUser = item.linked_by?.full_name || item.linked_by?.phone || 'غير محدد';
-                                
+
                                 return (
                                   <div key={index} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between text-right gap-3.5 hover:bg-slate-50/50 transition-all">
                                     <div className="flex items-center gap-3">
@@ -2630,7 +2630,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                         <FileText className="w-4.5 h-4.5 text-slate-450" />
                                       </div>
                                       <div>
-                                        <span className="text-xs font-bold text-slate-900 block font-mono">{(op.amount || 0).toLocaleString()} {op.currency}</span>
+                                        <span className="text-xs font-bold text-slate-900 block font-mono">{(op.amount || 0).toLocaleString('en-US', { numberingSystem: 'latn' })} {op.currency}</span>
                                         <div className="flex items-center gap-1.5 mt-0.5">
                                           <span className="text-[9px] text-slate-555 font-bold bg-slate-100 px-1.5 py-0.5 rounded">{op.financial_entity}</span>
                                           <span className="text-[9px] text-slate-400 font-mono">المرجع: {op.reference_number || 'غير متوفر'}</span>
@@ -2642,10 +2642,10 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                                       <div className="text-[9px] text-slate-500 text-left">
                                         <span className="block font-bold text-slate-700">بواسطة: {linkedUser}</span>
                                         <span className="block font-mono text-slate-450 mt-0.5">
-                                          {op.transaction_datetime ? new Date(op.transaction_datetime).toLocaleString('ar-YE', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                                          {op.transaction_datetime ? new Date(op.transaction_datetime).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', numberingSystem: 'latn' }) : ''}
                                         </span>
                                       </div>
-                                      
+
                                       <span className={`text-[9px] font-bold px-3 py-1 rounded-full border shrink-0 ${
                                         isVerified
                                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -2695,7 +2695,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 text-amber-600 shadow-3xs">
                     <PlusCircle className="w-7 h-7" />
                   </div>
-                  
+
                   <div className="space-y-2 max-w-md mx-auto">
                     <h3 className="text-sm font-bold text-slate-950 leading-relaxed">متجر إضافات سند التجاري</h3>
                     <p className="text-[10px] text-slate-550 leading-relaxed">
@@ -2721,7 +2721,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
                 </div>
               </div>
             )}
-            
+
           </main>
         </div>
       </div>
