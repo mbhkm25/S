@@ -157,7 +157,7 @@ async function uploadToWhatsapp(pdf: Uint8Array, filename: string) {
 }
 async function sendDocument(to: string, mediaId: string, filename: string, caption: string) {
   const res = await fetch(`https://graph.facebook.com/v20.0/${env("META_WA_PHONE_NUMBER_ID")}/messages`, { method: "POST", headers: { Authorization: `Bearer ${env("META_WA_ACCESS_TOKEN")}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, type: "document", document: { id: mediaId, filename, caption } }) });
-  const data = await res.json().catch(() => null); if (!res.ok) throw new Error(`whatsapp_send_failed_${res.status}`); return data as Json;
+  const data = await res.json().catch(() => null); if (!res.ok) throw new Error(`whatsapp_send_failed_${res.status}`); const messageId = Array.isArray(data?.messages) && data.messages[0]?.id ? String(data.messages[0].id) : null; if (!messageId) throw new Error("whatsapp_send_missing_message_id"); return data as Json;
 }
 
 Deno.serve(async (req) => {
@@ -202,13 +202,14 @@ Deno.serve(async (req) => {
     const wa = await sendDocument(report.destination_phone, mediaId, filename, caption);
     const messageId = Array.isArray(wa?.messages) && (wa.messages[0] as Json)?.id ? String((wa.messages[0] as Json).id) : null;
 
-    const { error: sentError } = await sb.from("report_requests").update({ status: "sent", processing_stage: "completed", whatsapp_message_id: messageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), error_message: null, updated_at: new Date().toISOString() }).eq("id", report.id);
+    const acceptedAt = new Date().toISOString();
+    const { error: sentError } = await sb.from("report_requests").update({ status: "sent", processing_stage: "accepted_by_whatsapp", whatsapp_message_id: messageId, delivery_status: "accepted", accepted_at: acceptedAt, sent_at: acceptedAt, last_delivery_event_at: acceptedAt, delivery_attempts: Number((report as any).delivery_attempts || 0) + 1, processed_at: acceptedAt, error_message: null, delivery_error_code: null, delivery_error_message: null, updated_at: acceptedAt }).eq("id", report.id);
     if (sentError) throw sentError;
-    return respond({ ok: true, report_id: report.id, status: "sent", report_context: report.report_context, result_bucket: bucket, result_path: path, destination_phone: report.destination_phone, metrics, whatsapp_message_id: messageId });
+    return respond({ ok: true, report_id: report.id, status: "accepted", delivery_status: "accepted", report_context: report.report_context, result_bucket: bucket, result_path: path, destination_phone: report.destination_phone, metrics, whatsapp_message_id: messageId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("sanad-v3-process-report failed", { report_id: report?.id || null, error: message.slice(0, 300) });
-    if (sb && report?.id) await sb.from("report_requests").update({ status: "failed", processing_stage: "failed", error_message: message.slice(0, 1000), processed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", report.id);
+    if (sb && report?.id) { const failedAt = new Date().toISOString(); await sb.from("report_requests").update({ status: "failed", processing_stage: "failed", delivery_status: "failed", failed_at: failedAt, last_delivery_event_at: failedAt, delivery_error_message: message.slice(0, 1000), error_message: message.slice(0, 1000), processed_at: failedAt, updated_at: failedAt }).eq("id", report.id); }
     return respond({ ok: false, error: message, report_id: report?.id || null }, 500);
   }
 });
