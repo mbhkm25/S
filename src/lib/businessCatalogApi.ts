@@ -40,15 +40,58 @@ export interface UpsertBusinessCatalogItemInput {
   contactAction?: BusinessCatalogContactAction;
 }
 
+function normalizeCatalogItem(value: unknown): BusinessCatalogItem | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  const id = typeof item.id === 'string' ? item.id : '';
+  const businessId = typeof item.business_id === 'string' ? item.business_id : '';
+  const title = typeof item.title === 'string' ? item.title.trim() : '';
+  if (!id || !businessId || !title) return null;
+
+  return {
+    id,
+    business_id: businessId,
+    item_type: (typeof item.item_type === 'string' ? item.item_type : 'other') as BusinessCatalogItemType,
+    title,
+    description: typeof item.description === 'string' ? item.description : null,
+    price: typeof item.price === 'number' ? item.price : item.price === null ? null : Number(item.price) || null,
+    currency: (typeof item.currency === 'string' ? item.currency : null) as BusinessCatalogItem['currency'],
+    image_paths: Array.isArray(item.image_paths) ? item.image_paths.filter((path): path is string => typeof path === 'string') : [],
+    features: Array.isArray(item.features) ? item.features : [],
+    status: (typeof item.status === 'string' ? item.status : 'draft') as BusinessCatalogItemStatus,
+    display_order: Number.isFinite(Number(item.display_order)) ? Number(item.display_order) : 100,
+    is_featured: item.is_featured === true,
+    availability_status: (typeof item.availability_status === 'string' ? item.availability_status : 'available') as BusinessCatalogAvailability,
+    contact_action: (typeof item.contact_action === 'string' ? item.contact_action : 'whatsapp') as BusinessCatalogContactAction,
+    created_at: typeof item.created_at === 'string' ? item.created_at : '',
+    updated_at: typeof item.updated_at === 'string' ? item.updated_at : '',
+  };
+}
+
+function extractCatalogItems(data: unknown): BusinessCatalogItem[] {
+  const source = Array.isArray(data)
+    ? data
+    : data && typeof data === 'object' && Array.isArray((data as { items?: unknown[] }).items)
+      ? (data as { items: unknown[] }).items
+      : [];
+
+  return source
+    .map(normalizeCatalogItem)
+    .filter((item): item is BusinessCatalogItem => Boolean(item))
+    .sort((a, b) => {
+      if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1;
+      if (a.display_order !== b.display_order) return a.display_order - b.display_order;
+      return b.created_at.localeCompare(a.created_at);
+    });
+}
+
 export async function getBusinessCatalog(businessId: string, includeHidden = true): Promise<BusinessCatalogItem[]> {
   const { data, error } = await supabase.rpc('get_business_catalog', {
     p_business_id: businessId,
-    p_include_hidden: includeHidden
+    p_include_hidden: includeHidden,
   });
   if (error) throw new Error(error.message || 'تعذر تحميل كتالوج النشاط.');
-  return Array.isArray((data as { items?: unknown[] } | null)?.items)
-    ? ((data as { items: BusinessCatalogItem[] }).items || [])
-    : [];
+  return extractCatalogItems(data);
 }
 
 export async function upsertBusinessCatalogItem(input: UpsertBusinessCatalogItemInput): Promise<BusinessCatalogItem> {
@@ -66,7 +109,7 @@ export async function upsertBusinessCatalogItem(input: UpsertBusinessCatalogItem
     p_display_order: input.displayOrder ?? 100,
     p_is_featured: input.isFeatured ?? false,
     p_availability_status: input.availabilityStatus || 'available',
-    p_contact_action: input.contactAction || 'whatsapp'
+    p_contact_action: input.contactAction || 'whatsapp',
   });
   if (error) {
     if (error.message.includes('active_catalog_limit_reached')) {
@@ -74,7 +117,11 @@ export async function upsertBusinessCatalogItem(input: UpsertBusinessCatalogItem
     }
     throw new Error(error.message || 'تعذر حفظ عنصر الكتالوج.');
   }
-  const item = (data as { item?: BusinessCatalogItem } | null)?.item;
-  if (!item) throw new Error('لم تُرجع قاعدة البيانات العنصر المحفوظ.');
+
+  const rawItem = data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as { item?: unknown }).item
+    : null;
+  const item = normalizeCatalogItem(rawItem);
+  if (!item) throw new Error('لم تُرجع قاعدة البيانات عنصرًا صالحًا بعد الحفظ.');
   return item;
 }
