@@ -1,11 +1,22 @@
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { X, Calendar, Phone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { getBusinessTeam, type BusinessProfile, type BusinessTeamMember, type BusinessOperationItem } from '../../../lib/businessApi';
-import { createBusinessReportRequest, triggerBusinessReportProcessing, type BusinessReportFilters } from '../../../lib/businessReportsApi';
+import { AlertCircle, Calendar, CheckCircle2, Loader2, Phone, X } from 'lucide-react';
+import {
+  getBusinessTeam,
+  type BusinessOperationItem,
+  type BusinessProfile,
+  type BusinessTeamMember
+} from '../../../lib/businessApi';
+import {
+  createBusinessReportRequest,
+  triggerBusinessReportProcessing,
+  type BusinessReportFilters
+} from '../../../lib/businessReportsApi';
 import { parseYemeniLocalPhone, toLatinDigits } from '../../../lib/digits';
 
 type ReportPeriod = 'today' | 'this_week' | 'this_month' | 'last_month' | 'last_30_days' | 'custom';
+
+type DateRange = { from: string | null; to: string | null };
 
 function getAdenDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -41,133 +52,117 @@ export default function BusinessReportRequestSheet({
   onClose,
   onSuccess
 }: BusinessReportRequestSheetProps) {
-  // Form states
   const [period, setPeriod] = useState<ReportPeriod>('last_30_days');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  
-  const [currency, setCurrency] = useState<'ALL' | 'YER' | 'SAR' | 'USD'>('ALL');
+  const [currency, setCurrency] = useState<BusinessReportFilters['currency']>('ALL');
   const [status, setStatus] = useState<BusinessReportFilters['status']>('all');
-  const [teamMemberId, setTeamMemberId] = useState<string>('ALL');
-  const [financialEntity, setFinancialEntity] = useState<string>('ALL');
-  
-  // Content toggles
+  const [teamMemberId, setTeamMemberId] = useState('ALL');
+  const [financialEntity, setFinancialEntity] = useState('ALL');
   const [includeDetails, setIncludeDetails] = useState(true);
   const [includeTeamPerformance, setIncludeTeamPerformance] = useState(true);
   const [includeStatusDistribution, setIncludeStatusDistribution] = useState(true);
   const [includeCurrencyDistribution, setIncludeCurrencyDistribution] = useState(true);
   const [includeEntityDistribution, setIncludeEntityDistribution] = useState(true);
-  
-  // Delivery WhatsApp
   const [whatsappPhone, setWhatsappPhone] = useState('');
-  
-  // Team loading
   const [team, setTeam] = useState<BusinessTeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
-  
-  // Request execution states
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const submissionLock = useRef(false);
 
-  // Set default WhatsApp phone from business
   useEffect(() => {
-    if (business?.whatsapp) {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (business.whatsapp) {
       setWhatsappPhone(parseYemeniLocalPhone(toLatinDigits(business.whatsapp)));
     }
-  }, [business]);
+  }, [business.whatsapp]);
 
-  // Load team members
   useEffect(() => {
+    let active = true;
     const loadTeam = async () => {
-      if (!business?.id) return;
       setLoadingTeam(true);
       try {
         const members = await getBusinessTeam(business.id);
-        setTeam(members || []);
-      } catch (err) {
-        console.warn('Failed to load business team:', err);
+        if (active) setTeam(members || []);
+      } catch (error) {
+        console.warn('Failed to load business team:', error);
       } finally {
-        setLoadingTeam(false);
+        if (active) setLoadingTeam(false);
       }
     };
-    loadTeam();
-  }, [business?.id]);
+    void loadTeam();
+    return () => {
+      active = false;
+    };
+  }, [business.id]);
 
-  // Financial entities unique list from operations
   const financialEntities = useMemo(() => {
-    const entities = new Set<string>();
-    operations.forEach((opItem) => {
-      const ent = opItem.operation?.financial_entity;
-      if (ent) entities.add(ent);
+    const values = new Set<string>();
+    operations.forEach((item) => {
+      const value = item.operation?.financial_entity?.trim();
+      if (value) values.add(value);
     });
-    return Array.from(entities);
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [operations]);
 
-  // Calculate standard date range ISO strings
-  const calculateDates = () => {
+  const calculateDates = (): DateRange => {
     const today = getAdenDateParts();
     const todayUtc = new Date(Date.UTC(today.year, today.month - 1, today.day));
+    const todayRange = adenDayRange(today.year, today.month, today.day);
     const rangeForUtcDate = (value: Date) =>
       adenDayRange(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
-    const todayRange = adenDayRange(today.year, today.month, today.day);
-    switch (period) {
-      case 'today':
-        return todayRange;
-      case 'this_week': {
-        const daysSinceSaturday = (todayUtc.getUTCDay() + 1) % 7;
-        const start = new Date(todayUtc.getTime() - daysSinceSaturday * 86400000);
-        return { from: rangeForUtcDate(start).from, to: todayRange.to };
-      }
-      case 'this_month':
-        return { from: adenDayRange(today.year, today.month, 1).from, to: todayRange.to };
-      case 'last_month': {
-        const start = new Date(Date.UTC(today.year, today.month - 2, 1));
-        const end = new Date(Date.UTC(today.year, today.month - 1, 0));
-        return { from: rangeForUtcDate(start).from, to: rangeForUtcDate(end).to };
-      }
-      case 'last_30_days': {
-        const start = new Date(todayUtc.getTime() - 29 * 86400000);
-        return { from: rangeForUtcDate(start).from, to: todayRange.to };
-      }
-      case 'custom': {
-        if (!customFrom) return { from: null, to: null };
-        const [fromYear, fromMonth, fromDay] = customFrom.split('-').map(Number);
-        const endValue = customTo || customFrom;
-        const [toYear, toMonth, toDay] = endValue.split('-').map(Number);
-        return {
-          from: adenDayRange(fromYear, fromMonth, fromDay).from,
-          to: adenDayRange(toYear, toMonth, toDay).to
-        };
-      }
-      default:
-        return { from: null, to: null };
+
+    if (period === 'today') return todayRange;
+    if (period === 'this_week') {
+      const daysSinceSaturday = (todayUtc.getUTCDay() + 1) % 7;
+      const start = new Date(todayUtc.getTime() - daysSinceSaturday * 86400000);
+      return { from: rangeForUtcDate(start).from, to: todayRange.to };
     }
+    if (period === 'this_month') {
+      return { from: adenDayRange(today.year, today.month, 1).from, to: todayRange.to };
+    }
+    if (period === 'last_month') {
+      const start = new Date(Date.UTC(today.year, today.month - 2, 1));
+      const end = new Date(Date.UTC(today.year, today.month - 1, 0));
+      return { from: rangeForUtcDate(start).from, to: rangeForUtcDate(end).to };
+    }
+    if (period === 'last_30_days') {
+      const start = new Date(todayUtc.getTime() - 29 * 86400000);
+      return { from: rangeForUtcDate(start).from, to: todayRange.to };
+    }
+    if (!customFrom) return { from: null, to: null };
+    const [fromYear, fromMonth, fromDay] = customFrom.split('-').map(Number);
+    const [toYear, toMonth, toDay] = (customTo || customFrom).split('-').map(Number);
+    return {
+      from: adenDayRange(fromYear, fromMonth, fromDay).from,
+      to: adenDayRange(toYear, toMonth, toDay).to
+    };
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     if (submitting || submissionLock.current) return;
-
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // Validate phone
-    const cleanedPhone = parseYemeniLocalPhone(whatsappPhone.trim());
-    if (!cleanedPhone) {
-      setErrorMsg('يرجى إدخال رقم واتساب مستلم.');
+    const localPhone = parseYemeniLocalPhone(whatsappPhone.trim());
+    if (!/^7\d{8}$/.test(localPhone)) {
+      setErrorMsg('أدخل رقم واتساب يمنيًا محليًا من 9 أرقام، مثل 777634971.');
       return;
     }
-    if (!/^7\d{8}$/.test(cleanedPhone)) {
-      setErrorMsg('رقم الهاتف المحلي اليمني يجب أن يتكون من 9 أرقام بالضبط (مثال: 777634971).');
-      return;
-    }
-    const destinationPhone = `967${cleanedPhone}`;
 
     const { from, to } = calculateDates();
     if (period === 'custom' && !from) {
-      setErrorMsg('يرجى اختيار تاريخ بدء الفترة المخصصة.');
+      setErrorMsg('اختر تاريخ بداية الفترة المخصصة.');
       return;
     }
     if (from && to && new Date(from) > new Date(to)) {
@@ -177,11 +172,10 @@ export default function BusinessReportRequestSheet({
 
     submissionLock.current = true;
     setSubmitting(true);
-
     try {
-      const filtersPayload: Partial<BusinessReportFilters> = {
+      const filters: Partial<BusinessReportFilters> = {
         currency,
-        status: status === 'all' ? 'all' : status,
+        status,
         team_member_user_id: teamMemberId === 'ALL' ? null : teamMemberId,
         financial_entity: financialEntity === 'ALL' ? null : financialEntity,
         include_details: includeDetails,
@@ -190,306 +184,111 @@ export default function BusinessReportRequestSheet({
         include_currency_distribution: includeCurrencyDistribution,
         include_entity_distribution: includeEntityDistribution
       };
-
-      // Create Request
       const reportRequestId = await createBusinessReportRequest({
         businessId: business.id,
         dateFrom: from,
         dateTo: to,
-        filters: filtersPayload,
-        destinationPhone
+        filters,
+        destinationPhone: `967${localPhone}`
       });
-
-      // Trigger Webhook Function
-      const triggerSuccess = await triggerBusinessReportProcessing(reportRequestId);
-
-      if (triggerSuccess) {
-        setSuccessMsg('تم استلام طلب التقرير، وسيصل إلى واتساب بعد اكتمال الإعداد.');
-      } else {
-        setSuccessMsg('تم حفظ طلب التقرير، وقد تتأخر المعالجة قليلًا.');
-      }
-
-      setTimeout(() => {
-        onSuccess();
-      }, 2000);
-    } catch (err: unknown) {
-      console.error(err);
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر معالجة طلب التقرير. تأكد من اتصال الشبكة.');
+      const triggered = await triggerBusinessReportProcessing(reportRequestId);
+      setSuccessMsg(
+        triggered
+          ? 'تم استلام الطلب، وسيصل التقرير إلى واتساب بعد اكتمال الإعداد.'
+          : 'تم حفظ الطلب، وقد تتأخر المعالجة قليلًا.'
+      );
+      window.setTimeout(onSuccess, 1600);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'تعذر إنشاء التقرير. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
       submissionLock.current = false;
       setSubmitting(false);
     }
   };
 
+  const periods: Array<{ id: ReportPeriod; label: string }> = [
+    { id: 'today', label: 'اليوم' },
+    { id: 'this_week', label: 'هذا الأسبوع' },
+    { id: 'this_month', label: 'هذا الشهر' },
+    { id: 'last_month', label: 'الشهر الماضي' },
+    { id: 'last_30_days', label: 'آخر 30 يومًا' },
+    { id: 'custom', label: 'فترة مخصصة' }
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs font-arabic animate-fade-in" dir="rtl">
-      {/* Container */}
-      <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl border border-slate-200/80 shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden animate-slide-up">
-        {/* Header */}
-        <div className="p-4.5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="text-right">
-            <h3 className="text-sm font-bold text-slate-900">طلب تقرير جديد</h3>
-            <p className="text-[10px] text-slate-400">حدد الفترة والفلاتر، وسيتم إرسال التقرير إلى واتساب.</p>
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/60 font-arabic backdrop-blur-sm sm:items-center sm:p-4"
+      dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="business-report-sheet-title"
+    >
+      <button className="absolute inset-0 cursor-default" onClick={onClose} aria-label="إغلاق النافذة" />
+      <section className="relative z-10 flex h-[min(92dvh,760px)] w-full min-h-0 flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white shadow-2xl sm:h-auto sm:max-h-[88dvh] sm:max-w-lg sm:rounded-[28px]">
+        <div className="mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-slate-200 sm:hidden" />
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-4 py-4">
+          <div>
+            <h2 id="business-report-sheet-title" className="text-sm font-bold text-slate-950">إعداد التقرير</h2>
+            <p className="mt-1 text-[10px] leading-5 text-slate-500">حدد الفترة والمحتوى، ثم أرسل الطلب إلى واتساب.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 hover:bg-slate-50 border border-slate-200 rounded-xl transition-all"
-          >
-            <X className="w-4 h-4 text-slate-450" />
+          <button onClick={onClose} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50" aria-label="إغلاق">
+            <X className="h-4 w-4" />
           </button>
-        </div>
+        </header>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-right flex-1">
-          {/* Alerts */}
-          {errorMsg && (
-            <div className="flex items-start gap-2.5 text-xs text-rose-600 bg-rose-50 p-3 rounded-2xl border border-rose-100 leading-relaxed">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-gutter:stable]">
+            {errorMsg && <div className="flex gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="h-4 w-4 shrink-0" /><span>{errorMsg}</span></div>}
+            {successMsg && <div className="flex gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" /><span>{successMsg}</span></div>}
 
-          {successMsg && (
-            <div className="flex items-start gap-2.5 text-xs text-emerald-700 bg-emerald-50 p-3 rounded-2xl border border-emerald-100 leading-relaxed">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* Period Selection */}
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold text-slate-550">الفترة الزمنية</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'today', label: 'اليوم' },
-                { id: 'this_week', label: 'هذا الأسبوع' },
-                { id: 'this_month', label: 'هذا الشهر' },
-                { id: 'last_month', label: 'الشهر الماضي' },
-                { id: 'last_30_days', label: 'آخر 30 يوماً' },
-                { id: 'custom', label: 'مخصصة...' }
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPeriod(p.id as ReportPeriod)}
-                  className={`py-2 px-1 rounded-xl text-[10px] font-bold border transition-all text-center ${
-                    period === p.id
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-3xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Range Picker */}
-            {period === 'custom' && (
-              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl animate-fade-in mt-2">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 flex items-center gap-1 justify-end">
-                    <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>تاريخ البدء</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
-                    className="w-full text-right p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 flex items-center gap-1 justify-end">
-                    <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>تاريخ الانتهاء</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
-                    className="w-full text-right p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
-                  />
-                </div>
+            <section className="space-y-2">
+              <label className="text-[11px] font-bold text-slate-700">الفترة الزمنية</label>
+              <div className="grid grid-cols-3 gap-2">
+                {periods.map((item) => (
+                  <button key={item.id} type="button" onClick={() => setPeriod(item.id)} className={`rounded-xl border px-2 py-2.5 text-[10px] font-bold ${period === item.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                    {item.label}
+                  </button>
+                ))}
               </div>
-            )}
+              {period === 'custom' && (
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <label className="space-y-1 text-[9px] font-bold text-slate-500"><span className="flex items-center gap-1"><Calendar className="h-3 w-3" />البداية</span><input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs" /></label>
+                  <label className="space-y-1 text-[9px] font-bold text-slate-500"><span className="flex items-center gap-1"><Calendar className="h-3 w-3" />النهاية</span><input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs" /></label>
+                </div>
+              )}
+            </section>
+
+            <section className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-[10px] font-bold text-slate-600">العملة<select value={currency} onChange={(e) => setCurrency(e.target.value as BusinessReportFilters['currency'])} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs"><option value="ALL">كل العملات</option><option value="YER">YER</option><option value="SAR">SAR</option><option value="USD">USD</option></select></label>
+              <label className="space-y-1 text-[10px] font-bold text-slate-600">الحالة<select value={status} onChange={(e) => setStatus(e.target.value as BusinessReportFilters['status'])} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs"><option value="all">كل الحالات</option><option value="verified">موثق</option><option value="ready">جاهز</option><option value="stored">مخزن</option><option value="received">مستلم</option><option value="matched">مطابق</option><option value="failed">فاشل</option></select></label>
+              <label className="space-y-1 text-[10px] font-bold text-slate-600">عضو الفريق<select value={teamMemberId} onChange={(e) => setTeamMemberId(e.target.value)} disabled={loadingTeam} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs disabled:opacity-50"><option value="ALL">الكل</option>{team.map((member) => <option key={member.user_id} value={member.user_id}>{member.profile?.full_name || member.profile?.phone || 'عضو فريق'}</option>)}</select></label>
+              <label className="space-y-1 text-[10px] font-bold text-slate-600">الجهة المالية<select value={financialEntity} onChange={(e) => setFinancialEntity(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs"><option value="ALL">كل الجهات</option>{financialEntities.map((entity) => <option key={entity} value={entity}>{entity}</option>)}</select></label>
+            </section>
+
+            <section className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs">
+              <p className="text-[10px] font-bold text-slate-600">محتويات التقرير</p>
+              {[
+                ['التفاصيل', includeDetails, setIncludeDetails],
+                ['أداء الفريق', includeTeamPerformance, setIncludeTeamPerformance],
+                ['توزيع الحالات', includeStatusDistribution, setIncludeStatusDistribution],
+                ['توزيع العملات', includeCurrencyDistribution, setIncludeCurrencyDistribution],
+                ['توزيع الجهات', includeEntityDistribution, setIncludeEntityDistribution]
+              ].map(([label, checked, setter]) => (
+                <label key={String(label)} className="flex items-center gap-2"><input type="checkbox" checked={Boolean(checked)} onChange={(e) => (setter as (value: boolean) => void)(e.target.checked)} className="accent-slate-900" /><span>{String(label)}</span></label>
+              ))}
+            </section>
+
+            <label className="space-y-1 text-[10px] font-bold text-slate-600"><span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />رقم واتساب المستلم</span><div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-slate-50" dir="ltr"><span className="border-r border-slate-200 bg-slate-100 px-3 py-3 font-mono text-xs">+967</span><input type="tel" value={whatsappPhone} onChange={(e) => setWhatsappPhone(parseYemeniLocalPhone(e.target.value).slice(0, 9))} placeholder="7XXXXXXXX" maxLength={9} className="min-w-0 flex-1 bg-transparent px-3 font-mono text-xs outline-none" /></div></label>
           </div>
 
-          {/* Filters Grid */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* Currency */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-550">العملة</label>
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as BusinessReportFilters['currency'])}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none"
-              >
-                <option value="ALL">كل العملات</option>
-                <option value="YER">YER — ريال يمني</option>
-                <option value="SAR">SAR — ريال سعودي</option>
-                <option value="USD">USD — دولار أمريكي</option>
-              </select>
+          <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
+            <div className="grid grid-cols-[auto_1fr] gap-2">
+              <button type="button" onClick={onClose} className="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600">إلغاء</button>
+              <button type="submit" disabled={submitting} className="flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-bold text-white disabled:bg-slate-300">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'جاري إرسال الطلب...' : 'إرسال طلب التقرير'}</button>
             </div>
-
-            {/* Status */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-550">حالة التحقق</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as BusinessReportFilters['status'])}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none"
-              >
-                <option value="all">كل الحالات</option>
-                <option value="verified">موثق ومعتمد</option>
-                <option value="ready">جاهز</option>
-                <option value="stored">تم الرفع</option>
-                <option value="received">تم الاستلام</option>
-                <option value="matched">مطابق</option>
-                <option value="failed">فشل التحليل</option>
-              </select>
-            </div>
-
-            {/* Team Member */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-550">العضو المسؤول</label>
-              <select
-                value={teamMemberId}
-                onChange={(e) => setTeamMemberId(e.target.value)}
-                disabled={loadingTeam}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none disabled:opacity-50"
-              >
-                <option value="ALL">كل أعضاء الفريق</option>
-                {team.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.profile?.full_name || m.profile?.phone || 'موظف نشط'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Financial Entity */}
-            <div className="space-y-1">
-              <label className="block text-[11px] font-bold text-slate-550">الجهة المالية</label>
-              <select
-                value={financialEntity}
-                onChange={(e) => setFinancialEntity(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-450 px-2.5 py-2.5 rounded-xl text-xs outline-none"
-              >
-                <option value="ALL">كل الجهات المالية</option>
-                {financialEntities.map((ent) => (
-                  <option key={ent} value={ent}>
-                    {ent}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Content Checkboxes */}
-          <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">محتويات ملف التقرير</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeDetails}
-                  onChange={(e) => setIncludeDetails(e.target.checked)}
-                  className="rounded border-slate-300 accent-slate-900"
-                />
-                <span>تضمين تفاصيل العمليات</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeTeamPerformance}
-                  onChange={(e) => setIncludeTeamPerformance(e.target.checked)}
-                  className="rounded border-slate-300 accent-slate-900"
-                />
-                <span>تضمين أداء أعضاء الفريق</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeStatusDistribution}
-                  onChange={(e) => setIncludeStatusDistribution(e.target.checked)}
-                  className="rounded border-slate-300 accent-slate-900"
-                />
-                <span>تضمين التوزيع حسب الحالة</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeCurrencyDistribution}
-                  onChange={(e) => setIncludeCurrencyDistribution(e.target.checked)}
-                  className="rounded border-slate-300 accent-slate-900"
-                />
-                <span>تضمين التوزيع حسب العملة</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={includeEntityDistribution}
-                  onChange={(e) => setIncludeEntityDistribution(e.target.checked)}
-                  className="rounded border-slate-300 accent-slate-900"
-                />
-                <span>تضمين التوزيع حسب الجهة</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Delivery Phone Number */}
-          <div className="space-y-1">
-            <label className="block text-[11px] font-bold text-slate-550 flex items-center gap-1 justify-end">
-              <Phone className="w-3.5 h-3.5 text-slate-400" />
-              <span>رقم واتساب المستلم للتقرير</span>
-            </label>
-
-            <div className="relative flex items-center rounded-2xl border border-slate-200 bg-slate-50 focus-within:bg-white focus-within:border-slate-400 transition-all overflow-hidden" dir="ltr">
-              <span className="px-3.5 py-3 bg-slate-100 border-r border-slate-200 text-slate-500 font-mono font-bold text-xs select-none">
-                +967
-              </span>
-              <input
-                type="tel"
-                value={whatsappPhone}
-                onChange={(e) => {
-                  const val = parseYemeniLocalPhone(e.target.value);
-                  setWhatsappPhone(val.substring(0, 9));
-                  setErrorMsg(null);
-                }}
-                placeholder="7XXXXXXXX"
-                className="w-full text-left font-mono font-bold text-xs p-3 bg-transparent border-none outline-none"
-                maxLength={9}
-                required
-              />
-            </div>
-            <p className="text-[9px] text-slate-400 leading-relaxed">
-              اكتب الأرقام المحلية اليمنية التسعة فقط (مثل 777634971) دون رمز الدولة.
-            </p>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full mt-4 bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                <span>جاري تسجيل وإرسال طلب التقرير...</span>
-              </>
-            ) : (
-              <>
-                <span>إرسال طلب التقرير</span>
-              </>
-            )}
-          </button>
+          </footer>
         </form>
-      </div>
+      </section>
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { MyOperationItem } from '../types';
-import { FileText, Calendar, Filter, Loader2, ArrowUpRight, FolderOpen, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { Calendar, Loader2, ArrowUpRight, FolderOpen, RefreshCcw } from 'lucide-react';
 import { getOperationCardDetails } from '../lib/digits';
+import FinancialEntityLogo from './FinancialEntityLogo';
 
 interface MyOperationsProps {
   onNavigateToDetails: (token: string) => void;
@@ -14,8 +15,6 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
   const [operations, setOperations] = useState<MyOperationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Segment Filter state ('uploader' or 'verifier')
   const [activeFilter, setActiveFilter] = useState<FilterType>('uploader');
 
   const fetchOperations = async () => {
@@ -30,35 +29,29 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
         p_offset: 0
       });
 
-      if (rpcError) {
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       const items = data || [];
-      const ids = items.map((op: any) => op.operation_id).filter(Boolean);
+      const ids = items.map((operation: any) => operation.operation_id).filter(Boolean);
       if (ids.length > 0) {
-        const { data: fullOps, error: fullOpsError } = await supabase
+        const { data: fullOperations, error: fullOperationsError } = await supabase
           .from('operations')
-          .select('id, amount, currency, financial_entity, reference_number, structured_data, raw_ai_json, receiver_name')
+          .select('id, amount, currency, financial_entity, reference_number, structured_data, raw_ai_json')
           .in('id', ids);
 
-        if (!fullOpsError && fullOps) {
-          const enriched = items.map((t2: any) => {
-            const full = fullOps.find(f => f.id === t2.operation_id);
-            return {
-              ...t2,
-              ...full
-            };
-          });
-          setOperations(enriched);
+        if (!fullOperationsError && fullOperations) {
+          setOperations(items.map((item: any) => ({
+            ...item,
+            ...(fullOperations.find((operation) => operation.id === item.operation_id) || {})
+          })));
         } else {
           setOperations(items);
         }
       } else {
         setOperations(items);
       }
-    } catch (err: any) {
-      console.error('get_my_operations error:', err);
+    } catch (caught) {
+      console.error('get_my_operations error:', caught);
       setError('تعذر جلب العمليات من قاعدة سند. أعد المحاولة.');
     } finally {
       setLoading(false);
@@ -66,20 +59,18 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
   };
 
   useEffect(() => {
-    fetchOperations();
+    void fetchOperations();
   }, [activeFilter]);
 
   return (
     <div className="space-y-6" id="my_operations_view">
-      
-      {/* Title */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-900">سجل عملياتي</h1>
           <p className="text-xs text-slate-500 font-arabic">مراجعة الإشعارات التي أرسلتها أو تحققت من صحتها</p>
         </div>
         <button
-          onClick={fetchOperations}
+          onClick={() => void fetchOperations()}
           disabled={loading}
           className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-500 border border-slate-150 transition-all cursor-pointer disabled:opacity-50"
           title="تحديث البيانات"
@@ -88,7 +79,6 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
         </button>
       </div>
 
-      {/* Filter Tabs (Segment Switcher) */}
       <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-150" id="filter_tabs">
         <button
           onClick={() => setActiveFilter('uploader')}
@@ -118,14 +108,12 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
         </div>
       )}
 
-      {/* List Container */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-3" id="operations_loader">
           <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
           <span className="text-xs text-slate-400 font-arabic">جاري تحميل سجل العمليات الموثقة...</span>
         </div>
       ) : operations.length === 0 ? (
-        /* Empty State */
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4 animate-fade-in" id="empty_operations_state">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 mb-2">
             <FolderOpen className="w-6 h-6" />
@@ -133,14 +121,11 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
           <div>
             <h3 className="text-sm font-bold text-slate-800">لا توجد عمليات مسجلة</h3>
             <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed font-arabic">
-              {activeFilter === 'uploader'
-                ? 'لم ترسل أي إشعار إلى سند بعد.'
-                : 'لم تتحقق من أي إشعار بعد.'}
+              {activeFilter === 'uploader' ? 'لم ترسل أي إشعار إلى سند بعد.' : 'لم تتحقق من أي إشعار بعد.'}
             </p>
           </div>
         </div>
       ) : (
-        /* Operations List */
         <div className="space-y-3.5" id="operations_list">
           {operations.map((item) => {
             const card = getOperationCardDetails(item);
@@ -150,44 +135,26 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
                 className="bg-white rounded-2xl border border-slate-100 hover:border-emerald-200/50 p-4 shadow-sm flex items-center justify-between gap-4 hover:shadow-md transition-all group"
               >
                 <div className="flex items-center gap-3 text-right overflow-hidden min-w-0">
-                  <div className={`p-2.5 rounded-xl shrink-0 ${
-                    item.relation_type === 'uploader' 
-                      ? 'bg-emerald-50 text-emerald-600' 
-                      : 'bg-indigo-50 text-indigo-600'
-                  }`}>
-                    <FileText className="w-5 h-5" />
-                  </div>
+                  <FinancialEntityLogo
+                    entity={card.entity}
+                    className="h-12 w-12 rounded-2xl border border-slate-100"
+                    imageClassName="h-full w-full object-contain p-1.5"
+                  />
                   <div className="overflow-hidden min-w-0">
-                    <h3 className="text-xs font-bold text-slate-900 truncate leading-snug">
-                      {card.title}
-                    </h3>
-                    
+                    <h3 className="text-xs font-bold text-slate-900 truncate leading-snug">{card.title}</h3>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[10px] text-slate-500 font-arabic">
-                      {/* Amount tag */}
                       {card.amount && (
-                        <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded font-mono text-[9px] border border-emerald-100/30 shrink-0">
+                        <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded font-mono text-[9px] border border-emerald-100/30 shrink-0">
                           {card.amount}
                         </span>
                       )}
-
-                      {/* Financial entity */}
-                      {card.entity && (
-                        <span className="text-slate-600 truncate max-w-[120px] shrink-0">{card.entity}</span>
-                      )}
-
-                      {/* Ref Number */}
-                      {card.refNum && (
-                        <span className="text-slate-400 font-mono text-[9px] shrink-0">رقم {card.refNum}</span>
-                      )}
-
-                      {/* Timestamp */}
+                      {card.entity && <span className="text-slate-600 truncate max-w-[120px] shrink-0">{card.entity}</span>}
+                      {card.refNum && <span className="text-slate-400 font-mono text-[9px] shrink-0">رقم {card.refNum}</span>}
                       <span className="flex items-center gap-1 text-slate-400 font-mono text-[9px] shrink-0">
                         <Calendar className="w-3 h-3 text-slate-300" />
                         <span>{card.dateStr}</span>
                       </span>
-
-                      {/* Role Tag */}
-                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[8px] font-semibold shrink-0 ${
+                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-semibold shrink-0 ${
                         item.relation_type === 'uploader'
                           ? 'bg-emerald-50 text-emerald-700'
                           : 'bg-indigo-50 text-indigo-700'
@@ -198,7 +165,6 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
                   </div>
                 </div>
 
-                {/* Action Button */}
                 <button
                   onClick={() => onNavigateToDetails(item.public_token)}
                   className="px-3.5 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200/50 hover:border-emerald-200 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer shrink-0 group-hover:translate-x-0.5"
