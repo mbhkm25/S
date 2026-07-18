@@ -32,7 +32,7 @@ interface PublicBusinessProfileProps {
 }
 
 type ProfileMode = 'intro' | 'details';
-type ProfileSection = 'overview' | 'catalog' | 'hours' | 'contact';
+type ProfileSection = 'catalog' | 'overview' | 'hours' | 'contact';
 
 type CatalogItem = {
   id: string;
@@ -42,6 +42,7 @@ type CatalogItem = {
   price?: number | null;
   currency?: string | null;
   image_paths?: string[] | null;
+  status?: string;
   is_featured?: boolean;
   availability_status?: string;
   contact_action?: string;
@@ -56,8 +57,8 @@ type ExtendedPublicBusinessDetail = PublicBusinessDetail & {
 };
 
 const SECTIONS: Array<{ id: ProfileSection; label: string; description: string }> = [
-  { id: 'overview', label: 'نظرة عامة', description: 'التعريف بالنشاط وأبرز ما يقدمه' },
-  { id: 'catalog', label: 'الكتالوج', description: 'العناصر الرئيسية المتاحة للاستفسار' },
+  { id: 'catalog', label: 'الكتالوج', description: 'أهم العناصر والخدمات التي يقدمها النشاط' },
+  { id: 'overview', label: 'نظرة عامة', description: 'التعريف بالنشاط ومعلوماته الأساسية' },
   { id: 'hours', label: 'ساعات العمل', description: 'مواعيد الدوام الأسبوعية' },
   { id: 'contact', label: 'التواصل والموقع', description: 'وسائل التواصل والعنوان' },
 ];
@@ -178,7 +179,9 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
   }, [mode]);
 
   const catalogItems = useMemo(
-    () => Array.isArray(profile?.catalog_items) ? profile.catalog_items.slice(0, 10) : [],
+    () => Array.isArray(profile?.catalog_items)
+      ? profile.catalog_items.filter((item) => !item.status || item.status === 'active').slice(0, 10)
+      : [],
     [profile?.catalog_items],
   );
   const featuredItems = useMemo(() => {
@@ -209,7 +212,7 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
       window.location.href,
     );
     setMode('details');
-    setSection('overview');
+    setSection(catalogItems.length > 0 ? 'catalog' : 'overview');
     setSectionMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -299,10 +302,10 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
 
   if (mode === 'intro') {
     return (
-      <div className="min-h-screen bg-slate-950 p-3 font-arabic" dir="rtl">
-        <div className="relative mx-auto min-h-[calc(100dvh-1.5rem)] max-w-xl overflow-hidden rounded-[2rem] bg-slate-800 shadow-2xl">
-          {coverUrl ? <img src={coverUrl} alt={profile.name} className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-slate-950/20 to-slate-950/95" />
+      <div className="min-h-screen bg-white px-0 py-3 font-arabic sm:px-3" dir="rtl">
+        <div className="relative mx-auto min-h-[calc(100dvh-1.5rem)] max-w-xl overflow-hidden rounded-[2rem] bg-slate-100 shadow-xl">
+          {coverUrl ? <img src={coverUrl} alt={profile.name} className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-slate-500 via-slate-700 to-slate-900" />}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/5 via-slate-950/15 to-slate-950/90" />
           <button type="button" onClick={leaveProfile} className="absolute right-4 top-4 z-10 rounded-2xl bg-white/90 p-3 text-slate-900 shadow-lg backdrop-blur" aria-label="العودة">
             <ArrowRight className="h-5 w-5" />
           </button>
@@ -371,6 +374,24 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
             )}
           </section>
 
+          {section === 'catalog' && (
+            <section className="space-y-3">
+              <div className="px-2 sm:px-0">
+                <h2 className="text-base font-bold text-slate-950">كتالوج النشاط</h2>
+                <p className="mt-1 text-[10px] text-slate-400">العناصر والخدمات الرئيسية التي نشرها النشاط.</p>
+              </div>
+              {catalogItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-12 text-center">
+                  <Package className="mx-auto h-8 w-8 text-slate-300" />
+                  <p className="mt-3 text-xs font-bold text-slate-600">لم ينشر النشاط عناصر في الكتالوج بعد</p>
+                  <p className="mt-1 text-[10px] text-slate-400">ستظهر العناصر هنا فور نشرها من إدارة النشاط.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{catalogItems.map(renderCatalogCard)}</div>
+              )}
+            </section>
+          )}
+
           {section === 'overview' && (
             <div className="space-y-5">
               <section className="border-y border-slate-200 bg-white px-3 py-5 sm:rounded-2xl sm:border sm:px-5">
@@ -383,8 +404,6 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
               {galleryUrls.length > 0 && <section className="space-y-3"><h2 className="px-2 text-sm font-bold text-slate-950 sm:px-0">صور من النشاط</h2><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{galleryUrls.map((url, index) => <img key={`${url}-${index}`} src={url} alt={`${profile.name} ${index + 1}`} className="aspect-square w-full rounded-2xl object-cover" loading="lazy" />)}</div></section>}
             </div>
           )}
-
-          {section === 'catalog' && <section className="space-y-3"><div className="px-2 sm:px-0"><h2 className="text-sm font-bold text-slate-950">كتالوج النشاط</h2><p className="mt-1 text-[10px] text-slate-400">العناصر الرئيسية التي اختارها النشاط لعرضها.</p></div>{catalogItems.length === 0 ? <div className="border-y border-slate-200 bg-white py-12 text-center sm:rounded-2xl sm:border"><Package className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-xs text-slate-500">لم ينشر النشاط عناصر في الكتالوج بعد.</p></div> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{catalogItems.map(renderCatalogCard)}</div>}</section>}
 
           {section === 'hours' && <section className="border-y border-slate-200 bg-white sm:rounded-2xl sm:border"><div className="flex items-center gap-3 border-b border-slate-100 px-4 py-4"><Clock className="h-5 w-5 text-slate-600" /><h2 className="text-sm font-bold text-slate-950">ساعات العمل الأسبوعية</h2></div><div className="divide-y divide-slate-100 px-4">{DAYS.map(([key, label]) => { const value = profile.working_hours?.[key]; return <div key={key} className="flex items-center justify-between py-3 text-xs"><span className="font-bold text-slate-800">{label}</span><span className="text-slate-500">{!value || value.closed ? 'مغلق' : `${value.open || '--'} - ${value.close || '--'}`}</span></div>; })}</div></section>}
 
