@@ -49,6 +49,42 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   numberingSystem: "latn", timeZone: "Asia/Aden", year: "numeric", month: "2-digit", day: "2-digit",
 });
 
+let sanadLogoDataUriPromise: Promise<string | null> | null = null;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(
+      ...bytes.subarray(index, Math.min(index + chunkSize, bytes.length)),
+    );
+  }
+
+  return btoa(binary);
+}
+
+async function getSanadLogoDataUri(): Promise<string | null> {
+  if (!sanadLogoDataUriPromise) {
+    sanadLogoDataUriPromise = (async () => {
+      try {
+        const logoUrl = new URL("./assets/sanad-logo.webp", import.meta.url);
+        const logoBytes = await Deno.readFile(logoUrl);
+
+        return `data:image/webp;base64,${bytesToBase64(logoBytes)}`;
+      } catch (error) {
+        console.error("sanad_report_logo_load_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        return null;
+      }
+    })();
+  }
+
+  return await sanadLogoDataUriPromise;
+}
+
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" } });
 }
@@ -114,7 +150,7 @@ function teamTable(items: unknown) {
   return `<section><h2>أداء أعضاء الفريق</h2><table><thead><tr><th>#</th><th>العضو</th><th>العمليات</th><th>الموثقة</th><th>الأخرى</th><th>آخر نشاط</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 
-function buildHtml(payload: Json, baseUrl: string) {
+function buildHtml(payload: Json, baseUrl: string, logoDataUri: string | null) {
   const request = payload.request as ReportRequest;
   const business = (payload.business || null) as Json | null;
   const operations = Array.isArray(payload.operations) ? payload.operations as OperationRow[] : [];
@@ -139,7 +175,7 @@ function buildHtml(payload: Json, baseUrl: string) {
   const details = includeDetails ? `<section><h2>تفاصيل العمليات</h2><table class="ops"><thead><tr><th>#</th><th>التاريخ</th><th>المرجع</th><th>الجهة</th><th>النوع</th><th>المبلغ</th><th>الحالة</th><th>التحليل</th><th>بواسطة</th><th>الملخص</th></tr></thead><tbody>${operationRows || `<tr><td colspan="10" class="empty">لا توجد عمليات ضمن نطاق التقرير.</td></tr>`}</tbody></table></section>` : "";
   const contextRows = request.report_context === "business" ? `<tr><th>النشاط</th><td>${esc(business?.name || "—")}</td><th>نوع التقرير</th><td>تقرير عمليات النشاط</td></tr>` : `<tr><th>نوع التقرير</th><td>تقرير عمليات شخصي</td><th>النطاق</th><td>${esc(request.report_scope || "all")}</td></tr>`;
 
-  return { html: `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4;margin:13mm 9mm}*{box-sizing:border-box}body{margin:0;direction:rtl;font-family:Arial,Tahoma,"Noto Sans Arabic",sans-serif;color:#111827;background:#fff;font-size:11px;line-height:1.6;font-variant-numeric:lining-nums tabular-nums}header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:14px}.brand h1{margin:0;font-size:26px}.brand p{margin:2px 0 0;color:#4b5563}.meta{direction:ltr;text-align:left;font-size:9px;color:#4b5563}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.card,.mini{border:1px solid #dbe1e8;border-radius:10px;padding:9px;background:#f8fafc}.label,.mini-label{color:#64748b;font-size:9px}.value,.mini-value{font-weight:800;font-size:17px;margin-top:3px}.mini-value{font-size:12px}.mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}section{margin-top:15px}h2{font-size:14px;margin:0 0 7px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1e8;padding:5px 6px;vertical-align:top;text-align:right}th{background:#f1f5f9;font-weight:800}.ops{font-size:8.7px}.ops tr{page-break-inside:avoid}.num{text-align:center;direction:ltr}.ltr,.amount{direction:ltr;text-align:left;white-space:nowrap}.summary{max-width:180px;word-break:break-word}.empty{text-align:center;padding:16px;color:#64748b}.notice{margin-top:10px;padding:8px;border:1px solid #f0c36d;background:#fff8e6;border-radius:8px}.disclaimer{margin-top:15px;padding-top:9px;border-top:1px solid #dbe1e8;color:#64748b;font-size:9px}.footer{direction:ltr;text-align:left;color:#64748b;font-size:8px;margin-top:7px}</style></head><body><header><div class="brand"><h1>سند | SANAD</h1><p>${esc(title)}</p></div><div class="meta"><div>Report ID: ${esc(request.id)}</div><div>Created: ${esc(fmtDate(new Date().toISOString()))}</div></div></header><section><h2>ملخص العمليات</h2><div class="cards"><div class="card"><div class="label">عدد العمليات</div><div class="value">${count(totalCount)}</div></div><div class="card"><div class="label">الموثقة</div><div class="value">${count(verifiedCount)}</div></div><div class="card"><div class="label">الأخرى</div><div class="value">${count(reviewCount)}</div></div></div></section><section><table><tbody>${contextRows}<tr><th>الفترة</th><td>${esc(fmtDate(request.date_from, true))} — ${esc(fmtDate(request.date_to, true))}</td><th>رقم واتساب</th><td class="ltr">${esc(request.destination_phone)}</td></tr></tbody></table></section>${truncated ? `<div class="notice">يعرض التقرير أول ${count(returnedCount)} عملية من أصل ${count(totalCount)} عملية مطابقة للفلاتر.</div>` : ""}${includeCurrency ? distributionCards(payload.currency_distribution, "currency", "توزيع العمليات حسب العملة") : ""}${includeStatus ? distributionCards(payload.status_distribution, "status", "توزيع العمليات حسب الحالة") : ""}${includeEntity ? distributionCards(payload.entity_distribution, "financial_entity", "توزيع العمليات حسب الجهة") : ""}${includeTeam ? teamTable(payload.team_performance) : ""}${details}<div class="disclaimer">يعرض هذا التقرير العمليات المسجلة وتفاصيل التحقق منها فقط. لا يُعد كشفًا محاسبيًا، ولا يتضمن إجماليات مالية أو أرباحًا أو عمولات أو أرصدة، ولا يجمع مبالغ العملات المختلفة.</div><div class="footer">SANAD operations report — ${esc(request.id)}</div></body></html>`, metrics: { operations_count: totalCount, returned_count: returnedCount, verified_count: verifiedCount, other_count: reviewCount, truncated } };
+  return { html: `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4;margin:13mm 9mm}*{box-sizing:border-box}body{margin:0;direction:rtl;font-family:Arial,Tahoma,"Noto Sans Arabic",sans-serif;color:#111827;background:#fff;font-size:11px;line-height:1.6;font-variant-numeric:lining-nums tabular-nums}header{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:14px}.brand h1{margin:0;font-size:26px}.brand-logo{display:block;width:145px;height:64px;object-fit:contain;object-position:right center}.brand p{margin:2px 0 0;color:#4b5563}.meta{direction:ltr;text-align:left;font-size:9px;color:#4b5563}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.card,.mini{border:1px solid #dbe1e8;border-radius:10px;padding:9px;background:#f8fafc}.label,.mini-label{color:#64748b;font-size:9px}.value,.mini-value{font-weight:800;font-size:17px;margin-top:3px}.mini-value{font-size:12px}.mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}section{margin-top:15px}h2{font-size:14px;margin:0 0 7px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #dbe1e8;padding:5px 6px;vertical-align:top;text-align:right}th{background:#f1f5f9;font-weight:800}.ops{font-size:8.7px}.ops tr{page-break-inside:avoid}.num{text-align:center;direction:ltr}.ltr,.amount{direction:ltr;text-align:left;white-space:nowrap}.summary{max-width:180px;word-break:break-word}.empty{text-align:center;padding:16px;color:#64748b}.notice{margin-top:10px;padding:8px;border:1px solid #f0c36d;background:#fff8e6;border-radius:8px}.disclaimer{margin-top:15px;padding-top:9px;border-top:1px solid #dbe1e8;color:#64748b;font-size:9px}.footer{direction:ltr;text-align:left;color:#64748b;font-size:8px;margin-top:7px}</style></head><body><header><div class="brand">${logoDataUri ? `<img class="brand-logo" src="${logoDataUri}" alt="SANAD">` : `<h1>سند | SANAD</h1>`}<p>${esc(title)}</p></div><div class="meta"><div>Report ID: ${esc(request.id)}</div><div>Created: ${esc(fmtDate(new Date().toISOString()))}</div></div></header><section><h2>ملخص العمليات</h2><div class="cards"><div class="card"><div class="label">عدد العمليات</div><div class="value">${count(totalCount)}</div></div><div class="card"><div class="label">الموثقة</div><div class="value">${count(verifiedCount)}</div></div><div class="card"><div class="label">الأخرى</div><div class="value">${count(reviewCount)}</div></div></div></section><section><table><tbody>${contextRows}<tr><th>الفترة</th><td>${esc(fmtDate(request.date_from, true))} — ${esc(fmtDate(request.date_to, true))}</td><th>رقم واتساب</th><td class="ltr">${esc(request.destination_phone)}</td></tr></tbody></table></section>${truncated ? `<div class="notice">يعرض التقرير أول ${count(returnedCount)} عملية من أصل ${count(totalCount)} عملية مطابقة للفلاتر.</div>` : ""}${includeCurrency ? distributionCards(payload.currency_distribution, "currency", "توزيع العمليات حسب العملة") : ""}${includeStatus ? distributionCards(payload.status_distribution, "status", "توزيع العمليات حسب الحالة") : ""}${includeEntity ? distributionCards(payload.entity_distribution, "financial_entity", "توزيع العمليات حسب الجهة") : ""}${includeTeam ? teamTable(payload.team_performance) : ""}${details}<div class="disclaimer">يعرض هذا التقرير العمليات المسجلة وتفاصيل التحقق منها فقط. لا يُعد كشفًا محاسبيًا، ولا يتضمن إجماليات مالية أو أرباحًا أو عمولات أو أرصدة، ولا يجمع مبالغ العملات المختلفة.</div><div class="footer">SANAD operations report — ${esc(request.id)}</div></body></html>`, metrics: { operations_count: totalCount, returned_count: returnedCount, verified_count: verifiedCount, other_count: reviewCount, truncated } };
 }
 
 async function renderPdf(html: string) {
@@ -181,7 +217,8 @@ Deno.serve(async (req) => {
     const { data: payload, error: payloadError } = await sb.rpc("get_report_payload", { p_report_request_id: report.id });
     if (payloadError) throw payloadError;
 
-    const { html, metrics } = buildHtml(payload as Json, env("PUBLIC_APP_BASE_URL", "https://app.sanadflow.com"));
+    const logoDataUri = await getSanadLogoDataUri();
+    const { html, metrics } = buildHtml(payload as Json, env("PUBLIC_APP_BASE_URL", "https://app.sanadflow.com"), logoDataUri);
     await sb.from("report_requests").update({ processing_stage: "rendering_pdf", updated_at: new Date().toISOString() }).eq("id", report.id);
     const pdf = await renderPdf(html);
 
