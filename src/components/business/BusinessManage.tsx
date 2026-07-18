@@ -53,6 +53,7 @@ import {
 import BusinessCustomers from './BusinessCustomers';
 import BusinessTeam from './BusinessTeam';
 import BusinessReports from './reports/BusinessReports';
+import BusinessManageNavigation, { type BusinessManageTab } from './BusinessManageNavigation';
 
 interface BusinessManageProps {
   onNavigate: (page: string, token?: string) => void;
@@ -204,6 +205,7 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
   // Sharing states
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -885,70 +887,17 @@ export default function BusinessManage({ onNavigate }: BusinessManageProps) {
 
         {/* Dashboard Grid Layout (Sidebar Tabs + Panel Content) */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
-          {/* Inner Sidebar matching the mockup layout */}
-          <aside className="w-full lg:w-64 shrink-0 bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-3xl p-4 flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-x-visible no-scrollbar shadow-sm">
-            <div className="text-[10px] text-slate-400 font-bold px-2 pb-2 hidden lg:block border-b border-slate-100 mb-2">أقسام التحكم</div>
-            {[
-              { id: 'overview', label: 'لوحة الأداء والنظرة العامة', icon: LayoutDashboard },
-              { id: 'products', label: 'كتالوج المنتجات المصور', icon: ShoppingBag },
-              { id: 'services', label: 'قائمة الخدمات والحلول', icon: Wrench },
-              { id: 'hours', label: 'الدوام ومواقع التواصل', icon: Clock },
-              { id: 'accounts', label: 'الحسابات المالية للنشاط', icon: Database },
-              { id: 'customers', label: 'إدارة العملاء والشركاء', icon: Users },
-              { id: 'team', label: 'فريق العمل والصلاحيات', icon: UserCheck },
-              { id: 'complaints', label: `صندوق الشكاوى والملاحظات (${complaintsList.filter(c => c.status === 'pending').length})`, icon: MessageSquare },
-              { id: 'reports', label: 'التقارير', icon: FileText }
-            ].filter(tab => tab.id !== 'products' || INTERNAL_BUSINESS_CATALOG_ENABLED).map((tab) => {
-              const Icon = tab.icon;
-              const isSelected = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as TabType);
-                    setSuccess(null);
-                    setError(null);
-                  }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[11px] font-bold text-right transition-all shrink-0 whitespace-nowrap lg:w-full ${
-                    isSelected
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-
-            <div className="hidden lg:block border-t border-slate-100 my-3 pt-3"></div>
-            <div className="text-[10px] text-slate-400 font-bold px-2 pb-2 hidden lg:block">الإضافات والربط</div>
-            {[
-              { id: 'integrations', label: 'خيار التكاملات', icon: Puzzle },
-              { id: 'addons', label: 'متجر إضافات سند', icon: PlusCircle }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isSelected = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as TabType);
-                    setSuccess(null);
-                    setError(null);
-                  }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl text-[11px] font-bold text-right transition-all shrink-0 whitespace-nowrap lg:w-full ${
-                    isSelected
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </aside>
+          <BusinessManageNavigation
+            activeTab={activeTab as BusinessManageTab}
+            complaintsCount={complaintsList.filter((item) => item.status === 'pending').length}
+            open={navigationOpen}
+            onOpenChange={setNavigationOpen}
+            onSelect={(tab) => {
+              setActiveTab(tab as TabType);
+              setSuccess(null);
+              setError(null);
+            }}
+          />
 
           {/* Main Content Area */}
           <main className="flex-1 w-full space-y-6">
