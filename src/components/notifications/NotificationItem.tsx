@@ -1,14 +1,16 @@
 import React from 'react';
-import { 
-  FileText, 
-  Sparkles, 
-  Users, 
-  CreditCard, 
-  ShieldAlert, 
-  Bell, 
-  Archive 
+import {
+  Archive,
+  Bell,
+  Building2,
+  CreditCard,
+  FileText,
+  Megaphone,
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
-import { NotificationItem, NotificationCategory } from '../../features/notifications/types';
+import type { NotificationCategory, NotificationItem, NotificationSeverity } from '../../features/notifications/types';
+import { toLatinDigits } from '../../lib/digits';
 
 interface NotificationItemProps {
   item: NotificationItem;
@@ -19,164 +21,102 @@ interface NotificationItemProps {
 }
 
 function formatRelativeTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '';
-    
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-
-    if (diffSec < 60) return 'الآن';
-    
-    if (diffMin < 60) {
-      if (diffMin === 1) return 'منذ دقيقة';
-      if (diffMin === 2) return 'منذ دقيقتين';
-      if (diffMin >= 3 && diffMin <= 10) return `منذ ${diffMin} دقائق`;
-      return `منذ ${diffMin} دقيقة`;
-    }
-    
-    if (diffHr < 24) {
-      if (diffHr === 1) return 'منذ ساعة';
-      if (diffHr === 2) return 'منذ ساعتين';
-      if (diffHr >= 3 && diffHr <= 10) return `منذ ${diffHr} ساعات`;
-      return `منذ ${diffHr} ساعة`;
-    }
-    
-    if (diffDay === 1) return 'أمس';
-    if (diffDay === 2) return 'قبل يومين';
-    if (diffDay < 7) return `منذ ${diffDay} أيام`;
-    
-    return new Intl.DateTimeFormat('ar-YE', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    }).format(date);
-  } catch (err) {
-    return '';
-  }
+  const timestamp = new Date(dateStr).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const deltaSeconds = Math.round((timestamp - Date.now()) / 1000);
+  const absoluteSeconds = Math.abs(deltaSeconds);
+  const formatter = new Intl.RelativeTimeFormat('ar-u-nu-latn', { numeric: 'auto' });
+  if (absoluteSeconds < 60) return 'الآن';
+  if (absoluteSeconds < 3600) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 60), 'minute'));
+  if (absoluteSeconds < 86400) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 3600), 'hour'));
+  if (absoluteSeconds < 604800) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 86400), 'day'));
+  return toLatinDigits(new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    numberingSystem: 'latn'
+  }).format(new Date(timestamp)));
 }
 
-function getCategoryIcon(category: NotificationCategory) {
-  const sizeClass = "w-5 h-5";
+function getCategoryMeta(category: NotificationCategory) {
+  const iconClass = 'h-5 w-5';
   switch (category) {
     case 'operations':
-      return {
-        icon: <FileText className={sizeClass} />,
-        bg: 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
-      };
+      return { label: 'إشعار مالي', icon: <FileText className={iconClass} />, iconTone: 'bg-emerald-50 text-emerald-700' };
     case 'reports':
-      return {
-        icon: <Sparkles className={sizeClass} />,
-        bg: 'bg-violet-50 text-violet-600 border-violet-100/50'
-      };
+      return { label: 'تقرير', icon: <Sparkles className={iconClass} />, iconTone: 'bg-violet-50 text-violet-700' };
     case 'business':
-      return {
-        icon: <Users className={sizeClass} />,
-        bg: 'bg-blue-50 text-blue-600 border-blue-100/50'
-      };
+      return { label: 'نشاط تجاري', icon: <Building2 className={iconClass} />, iconTone: 'bg-sky-50 text-sky-700' };
     case 'subscription':
-      return {
-        icon: <CreditCard className={sizeClass} />,
-        bg: 'bg-amber-50 text-amber-600 border-amber-100/50'
-      };
+      return { label: 'اشتراك', icon: <CreditCard className={iconClass} />, iconTone: 'bg-amber-50 text-amber-700' };
     case 'security':
-      return {
-        icon: <ShieldAlert className={sizeClass} />,
-        bg: 'bg-rose-50 text-rose-600 border-rose-100/50'
-      };
+      return { label: 'أمان', icon: <ShieldAlert className={iconClass} />, iconTone: 'bg-rose-50 text-rose-700' };
+    case 'system':
+      return { label: 'تحديث عام', icon: <Megaphone className={iconClass} />, iconTone: 'bg-slate-100 text-slate-700' };
     default:
-      return {
-        icon: <Bell className={sizeClass} />,
-        bg: 'bg-slate-50 text-slate-600 border-slate-100/50'
-      };
+      return { label: 'إشعار', icon: <Bell className={iconClass} />, iconTone: 'bg-slate-100 text-slate-700' };
   }
 }
 
-const NotificationItemComponent: React.FC<NotificationItemProps> = ({ 
-  item, 
+function getSeverityTone(severity: NotificationSeverity, unread: boolean) {
+  if (severity === 'error') return 'bg-rose-50/80 shadow-[0_12px_32px_rgba(190,24,93,0.08)]';
+  if (severity === 'warning') return 'bg-amber-50/80 shadow-[0_12px_32px_rgba(180,83,9,0.08)]';
+  if (severity === 'success') return 'bg-emerald-50/65 shadow-[0_12px_32px_rgba(5,150,105,0.07)]';
+  return unread ? 'bg-white shadow-[0_12px_32px_rgba(15,23,42,0.07)]' : 'bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.035)]';
+}
+
+const NotificationItemComponent: React.FC<NotificationItemProps> = ({
+  item,
   pendingRead,
   pendingArchive,
-  onItemClick, 
-  onArchiveClick 
+  onItemClick,
+  onArchiveClick
 }) => {
   const isUnread = !item.read_at;
-  const { icon, bg } = getCategoryIcon(item.category);
+  const category = getCategoryMeta(item.category);
   const hasAction = item.action_type !== 'none';
-
-  const handleClick = () => {
-    // Prevent action click if read or archive operation is in progress
-    if (pendingRead || pendingArchive) return;
-    
-    // Unread items can always be clicked to mark them read (even if action_type is none)
-    if (isUnread || hasAction) {
-      onItemClick(item);
-    }
-  };
-
-  const handleArchive = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (pendingRead || pendingArchive) return;
-    onArchiveClick(item.id, e);
-  };
-
-  // Unread items and items with actions are clickable
   const isClickable = isUnread || hasAction;
 
+  const handleClick = () => {
+    if (pendingRead || pendingArchive || !isClickable) return;
+    void onItemClick(item);
+  };
+
+  const handleArchive = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (pendingRead || pendingArchive) return;
+    void onArchiveClick(item.id, event);
+  };
+
   return (
-    <div 
+    <article
       onClick={handleClick}
-      className={`group relative p-4 rounded-3xl border transition-all text-right select-none flex items-start gap-3.5 ${
-        isUnread 
-          ? 'bg-white border-slate-200/80 shadow-xs ring-1 ring-slate-100/30' 
-          : 'bg-slate-50/50 border-slate-100 text-slate-600 hover:bg-slate-50'
-      } ${isClickable ? 'cursor-pointer hover:border-slate-300/80 hover:shadow-xs' : ''} ${
-        (pendingRead || pendingArchive) ? 'opacity-60 pointer-events-none' : ''
-      }`}
+      className={`relative flex items-start gap-3.5 rounded-[1.7rem] p-4 text-right transition-all ${getSeverityTone(item.severity, isUnread)} ${isClickable ? 'cursor-pointer active:scale-[0.995]' : ''} ${pendingRead || pendingArchive ? 'pointer-events-none opacity-60' : ''}`}
     >
-      {/* Unread indicator dot */}
-      {isUnread && (
-        <span className="absolute top-4 left-4 w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-      )}
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${category.iconTone}`}>
+        {category.icon}
+      </span>
 
-      {/* Category Icon Container */}
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0 ${bg}`}>
-        {icon}
-      </div>
-
-      {/* Title & Body */}
-      <div className="flex-1 min-w-0 space-y-1 pl-6">
-        <div className="flex items-center gap-2">
-          <h4 className={`text-xs font-bold font-arabic leading-snug truncate ${isUnread ? 'text-slate-900' : 'text-slate-600'}`}>
-            {item.title}
-          </h4>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-white/70 px-2.5 py-1 text-[9px] font-bold text-slate-500">{category.label}</span>
+          {isUnread && <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />جديد</span>}
         </div>
-        <p className="text-[11px] text-slate-500 font-arabic leading-relaxed break-words whitespace-pre-line">
-          {item.body}
-        </p>
-        <span className="text-[9px] text-slate-400 font-arabic block pt-0.5">
-          {formatRelativeTime(item.created_at)}
-        </span>
+        <h3 className={`mt-2 text-sm font-bold leading-6 ${isUnread ? 'text-slate-950' : 'text-slate-700'}`}>{item.title}</h3>
+        <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-6 text-slate-600">{item.body}</p>
+        <time className="mt-2 block text-[10px] text-slate-400">{formatRelativeTime(item.created_at)}</time>
       </div>
 
-      {/* Action panel (Archive) */}
-      <div className="flex flex-col gap-1 items-end justify-between self-stretch shrink-0">
-        <button
-          onClick={handleArchive}
-          disabled={pendingRead || pendingArchive}
-          className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-500 disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
-          title="أرشفة"
-          aria-label="أرشفة الإشعار"
-        >
-          <Archive className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+      <button
+        onClick={handleArchive}
+        disabled={pendingRead || pendingArchive}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
+        title="أرشفة"
+        aria-label="أرشفة الإشعار"
+      >
+        <Archive className="h-4 w-4" />
+      </button>
+    </article>
   );
 };
 
