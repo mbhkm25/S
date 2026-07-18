@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -126,7 +127,7 @@ export default function BusinessTeam({ onNavigate: _onNavigate }: BusinessTeamPr
     });
   }, [search, teamMembers]);
 
-  const handleSendInvite = async (event: React.FormEvent) => {
+  const handleSendInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanPhone = toLatinDigits(phone.trim().replace(/\+/g, '')).replace(/\D/g, '');
     if (!/^9677\d{8}$/.test(cleanPhone)) {
@@ -293,20 +294,22 @@ export default function BusinessTeam({ onNavigate: _onNavigate }: BusinessTeamPr
         ) : (
           <div className="divide-y divide-slate-100 border-y border-slate-100 bg-white sm:rounded-2xl sm:border">
             {filteredMembers.map((member) => {
-              const expanded = expandedMemberId === member.id;
-              const actionsOpen = actionsOpenFor === member.id;
+              const memberKey = member.user_id;
+              const expanded = expandedMemberId === memberKey;
+              const actionsOpen = actionsOpenFor === memberKey;
               const isOwner = member.role === 'owner';
               const suspended = member.status === 'suspended';
               return (
-                <article key={member.id} className="overflow-hidden">
+                <article key={memberKey} className="overflow-hidden">
                   <button
                     type="button"
                     onClick={() => {
-                      setExpandedMemberId(expanded ? null : member.id);
-                      if (expanded) setActionsOpenFor(null);
+                      setExpandedMemberId(expanded ? null : memberKey);
+                      setActionsOpenFor(null);
                     }}
                     className="flex w-full items-center gap-3 px-3 py-3.5 text-right transition hover:bg-slate-50"
                     aria-expanded={expanded}
+                    aria-controls={`team-member-${memberKey}`}
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                       {isOwner ? <ShieldCheck className="h-5 w-5" /> : <User className="h-5 w-5" />}
@@ -325,7 +328,7 @@ export default function BusinessTeam({ onNavigate: _onNavigate }: BusinessTeamPr
                   </button>
 
                   {expanded && (
-                    <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-4">
+                    <div id={`team-member-${memberKey}`} className="border-t border-slate-100 bg-slate-50/60 px-3 py-4">
                       <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                         <div><span className="block text-[9px] font-bold text-slate-400">الدور</span><span className="mt-1 block text-xs font-bold text-slate-800">{roleLabel(member)}</span></div>
                         <div><span className="block text-[9px] font-bold text-slate-400">تاريخ الانضمام</span><span className="mt-1 block text-xs font-bold text-slate-800">{formatDate(member.joined_at)}</span></div>
@@ -343,7 +346,7 @@ export default function BusinessTeam({ onNavigate: _onNavigate }: BusinessTeamPr
                           <>
                             <button
                               type="button"
-                              onClick={() => setActionsOpenFor(actionsOpen ? null : member.id)}
+                              onClick={() => setActionsOpenFor(actionsOpen ? null : memberKey)}
                               className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-3 text-right text-xs font-bold text-slate-800 shadow-sm"
                               aria-expanded={actionsOpen}
                             >
