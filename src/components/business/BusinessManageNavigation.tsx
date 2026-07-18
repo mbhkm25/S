@@ -39,7 +39,7 @@ interface BusinessManageNavigationProps {
 
 const primaryTabs = [
   { id: 'overview', label: 'لوحة الأداء والنظرة العامة', shortLabel: 'نظرة عامة', icon: LayoutDashboard },
-  { id: 'products', label: 'كتالوج المنتجات المصور', shortLabel: 'المنتجات', icon: ShoppingBag },
+  { id: 'products', label: 'كتالوج النشاط', shortLabel: 'المنتجات', icon: ShoppingBag },
   { id: 'services', label: 'قائمة الخدمات والحلول', shortLabel: 'الخدمات', icon: Wrench },
   { id: 'hours', label: 'الدوام ومواقع التواصل', shortLabel: 'الدوام والتواصل', icon: Clock },
   { id: 'accounts', label: 'الحسابات المالية للنشاط', shortLabel: 'الحسابات المالية', icon: Database },
@@ -53,6 +53,13 @@ const secondaryTabs = [
   { id: 'integrations', label: 'خيار التكاملات', shortLabel: 'التكاملات', icon: Puzzle },
   { id: 'addons', label: 'متجر إضافات سند', shortLabel: 'الإضافات', icon: PlusCircle }
 ] as const;
+
+function navigateToCatalogManager() {
+  const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  window.history.pushState({}, '', `${cleanBase}business/manage/whatsapp-catalog`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 export default function BusinessManageNavigation({
   activeTab,
@@ -80,8 +87,12 @@ export default function BusinessManageNavigation({
   }, [open, onOpenChange]);
 
   const choose = (tab: BusinessManageTab) => {
-    onSelect(tab);
     onOpenChange(false);
+    if (tab === 'products') {
+      navigateToCatalogManager();
+      return;
+    }
+    onSelect(tab);
   };
 
   const renderButton = (
