@@ -1,16 +1,17 @@
 import React from 'react';
 import {
-  Archive,
-  Bell,
-  Building2,
-  CreditCard,
   FileText,
-  Megaphone,
+  Sparkles,
+  Users,
+  CreditCard,
   ShieldAlert,
-  Sparkles
+  Bell,
+  Archive
 } from 'lucide-react';
-import type { NotificationCategory, NotificationItem, NotificationSeverity } from '../../features/notifications/types';
+import { NotificationItem, NotificationCategory } from '../../features/notifications/types';
 import { toLatinDigits } from '../../lib/digits';
+import FinancialEntityLogo from '../FinancialEntityLogo';
+import { detectFinancialEntityFromText } from '../../lib/financialEntities';
 
 interface NotificationItemProps {
   item: NotificationItem;
@@ -21,48 +22,57 @@ interface NotificationItemProps {
 }
 
 function formatRelativeTime(dateStr: string): string {
-  const timestamp = new Date(dateStr).getTime();
-  if (!Number.isFinite(timestamp)) return '';
-  const deltaSeconds = Math.round((timestamp - Date.now()) / 1000);
-  const absoluteSeconds = Math.abs(deltaSeconds);
-  const formatter = new Intl.RelativeTimeFormat('ar-u-nu-latn', { numeric: 'auto' });
-  if (absoluteSeconds < 60) return 'الآن';
-  if (absoluteSeconds < 3600) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 60), 'minute'));
-  if (absoluteSeconds < 86400) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 3600), 'hour'));
-  if (absoluteSeconds < 604800) return toLatinDigits(formatter.format(Math.round(deltaSeconds / 86400), 'day'));
-  return toLatinDigits(new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    numberingSystem: 'latn'
-  }).format(new Date(timestamp)));
-}
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '';
+    const diffMs = Date.now() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
 
-function getCategoryMeta(category: NotificationCategory) {
-  const iconClass = 'h-5 w-5';
-  switch (category) {
-    case 'operations':
-      return { label: 'إشعار مالي', icon: <FileText className={iconClass} />, iconTone: 'bg-emerald-50 text-emerald-700' };
-    case 'reports':
-      return { label: 'تقرير', icon: <Sparkles className={iconClass} />, iconTone: 'bg-violet-50 text-violet-700' };
-    case 'business':
-      return { label: 'نشاط تجاري', icon: <Building2 className={iconClass} />, iconTone: 'bg-sky-50 text-sky-700' };
-    case 'subscription':
-      return { label: 'اشتراك', icon: <CreditCard className={iconClass} />, iconTone: 'bg-amber-50 text-amber-700' };
-    case 'security':
-      return { label: 'أمان', icon: <ShieldAlert className={iconClass} />, iconTone: 'bg-rose-50 text-rose-700' };
-    case 'system':
-      return { label: 'تحديث عام', icon: <Megaphone className={iconClass} />, iconTone: 'bg-slate-100 text-slate-700' };
-    default:
-      return { label: 'إشعار', icon: <Bell className={iconClass} />, iconTone: 'bg-slate-100 text-slate-700' };
+    if (diffSec < 60) return 'الآن';
+    if (diffMin < 60) return toLatinDigits(`منذ ${diffMin} دقيقة`);
+    if (diffHr < 24) return toLatinDigits(`منذ ${diffHr} ساعة`);
+    if (diffDay === 1) return 'أمس';
+    if (diffDay < 7) return toLatinDigits(`منذ ${diffDay} أيام`);
+
+    return toLatinDigits(new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      numberingSystem: 'latn'
+    }).format(date));
+  } catch {
+    return '';
   }
 }
 
-function getSeverityTone(severity: NotificationSeverity, unread: boolean) {
-  if (severity === 'error') return 'bg-rose-50/80 shadow-[0_12px_32px_rgba(190,24,93,0.08)]';
-  if (severity === 'warning') return 'bg-amber-50/80 shadow-[0_12px_32px_rgba(180,83,9,0.08)]';
-  if (severity === 'success') return 'bg-emerald-50/65 shadow-[0_12px_32px_rgba(5,150,105,0.07)]';
-  return unread ? 'bg-white shadow-[0_12px_32px_rgba(15,23,42,0.07)]' : 'bg-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.035)]';
+function getCategoryIcon(category: NotificationCategory) {
+  const sizeClass = 'w-5 h-5';
+  switch (category) {
+    case 'operations':
+      return { icon: <FileText className={sizeClass} />, bg: 'bg-emerald-50 text-emerald-600' };
+    case 'reports':
+      return { icon: <Sparkles className={sizeClass} />, bg: 'bg-violet-50 text-violet-600' };
+    case 'business':
+      return { icon: <Users className={sizeClass} />, bg: 'bg-blue-50 text-blue-600' };
+    case 'subscription':
+      return { icon: <CreditCard className={sizeClass} />, bg: 'bg-amber-50 text-amber-600' };
+    case 'security':
+      return { icon: <ShieldAlert className={sizeClass} />, bg: 'bg-rose-50 text-rose-600' };
+    default:
+      return { icon: <Bell className={sizeClass} />, bg: 'bg-slate-50 text-slate-600' };
+  }
+}
+
+function severityClasses(item: NotificationItem, unread: boolean): string {
+  if (item.severity === 'error') return 'bg-rose-50/90 shadow-[0_10px_28px_rgba(225,29,72,0.07)]';
+  if (item.severity === 'warning') return 'bg-amber-50/90 shadow-[0_10px_28px_rgba(217,119,6,0.07)]';
+  if (item.severity === 'success') return 'bg-emerald-50/80 shadow-[0_10px_28px_rgba(5,150,105,0.06)]';
+  return unread ? 'bg-white shadow-[0_10px_28px_rgba(15,23,42,0.07)]' : 'bg-slate-50/70 shadow-sm';
 }
 
 const NotificationItemComponent: React.FC<NotificationItemProps> = ({
@@ -73,13 +83,17 @@ const NotificationItemComponent: React.FC<NotificationItemProps> = ({
   onArchiveClick
 }) => {
   const isUnread = !item.read_at;
-  const category = getCategoryMeta(item.category);
+  const { icon, bg } = getCategoryIcon(item.category);
   const hasAction = item.action_type !== 'none';
   const isClickable = isUnread || hasAction;
+  const payloadEntity = item.action_payload?.financial_entity || item.action_payload?.entity;
+  const financialEntity = item.category === 'operations'
+    ? detectFinancialEntityFromText(payloadEntity, item.title, item.body)
+    : null;
 
   const handleClick = () => {
-    if (pendingRead || pendingArchive || !isClickable) return;
-    void onItemClick(item);
+    if (pendingRead || pendingArchive) return;
+    if (isClickable) void onItemClick(item);
   };
 
   const handleArchive = (event: React.MouseEvent) => {
@@ -89,34 +103,46 @@ const NotificationItemComponent: React.FC<NotificationItemProps> = ({
   };
 
   return (
-    <article
+    <div
       onClick={handleClick}
-      className={`relative flex items-start gap-3.5 rounded-[1.7rem] p-4 text-right transition-all ${getSeverityTone(item.severity, isUnread)} ${isClickable ? 'cursor-pointer active:scale-[0.995]' : ''} ${pendingRead || pendingArchive ? 'pointer-events-none opacity-60' : ''}`}
+      className={`group relative flex items-start gap-3.5 rounded-[1.6rem] p-4 text-right transition-all select-none ${severityClasses(item, isUnread)} ${
+        isClickable ? 'cursor-pointer active:scale-[0.995]' : ''
+      } ${(pendingRead || pendingArchive) ? 'opacity-60 pointer-events-none' : ''}`}
     >
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${category.iconTone}`}>
-        {category.icon}
-      </span>
+      {isUnread && <span className="absolute left-4 top-4 rounded-full bg-emerald-500 px-2 py-0.5 text-[8px] font-bold text-white">جديد</span>}
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-white/70 px-2.5 py-1 text-[9px] font-bold text-slate-500">{category.label}</span>
-          {isUnread && <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />جديد</span>}
+      {financialEntity ? (
+        <FinancialEntityLogo
+          entity={financialEntity.nameAr}
+          className="h-12 w-12 rounded-2xl"
+          imageClassName="h-full w-full object-contain p-1.5"
+        />
+      ) : (
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${bg}`}>{icon}</div>
+      )}
+
+      <div className="min-w-0 flex-1 space-y-1.5 pl-7">
+        <div className="flex items-center gap-2">
+          <h4 className={`truncate text-sm font-bold leading-snug ${isUnread ? 'text-slate-950' : 'text-slate-700'}`}>{item.title}</h4>
         </div>
-        <h3 className={`mt-2 text-sm font-bold leading-6 ${isUnread ? 'text-slate-950' : 'text-slate-700'}`}>{item.title}</h3>
-        <p className="mt-1.5 whitespace-pre-line break-words text-xs leading-6 text-slate-600">{item.body}</p>
-        <time className="mt-2 block text-[10px] text-slate-400">{formatRelativeTime(item.created_at)}</time>
+        <p className="whitespace-pre-line break-words text-xs leading-6 text-slate-600">{item.body}</p>
+        <div className="flex items-center gap-2 pt-0.5 text-[9px] text-slate-400">
+          <span>{item.category === 'operations' ? 'إشعار مالي' : item.category === 'reports' ? 'تقرير' : item.category === 'business' ? 'نشاط تجاري' : item.category === 'security' ? 'أمان' : item.category === 'subscription' ? 'اشتراك' : 'تحديث عام'}</span>
+          <span>·</span>
+          <span>{formatRelativeTime(item.created_at)}</span>
+        </div>
       </div>
 
       <button
         onClick={handleArchive}
         disabled={pendingRead || pendingArchive}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
+        className="absolute bottom-3 left-3 rounded-xl p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
         title="أرشفة"
         aria-label="أرشفة الإشعار"
       >
         <Archive className="h-4 w-4" />
       </button>
-    </article>
+    </div>
   );
 };
 
