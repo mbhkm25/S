@@ -1,366 +1,184 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getBusinessMediaSignedUrl, getPublicBusinesses, PublicBusinessListItem } from '../../lib/businessApi';
-import { 
-  ArrowRight, 
-  Search, 
-  Store, 
-  MapPin, 
-  MessageSquare, 
-  Loader2, 
-  AlertCircle, 
-  RefreshCw,
-  ShieldCheck,
-  SlidersHorizontal,
-  ChevronDown
+import {
+  getBusinessMediaSignedUrl,
+  getPublicBusinesses,
+  type PublicBusinessListItem
+} from '../../lib/businessApi';
+import {
+  ArrowLeft, ArrowRight, Building2, ChevronDown, Filter, Loader2,
+  MapPin, RefreshCw, Search, ShieldCheck, Store, X
 } from 'lucide-react';
+import { toLatinDigits } from '../../lib/digits';
 
 interface BusinessCommunityProps {
   onNavigate: (page: string, token?: string) => void;
 }
 
+type Category = { id: string; name_ar: string };
+type BusinessItem = PublicBusinessListItem & {
+  profile_image_path?: string | null;
+  logo_path?: string | null;
+  verification_status?: string | null;
+  working_hours?: Record<string, { open?: string; close?: string; closed?: boolean }> | null;
+  catalog_count?: number | null;
+};
+
 const GOVERNORATES = [
-  'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة', 
-  'المهرة', 'مأرب', 'الجوف', 'صعدة', 'حجة', 'عمران', 'البيضاء', 
+  'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة',
+  'المهرة', 'مأرب', 'الجوف', 'صعدة', 'حجة', 'عمران', 'البيضاء',
   'لحج', 'أبين', 'الضالع', 'ريمة', 'سقطرى', 'المحويت'
 ];
+
+function getOpenStatus(hours?: BusinessItem['working_hours']) {
+  if (!hours || !Object.keys(hours).length) return null;
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const now = new Date();
+  const value = hours[days[now.getDay()]];
+  if (!value || value.closed || !value.open || !value.close) return { open: false, label: 'مغلق' };
+  const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  return current >= value.open && current <= value.close
+    ? { open: true, label: 'مفتوح الآن' }
+    : { open: false, label: 'مغلق' };
+}
 
 export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const [businesses, setBusinesses] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
+  const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [logos, setLogos] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [governorate, setGovernorate] = useState('');
+  const [city, setCity] = useState('');
+  const [category, setCategory] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Search & Filter States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGov, setSelectedGov] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Load categories directly from database
   const loadCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('business_categories')
-        .select('id, name_ar');
-      if (!error && data) {
-        setCategories(data);
-      }
-    } catch (e) {
-      console.warn('Failed loading categories:', e);
-    }
+    const { data } = await supabase.from('business_categories').select('id, name_ar').order('name_ar');
+    setCategories(Array.isArray(data) ? data : []);
   };
 
-  const loadData = async () => {
+  const loadBusinesses = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getPublicBusinesses({
-        p_search: searchQuery || null,
-        p_governorate: selectedGov || null,
-        p_city: selectedCity || null,
-        p_category_id: selectedCategory || null
+      const result = await getPublicBusinesses({
+        p_search: search.trim() || null,
+        p_governorate: governorate || null,
+        p_city: city.trim() || null,
+        p_category_id: category || null
       });
-
-      const items = Array.isArray(data) ? data : [];
+      const items = Array.isArray(result) ? result as BusinessItem[] : [];
       setBusinesses(items);
-
-      // Resolve signed URLs for logos
-      const resolvedEntries = await Promise.all(
-        items.map(async (item) => {
-          const path = (item as any).profile_image_path || (item as any).logo_path || item.logo_url || '';
-          if (!path) return [item.id, ''] as const;
-          const url = await getBusinessMediaSignedUrl(path);
-          return [item.id, url] as const;
-        })
-      );
-      setLogoUrls(Object.fromEntries(resolvedEntries));
-    } catch (err: any) {
-      console.error('[BusinessCommunity] Failed loading public businesses:', err);
-      setError(err.message || 'فشل في تحميل مجتمع الأعمال.');
+      const entries = await Promise.all(items.map(async (item) => {
+        const path = item.profile_image_path || item.logo_path || item.logo_url || '';
+        return [item.id, path ? await getBusinessMediaSignedUrl(path).catch(() => '') : ''] as const;
+      }));
+      setLogos(Object.fromEntries(entries));
+    } catch (caught) {
       setBusinesses([]);
+      setError(caught instanceof Error ? caught.message : 'تعذر تحميل مجتمع الأعمال.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCategories();
-    loadData();
+    void loadCategories();
+    void loadBusinesses();
   }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadData();
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void loadBusinesses();
   };
 
-  const handleClearFilters = () => {
-    setSearchQuery('');
-    setSelectedGov('');
-    setSelectedCity('');
-    setSelectedCategory('');
-    setTimeout(() => {
-      loadData();
-    }, 50);
+  const clearFilters = () => {
+    setSearch('');
+    setGovernorate('');
+    setCity('');
+    setCategory('');
+    window.setTimeout(() => void loadBusinesses(), 0);
   };
 
-  // Helper: Open / Closed Badge status
-  const getCardOpenStatus = (hours: any) => {
-    if (!hours || typeof hours !== 'object' || Object.keys(hours).length === 0) return null;
-    const daysEn = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const now = new Date();
-    const dayName = daysEn[now.getDay()];
-    const todayHours = hours[dayName];
-    if (!todayHours || todayHours.closed) return { open: false, text: 'مغلق' };
-    const currentTimeStr = now.toTimeString().slice(0, 5);
-    const { open, close } = todayHours;
-    if (currentTimeStr >= open && currentTimeStr <= close) {
-      return { open: true, text: 'مفتوح' };
-    }
-    return { open: false, text: 'مغلق' };
-  };
-
-
+  const selectedCategoryName = categories.find((item) => item.id === category)?.name_ar || '';
+  const activeFilters = [governorate, city, selectedCategoryName].filter(Boolean);
+  const featuredCategories = useMemo(() => categories.slice(0, 7), [categories]);
 
   return (
-    <div className="space-y-6 font-arabic bg-slate-50/40 min-h-screen pb-12 text-right" dir="rtl">
-      {/* Header Panel */}
-      <div className="flex items-center justify-between gap-4 p-4 bg-white/70 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-40">
-        <div className="flex items-center gap-2.5">
-          <button 
-            onClick={() => onNavigate('home')} 
-            className="p-2 bg-white hover:bg-slate-100 rounded-xl border border-slate-200/60 transition-all text-slate-700"
-          >
-            <ArrowRight className="w-4 h-4" />
+    <div className="min-h-screen bg-[#f7f8fa] pb-16 font-arabic text-right" dir="rtl">
+      <header className="sticky top-0 z-40 bg-white/95 px-3 py-3 shadow-[0_1px_16px_rgba(15,23,42,0.05)] backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-3">
+          <button onClick={() => window.history.length > 1 ? window.history.back() : onNavigate('home')} className="rounded-xl bg-slate-100 p-2.5 text-slate-700" aria-label="العودة">
+            <ArrowRight className="h-4 w-4" />
           </button>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900">مجتمع أعمال سند</h1>
-            <p className="text-[10px] text-slate-400">استكشف الأنشطة والمؤسسات المالية والشركاء الموثقين</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm font-bold text-slate-950">مجتمع أعمال سند</h1>
+            <p className="mt-0.5 text-[9px] text-slate-400">اكتشف الأنشطة والكتالوجات والخدمات المنشورة</p>
           </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><Building2 className="h-5 w-5" /></span>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-4xl mx-auto px-4 space-y-5">
-        {/* Search & Advanced Filters Bar */}
-        <form onSubmit={handleSearchSubmit} className="bg-white/80 backdrop-blur-md border border-slate-200/60 p-4 rounded-3xl shadow-xs space-y-3.5">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder="ابحث عن اسم النشاط، المنطقة، أو نوع الخدمة..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white rounded-xl py-3 pl-3 pr-9 outline-none transition-all text-right"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+      <main className="mx-auto max-w-5xl space-y-5 px-3 py-4">
+        <section className="rounded-[2rem] bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
+          <p className="text-[9px] font-bold text-emerald-300">دليل الأعمال العام</p>
+          <h2 className="mt-2 text-xl font-bold">ابحث عمّا تحتاجه</h2>
+          <p className="mt-2 max-w-md text-[10px] leading-6 text-white/60">نشاط، خدمة، منتج أو كتالوج؛ ثم افتح الملف العام وتواصل مباشرة.</p>
+          <form onSubmit={submitSearch} className="mt-4 flex gap-2 rounded-2xl bg-white p-2 shadow-lg">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث عن نشاط أو خدمة..." className="w-full rounded-xl bg-slate-50 py-3 pl-3 pr-9 text-xs text-slate-900 outline-none" />
             </div>
-            
-            <button
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className={`p-3 border rounded-xl transition-all ${
-                showFilters 
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-xs' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-              title="تصفية متقدمة"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
+            <button type="submit" className="rounded-xl bg-slate-950 px-4 text-[10px] font-bold text-white">بحث</button>
+          </form>
+        </section>
 
-            <button
-              type="submit"
-              className="bg-slate-900 hover:bg-black text-white text-xs font-bold py-2.5 px-5 rounded-xl transition-all shadow-sm"
-            >
-              بحث
-            </button>
-          </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button onClick={() => { setCategory(''); window.setTimeout(() => void loadBusinesses(), 0); }} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${!category ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>الكل</button>
+          {featuredCategories.map((item) => <button key={item.id} onClick={() => { setCategory(item.id); window.setTimeout(() => void loadBusinesses(), 0); }} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${category === item.id ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>{item.name_ar}</button>)}
+          <button onClick={() => setFiltersOpen((value) => !value)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-2 text-[10px] font-bold text-emerald-700"><Filter className="h-3.5 w-3.5" />فلاتر</button>
+        </div>
 
-          {/* Collapsible Advanced Filters (Governorate, City, Category) */}
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3.5 border-t border-slate-100 animate-slide-down">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500">المحافظة</label>
-                <div className="relative">
-                  <select
-                    value={selectedGov}
-                    onChange={(e) => setSelectedGov(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 pl-8 text-xs outline-none cursor-pointer appearance-none text-right focus:bg-white"
-                  >
-                    <option value="">كل المحافظات...</option>
-                    {GOVERNORATES.map(gov => (
-                      <option key={gov} value={gov}>{gov}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500">المدينة / المديرية</label>
-                <input
-                  type="text"
-                  placeholder="مثال: حدة، المنصورة..."
-                  value={selectedCity}
-                  onChange={(e) => setSelectedCity(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none text-right focus:bg-white"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500">تصنيف النشاط</label>
-                <div className="relative">
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 pl-8 text-xs outline-none cursor-pointer appearance-none text-right focus:bg-white"
-                  >
-                    <option value="">كل التصنيفات...</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name_ar}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="md:col-span-3 flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleClearFilters}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold py-1.5 px-4 rounded-xl transition-all"
-                >
-                  إعادة ضبط الفلاتر
-                </button>
-              </div>
+        {filtersOpen && (
+          <section className="rounded-[1.75rem] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="mb-4 flex items-center justify-between"><div><h3 className="text-xs font-bold text-slate-900">تصفية النتائج</h3><p className="mt-1 text-[9px] text-slate-400">حدّد الموقع أو التصنيف</p></div><button onClick={() => setFiltersOpen(false)} className="rounded-xl bg-slate-100 p-2"><X className="h-4 w-4" /></button></div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="space-y-1"><span className="text-[9px] font-bold text-slate-500">المحافظة</span><span className="relative block"><select value={governorate} onChange={(event) => setGovernorate(event.target.value)} className="w-full appearance-none rounded-xl bg-slate-50 p-3 text-xs outline-none"><option value="">كل المحافظات</option>{GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}</select><ChevronDown className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" /></span></label>
+              <label className="space-y-1"><span className="text-[9px] font-bold text-slate-500">المدينة</span><input value={city} onChange={(event) => setCity(event.target.value)} placeholder="مثال: المكلا" className="w-full rounded-xl bg-slate-50 p-3 text-xs outline-none" /></label>
+              <label className="space-y-1"><span className="text-[9px] font-bold text-slate-500">التصنيف</span><span className="relative block"><select value={category} onChange={(event) => setCategory(event.target.value)} className="w-full appearance-none rounded-xl bg-slate-50 p-3 text-xs outline-none"><option value="">كل التصنيفات</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}</select><ChevronDown className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" /></span></label>
             </div>
-          )}
-        </form>
+            <div className="mt-4 flex gap-2"><button onClick={() => void loadBusinesses()} className="flex-1 rounded-xl bg-slate-950 py-3 text-[10px] font-bold text-white">تطبيق الفلاتر</button><button onClick={clearFilters} className="rounded-xl bg-slate-100 px-4 text-[10px] font-bold text-slate-600">إعادة ضبط</button></div>
+          </section>
+        )}
 
-        {/* Businesses Directory List */}
+        {activeFilters.length > 0 && <div className="flex flex-wrap gap-2">{activeFilters.map((value) => <span key={value} className="rounded-full bg-white px-3 py-1.5 text-[9px] font-bold text-slate-500 shadow-sm">{value}</span>)}</div>}
+
+        <div className="flex items-end justify-between"><div><h2 className="text-sm font-bold text-slate-950">الأنشطة المنشورة</h2><p className="mt-1 text-[9px] text-slate-400">{loading ? 'جاري التحميل' : `${toLatinDigits(String(businesses.length))} نتيجة`}</p></div></div>
+
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <Loader2 className="w-6 h-6 text-slate-800 animate-spin" />
-            <span className="text-xs text-slate-500">جاري الاستعلام في دليل أعمال سند...</span>
-          </div>
+          <div className="flex min-h-[35vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-slate-700" /></div>
         ) : error ? (
-          <div className="bg-white rounded-[2rem] border border-slate-200/60 p-6 space-y-4 shadow-sm text-center">
-            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-            <div className="space-y-1">
-              <h2 className="text-sm font-bold text-slate-900">حدث خطأ أثناء تحميل البيانات</h2>
-              <p className="text-xs text-slate-500">{error}</p>
-            </div>
-            <button
-              onClick={loadData}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-black font-bold border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition-all"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>إعادة المحاولة</span>
-            </button>
-          </div>
+          <div className="rounded-[2rem] bg-white p-8 text-center shadow-sm"><p className="text-xs text-rose-600">{error}</p><button onClick={() => void loadBusinesses()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-[10px] font-bold"><RefreshCw className="h-4 w-4" />إعادة المحاولة</button></div>
         ) : businesses.length === 0 ? (
-          <div className="bg-white rounded-[2rem] border border-slate-200/60 p-12 text-center space-y-3 shadow-xs">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 shadow-2xs">
-              <Store className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-xs font-bold text-slate-900">لا توجد نتائج بحث مطابقة حالياً</h2>
-              <p className="text-[10px] text-slate-400 leading-normal max-w-sm mx-auto">
-                حاول البحث بكلمة مفتاحية مختلفة أو تغيير فلاتر التصفية الجغرافية والتصنيفات.
-              </p>
-            </div>
-          </div>
+          <div className="rounded-[2rem] bg-white p-10 text-center shadow-sm"><Store className="mx-auto h-8 w-8 text-slate-300" /><h3 className="mt-3 text-xs font-bold">لا توجد نتائج مطابقة</h3><p className="mt-2 text-[9px] leading-5 text-slate-400">غيّر عبارة البحث أو أعد ضبط الفلاتر.</p></div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {businesses.map((biz) => {
-              const openStatus = getCardOpenStatus(biz.working_hours);
-
-              const categoryName = biz.business_categories?.name_ar || biz.category_name || 'خدمات مالية وأعمال';
-
+          <div className="grid gap-3 sm:grid-cols-2">
+            {businesses.map((business) => {
+              const openStatus = getOpenStatus(business.working_hours);
               return (
-                <div 
-                  key={biz.id}
-                  className="bg-white/80 backdrop-blur-md border border-slate-200/60 p-4.5 rounded-[1.8rem] shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md hover:border-slate-300 transition-all duration-300 relative group"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {/* Logo Frame */}
-                      <div className="w-12 h-12 rounded-[1.2rem] bg-slate-950 text-white flex items-center justify-center font-bold text-base shrink-0 overflow-hidden border border-slate-150 shadow-2xs">
-                        {logoUrls[biz.id] ? (
-                          <img src={logoUrls[biz.id]} alt={`شعار ${biz.name}`} className="w-full h-full object-cover" />
-                        ) : (
-                          biz.name.slice(0, 1)
-                        )}
-                      </div>
-                      
-                      {/* Title & Metadata */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-xs font-bold text-slate-950 leading-snug group-hover:text-indigo-950 transition-colors">{biz.name}</h3>
-                          {biz.verification_status === 'verified' && (
-                            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" title="شريك موثق" />
-                          )}
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-slate-400 font-medium">
-                          <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">{categoryName}</span>
-                          <span className="flex items-center gap-0.5">
-                            <MapPin className="w-3 h-3 text-slate-350" />
-                            <span>{biz.city}، {biz.governorate}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Open/Close status badge on card */}
-                    <div className="flex flex-col items-end gap-1.5">
-                      {openStatus && (
-                        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border ${
-                          openStatus.open 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                            : 'bg-slate-100 text-slate-400 border-slate-200'
-                        }`}>
-                          {openStatus.text}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {biz.description && (
-                    <p className="text-[10px] text-slate-500 leading-relaxed text-right line-clamp-2 px-1">
-                      {biz.description}
-                    </p>
-                  )}
-
-                  {/* Actions buttons matching mockup pattern */}
-                  <div className="flex gap-2 pt-2.5 border-t border-slate-100">
-                    <button
-                      onClick={() => onNavigate('public-business-profile', biz.slug)}
-                      className="flex-1 bg-slate-900 hover:bg-black text-white text-[10px] font-bold py-2 rounded-xl transition-all shadow-xs"
-                    >
-                      عرض ملف العمل
-                    </button>
-                    {biz.whatsapp && (
-                      <a
-                        href={`https://wa.me/${biz.whatsapp}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-none bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 text-[10px] font-bold p-2 px-3.5 rounded-xl transition-all flex items-center gap-1"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>واتساب</span>
-                      </a>
-                    )}
-                  </div>
-                </div>
+                <button key={business.id} onClick={() => onNavigate('public-business-profile', business.slug)} className="group flex w-full items-center gap-4 rounded-[1.75rem] bg-white p-4 text-right shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]">
+                  <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] bg-slate-100">{logos[business.id] ? <img src={logos[business.id]} alt={business.name} className="h-full w-full object-cover" /> : <Store className="h-6 w-6 text-slate-300" />}</span>
+                  <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5"><strong className="truncate text-sm text-slate-950">{business.name}</strong>{business.verification_status === 'verified' && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}</span><span className="mt-1 block truncate text-[9px] text-slate-400">{business.category_name || 'نشاط تجاري'}</span><span className="mt-2 flex items-center gap-1 text-[9px] text-slate-500"><MapPin className="h-3.5 w-3.5" />{business.city}، {business.governorate}</span><span className="mt-2 flex flex-wrap gap-2">{openStatus && <span className={`rounded-full px-2 py-1 text-[8px] font-bold ${openStatus.open ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{openStatus.label}</span>}{business.catalog_count ? <span className="rounded-full bg-sky-50 px-2 py-1 text-[8px] font-bold text-sky-700">{toLatinDigits(String(business.catalog_count))} عناصر</span> : null}</span></span>
+                  <ArrowLeft className="h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:-translate-x-1" />
+                </button>
               );
             })}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
