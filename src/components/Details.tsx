@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { formatYemeniDisplay } from '../lib/digits';
 import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
 import ProUpgradeModal from './ProUpgradeModal';
+import FinancialEntityLogo from './FinancialEntityLogo';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 import {
   getLinkableBusinessesForUser, linkOperationToBusiness,
@@ -908,9 +909,17 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
       {/* 1. Quick Summary Card */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4.5 space-y-4 text-right relative overflow-hidden" id="quick_summary_card">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold font-arabic">
-            <Store className="w-3.5 h-3.5" />
-            <span>ملخص التحقق السريع</span>
+          <div className="flex items-center gap-2">
+            <FinancialEntityLogo
+              entity={financialEntity}
+              className="h-10 w-10 rounded-xl border border-slate-100"
+              imageClassName="h-full w-full object-contain p-1"
+              decorative
+            />
+            <div>
+              <span className="block text-[10px] font-bold text-slate-400 font-arabic">ملخص التحقق السريع</span>
+              {financialEntity && <strong className="mt-0.5 block text-[11px] text-slate-800 font-arabic">{financialEntity}</strong>}
+            </div>
           </div>
           {accessUsage && accessUsage.plan === 'sanad_pro' && (
             <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/30">سند Pro مفعّل</span>
