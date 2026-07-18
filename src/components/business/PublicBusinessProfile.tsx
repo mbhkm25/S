@@ -119,6 +119,7 @@ function CatalogItemCard({
   whatsapp,
   onNavigate
 }: {
+  key?: string | number;
   item: CatalogItem;
   businessSlug: string;
   businessName: string;
