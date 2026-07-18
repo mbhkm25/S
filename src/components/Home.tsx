@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Profile, MyOperationItem } from '../types';
 import { supabase } from '../lib/supabase';
 import {
-  Activity,
   ArrowLeft,
   ArrowUpRight,
   Building2,
@@ -11,7 +10,6 @@ import {
   FileBarChart2,
   FileText,
   QrCode,
-  Send,
   ShieldCheck,
   Store,
   UploadCloud,
@@ -66,9 +64,6 @@ function formatRelativeTime(value?: string | null): string {
 }
 
 export default function Home({ profile, onNavigate }: HomeProps) {
-  const [loading, setLoading] = useState(true);
-  const [uploaderCount, setUploaderCount] = useState(0);
-  const [verifierCount, setVerifierCount] = useState(0);
   const [latestOperations, setLatestOperations] = useState<MyOperationItem[]>([]);
   const [businesses, setBusinesses] = useState<BusinessPreview[]>([]);
   const [businessLogos, setBusinessLogos] = useState<Record<string, string>>({});
@@ -78,66 +73,60 @@ export default function Home({ profile, onNavigate }: HomeProps) {
     let active = true;
 
     async function loadHome() {
-      setLoading(true);
-      try {
-        const [uploadersResult, verifiersResult, businessesResult] = await Promise.allSettled([
-          supabase.rpc('get_my_operations', { p_relation_type: 'uploader', p_limit: 10 }),
-          supabase.rpc('get_my_operations', { p_relation_type: 'verifier', p_limit: 10 }),
-          getPublicBusinesses({
-            p_search: null,
-            p_governorate: null,
-            p_city: null,
-            p_category_id: null,
-            p_limit: 3,
-            p_offset: 0
-          })
-        ]);
+      const [uploadersResult, verifiersResult, businessesResult] = await Promise.allSettled([
+        supabase.rpc('get_my_operations', { p_relation_type: 'uploader', p_limit: 10 }),
+        supabase.rpc('get_my_operations', { p_relation_type: 'verifier', p_limit: 10 }),
+        getPublicBusinesses({
+          p_search: null,
+          p_governorate: null,
+          p_city: null,
+          p_category_id: null,
+          p_limit: 3,
+          p_offset: 0
+        })
+      ]);
 
-        if (!active) return;
+      if (!active) return;
 
-        const uploaders = uploadersResult.status === 'fulfilled' ? uploadersResult.value.data || [] : [];
-        const verifiers = verifiersResult.status === 'fulfilled' ? verifiersResult.value.data || [] : [];
-        setUploaderCount(uploaders.length);
-        setVerifierCount(verifiers.length);
+      const uploaders = uploadersResult.status === 'fulfilled' ? uploadersResult.value.data || [] : [];
+      const verifiers = verifiersResult.status === 'fulfilled' ? verifiersResult.value.data || [] : [];
+      const merged: MyOperationItem[] = [...uploaders, ...verifiers];
+      merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-        const merged: MyOperationItem[] = [...uploaders, ...verifiers];
-        merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const seen = new Set<string>();
+      const latest = merged.filter((item) => {
+        const id = item.operation_id || item.public_token;
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      }).slice(0, 1);
 
-        const seen = new Set<string>();
-        const latest = merged.filter((item) => {
-          const id = item.operation_id || item.public_token;
-          if (!id || seen.has(id)) return false;
-          seen.add(id);
-          return true;
-        }).slice(0, 1);
-
-        const ids = latest.map((item) => item.operation_id).filter(Boolean);
-        if (ids.length) {
-          const { data } = await supabase
-            .from('operations')
-            .select('id, amount, currency, financial_entity, reference_number, structured_data, raw_ai_json')
-            .in('id', ids);
+      const ids = latest.map((item) => item.operation_id).filter(Boolean);
+      if (ids.length) {
+        const { data } = await supabase
+          .from('operations')
+          .select('id, amount, currency, financial_entity, reference_number, structured_data, raw_ai_json')
+          .in('id', ids);
+        if (active) {
           setLatestOperations(latest.map((item) => ({
             ...item,
             ...(data?.find((row) => row.id === item.operation_id) || {})
           })));
-        } else {
-          setLatestOperations(latest);
         }
-
-        const publicBusinesses = businessesResult.status === 'fulfilled' && Array.isArray(businessesResult.value)
-          ? businessesResult.value.slice(0, 3) as BusinessPreview[]
-          : [];
-        setBusinesses(publicBusinesses);
-
-        const logoEntries = await Promise.all(publicBusinesses.map(async (business) => {
-          const path = business.profile_image_path || business.logo_path || business.logo_url || '';
-          return [business.id, path ? await getBusinessMediaSignedUrl(path).catch(() => '') : ''] as const;
-        }));
-        if (active) setBusinessLogos(Object.fromEntries(logoEntries));
-      } finally {
-        if (active) setLoading(false);
+      } else if (active) {
+        setLatestOperations(latest);
       }
+
+      const publicBusinesses = businessesResult.status === 'fulfilled' && Array.isArray(businessesResult.value)
+        ? businessesResult.value.slice(0, 3) as BusinessPreview[]
+        : [];
+      setBusinesses(publicBusinesses);
+
+      const logoEntries = await Promise.all(publicBusinesses.map(async (business) => {
+        const path = business.profile_image_path || business.logo_path || business.logo_url || '';
+        return [business.id, path ? await getBusinessMediaSignedUrl(path).catch(() => '') : ''] as const;
+      }));
+      if (active) setBusinessLogos(Object.fromEntries(logoEntries));
     }
 
     void loadHome();
@@ -146,7 +135,6 @@ export default function Home({ profile, onNavigate }: HomeProps) {
 
   const latest = useMemo(() => latestOperations[0] || null, [latestOperations]);
   const displayName = profile?.full_name?.trim() || 'مستخدم سند';
-  const totalOperations = uploaderCount + verifierCount;
 
   const openScanner = () => {
     if (canOpenCamera()) {
@@ -155,12 +143,6 @@ export default function Home({ profile, onNavigate }: HomeProps) {
     }
     setCameraNotice(true);
   };
-
-  const stats = [
-    { label: 'مرسلة', value: uploaderCount, icon: Send, tone: 'bg-sky-50 text-sky-700' },
-    { label: 'مدققة', value: verifierCount, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
-    { label: 'إجمالي', value: totalOperations, icon: Activity, tone: 'bg-slate-100 text-slate-700' }
-  ];
 
   return (
     <div className="space-y-6 font-arabic" dir="rtl" id="home_view">
@@ -194,8 +176,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
             <QrCode className="h-8 w-8" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="text-[9px] font-bold text-emerald-300">الإجراء الأساسي</span>
-            <strong className="mt-1 block text-lg">مسح QR</strong>
+            <strong className="block text-lg">مسح QR</strong>
             <span className="mt-1 block text-[10px] leading-5 text-white/60">افتح كاميرا سند وادخل إلى التحقق مباشرة.</span>
           </span>
           <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
@@ -233,22 +214,20 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {stats.map(({ label, value, icon: Icon, tone }) => (
-            <div key={label} className="rounded-[1.35rem] bg-white px-3 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.045)]">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></span>
-              <strong className="mt-3 block text-base text-slate-950">{loading ? '...' : toLatinDigits(String(value))}</strong>
-              <span className="mt-0.5 block text-[8px] text-slate-400">{label}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => onNavigate('my-operations')} className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
-            <FileText className="h-4 w-4 text-slate-500" /><span className="text-[10px] font-bold text-slate-700">كل العمليات</span><ArrowLeft className="mr-auto h-4 w-4 text-slate-300" />
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onNavigate('my-operations')}
+            className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileText className="h-4 w-4" /></span>
+            <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">كل العمليات</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
           </button>
-          <button onClick={() => onNavigate('reports')} className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
-            <FileBarChart2 className="h-4 w-4 text-slate-500" /><span className="text-[10px] font-bold text-slate-700">طلب تقرير</span><ArrowLeft className="mr-auto h-4 w-4 text-slate-300" />
+          <button
+            onClick={() => onNavigate('reports')}
+            className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileBarChart2 className="h-4 w-4" /></span>
+            <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">طلب تقرير</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
           </button>
         </div>
 
@@ -268,6 +247,11 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           );
         })()}
       </section>
+
+      <div className="relative py-2" aria-hidden="true">
+        <div className="h-px w-full bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
+        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-200 ring-4 ring-[#f7f8fa]" />
+      </div>
 
       <section className="space-y-4" aria-labelledby="business-sanad-title">
         <div className="flex items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-sky-50/90 to-transparent px-4 py-3">
