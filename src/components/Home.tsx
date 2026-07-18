@@ -21,6 +21,7 @@ import {
   getPublicBusinesses,
   type PublicBusinessListItem
 } from '../lib/businessApi';
+import FinancialEntityLogo from './FinancialEntityLogo';
 
 interface HomeProps {
   profile: Profile | null;
@@ -236,7 +237,12 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           const relativeTime = formatRelativeTime(latest.created_at);
           return (
             <button onClick={() => onNavigate('details', latest.public_token)} className="flex w-full items-center gap-3 rounded-[1.5rem] bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><ShieldCheck className="h-5 w-5" /></span>
+              <FinancialEntityLogo
+                entity={card.entity || latest.financial_entity}
+                className="h-11 w-11 rounded-xl border border-slate-100"
+                imageClassName="h-full w-full object-contain p-1"
+                decorative
+              />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-[9px] text-slate-400"><span>آخر نشاط</span>{relativeTime && <><span>·</span><Clock3 className="h-3 w-3" /><span>{relativeTime}</span></>}</span>
                 <strong className="mt-1 block truncate text-xs text-slate-900">{card.title}</strong>
