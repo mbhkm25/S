@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getBusinessMediaSignedUrl } from '../../lib/businessApi';
 import {
-  getBusinessMediaSignedUrl,
-  getPublicBusinesses,
-  type PublicBusinessListItem
-} from '../../lib/businessApi';
+  getDiscoverableBusinesses,
+  type BusinessDiscoveryFilters,
+  type DiscoverableBusiness
+} from '../../lib/businessDiscoveryApi';
 import {
   ArrowLeft, ArrowRight, Building2, ChevronDown, Filter, Loader2,
   MapPin, RefreshCw, Search, ShieldCheck, Store, X
@@ -17,13 +18,6 @@ interface BusinessCommunityProps {
 }
 
 type Category = { id: string; name_ar: string };
-type BusinessItem = PublicBusinessListItem & {
-  profile_image_path?: string | null;
-  logo_path?: string | null;
-  verification_status?: string | null;
-  working_hours?: Record<string, { open?: string; close?: string; closed?: boolean }> | null;
-  catalog_count?: number | null;
-};
 
 const GOVERNORATES = [
   'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة',
@@ -31,7 +25,7 @@ const GOVERNORATES = [
   'لحج', 'أبين', 'الضالع', 'ريمة', 'سقطرى', 'المحويت'
 ];
 
-function getOpenStatus(hours?: BusinessItem['working_hours']) {
+function getOpenStatus(hours?: DiscoverableBusiness['working_hours']) {
   if (!hours || !Object.keys(hours).length) return null;
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const now = new Date();
@@ -46,7 +40,7 @@ function getOpenStatus(hours?: BusinessItem['working_hours']) {
 export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
+  const [businesses, setBusinesses] = useState<DiscoverableBusiness[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [logos, setLogos] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
@@ -60,22 +54,23 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
     setCategories(Array.isArray(data) ? data : []);
   };
 
-  const loadBusinesses = async () => {
+  const loadBusinesses = async (overrides: Partial<BusinessDiscoveryFilters> = {}) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getPublicBusinesses({
-        p_search: search.trim() || null,
-        p_governorate: governorate || null,
-        p_city: city.trim() || null,
-        p_category_id: category || null
-      });
-      const items = Array.isArray(result) ? result as BusinessItem[] : [];
+      const filters: BusinessDiscoveryFilters = {
+        search,
+        governorate,
+        city,
+        categoryId: category,
+        limit: 30,
+        ...overrides
+      };
+      const items = await getDiscoverableBusinesses(filters);
       setBusinesses(items);
-      const entries = await Promise.all(items.map(async (item) => {
-        const path = item.profile_image_path || item.logo_path || item.logo_url || '';
-        return [item.id, path ? await getBusinessMediaSignedUrl(path).catch(() => '') : ''] as const;
-      }));
+      const entries = await Promise.all(items.map(async (item) => (
+        [item.id, item.logo_path ? await getBusinessMediaSignedUrl(item.logo_path).catch(() => '') : ''] as const
+      )));
       setLogos(Object.fromEntries(entries));
     } catch (caught) {
       setBusinesses([]);
@@ -92,7 +87,12 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void loadBusinesses();
+    void loadBusinesses({ search });
+  };
+
+  const chooseCategory = (nextCategory: string) => {
+    setCategory(nextCategory);
+    void loadBusinesses({ categoryId: nextCategory || null });
   };
 
   const clearFilters = () => {
@@ -100,7 +100,11 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
     setGovernorate('');
     setCity('');
     setCategory('');
-    window.setTimeout(() => void loadBusinesses(), 0);
+    void loadBusinesses({ search: null, governorate: null, city: null, categoryId: null });
+  };
+
+  const applyFilters = () => {
+    void loadBusinesses({ search, governorate, city, categoryId: category });
   };
 
   const selectedCategoryName = categories.find((item) => item.id === category)?.name_ar || '';
@@ -137,8 +141,8 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
         </section>
 
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button onClick={() => { setCategory(''); window.setTimeout(() => void loadBusinesses(), 0); }} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${!category ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>الكل</button>
-          {featuredCategories.map((item) => <button key={item.id} onClick={() => { setCategory(item.id); window.setTimeout(() => void loadBusinesses(), 0); }} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${category === item.id ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>{item.name_ar}</button>)}
+          <button onClick={() => chooseCategory('')} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${!category ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>الكل</button>
+          {featuredCategories.map((item) => <button key={item.id} onClick={() => chooseCategory(item.id)} className={`shrink-0 rounded-full px-4 py-2 text-[10px] font-bold ${category === item.id ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>{item.name_ar}</button>)}
           <button onClick={() => setFiltersOpen((value) => !value)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-2 text-[10px] font-bold text-emerald-700"><Filter className="h-3.5 w-3.5" />فلاتر</button>
         </div>
 
@@ -150,7 +154,7 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
               <label className="space-y-1"><span className="text-[9px] font-bold text-slate-500">المدينة</span><input value={city} onChange={(event) => setCity(event.target.value)} placeholder="مثال: المكلا" className="w-full rounded-xl bg-slate-50 p-3 text-xs outline-none" /></label>
               <label className="space-y-1"><span className="text-[9px] font-bold text-slate-500">التصنيف</span><span className="relative block"><select value={category} onChange={(event) => setCategory(event.target.value)} className="w-full appearance-none rounded-xl bg-slate-50 p-3 text-xs outline-none"><option value="">كل التصنيفات</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}</select><ChevronDown className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" /></span></label>
             </div>
-            <div className="mt-4 flex gap-2"><button onClick={() => void loadBusinesses()} className="flex-1 rounded-xl bg-slate-950 py-3 text-[10px] font-bold text-white">تطبيق الفلاتر</button><button onClick={clearFilters} className="rounded-xl bg-slate-100 px-4 text-[10px] font-bold text-slate-600">إعادة ضبط</button></div>
+            <div className="mt-4 flex gap-2"><button onClick={applyFilters} className="flex-1 rounded-xl bg-slate-950 py-3 text-[10px] font-bold text-white">تطبيق الفلاتر</button><button onClick={clearFilters} className="rounded-xl bg-slate-100 px-4 text-[10px] font-bold text-slate-600">إعادة ضبط</button></div>
           </section>
         )}
 
@@ -171,7 +175,7 @@ export default function BusinessCommunity({ onNavigate }: BusinessCommunityProps
               return (
                 <button key={business.id} onClick={() => onNavigate('public-business-profile', business.slug)} className="group flex w-full items-center gap-4 rounded-[1.75rem] bg-white p-4 text-right shadow-[0_10px_30px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]">
                   <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] bg-slate-100">{logos[business.id] ? <img src={logos[business.id]} alt={business.name} className="h-full w-full object-cover" /> : <Store className="h-6 w-6 text-slate-300" />}</span>
-                  <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5"><strong className="truncate text-sm text-slate-950">{business.name}</strong>{business.verification_status === 'verified' && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}</span><span className="mt-1 block truncate text-[9px] text-slate-400">{business.category_name || 'نشاط تجاري'}</span><span className="mt-2 flex items-center gap-1 text-[9px] text-slate-500"><MapPin className="h-3.5 w-3.5" />{business.city}، {business.governorate}</span><span className="mt-2 flex flex-wrap gap-2">{openStatus && <span className={`rounded-full px-2 py-1 text-[8px] font-bold ${openStatus.open ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{openStatus.label}</span>}{business.catalog_count ? <span className="rounded-full bg-sky-50 px-2 py-1 text-[8px] font-bold text-sky-700">{toLatinDigits(String(business.catalog_count))} عناصر</span> : null}</span></span>
+                  <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5"><strong className="truncate text-sm text-slate-950">{business.name}</strong>{business.verification_status === 'verified' && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}</span><span className="mt-1 block truncate text-[9px] text-slate-400">{business.category_name || 'نشاط تجاري'}</span><span className="mt-2 flex items-center gap-1 text-[9px] text-slate-500"><MapPin className="h-3.5 w-3.5" />{business.city}، {business.governorate}</span><span className="mt-2 flex flex-wrap gap-2">{openStatus && <span className={`rounded-full px-2 py-1 text-[8px] font-bold ${openStatus.open ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{openStatus.label}</span>}{business.catalog_count > 0 && <span className="rounded-full bg-sky-50 px-2 py-1 text-[8px] font-bold text-sky-700">{toLatinDigits(String(business.catalog_count))} عناصر</span>}</span></span>
                   <ArrowLeft className="h-5 w-5 shrink-0 text-slate-300 transition-transform group-hover:-translate-x-1" />
                 </button>
               );
