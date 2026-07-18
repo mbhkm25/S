@@ -1,169 +1,199 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import {
-  getPublicBusinessProfile,
-  joinBusinessAsCustomer,
-  getBusinessMediaSignedUrl,
-  getUserBusinessContexts,
-  updateBusinessProfile,
-  PublicBusinessDetail
-} from '../../lib/businessApi';
-import { INTERNAL_BUSINESS_CATALOG_ENABLED } from '../../lib/urlUtils';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
-  Store,
-  MapPin,
-  MessageSquare,
-  UserCheck,
-  Loader2,
-  AlertCircle,
-  RefreshCw,
-  CheckCircle2,
-  ShieldCheck,
-  ShoppingBag,
-  Wrench,
+  ChevronDown,
+  ChevronUp,
   Clock,
+  ExternalLink,
   Globe,
-  Copy,
-  Facebook,
-  Instagram,
-  Twitter,
+  Image as ImageIcon,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Package,
+  Phone,
   Plus,
-  Send,
-  AlertTriangle,
-  Image as ImageIcon
+  ShieldCheck,
+  Store,
+  UserCheck
 } from 'lucide-react';
+import {
+  getBusinessMediaSignedUrl,
+  getPublicBusinessProfile,
+  getUserBusinessContexts,
+  joinBusinessAsCustomer,
+  type PublicBusinessDetail
+} from '../../lib/businessApi';
+import { toLatinDigits } from '../../lib/digits';
 
 interface PublicBusinessProfileProps {
   slug: string;
   onNavigate: (page: string, token?: string) => void;
-  initialTab?: TabType;
+  initialTab?: 'overview' | 'products' | 'services' | 'financial' | 'complaints';
 }
 
-type TabType = 'overview' | 'products' | 'services' | 'financial' | 'complaints';
+type ProfileSection = 'overview' | 'catalog' | 'hours' | 'contact';
+type ProfileMode = 'intro' | 'details';
 
-// Sub-component for product card to comply with React Hooks Rules
-function PublicProductCardItem({
-  prod,
+type CatalogItem = {
+  id: string;
+  item_type: 'product' | 'service' | 'digital' | 'offer' | 'subscription' | 'other' | string;
+  title: string;
+  description?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  image_paths?: string[] | null;
+  status?: string;
+  is_featured?: boolean;
+  availability_status?: 'available' | 'on_request' | 'unavailable' | string;
+  contact_action?: 'whatsapp' | 'call' | 'none' | string;
+};
+
+type ExtendedPublicBusinessDetail = PublicBusinessDetail & {
+  working_hours?: Record<string, { open?: string; close?: string; closed?: boolean }> | null;
+  contact_links?: Record<string, string | null> | null;
+  profile_sections?: {
+    services?: unknown[];
+    reviews?: unknown[];
+  } | null;
+  catalog_items?: CatalogItem[];
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+const DAYS: Array<{ key: string; label: string }> = [
+  { key: 'saturday', label: 'السبت' },
+  { key: 'sunday', label: 'الأحد' },
+  { key: 'monday', label: 'الاثنين' },
+  { key: 'tuesday', label: 'الثلاثاء' },
+  { key: 'wednesday', label: 'الأربعاء' },
+  { key: 'thursday', label: 'الخميس' },
+  { key: 'friday', label: 'الجمعة' }
+];
+
+const SECTION_META: Array<{ id: ProfileSection; label: string; description: string }> = [
+  { id: 'overview', label: 'نظرة عامة', description: 'التعريف بالنشاط وأبرز ما يقدمه' },
+  { id: 'catalog', label: 'الكتالوج', description: 'العناصر الرئيسية المتاحة للاستفسار' },
+  { id: 'hours', label: 'ساعات العمل', description: 'مواعيد الدوام الأسبوعية' },
+  { id: 'contact', label: 'التواصل والموقع', description: 'وسائل التواصل والعنوان' }
+];
+
+function normalizeInitialSection(initialTab?: PublicBusinessProfileProps['initialTab']): ProfileSection {
+  if (initialTab === 'products' || initialTab === 'services') return 'catalog';
+  if (initialTab === 'financial' || initialTab === 'complaints') return 'contact';
+  return 'overview';
+}
+
+function normalizeWhatsapp(phone?: string | null) {
+  return toLatinDigits(phone || '').replace(/\D/g, '');
+}
+
+function itemTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    product: 'منتج',
+    service: 'خدمة',
+    digital: 'رقمي',
+    offer: 'عرض',
+    subscription: 'اشتراك',
+    other: 'عنصر'
+  };
+  return labels[type] || 'عنصر';
+}
+
+function availabilityLabel(status?: string) {
+  if (status === 'unavailable') return 'غير متاح حاليًا';
+  if (status === 'on_request') return 'متاح عند الطلب';
+  return 'متاح';
+}
+
+function priceLabel(item: CatalogItem) {
+  if (item.price === null || item.price === undefined) return 'السعر عند الطلب';
+  const value = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(item.price);
+  return `${value}${item.currency ? ` ${item.currency}` : ''}`;
+}
+
+function CatalogItemCard({
+  item,
   businessSlug,
+  businessName,
+  whatsapp,
   onNavigate
 }: {
-  prod: any;
+  item: CatalogItem;
   businessSlug: string;
+  businessName: string;
+  whatsapp: string;
   onNavigate: (page: string, token?: string) => void;
-  key?: any;
 }) {
-  const [imgUrl, setImgUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
 
   useEffect(() => {
     let active = true;
-    if (prod.image_path) {
-      getBusinessMediaSignedUrl(prod.image_path).then((url) => {
-        if (active) setImgUrl(url);
-      });
-    } else {
-      setImgUrl('');
+    const path = Array.isArray(item.image_paths) ? item.image_paths[0] : null;
+    if (!path) {
+      setImageUrl('');
+      return;
     }
+    void getBusinessMediaSignedUrl(path).then((url) => {
+      if (active) setImageUrl(url || '');
+    });
     return () => {
       active = false;
     };
-  }, [prod.image_path]);
+  }, [item.image_paths]);
+
+  const message = `مرحبًا، أريد الاستفسار عن ${item.title} المعروض في كتالوج ${businessName} على سند.`;
+  const whatsappUrl = whatsapp ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}` : '';
 
   return (
-    <button
-      onClick={() => onNavigate('public-product-detail', `${businessSlug}/${prod.id}`)}
-      className="w-full bg-white border border-slate-200/80 rounded-2xl overflow-hidden text-right transition-all flex flex-col hover:border-slate-350 active:scale-[0.98] shadow-3xs hover:shadow-2xs text-slate-800"
-    >
-      <div className="w-full aspect-square bg-slate-50 border-b border-slate-100 relative shrink-0">
-        {imgUrl ? (
-          <img
-            src={imgUrl}
-            alt={prod.name}
-            className="w-full h-full object-cover object-center"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon className="w-6 h-6 text-slate-300" />
-          </div>
-        )}
-      </div>
-
-      <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5 w-full min-w-0">
-        <div className="space-y-0.5 min-w-0">
-          <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight">
-            {prod.name}
-          </h4>
-          {prod.description && (
-            <p className="text-[10px] text-slate-450 line-clamp-1 leading-normal">
-              {prod.description}
-            </p>
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => onNavigate('public-product-detail', `${businessSlug}/${item.id}`)}
+        className="block w-full text-right"
+      >
+        <div className="relative aspect-[4/3] w-full bg-slate-100">
+          {imageUrl ? (
+            <img src={imageUrl} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageIcon className="h-8 w-8 text-slate-300" />
+            </div>
           )}
-        </div>
-
-        <div className="flex items-baseline justify-between gap-1 flex-wrap pt-0.5 border-t border-slate-50 w-full">
-          <span className="text-xs font-extrabold text-indigo-700 font-mono">
-            {prod.price ? `${prod.price}` : 'السعر عند الطلب'}
-          </span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-// Sub-component for service card to comply with React Hooks Rules
-function PublicServiceCardItem({ serv, whatsapp }: { serv: any; whatsapp: string; key?: any }) {
-  const [imgUrl, setImgUrl] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    if (serv.image_path) {
-      getBusinessMediaSignedUrl(serv.image_path).then((url) => {
-        if (active) setImgUrl(url);
-      });
-    } else {
-      setImgUrl('');
-    }
-    return () => {
-      active = false;
-    };
-  }, [serv.image_path]);
-
-  const rawMsg = `مرحباً، أود طلب الخدمة: ${serv.name} المعروضة في صفحتكم على سند.`;
-  const requestUrl = `https://wa.me/${whatsapp}?text=${encodeURIComponent(rawMsg)}`;
-
-  return (
-    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex gap-3 shadow-2xs hover:border-slate-350 transition-all">
-      <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 shrink-0 overflow-hidden shadow-3xs flex items-center justify-center">
-        {imgUrl ? (
-          <img src={imgUrl} alt={serv.name} className="w-full h-full object-cover" />
-        ) : (
-          <ImageIcon className="w-5 h-5 text-slate-350" />
-        )}
-      </div>
-
-      <div className="flex-1 space-y-1 text-right min-w-0 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-900 truncate">{serv.name}</h4>
-            {serv.price && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded shrink-0">{serv.price}</span>}
+          <div className="absolute right-2 top-2 flex gap-1.5">
+            {item.is_featured && (
+              <span className="rounded-full bg-slate-950/85 px-2 py-1 text-[9px] font-bold text-white backdrop-blur">مميز</span>
+            )}
+            <span className="rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-700 backdrop-blur">
+              {itemTypeLabel(item.item_type)}
+            </span>
           </div>
-          <p className="text-[10px] text-slate-550 line-clamp-1">{serv.description}</p>
         </div>
-
-        <div className="pt-2 flex justify-end">
-          <a
-            href={requestUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#111111] text-white rounded-lg hover:bg-black text-[9px] font-bold transition-all shadow-sm"
-          >
-            <Wrench className="w-3 h-3" />
-            <span>طلب الخدمة الآن</span>
-          </a>
+        <div className="space-y-2 p-3">
+          <div>
+            <h3 className="line-clamp-1 text-xs font-bold text-slate-950">{item.title}</h3>
+            {item.description && <p className="mt-1 line-clamp-2 text-[10px] leading-5 text-slate-500">{item.description}</p>}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+            <span className="text-[10px] font-bold text-slate-900">{priceLabel(item)}</span>
+            <span className={`text-[9px] font-bold ${item.availability_status === 'unavailable' ? 'text-rose-600' : 'text-emerald-700'}`}>
+              {availabilityLabel(item.availability_status)}
+            </span>
+          </div>
         </div>
-      </div>
-    </div>
+      </button>
+      {item.contact_action !== 'none' && whatsappUrl && (
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-2 border-t border-slate-100 px-3 py-3 text-[10px] font-bold text-emerald-700"
+        >
+          <MessageCircle className="h-4 w-4" />
+          استفسار عن العنصر
+        </a>
+      )}
+    </article>
   );
 }
 
@@ -171,685 +201,366 @@ export default function PublicBusinessProfile({ slug, onNavigate, initialTab }: 
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const [profile, setProfile] = useState<PublicBusinessDetail | null>(null);
-  const [linkedSuccess, setLinkedSuccess] = useState(false);
-  const [isCustomer, setIsCustomer] = useState(false);
-
-  // Resolved Signed Media URLs
+  const [profile, setProfile] = useState<ExtendedPublicBusinessDetail | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-
-  // Tabs
-  const [activeTab, setActiveTab] = useState<TabType>(
-    initialTab === 'products' && !INTERNAL_BUSINESS_CATALOG_ENABLED ? 'overview' : (initialTab || 'overview')
-  );
+  const [isCustomer, setIsCustomer] = useState(false);
+  const [mode, setMode] = useState<ProfileMode>(initialTab ? 'details' : 'intro');
+  const [section, setSection] = useState<ProfileSection>(normalizeInitialSection(initialTab));
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (initialTab) {
-      if (initialTab === 'products' && !INTERNAL_BUSINESS_CATALOG_ENABLED) {
-        setActiveTab('overview');
-      } else {
-        setActiveTab(initialTab);
-      }
-    }
+    if (!initialTab) return;
+    setSection(normalizeInitialSection(initialTab));
+    setMode('details');
   }, [initialTab]);
 
-  // Working Status
-  const [openStatus, setOpenStatus] = useState<{ open: boolean; text: string } | null>(null);
-
-  // Complaint form states
-  const [visitorName, setVisitorName] = useState('');
-  const [visitorPhone, setVisitorPhone] = useState('');
-  const [complaintText, setComplaintText] = useState('');
-  const [localComplaints, setLocalComplaints] = useState<any[]>([]);
-
-  const DAYS_AR: Record<string, string> = {
-    saturday: 'السبت',
-    sunday: 'الأحد',
-    monday: 'الاثنين',
-    tuesday: 'الثلاثاء',
-    wednesday: 'الأربعاء',
-    thursday: 'الخميس',
-    friday: 'الجمعة'
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getPublicBusinessProfile(slug);
-
-      const mergedProfile = data;
-      setProfile(mergedProfile);
-
-      const contexts = await getUserBusinessContexts().catch(() => null);
-      setIsCustomer(!!contexts?.customer_businesses?.find((biz: any) => biz.id === mergedProfile.id));
-
-      // Resolve profile & cover signed URLs
-      const profilePath = (mergedProfile as any).profile_image_path || (mergedProfile as any).logo_path || mergedProfile.logo_url || '';
-      if (profilePath) {
-        const sign = await getBusinessMediaSignedUrl(profilePath);
-        setLogoUrl(sign);
-      } else {
-        setLogoUrl('');
-      }
-
-      const coverPath = (mergedProfile as any).cover_image_path || '';
-      if (coverPath) {
-        const sign = await getBusinessMediaSignedUrl(coverPath);
-        setCoverUrl(sign);
-      } else {
-        setCoverUrl('');
-      }
-
-      const gallery = (mergedProfile as any).gallery_paths || [];
-      if (Array.isArray(gallery) && gallery.length > 0) {
-        const signs = await Promise.all(gallery.map(p => getBusinessMediaSignedUrl(p)));
-        setGalleryUrls(signs.filter(Boolean));
-      } else {
-        setGalleryUrls([]);
-      }
-
-      // Check Opening Status
-      const hours = (mergedProfile as any).working_hours;
-      if (hours && typeof hours === 'object' && Object.keys(hours).length > 0) {
-        const status = checkOpeningStatus(hours);
-        setOpenStatus(status);
-      }
-
-      // Load local complaints history from localStorage
-      const cached = localStorage.getItem(`local_complaints_${mergedProfile.id}`);
-      if (cached) {
-        setLocalComplaints(JSON.parse(cached));
-      }
-
-    } catch (err: any) {
-      setError(err.message || 'فشل في تحميل الملف التجاري.');
-      setIsCustomer(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkOpeningStatus = (hours: any) => {
-    const daysEn = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const now = new Date();
-    const dayName = daysEn[now.getDay()];
-    const todayHours = hours[dayName];
-
-    if (!todayHours || todayHours.closed) return { open: false, text: 'مغلق حالياً' };
-
-    const currentTimeStr = now.toTimeString().slice(0, 5); // "HH:MM"
-    const { open, close } = todayHours;
-
-    if (currentTimeStr >= open && currentTimeStr <= close) {
-      return { open: true, text: `مفتوح الآن (حتى ${close})` };
-    }
-    return { open: false, text: `مغلق حالياً (يفتح عند ${open})` };
-  };
-
   useEffect(() => {
-    loadData();
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getPublicBusinessProfile(slug) as ExtendedPublicBusinessDetail;
+        if (!active) return;
+        setProfile(data);
+
+        const contexts = await getUserBusinessContexts().catch(() => null);
+        if (active) {
+          setIsCustomer(Boolean(contexts?.customer_businesses?.some((business) => business.id === data.id)));
+        }
+
+        const profilePath = data.profile_image_path || data.logo_path || data.logo_url || '';
+        const coverPath = data.cover_image_path || '';
+        const gallery = Array.isArray(data.gallery_paths) ? data.gallery_paths : [];
+        const [resolvedLogo, resolvedCover, resolvedGallery] = await Promise.all([
+          profilePath ? getBusinessMediaSignedUrl(profilePath) : Promise.resolve(''),
+          coverPath ? getBusinessMediaSignedUrl(coverPath) : Promise.resolve(''),
+          Promise.all(gallery.slice(0, 6).map((path) => getBusinessMediaSignedUrl(path)))
+        ]);
+        if (!active) return;
+        setLogoUrl(resolvedLogo || '');
+        setCoverUrl(resolvedCover || '');
+        setGalleryUrls(resolvedGallery.filter(Boolean));
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'تعذر تحميل الملف العام للنشاط.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
   }, [slug]);
 
-  const handleJoinBusiness = async () => {
-    if (!profile) return;
+  const catalogItems = useMemo(() => Array.isArray(profile?.catalog_items) ? profile.catalog_items.slice(0, 10) : [], [profile?.catalog_items]);
+  const featuredItems = useMemo(() => {
+    const featured = catalogItems.filter((item) => item.is_featured);
+    return (featured.length > 0 ? featured : catalogItems).slice(0, 6);
+  }, [catalogItems]);
+
+  const currentSection = SECTION_META.find((item) => item.id === section) || SECTION_META[0];
+  const whatsapp = normalizeWhatsapp(profile?.whatsapp);
+  const socials = profile?.contact_links || {};
+
+  const handleJoin = async () => {
+    if (!profile || isCustomer) return;
     setLinking(true);
     setError(null);
     try {
       await joinBusinessAsCustomer(profile.id, 'public_profile');
-      setLinkedSuccess(true);
       setIsCustomer(true);
-    } catch (err: any) {
-      setError(err.message || 'فشل الارتباط بالنشاط التجاري.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر الارتباط بالنشاط.');
     } finally {
       setLinking(false);
     }
   };
 
-  // Submit Complaint via WhatsApp Prefilled Text & Log in Database / localStorage
-  const handleComplaintSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile) return;
-
-    const messageText = complaintText.trim();
-    const name = visitorName.trim();
-    const phone = visitorPhone.trim();
-
-    if (!messageText || !name || !phone) return;
-
-    // 1. Submit to database via RPC submit_business_complaint
-    try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('submit_business_complaint', {
-        p_business_id: profile.id,
-        p_name: name,
-        p_phone: phone,
-        p_text: messageText
-      });
-
-      if (rpcErr) {
-        console.warn('RPC submit_business_complaint failed, fallback to local storage only:', rpcErr);
-      }
-    } catch (dbErr) {
-      console.warn('Database complaint submission failed:', dbErr);
-    }
-
-    // 2. Save to local storage complaint log
-    const newComplaint = {
-      id: `local_comp_${Date.now()}`,
-      name,
-      phone,
-      text: messageText,
-      created_at: new Date().toISOString(),
-      status: 'pending'
-    };
-
-    const updated = [newComplaint, ...localComplaints];
-    setLocalComplaints(updated);
-    localStorage.setItem(`local_complaints_${profile.id}`, JSON.stringify(updated));
-
-    // 3. Construct WhatsApp message
-    const waText = `مرحباً، أود تقديم شكوى بخصوص المعاملات مع نشاطكم التجاري.\n\nالاسم: ${name}\nالهاتف: ${phone}\nالشكوى:\n${messageText}`;
-    const cleanPhone = profile.whatsapp || '';
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waText)}`;
-
-    // Reset inputs
-    setComplaintText('');
-    setVisitorName('');
-    setVisitorPhone('');
-    setSuccess('تم تسجيل الشكوى وإرسالها للمالك عبر واتساب بزنس.');
-    setTimeout(() => setSuccess(null), 5000);
-
-    // Open WhatsApp
-    window.open(whatsappUrl, '_blank');
-  };
-
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-3 font-arabic text-right">
-        <Loader2 className="w-6 h-6 text-slate-800 animate-spin" />
-        <span className="text-xs text-slate-500">جاري تحميل ملف العمل...</span>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 font-arabic">
+        <Loader2 className="h-7 w-7 animate-spin text-slate-800" />
+        <p className="text-xs text-slate-500">جاري تحميل الملف العام...</p>
       </div>
     );
   }
 
-  if (error || !profile) {
+  if (!profile || error) {
     return (
-      <div className="max-w-md mx-auto my-12 p-6 bg-white border border-slate-200/60 rounded-3xl text-center space-y-4 font-arabic text-right">
-        <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
-        <p className="text-xs text-slate-600">{error || 'لم يتم العثور على هذا النشاط التجاري.'}</p>
-        <button
-          onClick={() => onNavigate('business-community')}
-          className="inline-flex items-center gap-1.5 text-xs text-indigo-700 font-bold hover:underline"
-        >
-          <ArrowRight className="w-4 h-4" />
-          <span>الرجوع لدليل مجتمع الأعمال</span>
+      <div className="mx-auto my-12 max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-center font-arabic">
+        <p className="text-xs leading-6 text-slate-600">{error || 'لم يتم العثور على النشاط.'}</p>
+        <button onClick={() => onNavigate('business-community')} className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-slate-900">
+          <ArrowRight className="h-4 w-4" /> العودة إلى دليل الأعمال
         </button>
       </div>
     );
   }
 
-  const products = profile.profile_sections?.products || [];
-  const services = profile.profile_sections?.services || [];
-  const financialAccounts = profile.profile_sections?.financial_accounts || [];
-  const socials = (profile as any).contact_links || {};
+  if (mode === 'intro') {
+    return (
+      <div className="min-h-screen bg-slate-950 p-3 font-arabic" dir="rtl">
+        <div className="relative mx-auto min-h-[calc(100dvh-1.5rem)] max-w-xl overflow-hidden rounded-[2rem] bg-slate-800 shadow-2xl">
+          {coverUrl ? (
+            <img src={coverUrl} alt={profile.name} className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-slate-950/15 to-slate-950/95" />
+          <button
+            type="button"
+            onClick={() => onNavigate('business-community')}
+            className="absolute right-4 top-4 z-10 rounded-2xl bg-white/90 p-3 text-slate-900 shadow-lg backdrop-blur"
+            aria-label="العودة"
+          >
+            <ArrowRight className="h-5 w-5" />
+          </button>
 
-  return (
-    <div className="min-h-screen bg-slate-50/45 pb-16 font-arabic text-right" dir="rtl">
-      {/* Upper Cover photo with glass effect */}
-      <div className="relative h-48 md:h-64 bg-slate-200 overflow-hidden border-b border-slate-200/50">
-        {coverUrl ? (
-          <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-r from-slate-100 to-slate-200" />
-        )}
-
-        {/* Back navigation */}
-        <button
-          onClick={() => onNavigate('business-community')}
-          className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-white backdrop-blur-md border border-slate-200/50 rounded-xl transition-all shadow-sm"
-        >
-          <ArrowRight className="w-4 h-4 text-slate-800" />
-        </button>
-
-        {/* Live working hours badge */}
-        {openStatus && (
-          <div className="absolute bottom-4 right-4">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-md border ${
-              openStatus.open
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                : 'bg-rose-50 text-rose-700 border-rose-100'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${openStatus.open ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-              <span>{openStatus.text}</span>
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 -mt-16 relative z-10 space-y-6">
-        {/* Profile Card Info */}
-        <div className="bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 text-center sm:text-right">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              {/* Logo wrapper */}
-              <div className="w-24 h-24 rounded-2xl bg-white border border-slate-200/80 overflow-hidden shadow-sm shrink-0 flex items-center justify-center -mt-20">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={profile.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Store className="w-8 h-8 text-slate-400" />
-                )}
+          <div className="absolute inset-x-0 bottom-0 z-10 space-y-5 p-6 text-white sm:p-8">
+            <div className="flex items-end gap-4">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-white/20 bg-white/95 shadow-xl">
+                {logoUrl ? <img src={logoUrl} alt={profile.name} className="h-full w-full object-cover" /> : <Store className="h-8 w-8 text-slate-500" />}
               </div>
-
-              <div className="space-y-1">
-                <div className="flex items-center justify-center sm:justify-start gap-1.5">
-                  <h1 className="text-base font-bold text-slate-900 leading-tight">{profile.name}</h1>
-                  {profile.verification_status === 'verified' && (
-                    <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
-                  )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold">{profile.name}</h1>
+                  {profile.verification_status === 'verified' && <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-300" />}
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  {profile.category_name || 'خدمات وأعمال عامة'}
-                </p>
-                <div className="flex items-center justify-center sm:justify-start gap-1 text-[10px] text-slate-400">
-                  <MapPin className="w-3.5 h-3.5 text-slate-350" />
+                <p className="mt-1 text-xs text-white/75">{profile.display_tagline || profile.category_name || 'نشاط تجاري على سند'}</p>
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-white/65">
+                  <MapPin className="h-4 w-4" />
                   <span>{profile.city}، {profile.governorate}</span>
                 </div>
               </div>
             </div>
 
-            {/* Link Customer CTA */}
-            <div className="shrink-0 w-full sm:w-auto">
-              {isCustomer ? (
-                <div className="bg-emerald-50 text-emerald-700 border border-emerald-100/60 px-4 py-2.5 rounded-2xl text-[10px] font-bold flex items-center justify-center gap-2 shadow-3xs">
-                  <UserCheck className="w-4.5 h-4.5 text-emerald-600" />
-                  <span>أنت مرتبط بهذا النشاط التجاري</span>
-                </div>
-              ) : (
-                <button
-                  onClick={handleJoinBusiness}
-                  disabled={linking}
-                  className="w-full bg-slate-900 hover:bg-black text-white text-[10px] font-bold py-2.5 px-5 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-1.5"
-                >
-                  {linking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  <span>ارتباط كعميل مع هذا النشاط</span>
-                </button>
-              )}
+            <p className="max-w-lg text-sm leading-7 text-white/85">{profile.description || 'اكتشف معلومات النشاط والعناصر والخدمات وطرق التواصل المتاحة.'}</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => void handleJoin()}
+                disabled={isCustomer || linking}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-xs font-bold text-slate-950 disabled:bg-emerald-100 disabled:text-emerald-800"
+              >
+                {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : isCustomer ? <UserCheck className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {isCustomer ? 'مرتبط بالنشاط' : 'الارتباط كعميل'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('details')}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-white/25 bg-white/10 px-4 py-3.5 text-xs font-bold text-white backdrop-blur"
+              >
+                استعراض الملف
+                <ExternalLink className="h-4 w-4" />
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          <p className="text-xs text-slate-655 leading-relaxed pt-2 border-t border-slate-100">
-            {profile.description || 'شريك التحقق المالي المعزز عبر منصة سند.'}
-          </p>
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20 font-arabic text-right" dir="rtl">
+      <div className="mx-auto max-w-5xl">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-5">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setMode('intro')} className="rounded-xl border border-slate-200 p-2.5 text-slate-700" aria-label="العودة إلى الغلاف">
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {logoUrl ? <img src={logoUrl} alt={profile.name} className="h-full w-full object-cover" /> : <Store className="h-5 w-5 text-slate-400" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h1 className="truncate text-sm font-bold text-slate-950">{profile.name}</h1>
+                {profile.verification_status === 'verified' && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}
+              </div>
+              <p className="mt-0.5 truncate text-[10px] text-slate-500">{profile.city}، {profile.governorate}</p>
+            </div>
+            {whatsapp && (
+              <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer" className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700" aria-label="واتساب">
+                <MessageCircle className="h-5 w-5" />
+              </a>
+            )}
+          </div>
+        </header>
 
-          {/* Social Media Link Buttons (NEW) */}
-          {(socials.facebook || socials.instagram || socials.twitter || socials.website || profile.whatsapp || profile.whatsapp_catalog_url) && (
-            <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100 justify-center sm:justify-start">
-              {socials.facebook && (
-                <a
-                  href={socials.facebook}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 hover:text-blue-600 hover:bg-white rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <Facebook className="w-3.5 h-3.5 text-blue-600 fill-blue-600" />
-                  <span>فيسبوك</span>
-                </a>
+        <main className="space-y-5 px-2 py-4 sm:px-5">
+          {error && <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
+
+          <section className="rounded-2xl border border-slate-200 bg-white">
+            <button
+              type="button"
+              onClick={() => setSectionMenuOpen((value) => !value)}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-right"
+              aria-expanded={sectionMenuOpen}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                <Store className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-bold text-slate-400">قسم الملف العام</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-950">{currentSection.label}</p>
+              </div>
+              {sectionMenuOpen ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
+            </button>
+            {sectionMenuOpen && (
+              <div className="grid gap-1 border-t border-slate-100 p-2 sm:grid-cols-2">
+                {SECTION_META.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setSection(item.id);
+                      setSectionMenuOpen(false);
+                    }}
+                    className={`rounded-xl px-3 py-3 text-right ${section === item.id ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}
+                  >
+                    <p className="text-xs font-bold">{item.label}</p>
+                    <p className={`mt-1 text-[9px] ${section === item.id ? 'text-white/65' : 'text-slate-400'}`}>{item.description}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {section === 'overview' && (
+            <div className="space-y-5">
+              <section className="border-y border-slate-200 bg-white px-3 py-5 sm:rounded-2xl sm:border sm:px-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-950">{profile.name}</h2>
+                  {profile.verification_status === 'verified' && <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700">نشاط موثّق</span>}
+                </div>
+                <p className="mt-2 text-xs leading-7 text-slate-600">{profile.description || 'لم يضف النشاط وصفًا تفصيليًا بعد.'}</p>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-[10px]">
+                  <div><span className="block text-slate-400">التصنيف</span><strong className="mt-1 block text-slate-800">{profile.category_name || 'عام'}</strong></div>
+                  <div><span className="block text-slate-400">الموقع</span><strong className="mt-1 block text-slate-800">{profile.city}، {profile.governorate}</strong></div>
+                </div>
+                <div className="mt-4">
+                  {isCustomer ? (
+                    <div className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+                      <UserCheck className="h-4 w-4" /> أنت مرتبط بهذا النشاط التجاري
+                    </div>
+                  ) : (
+                    <button onClick={() => void handleJoin()} disabled={linking} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-bold text-white">
+                      {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} الارتباط كعميل
+                    </button>
+                  )}
+                </div>
+              </section>
+
+              {featuredItems.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between px-2 sm:px-0">
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-950">عناصر مختارة من الكتالوج</h2>
+                      <p className="mt-1 text-[10px] text-slate-400">أبرز ما يقدمه النشاط</p>
+                    </div>
+                    <button type="button" onClick={() => setSection('catalog')} className="text-[10px] font-bold text-slate-700">عرض الكل</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {featuredItems.map((item) => (
+                      <CatalogItemCard key={item.id} item={item} businessSlug={profile.slug} businessName={profile.name} whatsapp={whatsapp} onNavigate={onNavigate} />
+                    ))}
+                  </div>
+                </section>
               )}
-              {socials.instagram && (
-                <a
-                  href={socials.instagram}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 hover:text-pink-600 hover:bg-white rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <Instagram className="w-3.5 h-3.5 text-pink-600" />
-                  <span>إنستغرام</span>
-                </a>
-              )}
-              {socials.twitter && (
-                <a
-                  href={socials.twitter}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 hover:text-sky-500 hover:bg-white rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <Twitter className="w-3.5 h-3.5 text-sky-500 fill-sky-500" />
-                  <span>تويتر / X</span>
-                </a>
-              )}
-              {socials.website && (
-                <a
-                  href={socials.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-white rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <Globe className="w-3.5 h-3.5 text-slate-650" />
-                  <span>الموقع الإلكتروني</span>
-                </a>
-              )}
-              {profile.whatsapp && (
-                <a
-                  href={`https://wa.me/${profile.whatsapp}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100/70 rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>تواصل سريع</span>
-                </a>
-              )}
-              {profile.whatsapp_catalog_url && (
-                <a
-                  href={profile.whatsapp_catalog_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100/70 rounded-xl text-[10px] font-bold transition-all"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>كتالوج واتساب</span>
-                </a>
+
+              {galleryUrls.length > 0 && (
+                <section className="space-y-3">
+                  <h2 className="px-2 text-sm font-bold text-slate-950 sm:px-0">صور من النشاط</h2>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {galleryUrls.map((url, index) => <img key={`${url}-${index}`} src={url} alt={`${profile.name} ${index + 1}`} className="aspect-square w-full rounded-2xl object-cover" loading="lazy" />)}
+                  </div>
+                </section>
               )}
             </div>
           )}
-        </div>
 
-        {/* Tab Buttons Navigation */}
-        <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-2xl p-2 flex overflow-x-auto no-scrollbar gap-1 shadow-2xs">
-          {[
-            { id: 'overview', label: 'لوحة النشاط والمعلومات', icon: Store },
-            { id: 'products', label: 'كتالوج المنتجات المعروضة', icon: ShoppingBag },
-            { id: 'services', label: 'الخدمات المتاحة للطلب', icon: Wrench },
-            { id: 'financial', label: 'الحسابات المالية للتحويل', icon: Globe },
-            { id: 'complaints', label: 'صندوق الشكاوى والملاحظات', icon: AlertTriangle }
-          ].filter(tab => tab.id !== 'products' || INTERNAL_BUSINESS_CATALOG_ENABLED).map((tab) => {
-            const Icon = tab.icon;
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold transition-all shrink-0 ${
-                  isSelected
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Status messages */}
-        {success && (
-          <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 text-[11px] rounded-2xl flex items-center gap-2 animate-scale-up">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{success}</span>
-          </div>
-        )}
-
-        {/* TAB: OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Gallery Section */}
-            {galleryUrls.length > 0 && (
-              <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-3">
-                <h3 className="text-xs font-bold text-slate-900">معرض صور النشاط التجاري</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {galleryUrls.map((url, i) => (
-                    <div key={i} className="aspect-video bg-slate-100 rounded-xl overflow-hidden border border-slate-200 shadow-3xs hover:opacity-90 transition-all cursor-pointer">
-                      <img src={url} alt={`gallery-${i}`} className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
+          {section === 'catalog' && (
+            <section className="space-y-3">
+              <div className="px-2 sm:px-0">
+                <h2 className="text-sm font-bold text-slate-950">كتالوج النشاط</h2>
+                <p className="mt-1 text-[10px] leading-5 text-slate-400">حتى 10 عناصر رئيسية يختارها النشاط لعرضها لعملائه.</p>
               </div>
-            )}
-
-            {/* Working Hours detail */}
-            <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-700" />
-                <span>مواعيد وساعات العمل الأسبوعية</span>
-              </h3>
-
-              {profile.working_hours && Object.keys(profile.working_hours).length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  {Object.entries(profile.working_hours).map(([day, val]: [string, any]) => (
-                    <div key={day} className="flex justify-between items-center bg-slate-50 border border-slate-200/50 p-2.5 rounded-xl text-xs">
-                      <span className="font-bold text-slate-950">{DAYS_AR[day]}</span>
-                      {val.closed ? (
-                        <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50 font-bold">عطلة نهاية الأسبوع</span>
-                      ) : (
-                        <span className="font-mono text-slate-700" dir="ltr">{val.open} - {val.close}</span>
-                      )}
-                    </div>
-                  ))}
+              {catalogItems.length === 0 ? (
+                <div className="border-y border-slate-200 bg-white py-12 text-center sm:rounded-2xl sm:border">
+                  <Package className="mx-auto h-8 w-8 text-slate-300" />
+                  <p className="mt-3 text-xs text-slate-500">لم ينشر النشاط عناصر في الكتالوج بعد.</p>
                 </div>
               ) : (
-                <p className="text-[10px] text-slate-400">لم يتم تحديد مواعيد العمل بعد.</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {catalogItems.map((item) => (
+                    <CatalogItemCard key={item.id} item={item} businessSlug={profile.slug} businessName={profile.name} whatsapp={whatsapp} onNavigate={onNavigate} />
+                  ))}
+                </div>
               )}
-            </div>
-          </div>
-        )}
+            </section>
+          )}
 
-        {/* TAB: PRODUCTS */}
-        {activeTab === 'products' && INTERNAL_BUSINESS_CATALOG_ENABLED && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
-              <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-900">كتالوج السلع والمنتجات</h3>
-                {(profile as any).whatsapp_catalog_url && (
-                  <a
-                    href={(profile as any).whatsapp_catalog_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-150 rounded-xl text-[9px] font-bold"
-                  >
-                    <span>تصفح الكاتلوج على واتساب</span>
+          {section === 'hours' && (
+            <section className="border-y border-slate-200 bg-white sm:rounded-2xl sm:border">
+              <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-4">
+                <Clock className="h-5 w-5 text-slate-600" />
+                <div><h2 className="text-sm font-bold text-slate-950">ساعات العمل الأسبوعية</h2><p className="mt-1 text-[10px] text-slate-400">المواعيد التي حددها النشاط</p></div>
+              </div>
+              <div className="divide-y divide-slate-100 px-4">
+                {DAYS.map(({ key, label }) => {
+                  const day = profile.working_hours?.[key];
+                  const closed = !day || day.closed;
+                  return (
+                    <div key={key} className="flex items-center justify-between py-3.5 text-xs">
+                      <span className="font-bold text-slate-800">{label}</span>
+                      <span className={closed ? 'text-slate-400' : 'font-mono text-slate-700'}>{closed ? 'مغلق' : `${toLatinDigits(day.open || '')} — ${toLatinDigits(day.close || '')}`}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {section === 'contact' && (
+            <div className="space-y-4">
+              <section className="divide-y divide-slate-100 border-y border-slate-200 bg-white sm:rounded-2xl sm:border">
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                  <div><p className="text-xs font-bold text-slate-900">العنوان</p><p className="mt-1 text-[11px] leading-5 text-slate-500">{profile.address_text || `${profile.city}، ${profile.governorate}`}</p></div>
+                </div>
+                {whatsapp && (
+                  <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-4 py-4">
+                    <MessageCircle className="h-5 w-5 text-emerald-600" />
+                    <div className="flex-1"><p className="text-xs font-bold text-slate-900">واتساب</p><p className="mt-1 font-mono text-[11px] text-slate-500" dir="ltr">+{whatsapp}</p></div>
+                    <ExternalLink className="h-4 w-4 text-slate-300" />
                   </a>
                 )}
-              </div>
-
-              {products.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 text-xs">لا توجد منتجات مسجلة حالياً.</div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 px-1">
-                  {products.map((prod: any) => (
-                    <PublicProductCardItem
-                      key={prod.id}
-                      prod={prod}
-                      businessSlug={profile.slug}
-                      onNavigate={onNavigate}
-                    />
-                  ))}
-                </div>
-              )}
+                {profile.whatsapp_catalog_url && (
+                  <a href={profile.whatsapp_catalog_url} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-4 py-4">
+                    <Package className="h-5 w-5 text-slate-600" />
+                    <div className="flex-1"><p className="text-xs font-bold text-slate-900">كتالوج واتساب</p><p className="mt-1 text-[10px] text-slate-400">فتح الكتالوج الخارجي للنشاط</p></div>
+                    <ExternalLink className="h-4 w-4 text-slate-300" />
+                  </a>
+                )}
+                {socials.website && (
+                  <a href={socials.website} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-4 py-4">
+                    <Globe className="h-5 w-5 text-slate-600" />
+                    <div className="flex-1"><p className="text-xs font-bold text-slate-900">الموقع الإلكتروني</p><p className="mt-1 truncate text-[10px] text-slate-400">{socials.website}</p></div>
+                    <ExternalLink className="h-4 w-4 text-slate-300" />
+                  </a>
+                )}
+                {profile.whatsapp && (
+                  <a href={`tel:+${whatsapp}`} className="flex items-center gap-3 px-4 py-4">
+                    <Phone className="h-5 w-5 text-slate-600" />
+                    <div className="flex-1"><p className="text-xs font-bold text-slate-900">اتصال</p><p className="mt-1 text-[10px] text-slate-400">الاتصال برقم النشاط</p></div>
+                  </a>
+                )}
+              </section>
             </div>
-          </div>
-        )}
-
-        {/* TAB: SERVICES */}
-        {activeTab === 'services' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold text-slate-900 pb-3 border-b border-slate-100">قائمة الخدمات والحلول المتاحة</h3>
-
-              {services.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 text-xs">لا توجد خدمات مسجلة حالياً.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {services.map((serv: any) => (
-                    <PublicServiceCardItem key={serv.id} serv={serv} whatsapp={profile.whatsapp || ''} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB: FINANCIAL ACCOUNTS */}
-        {activeTab === 'financial' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
-              <div>
-                <h3 className="text-xs font-bold text-slate-900">الحسابات المصرفية ومحافظ الدفع المعتمدة</h3>
-                <p className="text-[9px] text-slate-400">انقر على زر نسخ رقم الحساب لتسهيل عملية التحويل المالي والسداد</p>
-              </div>
-
-              {financialAccounts.length === 0 ? (
-                <div className="p-12 text-center text-slate-450 text-xs">لا يوجد حسابات مالية مسجلة للتحويل حالياً.</div>
-              ) : (
-                <div className="space-y-4 pt-2">
-                  {financialAccounts.map((acc: any) => (
-                    <div key={acc.id} className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3 text-right">
-                      <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
-                        <h4 className="text-xs font-bold text-slate-900">{acc.name}</h4>
-                        <span className="text-[9px] bg-slate-200 text-slate-700 font-bold px-2.5 py-0.5 rounded-full">
-                          {acc.is_multicurrency ? 'حساب متعدد العملات' : 'حساب موحد'}
-                        </span>
-                      </div>
-
-                      {!acc.is_multicurrency ? (
-                        <div className="flex items-center justify-between bg-white px-3 py-2.5 rounded-xl border border-slate-200/60 font-mono text-xs shadow-3xs">
-                          <span className="text-slate-800 font-bold">{acc.account_number}</span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(acc.account_number);
-                              setSuccess(`تم نسخ رقم حساب ${acc.name}!`);
-                              setTimeout(() => setSuccess(null), 2000);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-black hover:bg-slate-100 rounded-lg transition-all"
-                            title="نسخ رقم الحساب"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                          {['YER', 'SAR', 'USD'].map((cur) => {
-                            const accNum = acc.accounts?.[cur];
-                            if (!accNum) return null;
-                            return (
-                              <div key={cur} className="bg-white p-3 rounded-xl border border-slate-200/60 flex items-center justify-between gap-2.5 font-mono text-[10px] shadow-3xs">
-                                <div className="space-y-0.5 min-w-0">
-                                  <span className="text-[8px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold">{cur}</span>
-                                  <span className="text-slate-800 font-bold block pt-0.5">{accNum}</span>
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(accNum);
-                                    setSuccess(`تم نسخ رقم حساب ${acc.name} بالـ ${cur}!`);
-                                    setTimeout(() => setSuccess(null), 2000);
-                                  }}
-                                  className="p-1 text-slate-550 hover:text-black hover:bg-slate-100 rounded transition-all shrink-0"
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB: COMPLAINTS */}
-        {activeTab === 'complaints' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Submit form */}
-            <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-4">
-              <div className="pb-3 border-b border-slate-100">
-                <h3 className="text-xs font-bold text-slate-900">تقديم شكوى أو ملاحظة</h3>
-                <p className="text-[10px] text-slate-400">أرسل ملاحظتك مباشرة للمالك لتسجيلها ومتابعتها بخصوص المعاملات المالية المربوطة</p>
-              </div>
-
-              <form onSubmit={handleComplaintSubmit} className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">اسم مقدم الشكوى الثنائي</label>
-                    <input
-                      type="text"
-                      required
-                      value={visitorName}
-                      onChange={(e) => setVisitorName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none"
-                      placeholder="اسمك الكامل"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500">رقم الهاتف للتواصل</label>
-                    <input
-                      type="tel"
-                      required
-                      value={visitorPhone}
-                      onChange={(e) => setVisitorPhone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs font-mono text-left outline-none"
-                      placeholder="967..."
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500">نص الشكوى أو الملاحظة بالتفصيل</label>
-                  <textarea
-                    rows={3}
-                    required
-                    value={complaintText}
-                    onChange={(e) => setComplaintText(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 px-3 py-2 rounded-xl text-xs outline-none resize-none"
-                    placeholder="اكتب ملاحظتك أو رقم المعاملة المعنية هنا..."
-                  />
-                </div>
-
-                <div className="flex justify-end pt-2 border-t border-slate-100">
-                  <button
-                    type="submit"
-                    className="bg-slate-900 text-white text-[10px] font-bold py-2.5 px-5 rounded-xl hover:bg-black transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>إرسال ومتابعة عبر واتساب</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Local complaints log */}
-            {localComplaints.length > 0 && (
-              <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-xs space-y-3">
-                <h3 className="text-xs font-bold text-slate-900">سجل شكاواك السابقة المسجلة محلياً في هذا المتصفح</h3>
-                <div className="space-y-3 pt-1">
-                  {localComplaints.map((comp: any) => (
-                    <div key={comp.id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-800">{comp.name}</span>
-                        <span className="text-[8px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-bold">
-                          {comp.status === 'resolved' ? 'تم الحل' : 'قيد المتابعة مع الإدارة'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-600 leading-relaxed">{comp.text}</p>
-                      <span className="text-[8px] text-slate-400 font-mono block text-left">
-                        {new Date(comp.created_at).toLocaleString('ar-YE-u-nu-latn', { dateStyle: 'short', numberingSystem: 'latn' })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
+          )}
+        </main>
       </div>
     </div>
   );
