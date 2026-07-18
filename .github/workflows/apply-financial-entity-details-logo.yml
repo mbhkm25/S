@@ -1,0 +1,37 @@
+name: Apply financial entity logo to details
+
+on:
+  push:
+    branches:
+      - feature/business-customer-management-v1
+    paths:
+      - scripts/apply-financial-entity-logo-to-details.mjs
+      - .github/workflows/apply-financial-entity-details-logo.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-details-logo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/business-customer-management-v1
+          fetch-depth: 0
+
+      - name: Apply focused patch
+        run: node scripts/apply-financial-entity-logo-to-details.mjs
+
+      - name: Commit patched details
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Show financial entity logo in operation details"
+          git push origin HEAD:feature/business-customer-management-v1
