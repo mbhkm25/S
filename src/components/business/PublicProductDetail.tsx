@@ -1,21 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  ArrowRight, 
-  Share2, 
-  MessageSquare, 
-  MapPin, 
-  Loader2, 
-  AlertTriangle, 
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowRight,
   Check,
-  Copy, 
   Image as ImageIcon,
-  Store,
-  ChevronLeft
+  Loader2,
+  MessageCircle,
+  Package,
+  Share2,
+  ShieldCheck
 } from 'lucide-react';
-import { 
-  getPublicBusinessProfile, 
-  getBusinessMediaSignedUrl 
-} from '../../lib/businessApi';
+import { getBusinessMediaSignedUrl, getPublicBusinessProfile } from '../../lib/businessApi';
 import { buildPublicProductUrl } from '../../lib/urlUtils';
 
 interface PublicProductDetailProps {
@@ -24,341 +18,149 @@ interface PublicProductDetailProps {
   onNavigate: (page: string, token?: string) => void;
 }
 
-function SimilarProductCardItem({ 
-  prod, 
-  businessSlug, 
-  onNavigate 
-}: { 
-  prod: any; 
-  businessSlug: string; 
-  onNavigate: (page: string, token?: string) => void;
-  key?: any;
-}) {
-  const [imgUrl, setImgUrl] = useState('');
+type CatalogItem = {
+  id: string;
+  title: string;
+  description?: string | null;
+  item_type?: string;
+  price?: number | null;
+  currency?: string | null;
+  image_paths?: string[] | null;
+  availability_status?: string;
+  contact_action?: string;
+  features?: unknown[];
+};
 
-  useEffect(() => {
-    let active = true;
-    if (prod.image_path) {
-      getBusinessMediaSignedUrl(prod.image_path).then((url) => {
-        if (active) setImgUrl(url);
-      });
-    } else {
-      setImgUrl('');
-    }
-    return () => {
-      active = false;
-    };
-  }, [prod.image_path]);
-
-  return (
-    <button
-      onClick={() => onNavigate('public-product-detail', `${businessSlug}/${prod.id}`)}
-      className="w-36 bg-white border border-slate-200 rounded-2xl overflow-hidden text-right transition-all flex flex-col shrink-0 hover:border-slate-350 active:scale-[0.98] shadow-3xs hover:shadow-2xs text-slate-800"
-    >
-      <div className="w-full aspect-square bg-slate-50 border-b border-slate-100 relative overflow-hidden">
-        {imgUrl ? (
-          <img src={imgUrl} alt={prod.name} className="w-full h-full object-cover object-center" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon className="w-5 h-5 text-slate-300" />
-          </div>
-        )}
-      </div>
-      <div className="p-2.5 flex-1 flex flex-col justify-between space-y-1">
-        <h5 className="text-[10px] font-bold text-slate-900 line-clamp-1 leading-tight">{prod.name}</h5>
-        <span className="text-[9px] font-extrabold text-indigo-700 font-mono">
-          {prod.price ? prod.price : 'السعر عند الطلب'}
-        </span>
-      </div>
-    </button>
-  );
+function availabilityLabel(value?: string) {
+  if (value === 'unavailable') return 'غير متاح حاليًا';
+  if (value === 'on_request') return 'متاح عند الطلب';
+  return 'متاح';
 }
 
-export default function PublicProductDetail({ 
-  businessSlug, 
-  productId, 
-  onNavigate 
-}: PublicProductDetailProps) {
+function priceLabel(item: CatalogItem) {
+  if (item.price === null || item.price === undefined) return 'السعر عند الطلب';
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(item.price)}${item.currency ? ` ${item.currency}` : ''}`;
+}
+
+export default function PublicProductDetail({ businessSlug, productId, onNavigate }: PublicProductDetailProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
-  const [product, setProduct] = useState<any | null>(null);
-  
-  const [imgUrl, setImgUrl] = useState('');
+  const [item, setItem] = useState<CatalogItem | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
-    const fetchProduct = async () => {
+    const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const bizProfile = await getPublicBusinessProfile(businessSlug);
+        const business = await getPublicBusinessProfile(businessSlug) as any;
         if (!active) return;
-        setProfile(bizProfile);
-
-        const productsList = (bizProfile as any).profile_sections?.products || [];
-        const foundProduct = productsList.find((p: any) => p.id === productId);
-        
-        if (!foundProduct) {
-          setError('لم يتم العثور على المنتج المطلوب في الكتالوج.');
+        const items = Array.isArray(business.catalog_items) ? business.catalog_items as CatalogItem[] : [];
+        const found = items.find((candidate) => candidate.id === productId) || null;
+        if (!found) {
+          setError('لم يتم العثور على العنصر المطلوب في كتالوج النشاط.');
           return;
         }
-        setProduct(foundProduct);
-
-        // Resolve Image Signed URL
-        if (foundProduct.image_path) {
-          const url = await getBusinessMediaSignedUrl(foundProduct.image_path);
-          if (active) setImgUrl(url);
+        setProfile(business);
+        setItem(found);
+        const imagePath = Array.isArray(found.image_paths) ? found.image_paths[0] : null;
+        if (imagePath) {
+          const resolved = await getBusinessMediaSignedUrl(imagePath);
+          if (active) setImageUrl(resolved || '');
         }
-      } catch (err: any) {
-        if (active) {
-          setError(err.message || 'فشل في تحميل تفاصيل المنتج.');
-        }
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : 'تعذر تحميل تفاصيل العنصر.');
       } finally {
         if (active) setLoading(false);
       }
     };
-
-    fetchProduct();
+    void load();
     return () => {
       active = false;
     };
   }, [businessSlug, productId]);
 
-  const productUrl = buildPublicProductUrl(businessSlug, productId);
+  const itemUrl = buildPublicProductUrl(businessSlug, productId);
+  const whatsappUrl = useMemo(() => {
+    if (!profile || !item || item.contact_action === 'none') return '';
+    const phone = String(profile.whatsapp || '').replace(/\D/g, '');
+    if (!phone) return '';
+    const message = `مرحبًا، أريد الاستفسار عن ${item.title} المعروض في كتالوج ${profile.name} على سند.\n${priceLabel(item)}\n${itemUrl}`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  }, [item, itemUrl, profile]);
 
   const handleShare = async () => {
+    if (!item) return;
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: product?.name || 'تفاصيل المنتج',
-          text: `شاهد المنتج: ${product?.name} على منصة سند`,
-          url: productUrl,
-        });
-      } catch (err) {
-        console.warn('Web Share failed, fallback to copy:', err);
-        copyToClipboard();
+        await navigator.share({ title: item.title, text: `شاهد ${item.title} على سند`, url: itemUrl });
+        return;
+      } catch {
+        // Fall back to clipboard.
       }
-    } else {
-      copyToClipboard();
     }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(productUrl);
+    await navigator.clipboard.writeText(itemUrl);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // WhatsApp Enquiry URL Builder
-  const getWhatsappUrl = () => {
-    if (!profile || !product) return '';
-    const phone = profile.whatsapp || '';
-    const priceText = product.price ? `السعر: ${product.price}` : 'السعر: عند الطلب';
-    const message = `مرحباً، أود الاستفسار عن المنتج المعروض في صفحتكم على سند:
-📦 المنتج: ${product.name}
-💰 ${priceText}
-🔗 رابط المنتج: ${productUrl}`;
-    
-    return product.whatsapp_url || `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   if (loading) {
+    return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-slate-800" /></div>;
+  }
+
+  if (!item || error) {
     return (
-      <div className="min-h-screen bg-slate-50/50 flex flex-col items-center justify-center p-6 text-center font-arabic" dir="rtl">
-        <Loader2 className="w-7 h-7 animate-spin text-slate-800" />
-        <p className="text-xs text-slate-400 mt-2">جاري تحميل تفاصيل المنتج...</p>
+      <div className="mx-auto my-12 max-w-sm rounded-3xl border border-slate-200 bg-white p-6 text-center font-arabic" dir="rtl">
+        <p className="text-xs leading-6 text-slate-600">{error || 'لم يتم العثور على العنصر.'}</p>
+        <button onClick={() => onNavigate('public-business-profile', businessSlug)} className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white">العودة إلى النشاط</button>
       </div>
     );
   }
-
-  if (error || !product) {
-    return (
-      <div className="min-h-screen bg-slate-50/50 flex flex-col items-center justify-center p-6 text-center font-arabic" dir="rtl">
-        <div className="p-4 bg-white border border-slate-200 rounded-3xl space-y-4 max-w-sm shadow-xs">
-          <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
-          <div className="space-y-1">
-            <h3 className="text-xs font-bold text-slate-900">حدث خطأ</h3>
-            <p className="text-[10px] text-slate-550 leading-relaxed">
-              {error || 'لم نتمكن من العثور على تفاصيل هذا المنتج.'}
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate('public-business-profile', businessSlug)}
-            className="w-full bg-slate-900 text-white text-[10px] font-bold py-2.5 px-4 rounded-xl hover:bg-black transition-all"
-          >
-            العودة لصفحة النشاط
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Similar products filter
-  const similarProducts = (profile?.profile_sections?.products || [])
-    .filter((p: any) => p.id !== productId)
-    .slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-slate-50/40 pb-28 font-arabic text-right relative flex flex-col" dir="rtl">
-      {/* Dynamic Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={() => onNavigate('public-business-profile', businessSlug)}
-          className="p-2 hover:bg-slate-100 rounded-xl transition-all border border-transparent hover:border-slate-200"
-          aria-label="رجوع"
-        >
-          <ArrowRight className="w-4 h-4 text-slate-800" />
-        </button>
-        <span className="text-xs font-bold text-slate-900 max-w-[200px] truncate">{product.name}</span>
-        <button
-          onClick={handleShare}
-          className="p-2 hover:bg-slate-100 rounded-xl transition-all border border-transparent hover:border-slate-200"
-          aria-label="مشاركة"
-        >
-          {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4 text-slate-800" />}
-        </button>
+    <div className="min-h-screen bg-slate-50 pb-24 font-arabic text-right" dir="rtl">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur">
+        <button onClick={() => onNavigate('public-business-profile', businessSlug)} className="rounded-xl border border-slate-200 p-2.5 text-slate-700" aria-label="العودة"><ArrowRight className="h-4 w-4" /></button>
+        <h1 className="max-w-[65%] truncate text-xs font-bold text-slate-950">{item.title}</h1>
+        <button onClick={() => void handleShare()} className="rounded-xl border border-slate-200 p-2.5 text-slate-700" aria-label="مشاركة">{copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Share2 className="h-4 w-4" />}</button>
       </header>
 
-      {/* Main Image Banner */}
-      <section className="w-full max-w-lg mx-auto bg-white border-b border-slate-200/60 relative">
-        <div className="w-full aspect-square md:aspect-[4/3] max-h-[450px] relative overflow-hidden flex items-center justify-center">
-          {imgUrl ? (
-            <img 
-              src={imgUrl} 
-              alt={product.name} 
-              className="w-full h-full object-cover object-center" 
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 text-slate-300 space-y-1">
-              <ImageIcon className="w-12 h-12 stroke-[1.5]" />
-              <span className="text-[10px]">لا توجد صورة متوفرة</span>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Product Information */}
-      <main className="w-full max-w-lg mx-auto px-4 mt-4 space-y-4">
-        {/* Info Card */}
-        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-3xs space-y-3.5">
-          <div className="space-y-1">
-            <h1 className="text-sm font-bold text-slate-950 leading-snug">{product.name}</h1>
-            <span className="inline-block text-[9px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md font-bold">
-              قسم الكتالوج
-            </span>
+      <main className="mx-auto max-w-2xl space-y-4 px-2 py-4 sm:px-4">
+        <section className="overflow-hidden border-y border-slate-200 bg-white sm:rounded-3xl sm:border">
+          <div className="aspect-[4/3] bg-slate-100">
+            {imageUrl ? <img src={imageUrl} alt={item.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><ImageIcon className="h-12 w-12 text-slate-300" /></div>}
           </div>
-
-          <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-            <div className="space-y-0.5">
-              <span className="text-[9px] text-slate-400 block font-bold">سعر البيع</span>
-              <span className="text-base font-extrabold text-indigo-700 font-mono">
-                {product.price ? product.price : 'السعر عند الطلب'}
-              </span>
-            </div>
-
-            <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1 rounded-full">
-              متوفر للطلب
-            </span>
-          </div>
-        </div>
-
-        {/* Copy Link toast notice */}
-        {copied && (
-          <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 text-[10px] font-bold rounded-2xl flex items-center gap-2 animate-scale-up">
-            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>تم نسخ رابط المنتج إلى الحافظة! يمكنك الآن مشاركته مباشرة.</span>
-          </div>
-        )}
-
-        {/* Description section */}
-        {product.description && (
-          <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-3xs space-y-2">
-            <h3 className="text-xs font-bold text-slate-900 border-r-2 border-indigo-600 pr-2">وصف وتفاصيل المنتج</h3>
-            <p className="text-[11px] text-slate-655 leading-relaxed whitespace-pre-line">
-              {product.description}
-            </p>
-          </div>
-        )}
-
-        {/* Specifications Table */}
-        <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-3xs space-y-3">
-          <h3 className="text-xs font-bold text-slate-900 border-r-2 border-indigo-600 pr-2">المواصفات والخصائص</h3>
-          <div className="divide-y divide-slate-100 text-[10px]">
-            <div className="py-2.5 flex justify-between">
-              <span className="text-slate-400 font-bold">حالة التوفر</span>
-              <span className="text-slate-800 font-semibold">متوفر للطلب المباشر</span>
-            </div>
-            <div className="py-2.5 flex justify-between">
-              <span className="text-slate-400 font-bold">شريك التوثيق</span>
-              <span className="text-emerald-700 font-bold flex items-center gap-0.5">✓ منصة سند للتحقق</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Merchant Card */}
-        {profile && (
-          <div className="bg-white border border-slate-200/60 rounded-3xl p-4.5 shadow-3xs flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-center shrink-0">
-                <Store className="w-5 h-5 text-slate-455" />
+          <div className="space-y-4 p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold text-slate-950">{item.title}</h2>
+                <p className="mt-1 text-[10px] text-slate-400">{item.item_type || 'catalog item'}</p>
               </div>
-              <div className="space-y-0.5 min-w-0">
-                <span className="text-[9px] text-slate-400 block">البائع والنشاط التجاري</span>
-                <h4 className="text-xs font-bold text-slate-900 truncate">{profile.name}</h4>
-              </div>
+              <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${item.availability_status === 'unavailable' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>{availabilityLabel(item.availability_status)}</span>
             </div>
-            <button
-              onClick={() => onNavigate('public-business-profile', businessSlug)}
-              className="px-3 py-1.5 border border-slate-250 text-slate-700 hover:text-black hover:bg-slate-50 text-[9px] font-bold rounded-xl transition-all shrink-0 flex items-center gap-1"
-            >
-              <span>زيارة النشاط</span>
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center justify-between border-y border-slate-100 py-3">
+              <span className="text-[10px] font-bold text-slate-400">السعر</span>
+              <strong className="font-mono text-sm text-slate-950">{priceLabel(item)}</strong>
+            </div>
+            {item.description && <p className="whitespace-pre-line text-xs leading-7 text-slate-600">{item.description}</p>}
           </div>
-        )}
+        </section>
 
-        {/* Similar Products */}
-        {similarProducts.length > 0 && (
-          <div className="space-y-3 pt-2">
-            <h3 className="text-xs font-bold text-slate-900 pr-1">منتجات أخرى قد تعجبك</h3>
-            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-3 px-1">
-              {similarProducts.map((prod: any) => (
-                <SimilarProductCardItem 
-                  key={prod.id} 
-                  prod={prod} 
-                  businessSlug={businessSlug} 
-                  onNavigate={onNavigate} 
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        <section className="border-y border-slate-200 bg-white px-4 py-4 sm:rounded-2xl sm:border">
+          <div className="flex items-center gap-3"><Package className="h-5 w-5 text-slate-600" /><div><p className="text-xs font-bold text-slate-900">من كتالوج {profile?.name}</p><p className="mt-1 text-[10px] text-slate-400">نشاط ظاهر وموثوق عبر منصة سند</p></div>{profile?.verification_status === 'verified' && <ShieldCheck className="mr-auto h-5 w-5 text-emerald-600" />}</div>
+        </section>
       </main>
 
-      {/* Bottom Sticky Action Bar */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/70 p-3 shadow-lg z-40 flex items-center justify-between gap-3">
-        <div className="max-w-md mx-auto w-full flex items-center justify-between gap-3">
-          <a
-            href={getWhatsappUrl()}
-            target="_blank"
-            rel="noreferrer"
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-3.5 px-4 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2"
-          >
-            <MessageSquare className="w-4 h-4 fill-white" />
-            <span>استفسار وطلب عبر واتساب</span>
+      {whatsappUrl && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+          <a href={whatsappUrl} target="_blank" rel="noreferrer" className="mx-auto flex max-w-2xl items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white">
+            <MessageCircle className="h-5 w-5" /> استفسار عبر واتساب
           </a>
-
-          <button
-            onClick={copyToClipboard}
-            className="p-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-2xl transition-all shrink-0"
-            title="نسخ الرابط"
-          >
-            {copied ? <Check className="w-4.5 h-4.5 text-emerald-600" /> : <Copy className="w-4.5 h-4.5" />}
-          </button>
         </div>
-      </footer>
+      )}
     </div>
   );
 }
