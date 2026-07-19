@@ -124,9 +124,7 @@ export async function uploadCatalogItemImage(
   displayOrder: number
 ): Promise<CatalogImageUploadResult> {
   const { mimeType, extension } = normalizeCatalogImageFile(file);
-  const randomPart = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const randomPart = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   const path = `${businessId}/catalog/item-${randomPart}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
@@ -146,7 +144,11 @@ export async function uploadCatalogItemImage(
   });
 
   if (registerError) {
-    await supabase.storage.from('business-media').remove([path]).catch(() => undefined);
+    try {
+      await supabase.storage.from('business-media').remove([path]);
+    } catch {
+      // The registration error is the actionable failure; cleanup is best effort.
+    }
     throw new Error(registerError.message || 'تعذر تسجيل صورة العنصر.');
   }
 
