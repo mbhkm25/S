@@ -18,45 +18,6 @@
   @media (min-width: 1024px) {
     .sanad-page-gutter { padding-inline: 1.25rem; }
   }
-
-  .sanad-domain-divider {
-    position: relative;
-    height: 2.75rem;
-    overflow: hidden;
-  }
-
-  .sanad-domain-divider::before {
-    content: '';
-    position: absolute;
-    inset-inline: 0;
-    top: 50%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(15,23,42,.22), rgba(16,185,129,.45), rgba(15,23,42,.22), transparent);
-  }
-
-  .sanad-domain-divider::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: -20%;
-    width: 24%;
-    height: 3px;
-    border-radius: 999px;
-    background: linear-gradient(90deg, transparent, rgba(16,185,129,.9), transparent);
-    transform: translateY(-50%);
-    animation: sanad-divider-flow 3.2s ease-in-out infinite;
-  }
-}
-
-@keyframes sanad-divider-flow {
-  0% { right: -24%; opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { right: 100%; opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sanad-domain-divider::after { animation: none; right: 38%; opacity: .7; }
 }
 
 @theme {
@@ -67,6 +28,59 @@
 body {
   font-family: var(--font-sans);
   direction: rtl;
+}
+
+#home_view section[aria-labelledby="financial-sanad-title"] > div.grid button {
+  min-height: 5.5rem !important;
+}
+
+#home_view section[aria-labelledby="financial-sanad-title"] > div.grid button > span > span {
+  display: none;
+}
+
+#home_view > div.relative.py-2 {
+  position: relative;
+  height: 3rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+#home_view > div.relative.py-2 > div,
+#home_view > div.relative.py-2 > span {
+  display: none;
+}
+
+#home_view > div.relative.py-2::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0.25rem;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(15,23,42,.2), rgba(16,185,129,.5), rgba(14,165,233,.45), rgba(15,23,42,.2), transparent);
+}
+
+#home_view > div.relative.py-2::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -24%;
+  width: 28%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(16,185,129,.95), rgba(14,165,233,.9), transparent);
+  transform: translateY(-50%);
+  animation: sanad-divider-flow 3.2s ease-in-out infinite;
+}
+
+@keyframes sanad-divider-flow {
+  0% { right: -28%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { right: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #home_view > div.relative.py-2::after { animation: none; right: 36%; opacity: .7; }
 }
 
 @media (max-width: 639px) {
