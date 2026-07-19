@@ -44,11 +44,17 @@ const SANAD_ANALYZE_FUNCTION_URL =
   Deno.env.get("SANAD_ANALYZE_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
 
+const SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL =
+  Deno.env.get("SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL") ||
+  `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-onboarding`;
+
 const SEND_UNSUPPORTED_REPLY =
   (Deno.env.get("SEND_UNSUPPORTED_REPLY") || "true") !== "false";
 
 const SEND_QR_REPLY = (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
 const TRIGGER_ANALYSIS = (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
+const TRIGGER_ONBOARDING =
+  (Deno.env.get("TRIGGER_ONBOARDING") || "true") !== "false";
 
 const META_GRAPH_VERSION = "v20.0";
 const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -380,6 +386,60 @@ async function findExistingOperationByMessageId(messageId: string): Promise<any 
   }
 }
 
+async function registerWhatsAppInbound(
+  normalized: any,
+  supported: boolean,
+): Promise<void> {
+  try {
+    await supabaseJson(
+      "/rest/v1/rpc/register_whatsapp_inbound",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_phone: normalized.senderPhone,
+          p_wa_id:
+            normalized.senderWaId ||
+            normalized.senderPhone,
+          p_display_name:
+            normalized.senderName || null,
+          p_message_id:
+            normalized.messageId || null,
+          p_message_type:
+            normalized.messageType || null,
+          p_supported: supported,
+          p_metadata: {
+            function: FUNCTION_NAME,
+            media_id:
+              normalized.mediaId || null,
+            mime_type:
+              normalized.mimeType || null,
+            whatsapp_timestamp:
+              normalized.timestamp || null,
+          },
+        }),
+      },
+    );
+  } catch (error) {
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      event:
+        "whatsapp_contact_registration_failed",
+      message_id:
+        normalized.messageId || null,
+      phone:
+        normalized.senderPhone || null,
+      error: truncateText(
+        error instanceof Error
+          ? error.message
+          : String(error),
+      ),
+    }));
+  }
+}
+
 async function uploadToStorage(
   bucket: string,
   path: string,
@@ -614,6 +674,53 @@ async function triggerAnalysis(operationId: string, publicToken: string): Promis
   }
 }
 
+async function triggerWhatsAppOnboarding(): Promise<void> {
+  if (!TRIGGER_ONBOARDING) return;
+
+  try {
+    const response = await fetch(
+      SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-sanad-internal-key":
+            SANAD_INTERNAL_API_KEY,
+        },
+        body: JSON.stringify({
+          limit: 1,
+          source: FUNCTION_NAME,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const text = await response
+        .text()
+        .catch(() => "");
+
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        event:
+          "whatsapp_onboarding_trigger_rejected",
+        status: response.status,
+        response: truncateText(text),
+      }));
+    }
+  } catch (error) {
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      event:
+        "whatsapp_onboarding_trigger_failed",
+      error: truncateText(
+        error instanceof Error
+          ? error.message
+          : String(error),
+      ),
+    }));
+  }
+}
+
 function buildCaption(verificationUrl: string): string {
   return (
     "تم رفع الإشعار المالي إلى سند ✅\n\n" +
@@ -727,7 +834,18 @@ async function processWebhookInBackground(body: any): Promise<void> {
     return;
   }
 
-  if (!isSupportedMedia(messageType, initialMimeType, mediaId)) {
+  const supportedMedia = isSupportedMedia(
+    messageType,
+    initialMimeType,
+    mediaId,
+  );
+
+  await registerWhatsAppInbound(
+    normalized,
+    supportedMedia,
+  );
+
+  if (!supportedMedia) {
     await sendUnsupportedMessage(senderPhone);
     return;
   }
@@ -865,6 +983,10 @@ async function processWebhookInBackground(body: any): Promise<void> {
         qr_url: qrUrl,
       });
     }
+  }
+
+  if (qrSendResponse) {
+    await triggerWhatsAppOnboarding();
   }
 
   await triggerAnalysis(operation.id, publicToken);
