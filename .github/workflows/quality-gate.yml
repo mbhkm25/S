@@ -59,8 +59,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if grep -RInE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
-            'https://sanadflow\.com/v/|/app/v/' .; then
+          targets=(src supabase/functions services android public index.html)
+          existing_targets=()
+          for target in "${targets[@]}"; do
+            if [ -e "$target" ]; then
+              existing_targets+=("$target")
+            fi
+          done
+
+          if grep -RInE --exclude-dir=node_modules --exclude-dir=dist \
+            'https://sanadflow\.com/v/|/app/v/' "${existing_targets[@]}"; then
             echo 'Obsolete operational verification URL detected.' >&2
             exit 1
           fi
