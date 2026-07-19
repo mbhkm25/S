@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const metaEnv = (import.meta as any).env || {};
 const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://api.sanadflow.com';
+const SUPABASE_PROJECT_REF = 'hudbzlgclghlhazlduas';
+const SUPABASE_AUTH_STORAGE_KEY = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
 
 // Intelligently resolve the anonymous client key.
 // Standard Supabase client requires the JWT anon key to handle authentication and row-level security (RLS).
@@ -33,12 +35,16 @@ if (metaEnv.DEV) {
 
 export const hasSupabaseConfig = !!supabaseKey && supabaseKey !== '';
 
-// Create the Supabase Client
+// Keep one stable auth storage key even when the API hostname changes from the
+// default Supabase project URL to the SANAD custom domain. Without this explicit
+// key, the same browser origin can read a different cached session after a host
+// migration and send an invalid bearer token to PostgREST.
 export const supabase = createClient(
   supabaseUrl,
   supabaseKey,
   {
     auth: {
+      storageKey: SUPABASE_AUTH_STORAGE_KEY,
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
@@ -48,4 +54,3 @@ export const supabase = createClient(
     },
   },
 );
-
