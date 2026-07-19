@@ -94,7 +94,11 @@ function extractCatalogItems(data: unknown): BusinessCatalogItem[] {
     });
 }
 
-function normalizeCatalogImageFile(file: File) {
+function normalizeCatalogImageFile(value: unknown) {
+  if (!(value instanceof File)) {
+    throw new Error('تعذر قراءة ملف الصورة المختار.');
+  }
+  const file = value;
   const mimeType = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
   if (!CATALOG_IMAGE_TYPES.includes(mimeType)) {
     throw new Error('الصورة غير مدعومة. استخدم JPEG أو PNG أو WEBP.');
@@ -106,7 +110,7 @@ function normalizeCatalogImageFile(file: File) {
   const extension = sourceExtension && ['jpg', 'jpeg', 'png', 'webp'].includes(sourceExtension)
     ? sourceExtension
     : mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-  return { mimeType, extension };
+  return { file, mimeType, extension };
 }
 
 export async function getBusinessCatalog(businessId: string, includeHidden = true): Promise<BusinessCatalogItem[]> {
@@ -120,10 +124,10 @@ export async function getBusinessCatalog(businessId: string, includeHidden = tru
 
 export async function uploadCatalogItemImage(
   businessId: string,
-  file: File,
+  selectedFile: unknown,
   displayOrder: number
 ): Promise<CatalogImageUploadResult> {
-  const { mimeType, extension } = normalizeCatalogImageFile(file);
+  const { file, mimeType, extension } = normalizeCatalogImageFile(selectedFile);
   const randomPart = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   const path = `${businessId}/catalog/item-${randomPart}.${extension}`;
 
