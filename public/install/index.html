@@ -1,119 +1,687 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+  <meta name="theme-color" content="#111827">
   <title>تثبيت تطبيق سند</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
   <style>
-    :root { font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f7f7f4; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #ffffff 0, #f7f7f4 52%, #efefe9 100%); }
-    main { width: min(100%, 680px); margin: 0 auto; padding: 28px 18px 48px; }
-    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
-    .mark { width: 48px; height: 48px; border-radius: 16px; background: #111827; color: white; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
-    .brand strong { display: block; font-size: 20px; }
-    .brand span { color: #6b7280; font-size: 13px; }
-    .hero, .card { background: rgba(255,255,255,.94); border: 1px solid #e5e7eb; border-radius: 24px; box-shadow: 0 16px 50px rgba(17,24,39,.06); }
-    .hero { padding: 26px; }
-    h1 { margin: 0 0 12px; font-size: clamp(28px, 7vw, 40px); line-height: 1.25; }
-    .lead { margin: 0; color: #4b5563; line-height: 1.9; font-size: 16px; }
-    .benefits { display: grid; gap: 10px; margin: 22px 0; }
-    .benefit { display: flex; gap: 10px; align-items: flex-start; background: #f9fafb; border-radius: 14px; padding: 12px 14px; }
-    .tick { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; display: grid; place-items: center; background: #dcfce7; color: #166534; font-weight: 800; }
-    .actions { display: grid; gap: 10px; }
-    button, a.primary, a.secondary { width: 100%; border: 0; border-radius: 15px; padding: 14px 16px; font: inherit; font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
-    .primary { background: #111827; color: white; }
-    .secondary { background: #eef2ff; color: #3730a3; }
-    .card { margin-top: 16px; padding: 22px; }
-    .card h2 { margin: 0 0 8px; font-size: 21px; }
-    .muted { color: #6b7280; line-height: 1.8; }
-    ol { margin: 16px 0 0; padding: 0 22px 0 0; }
-    li { margin: 10px 0; line-height: 1.7; }
-    .notice { display: none; margin-top: 14px; padding: 13px; border-radius: 14px; background: #fff7ed; color: #9a3412; line-height: 1.7; }
-    .visible { display: block; }
-    footer { text-align: center; margin-top: 24px; color: #9ca3af; font-size: 12px; }
+    :root {
+      font-family:
+        "IBM Plex Sans Arabic",
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      color: #111827;
+      background: #f6f6f2;
+
+      --ink: #111827;
+      --muted: #667085;
+      --line: #e5e7eb;
+      --surface: rgba(255, 255, 255, .96);
+      --soft: #f3f4f6;
+      --success: #067647;
+      --success-bg: #ecfdf3;
+      --accent: #273a8a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          #fff 0,
+          rgba(255, 255, 255, .7) 34%,
+          transparent 58%
+        ),
+        linear-gradient(
+          180deg,
+          #f8f8f5 0%,
+          #f1f1eb 100%
+        );
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    main {
+      width: min(100%, 680px);
+      margin: 0 auto;
+      padding: 22px 16px 44px;
+    }
+
+    .brand {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 4px 0 20px;
+    }
+
+    .brand img {
+      display: block;
+      width: min(190px, 46vw);
+      height: auto;
+      object-fit: contain;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: 0 18px 55px rgba(17, 24, 39, .07);
+    }
+
+    .hero {
+      padding: 28px 24px 24px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 8vw, 46px);
+      line-height: 1.28;
+      letter-spacing: -.02em;
+    }
+
+    .lead {
+      max-width: 530px;
+      margin: 14px auto 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.95;
+    }
+
+    .benefits {
+      display: grid;
+      gap: 10px;
+      margin: 22px 0;
+      text-align: right;
+    }
+
+    .benefit {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 13px 14px;
+      border-radius: 16px;
+      background: var(--soft);
+      line-height: 1.7;
+    }
+
+    .tick {
+      display: grid;
+      place-items: center;
+      flex: 0 0 25px;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: #d1fadf;
+      color: var(--success);
+      font-weight: 800;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 15px 18px;
+      border: 0;
+      border-radius: 17px;
+      font: inherit;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition:
+        transform .18s ease,
+        opacity .18s ease;
+    }
+
+    .btn:active {
+      transform: scale(.985);
+    }
+
+    .btn-primary {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #edf0ff;
+      color: var(--accent);
+    }
+
+    .btn[disabled] {
+      opacity: .62;
+      cursor: wait;
+    }
+
+    .status {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #f9fafb;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .status.success {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .status.warning {
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .guide {
+      margin-top: 16px;
+      padding: 22px;
+    }
+
+    .guide[hidden] {
+      display: none;
+    }
+
+    .guide h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .guide > p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .step-number {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+      font-weight: 700;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .step span {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    footer {
+      margin-top: 22px;
+      color: #98a2b3;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (min-width: 640px) {
+      main {
+        padding-top: 34px;
+      }
+
+      .hero {
+        padding: 34px;
+      }
+
+      .benefits {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
   </style>
 </head>
+
 <body>
-<main>
-  <div class="brand"><div class="mark">س</div><div><strong>سند</strong><span>SANAD</span></div></div>
-  <section class="hero">
-    <h1>اجعل إشعاراتك المالية أقرب إليك</h1>
-    <p class="lead">ثبّت تطبيق سند للوصول إلى عملياتك بسرعة، حفظها ومراجعتها، متابعة التحقق، إنشاء التقارير، ومشاركة الإشعارات المالية مباشرة إلى التطبيق.</p>
-    <div class="benefits">
-      <div class="benefit"><span class="tick">✓</span><span>سجل موحد لعملياتك وإشعاراتك المالية.</span></div>
-      <div class="benefit"><span class="tick">✓</span><span>فتح أسرع للروابط والملفات ومتابعة حالة التحليل.</span></div>
-      <div class="benefit"><span class="tick">✓</span><span>مشاركة الصور وملفات PDF مباشرة إلى سند دون واتساب.</span></div>
-      <div class="benefit"><span class="tick">✓</span><span>الوصول إلى التقارير وميزات سند من الشاشة الرئيسية.</span></div>
+  <main>
+    <div class="brand">
+      <img
+        src="/install-assets/sanad_logo.webp"
+        alt="شعار سند"
+        width="190"
+        height="96"
+      >
     </div>
-    <div class="actions">
-      <button id="installButton" class="primary" hidden>تثبيت تطبيق سند</button>
-      <a class="secondary" href="/">فتح تطبيق سند</a>
-    </div>
-    <div id="whatsappBrowserNotice" class="notice">يبدو أن الصفحة مفتوحة داخل واتساب. افتح قائمة المتصفح ثم اختر «فتح في Safari» أو «فتح في Chrome» لتظهر خيارات التثبيت كاملة.</div>
-  </section>
 
-  <section class="card">
-    <h2 id="guideTitle">طريقة التثبيت على جهازك</h2>
-    <p id="guideIntro" class="muted"></p>
-    <ol id="guideSteps"></ol>
-  </section>
-  <footer>app.sanadflow.com — تطبيق سند</footer>
-</main>
-<script>
-  const ua = navigator.userAgent || '';
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
-  const isAndroid = /Android/i.test(ua);
-  const isSamsung = /SamsungBrowser/i.test(ua);
-  const isWhatsApp = /WhatsApp/i.test(ua);
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const title = document.getElementById('guideTitle');
-  const intro = document.getElementById('guideIntro');
-  const steps = document.getElementById('guideSteps');
-  const installButton = document.getElementById('installButton');
-  const notice = document.getElementById('whatsappBrowserNotice');
-  let deferredPrompt = null;
+    <section class="panel hero">
+      <div id="eyebrow" class="eyebrow">
+        تجربة أسرع من الشاشة الرئيسية
+      </div>
 
-  const renderSteps = (items) => { steps.innerHTML = items.map(item => `<li>${item}</li>`).join(''); };
+      <h1>ثبّت سند على جهازك</h1>
 
-  if (isStandalone) {
-    title.textContent = 'سند مثبت على جهازك';
-    intro.textContent = 'يمكنك الآن فتح التطبيق مباشرة من الشاشة الرئيسية.';
-    renderSteps(['عد إلى الشاشة الرئيسية.', 'ابحث عن أيقونة سند واضغط عليها.']);
-  } else if (isIOS) {
-    title.textContent = 'التثبيت على iPhone أو iPad';
-    intro.textContent = 'يعمل التثبيت من متصفح Safari.';
-    renderSteps(['افتح هذه الصفحة في Safari.', 'اضغط زر المشاركة في أسفل الشاشة.', 'مرر إلى خيار «إضافة إلى الشاشة الرئيسية».', 'اضغط «إضافة» لتثبيت سند.']);
-  } else if (isSamsung) {
-    title.textContent = 'التثبيت عبر Samsung Internet';
-    intro.textContent = 'اتبع الخطوات التالية من متصفح سامسونج.';
-    renderSteps(['افتح قائمة المتصفح.', 'اختر «إضافة الصفحة إلى».', 'اختر «الشاشة الرئيسية» أو «التطبيقات».', 'أكد إضافة تطبيق سند.']);
-  } else if (isAndroid) {
-    title.textContent = 'التثبيت على Android';
-    intro.textContent = 'في Chrome سيظهر زر التثبيت تلقائيًا عندما يصبح التطبيق جاهزًا.';
-    renderSteps(['اضغط زر «تثبيت تطبيق سند» إن ظهر.', 'أو افتح قائمة المتصفح ⋮.', 'اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».', 'أكد عملية التثبيت.']);
-  } else {
-    title.textContent = 'إضافة سند إلى جهازك';
-    intro.textContent = 'افتح قائمة المتصفح وابحث عن خيار تثبيت التطبيق أو إضافته إلى الشاشة الرئيسية.';
-    renderSteps(['افتح قائمة المتصفح.', 'اختر تثبيت التطبيق أو إنشاء اختصار.', 'أكد الإضافة ثم افتح سند من جهازك.']);
-  }
+      <p class="lead">
+        وصول أسرع إلى عملياتك وتقاريرك وإشعاراتك المالية،
+        مع إمكانية مشاركة الصور وملفات PDF مباشرة إلى سند.
+      </p>
 
-  if (isWhatsApp) notice.classList.add('visible');
+      <div class="benefits">
+        <div class="benefit">
+          <span class="tick">✓</span>
+          <span>فتح سريع من الشاشة الرئيسية.</span>
+        </div>
 
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    deferredPrompt = event;
-    installButton.hidden = false;
-  });
+        <div class="benefit">
+          <span class="tick">✓</span>
+          <span>سجل موحد للعمليات والإشعارات.</span>
+        </div>
 
-  installButton.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null;
-    installButton.hidden = true;
-  });
-</script>
+        <div class="benefit">
+          <span class="tick">✓</span>
+          <span>مشاركة الصور وملفات PDF مباشرة.</span>
+        </div>
+
+        <div class="benefit">
+          <span class="tick">✓</span>
+          <span>متابعة التحليل والتحقق والتقارير.</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button
+          id="installButton"
+          class="btn btn-primary"
+          type="button"
+        >
+          جارٍ تجهيز التثبيت…
+        </button>
+
+        <a
+          id="openAppButton"
+          class="btn btn-secondary"
+          href="/"
+        >
+          فتح تطبيق سند
+        </a>
+      </div>
+
+      <div
+        id="status"
+        class="status"
+        role="status"
+        aria-live="polite"
+      >
+        سنُظهر لك أفضل طريقة للتثبيت حسب جهازك ومتصفحك.
+      </div>
+    </section>
+
+    <section id="guide" class="panel guide" hidden>
+      <h2 id="guideTitle">طريقة التثبيت</h2>
+      <p id="guideIntro"></p>
+      <div id="guideSteps" class="steps"></div>
+    </section>
+
+    <footer>
+      app.sanadflow.com — تطبيق سند
+    </footer>
+  </main>
+
+  <script>
+    const ua = navigator.userAgent || "";
+
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(ua);
+
+    const isSamsung =
+      /SamsungBrowser/i.test(ua);
+
+    const isWhatsApp =
+      /WhatsApp/i.test(ua);
+
+    const isFacebookInApp =
+      /FBAN|FBAV|Instagram/i.test(ua);
+
+    const isInAppBrowser =
+      isWhatsApp || isFacebookInApp;
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      navigator.standalone === true;
+
+    const installButton =
+      document.getElementById("installButton");
+
+    const openAppButton =
+      document.getElementById("openAppButton");
+
+    const status =
+      document.getElementById("status");
+
+    const guide =
+      document.getElementById("guide");
+
+    const guideTitle =
+      document.getElementById("guideTitle");
+
+    const guideIntro =
+      document.getElementById("guideIntro");
+
+    const guideSteps =
+      document.getElementById("guideSteps");
+
+    const eyebrow =
+      document.getElementById("eyebrow");
+
+    let deferredPrompt = null;
+
+    function setStatus(message, type = "") {
+      status.textContent = message;
+      status.className =
+        `status ${type}`.trim();
+    }
+
+    function showGuide(title, intro, items) {
+      guide.hidden = false;
+      guideTitle.textContent = title;
+      guideIntro.textContent = intro;
+
+      guideSteps.innerHTML = items
+        .map((item, index) => `
+          <div class="step">
+            <div class="step-number">
+              ${index + 1}
+            </div>
+
+            <div>
+              <strong>${item.title}</strong>
+              <span>${item.text}</span>
+            </div>
+          </div>
+        `)
+        .join("");
+    }
+
+    function setInstalledState() {
+      installButton.hidden = true;
+      openAppButton.textContent =
+        "فتح تطبيق سند";
+
+      eyebrow.textContent =
+        "سند مثبت على جهازك";
+
+      setStatus(
+        "تم تثبيت سند بنجاح. افتحه من الشاشة الرئيسية أو من الزر أعلاه.",
+        "success"
+      );
+
+      guide.hidden = true;
+    }
+
+    if (isStandalone) {
+      setInstalledState();
+    }
+    else if (isInAppBrowser) {
+      installButton.textContent =
+        isIOS
+          ? "فتح في Safari للتثبيت"
+          : "فتح في المتصفح للتثبيت";
+
+      installButton.disabled = false;
+
+      setStatus(
+        "المتصفح الداخلي لا يدعم التثبيت المباشر. افتح الصفحة في Safari أو Chrome أو Edge.",
+        "warning"
+      );
+
+      showGuide(
+        "افتح الصفحة في المتصفح",
+        "خطوة واحدة إضافية فقط لإظهار زر التثبيت الحقيقي.",
+        [
+          {
+            title: "افتح قائمة المتصفح",
+            text: "اضغط قائمة النقاط أو زر المشاركة داخل واتساب."
+          },
+          {
+            title: "اختر فتح في المتصفح",
+            text: isIOS
+              ? "اختر Safari."
+              : "اختر Chrome أو Edge أو Samsung Internet."
+          }
+        ]
+      );
+    }
+    else if (isIOS) {
+      installButton.textContent =
+        "طريقة تثبيت سند على iPhone";
+
+      installButton.disabled = false;
+
+      setStatus(
+        "على iPhone يتطلب التثبيت استخدام خيار «إضافة إلى الشاشة الرئيسية»."
+      );
+
+      showGuide(
+        "التثبيت على iPhone أو iPad",
+        "اتبع هذه الخطوات من Safari:",
+        [
+          {
+            title: "افتح الصفحة في Safari",
+            text: "يجب تنفيذ التثبيت من Safari للحصول على أفضل نتيجة."
+          },
+          {
+            title: "اضغط زر المشاركة",
+            text: "اضغط رمز المشاركة في شريط Safari."
+          },
+          {
+            title: "اختر إضافة إلى الشاشة الرئيسية",
+            text: "مرر القائمة حتى يظهر هذا الخيار."
+          },
+          {
+            title: "اضغط إضافة",
+            text: "سيظهر سند كتطبيق مستقل على جهازك."
+          }
+        ]
+      );
+    }
+    else {
+      installButton.disabled = true;
+
+      setTimeout(() => {
+        if (!deferredPrompt && !isStandalone) {
+          installButton.disabled = false;
+
+          installButton.textContent =
+            isSamsung
+              ? "طريقة التثبيت على سامسونج"
+              : "طريقة التثبيت اليدوية";
+
+          setStatus(
+            "لم يجهز المتصفح نافذة التثبيت المباشر بعد. استخدم خطوات المتصفح التالية."
+          );
+
+          showGuide(
+            isSamsung
+              ? "التثبيت عبر Samsung Internet"
+              : "التثبيت من المتصفح",
+
+            "تختلف تسمية الخيار قليلًا حسب إصدار المتصفح.",
+
+            isSamsung
+              ? [
+                  {
+                    title: "افتح قائمة المتصفح",
+                    text: "اضغط زر القائمة في Samsung Internet."
+                  },
+                  {
+                    title: "اختر إضافة الصفحة إلى",
+                    text: "ثم اختر الشاشة الرئيسية أو التطبيقات."
+                  },
+                  {
+                    title: "أكد التثبيت",
+                    text: "سيظهر سند ضمن تطبيقات الجهاز."
+                  }
+                ]
+              : [
+                  {
+                    title: "افتح قائمة المتصفح",
+                    text: "اضغط زر ⋮ في Chrome أو Edge."
+                  },
+                  {
+                    title: "اختر تثبيت التطبيق",
+                    text: "قد يظهر باسم «إضافة إلى الشاشة الرئيسية»."
+                  },
+                  {
+                    title: "أكد التثبيت",
+                    text: "سيظهر سند كتطبيق مستقل على جهازك."
+                  }
+                ]
+          );
+        }
+      }, 1800);
+    }
+
+    window.addEventListener(
+      "beforeinstallprompt",
+      (event) => {
+        event.preventDefault();
+
+        deferredPrompt = event;
+
+        installButton.hidden = false;
+        installButton.disabled = false;
+        installButton.textContent =
+          "تثبيت تطبيق سند";
+
+        setStatus(
+          "جاهز للتثبيت. اضغط الزر ثم أكد نافذة النظام.",
+          "success"
+        );
+
+        guide.hidden = true;
+      }
+    );
+
+    window.addEventListener(
+      "appinstalled",
+      () => {
+        deferredPrompt = null;
+        setInstalledState();
+      }
+    );
+
+    installButton.addEventListener(
+      "click",
+      async () => {
+        if (isInAppBrowser) {
+          guide.hidden = false;
+
+          guide.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+
+          return;
+        }
+
+        if (isIOS || !deferredPrompt) {
+          guide.hidden = false;
+
+          guide.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+
+          return;
+        }
+
+        installButton.disabled = true;
+        installButton.textContent =
+          "جارٍ فتح نافذة التثبيت…";
+
+        deferredPrompt.prompt();
+
+        const choice =
+          await deferredPrompt.userChoice;
+
+        deferredPrompt = null;
+
+        if (choice.outcome === "accepted") {
+          setStatus(
+            "تم قبول التثبيت. سيظهر سند على جهازك خلال لحظات.",
+            "success"
+          );
+        }
+        else {
+          installButton.disabled = false;
+          installButton.textContent =
+            "تثبيت تطبيق سند";
+
+          setStatus(
+            "لم يكتمل التثبيت. يمكنك المحاولة مرة أخرى من قائمة المتصفح."
+          );
+        }
+      }
+    );
+  </script>
 </body>
 </html>
