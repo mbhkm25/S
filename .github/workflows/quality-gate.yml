@@ -1,0 +1,103 @@
+name: Production quality gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            services/push-worker/package-lock.json
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Type-check application
+        run: npm run lint
+
+      - name: Build production PWA
+        run: npm run build -- --mode production
+
+      - name: Build Android assets
+        run: npm run build:android
+
+      - name: Install push worker dependencies
+        working-directory: services/push-worker
+        run: npm ci
+
+      - name: Type-check push worker
+        working-directory: services/push-worker
+        run: npm run lint
+
+      - name: Test push worker
+        working-directory: services/push-worker
+        run: npm test
+
+      - name: Build push worker
+        working-directory: services/push-worker
+        run: npm run build
+
+      - name: Reject obsolete operational verification URLs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          targets=(src supabase/functions services android public index.html)
+          existing_targets=()
+          for target in "${targets[@]}"; do
+            if [ -e "$target" ]; then
+              existing_targets+=("$target")
+            fi
+          done
+
+          if grep -RInE --exclude-dir=node_modules --exclude-dir=dist \
+            'https://sanadflow\.com/v/|/app/v/' "${existing_targets[@]}"; then
+            echo 'Obsolete operational verification URL detected.' >&2
+            exit 1
+          fi
+
+      - name: Verify tracked Edge Function sources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          functions=(
+            sanad-file-access
+            sanad-pro-payment-verify
+            sanad-v3-analyze-operation
+            sanad-v3-app-trigger-analysis
+            sanad-v3-app-trigger-notify-verification
+            sanad-v3-app-trigger-pro-payment-verify
+            sanad-v3-app-trigger-report
+            sanad-v3-business-actions
+            sanad-v3-notify-verification
+            sanad-v3-process-report
+            sanad-v3-retry-report-delivery
+            sanad-v3-whatsapp-intake
+          )
+
+          for function_name in "${functions[@]}"; do
+            test -s "supabase/functions/${function_name}/index.ts" || {
+              echo "Missing Edge Function source: ${function_name}" >&2
+              exit 1
+            }
+          done
+
+      - name: Verify repository formatting
+        run: git diff --check
