@@ -8,19 +8,15 @@
 
   .sanad-page-gutter {
     width: 100%;
-    padding-inline: 0.125rem;
+    padding-inline: 0.5rem;
   }
 
   @media (min-width: 640px) {
-    .sanad-page-gutter {
-      padding-inline: 0.75rem;
-    }
+    .sanad-page-gutter { padding-inline: 0.75rem; }
   }
 
   @media (min-width: 1024px) {
-    .sanad-page-gutter {
-      padding-inline: 1.25rem;
-    }
+    .sanad-page-gutter { padding-inline: 1.25rem; }
   }
 }
 
@@ -34,21 +30,70 @@ body {
   direction: rtl;
 }
 
-/*
- * قاعدة موحدة لكل واجهات التطبيق: المحتوى يقترب من حافة الهاتف،
- * ثم يستعيد فراغًا مريحًا تدريجيًا على الشاشات الأكبر.
- */
+#home_view section[aria-labelledby="financial-sanad-title"] > div.grid button {
+  min-height: 5.5rem !important;
+}
+
+#home_view section[aria-labelledby="financial-sanad-title"] > div.grid button > span > span {
+  display: none;
+}
+
+#home_view > div.relative.py-2 {
+  position: relative;
+  height: 3rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+#home_view > div.relative.py-2 > div,
+#home_view > div.relative.py-2 > span {
+  display: none;
+}
+
+#home_view > div.relative.py-2::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0.25rem;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(15,23,42,.2), rgba(16,185,129,.5), rgba(14,165,233,.45), rgba(15,23,42,.2), transparent);
+}
+
+#home_view > div.relative.py-2::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -24%;
+  width: 28%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(16,185,129,.95), rgba(14,165,233,.9), transparent);
+  transform: translateY(-50%);
+  animation: sanad-divider-flow 3.2s ease-in-out infinite;
+}
+
+@keyframes sanad-divider-flow {
+  0% { right: -28%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { right: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #home_view > div.relative.py-2::after { animation: none; right: 36%; opacity: .7; }
+}
+
 @media (max-width: 639px) {
   #app_main {
     max-width: none !important;
-    padding-left: 0.125rem !important;
-    padding-right: 0.125rem !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
   }
 
   #app_main main {
     max-width: none !important;
-    padding-left: 0.125rem !important;
-    padding-right: 0.125rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   #global_header {

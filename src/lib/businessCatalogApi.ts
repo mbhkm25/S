@@ -5,8 +5,10 @@ export type BusinessCatalogItemStatus = 'draft' | 'active' | 'hidden' | 'archive
 export type BusinessCatalogAvailability = 'available' | 'on_request' | 'unavailable';
 export type BusinessCatalogContactAction = 'whatsapp' | 'call' | 'none';
 
-export const MAX_CATALOG_IMAGES = 6;
-const MAX_CATALOG_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_CATALOG_IMAGES = 3;
+const MAX_SOURCE_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_OUTPUT_EDGE = 1600;
+const OUTPUT_QUALITY = 0.78;
 const CATALOG_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export interface BusinessCatalogItem {
@@ -94,23 +96,34 @@ function extractCatalogItems(data: unknown): BusinessCatalogItem[] {
     });
 }
 
-function normalizeCatalogImageFile(value: unknown) {
-  if (!(value instanceof File)) {
-    throw new Error('تعذر قراءة ملف الصورة المختار.');
+function validateSourceImage(value: unknown): File {
+  if (!(value instanceof File)) throw new Error('تعذر قراءة ملف الصورة المختار.');
+  const mimeType = value.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : value.type.toLowerCase();
+  if (!CATALOG_IMAGE_TYPES.includes(mimeType)) throw new Error('الصورة غير مدعومة. استخدم JPEG أو PNG أو WEBP.');
+  if (value.size <= 0 || value.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('حجم الصورة الأصلية يجب ألا يتجاوز 12 ميجابايت.');
+  return value;
+}
+
+async function compressCatalogImage(source: File): Promise<File> {
+  const image = await createImageBitmap(source);
+  const scale = Math.min(1, MAX_OUTPUT_EDGE / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { alpha: false });
+  if (!context) {
+    image.close();
+    throw new Error('تعذر تجهيز الصورة للرفع.');
   }
-  const file = value;
-  const mimeType = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
-  if (!CATALOG_IMAGE_TYPES.includes(mimeType)) {
-    throw new Error('الصورة غير مدعومة. استخدم JPEG أو PNG أو WEBP.');
-  }
-  if (file.size <= 0 || file.size > MAX_CATALOG_IMAGE_BYTES) {
-    throw new Error('حجم الصورة يجب ألا يتجاوز 10 ميجابايت.');
-  }
-  const sourceExtension = file.name.split('.').pop()?.toLowerCase();
-  const extension = sourceExtension && ['jpg', 'jpeg', 'png', 'webp'].includes(sourceExtension)
-    ? sourceExtension
-    : mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-  return { file, mimeType, extension };
+  context.drawImage(image, 0, 0, width, height);
+  image.close();
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((value) => value ? resolve(value) : reject(new Error('تعذر ضغط الصورة.')), 'image/webp', OUTPUT_QUALITY);
+  });
+  const baseName = source.name.replace(/\.[^.]+$/, '').slice(0, 100) || 'catalog-image';
+  return new File([blob], `${baseName}.webp`, { type: 'image/webp', lastModified: Date.now() });
 }
 
 export async function getBusinessCatalog(businessId: string, includeHidden = true): Promise<BusinessCatalogItem[]> {
@@ -127,20 +140,21 @@ export async function uploadCatalogItemImage(
   selectedFile: unknown,
   displayOrder: number
 ): Promise<CatalogImageUploadResult> {
-  const { file, mimeType, extension } = normalizeCatalogImageFile(selectedFile);
+  const source = validateSourceImage(selectedFile);
+  const file = await compressCatalogImage(source);
   const randomPart = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-  const path = `${businessId}/catalog/item-${randomPart}.${extension}`;
+  const path = `${businessId}/catalog/item-${randomPart}.webp`;
 
   const { error: uploadError } = await supabase.storage
     .from('business-media')
-    .upload(path, file, { contentType: mimeType, cacheControl: '3600', upsert: false });
+    .upload(path, file, { contentType: 'image/webp', cacheControl: '31536000', upsert: false });
   if (uploadError) throw new Error(uploadError.message || 'تعذر رفع صورة العنصر.');
 
   const { error: registerError } = await supabase.rpc('register_business_media_asset', {
     p_business_id: businessId,
     p_asset_type: 'catalog',
     p_storage_path: path,
-    p_mime_type: mimeType,
+    p_mime_type: 'image/webp',
     p_file_name: file.name.slice(0, 255),
     p_file_size: file.size,
     p_alt_text: null,
@@ -148,35 +162,26 @@ export async function uploadCatalogItemImage(
   });
 
   if (registerError) {
-    try {
-      await supabase.storage.from('business-media').remove([path]);
-    } catch {
-      // The registration error is the actionable failure; cleanup is best effort.
-    }
+    try { await supabase.storage.from('business-media').remove([path]); } catch { /* best effort */ }
     throw new Error(registerError.message || 'تعذر تسجيل صورة العنصر.');
   }
 
-  const { data: signed, error: signedError } = await supabase.storage
-    .from('business-media')
-    .createSignedUrl(path, 3600);
+  const { data: signed, error: signedError } = await supabase.storage.from('business-media').createSignedUrl(path, 86400);
   if (signedError) throw new Error('تم رفع الصورة، لكن تعذر إنشاء معاينتها.');
-
   return { path, signedUrl: signed?.signedUrl || '' };
 }
 
 export async function resolveCatalogImageUrl(path: string): Promise<string> {
   if (!path) return '';
   if (/^https?:\/\//i.test(path)) return path;
-  const { data, error } = await supabase.storage.from('business-media').createSignedUrl(path, 3600);
+  const { data, error } = await supabase.storage.from('business-media').createSignedUrl(path, 86400);
   if (error) return '';
   return data?.signedUrl || '';
 }
 
 export async function upsertBusinessCatalogItem(input: UpsertBusinessCatalogItemInput): Promise<BusinessCatalogItem> {
   const imagePaths = input.imagePaths || [];
-  if (imagePaths.length > MAX_CATALOG_IMAGES) {
-    throw new Error(`الحد الأعلى هو ${MAX_CATALOG_IMAGES} صور لكل عنصر.`);
-  }
+  if (imagePaths.length > MAX_CATALOG_IMAGES) throw new Error(`الحد الأعلى هو ${MAX_CATALOG_IMAGES} صور لكل عنصر.`);
   const { data, error } = await supabase.rpc('upsert_business_catalog_item', {
     p_business_id: input.businessId,
     p_item_id: input.itemId || null,
@@ -194,18 +199,11 @@ export async function upsertBusinessCatalogItem(input: UpsertBusinessCatalogItem
     p_contact_action: input.contactAction || 'whatsapp',
   });
   if (error) {
-    if (error.message.includes('active_catalog_limit_reached')) {
-      throw new Error('وصل النشاط إلى الحد الأعلى: 10 عناصر منشورة. أخفِ عنصرًا قبل نشر عنصر جديد.');
-    }
-    if (error.message.includes('catalog_image_limit_exceeded')) {
-      throw new Error(`الحد الأعلى هو ${MAX_CATALOG_IMAGES} صور لكل عنصر.`);
-    }
+    if (error.message.includes('active_catalog_limit_reached')) throw new Error('وصل النشاط إلى الحد الأعلى: 10 عناصر منشورة. أخفِ عنصرًا قبل نشر عنصر جديد.');
+    if (error.message.includes('catalog_image_limit_exceeded')) throw new Error(`الحد الأعلى هو ${MAX_CATALOG_IMAGES} صور لكل عنصر.`);
     throw new Error(error.message || 'تعذر حفظ عنصر الكتالوج.');
   }
-
-  const rawItem = data && typeof data === 'object' && !Array.isArray(data)
-    ? (data as { item?: unknown }).item
-    : null;
+  const rawItem = data && typeof data === 'object' && !Array.isArray(data) ? (data as { item?: unknown }).item : null;
   const item = normalizeCatalogItem(rawItem);
   if (!item) throw new Error('لم تُرجع قاعدة البيانات عنصرًا صالحًا بعد الحفظ.');
   return item;
