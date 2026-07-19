@@ -12,7 +12,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -23,39 +23,37 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            services/push-worker/package-lock.json
 
-      - name: Install dependencies
+      - name: Install application dependencies
         run: npm ci
 
-      - name: Type-check
-        id: typecheck
-        shell: bash
-        run: |
-          set +e
-          npm run lint > typecheck.log 2>&1
-          exit_code=$?
-          cat typecheck.log
-          echo "exit_code=${exit_code}" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Upload type-check diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: typecheck-diagnostics
-          path: typecheck.log
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Enforce type-check result
-        if: steps.typecheck.outputs.exit_code != '0'
-        run: exit 1
+      - name: Type-check application
+        run: npm run lint
 
       - name: Build production PWA
         run: npm run build -- --mode production
 
       - name: Build Android assets
         run: npm run build:android
+
+      - name: Install push worker dependencies
+        working-directory: services/push-worker
+        run: npm ci
+
+      - name: Type-check push worker
+        working-directory: services/push-worker
+        run: npm run lint
+
+      - name: Test push worker
+        working-directory: services/push-worker
+        run: npm test
+
+      - name: Build push worker
+        working-directory: services/push-worker
+        run: npm run build
 
       - name: Reject obsolete operational verification URLs
         shell: bash
@@ -93,5 +91,5 @@ jobs:
             }
           done
 
-      - name: Verify SQL migration formatting
+      - name: Verify repository formatting
         run: git diff --check
