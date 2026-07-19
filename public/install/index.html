@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>تثبيت تطبيق سند</title>
+  <style>
+    :root { font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f7f7f4; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #ffffff 0, #f7f7f4 52%, #efefe9 100%); }
+    main { width: min(100%, 680px); margin: 0 auto; padding: 28px 18px 48px; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+    .mark { width: 48px; height: 48px; border-radius: 16px; background: #111827; color: white; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
+    .brand strong { display: block; font-size: 20px; }
+    .brand span { color: #6b7280; font-size: 13px; }
+    .hero, .card { background: rgba(255,255,255,.94); border: 1px solid #e5e7eb; border-radius: 24px; box-shadow: 0 16px 50px rgba(17,24,39,.06); }
+    .hero { padding: 26px; }
+    h1 { margin: 0 0 12px; font-size: clamp(28px, 7vw, 40px); line-height: 1.25; }
+    .lead { margin: 0; color: #4b5563; line-height: 1.9; font-size: 16px; }
+    .benefits { display: grid; gap: 10px; margin: 22px 0; }
+    .benefit { display: flex; gap: 10px; align-items: flex-start; background: #f9fafb; border-radius: 14px; padding: 12px 14px; }
+    .tick { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; display: grid; place-items: center; background: #dcfce7; color: #166534; font-weight: 800; }
+    .actions { display: grid; gap: 10px; }
+    button, a.primary, a.secondary { width: 100%; border: 0; border-radius: 15px; padding: 14px 16px; font: inherit; font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; }
+    .primary { background: #111827; color: white; }
+    .secondary { background: #eef2ff; color: #3730a3; }
+    .card { margin-top: 16px; padding: 22px; }
+    .card h2 { margin: 0 0 8px; font-size: 21px; }
+    .muted { color: #6b7280; line-height: 1.8; }
+    ol { margin: 16px 0 0; padding: 0 22px 0 0; }
+    li { margin: 10px 0; line-height: 1.7; }
+    .notice { display: none; margin-top: 14px; padding: 13px; border-radius: 14px; background: #fff7ed; color: #9a3412; line-height: 1.7; }
+    .visible { display: block; }
+    footer { text-align: center; margin-top: 24px; color: #9ca3af; font-size: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><div class="mark">س</div><div><strong>سند</strong><span>SANAD</span></div></div>
+  <section class="hero">
+    <h1>اجعل إشعاراتك المالية أقرب إليك</h1>
+    <p class="lead">ثبّت تطبيق سند للوصول إلى عملياتك بسرعة، حفظها ومراجعتها، متابعة التحقق، إنشاء التقارير، ومشاركة الإشعارات المالية مباشرة إلى التطبيق.</p>
+    <div class="benefits">
+      <div class="benefit"><span class="tick">✓</span><span>سجل موحد لعملياتك وإشعاراتك المالية.</span></div>
+      <div class="benefit"><span class="tick">✓</span><span>فتح أسرع للروابط والملفات ومتابعة حالة التحليل.</span></div>
+      <div class="benefit"><span class="tick">✓</span><span>مشاركة الصور وملفات PDF مباشرة إلى سند دون واتساب.</span></div>
+      <div class="benefit"><span class="tick">✓</span><span>الوصول إلى التقارير وميزات سند من الشاشة الرئيسية.</span></div>
+    </div>
+    <div class="actions">
+      <button id="installButton" class="primary" hidden>تثبيت تطبيق سند</button>
+      <a class="secondary" href="/">فتح تطبيق سند</a>
+    </div>
+    <div id="whatsappBrowserNotice" class="notice">يبدو أن الصفحة مفتوحة داخل واتساب. افتح قائمة المتصفح ثم اختر «فتح في Safari» أو «فتح في Chrome» لتظهر خيارات التثبيت كاملة.</div>
+  </section>
+
+  <section class="card">
+    <h2 id="guideTitle">طريقة التثبيت على جهازك</h2>
+    <p id="guideIntro" class="muted"></p>
+    <ol id="guideSteps"></ol>
+  </section>
+  <footer>app.sanadflow.com — تطبيق سند</footer>
+</main>
+<script>
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isSamsung = /SamsungBrowser/i.test(ua);
+  const isWhatsApp = /WhatsApp/i.test(ua);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const title = document.getElementById('guideTitle');
+  const intro = document.getElementById('guideIntro');
+  const steps = document.getElementById('guideSteps');
+  const installButton = document.getElementById('installButton');
+  const notice = document.getElementById('whatsappBrowserNotice');
+  let deferredPrompt = null;
+
+  const renderSteps = (items) => { steps.innerHTML = items.map(item => `<li>${item}</li>`).join(''); };
+
+  if (isStandalone) {
+    title.textContent = 'سند مثبت على جهازك';
+    intro.textContent = 'يمكنك الآن فتح التطبيق مباشرة من الشاشة الرئيسية.';
+    renderSteps(['عد إلى الشاشة الرئيسية.', 'ابحث عن أيقونة سند واضغط عليها.']);
+  } else if (isIOS) {
+    title.textContent = 'التثبيت على iPhone أو iPad';
+    intro.textContent = 'يعمل التثبيت من متصفح Safari.';
+    renderSteps(['افتح هذه الصفحة في Safari.', 'اضغط زر المشاركة في أسفل الشاشة.', 'مرر إلى خيار «إضافة إلى الشاشة الرئيسية».', 'اضغط «إضافة» لتثبيت سند.']);
+  } else if (isSamsung) {
+    title.textContent = 'التثبيت عبر Samsung Internet';
+    intro.textContent = 'اتبع الخطوات التالية من متصفح سامسونج.';
+    renderSteps(['افتح قائمة المتصفح.', 'اختر «إضافة الصفحة إلى».', 'اختر «الشاشة الرئيسية» أو «التطبيقات».', 'أكد إضافة تطبيق سند.']);
+  } else if (isAndroid) {
+    title.textContent = 'التثبيت على Android';
+    intro.textContent = 'في Chrome سيظهر زر التثبيت تلقائيًا عندما يصبح التطبيق جاهزًا.';
+    renderSteps(['اضغط زر «تثبيت تطبيق سند» إن ظهر.', 'أو افتح قائمة المتصفح ⋮.', 'اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».', 'أكد عملية التثبيت.']);
+  } else {
+    title.textContent = 'إضافة سند إلى جهازك';
+    intro.textContent = 'افتح قائمة المتصفح وابحث عن خيار تثبيت التطبيق أو إضافته إلى الشاشة الرئيسية.';
+    renderSteps(['افتح قائمة المتصفح.', 'اختر تثبيت التطبيق أو إنشاء اختصار.', 'أكد الإضافة ثم افتح سند من جهازك.']);
+  }
+
+  if (isWhatsApp) notice.classList.add('visible');
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferredPrompt = event;
+    installButton.hidden = false;
+  });
+
+  installButton.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installButton.hidden = true;
+  });
+</script>
+</body>
+</html>
