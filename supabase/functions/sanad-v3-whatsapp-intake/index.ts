@@ -44,11 +44,17 @@ const SANAD_ANALYZE_FUNCTION_URL =
   Deno.env.get("SANAD_ANALYZE_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
 
+const SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL =
+  Deno.env.get("SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL") ||
+  `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-onboarding`;
+
 const SEND_UNSUPPORTED_REPLY =
   (Deno.env.get("SEND_UNSUPPORTED_REPLY") || "true") !== "false";
 
 const SEND_QR_REPLY = (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
 const TRIGGER_ANALYSIS = (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
+const TRIGGER_ONBOARDING =
+  (Deno.env.get("TRIGGER_ONBOARDING") || "true") !== "false";
 
 const META_GRAPH_VERSION = "v20.0";
 const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -828,7 +834,18 @@ async function processWebhookInBackground(body: any): Promise<void> {
     return;
   }
 
-  if (!isSupportedMedia(messageType, initialMimeType, mediaId)) {
+  const supportedMedia = isSupportedMedia(
+    messageType,
+    initialMimeType,
+    mediaId,
+  );
+
+  await registerWhatsAppInbound(
+    normalized,
+    supportedMedia,
+  );
+
+  if (!supportedMedia) {
     await sendUnsupportedMessage(senderPhone);
     return;
   }
@@ -966,6 +983,10 @@ async function processWebhookInBackground(body: any): Promise<void> {
         qr_url: qrUrl,
       });
     }
+  }
+
+  if (qrSendResponse) {
+    await triggerWhatsAppOnboarding();
   }
 
   await triggerAnalysis(operation.id, publicToken);
