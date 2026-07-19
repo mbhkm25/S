@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://hudbzlgclghlhazlduas.supabase.co';
+const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://api.sanadflow.com';
 
 // Intelligently resolve the anonymous client key.
 // Standard Supabase client requires the JWT anon key to handle authentication and row-level security (RLS).

@@ -788,7 +788,7 @@ export default function App() {
             </p>
           </div>
           <div className="bg-slate-900/60 p-4 rounded-2xl text-right font-mono text-xs text-slate-300 space-y-2 border border-slate-950">
-            <div>VITE_SUPABASE_URL=https://hudbzlgclghlhazlduas.supabase.co</div>
+            <div>VITE_SUPABASE_URL=https://api.sanadflow.com</div>
             <div>VITE_SUPABASE_PUBLISHABLE_KEY=M_KEY</div>
           </div>
           <p className="text-[11px] text-slate-500">قم بضبط هذه المتغيرات في لوحة الإعدادات لإطلاق التطبيق بنجاح.</p>
