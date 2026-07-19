@@ -41,33 +41,20 @@ export type BusinessDashboardSummary = {
     verification_status: string;
     review_note: string | null;
   };
-  catalog: {
-    total: number;
-    active: number;
-  };
-  customers: {
-    total: number;
-    new_30d: number;
-    inactive_90d: number;
-  };
-  team: {
-    active: number;
-    pending_invitations: number;
-  };
-  operations: {
-    total: number;
-  };
-  financial_accounts: {
-    total: number;
-  };
-  complaints: {
-    pending: number;
-  };
+  catalog: { total: number; active: number };
+  customers: { total: number; new_30d: number; inactive_90d: number };
+  team: { active: number; pending_invitations: number };
+  operations: { total: number };
+  financial_accounts: { total: number };
+  complaints: { pending: number };
 };
 
 export type ManagementBusinessProfile = BusinessProfile & {
   display_tagline?: string | null;
   address_text?: string | null;
+  profile_image_path?: string | null;
+  cover_image_path?: string | null;
+  gallery_paths?: string[] | null;
   contact_links?: Record<string, string | null> | null;
   working_hours?: Record<string, { open: string; close: string; closed: boolean }> | null;
   profile_sections?: {
@@ -91,9 +78,7 @@ export async function getBusinessManagementProfile(businessId: string): Promise<
 
 export async function getBusinessDashboardSummary(businessId: string): Promise<BusinessDashboardSummary> {
   rememberActiveManagedBusiness(businessId);
-  const { data, error } = await supabase.rpc('get_business_dashboard_summary', {
-    p_business_id: businessId
-  });
+  const { data, error } = await supabase.rpc('get_business_dashboard_summary', { p_business_id: businessId });
   if (error) throw new Error(error.message || 'تعذر تحميل ملخص لوحة النشاط.');
   return data as BusinessDashboardSummary;
 }
