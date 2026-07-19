@@ -380,60 +380,6 @@ async function findExistingOperationByMessageId(messageId: string): Promise<any 
   }
 }
 
-async function registerWhatsAppInbound(
-  normalized: any,
-  supported: boolean,
-): Promise<void> {
-  try {
-    await supabaseJson(
-      "/rest/v1/rpc/register_whatsapp_inbound",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          p_phone: normalized.senderPhone,
-          p_wa_id:
-            normalized.senderWaId ||
-            normalized.senderPhone,
-          p_display_name:
-            normalized.senderName || null,
-          p_message_id:
-            normalized.messageId || null,
-          p_message_type:
-            normalized.messageType || null,
-          p_supported: supported,
-          p_metadata: {
-            function: FUNCTION_NAME,
-            media_id:
-              normalized.mediaId || null,
-            mime_type:
-              normalized.mimeType || null,
-            whatsapp_timestamp:
-              normalized.timestamp || null,
-          },
-        }),
-      },
-    );
-  } catch (error) {
-    console.error(JSON.stringify({
-      function: FUNCTION_NAME,
-      event:
-        "whatsapp_contact_registration_failed",
-      message_id:
-        normalized.messageId || null,
-      phone:
-        normalized.senderPhone || null,
-      error: truncateText(
-        error instanceof Error
-          ? error.message
-          : String(error),
-      ),
-    }));
-  }
-}
-
 async function uploadToStorage(
   bucket: string,
   path: string,
@@ -665,53 +611,6 @@ async function triggerAnalysis(operationId: string, publicToken: string): Promis
   } catch {
     // Do not fail intake if analysis trigger failed.
     // The operation remains pending and can be retried later.
-  }
-}
-
-async function triggerWhatsAppOnboarding(): Promise<void> {
-  if (!TRIGGER_ONBOARDING) return;
-
-  try {
-    const response = await fetch(
-      SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-sanad-internal-key":
-            SANAD_INTERNAL_API_KEY,
-        },
-        body: JSON.stringify({
-          limit: 1,
-          source: FUNCTION_NAME,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const text = await response
-        .text()
-        .catch(() => "");
-
-      console.error(JSON.stringify({
-        function: FUNCTION_NAME,
-        event:
-          "whatsapp_onboarding_trigger_rejected",
-        status: response.status,
-        response: truncateText(text),
-      }));
-    }
-  } catch (error) {
-    console.error(JSON.stringify({
-      function: FUNCTION_NAME,
-      event:
-        "whatsapp_onboarding_trigger_failed",
-      error: truncateText(
-        error instanceof Error
-          ? error.message
-          : String(error),
-      ),
-    }));
   }
 }
 
