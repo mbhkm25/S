@@ -4,6 +4,7 @@ import { Profile } from '../types';
 import { Upload, CheckCircle2, Clipboard, Loader2, FileText, Check, AlertTriangle, Share2, PlusCircle, Home } from 'lucide-react';
 import QRCode from 'qrcode';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
+import { getPublicAppUrl } from '../lib/urlUtils';
 
 interface ShareIntakeProps {
   user: any;
@@ -215,9 +216,8 @@ export default function ShareIntake({ user, profile, onNavigateToDetails, onNavi
           throw new Error('لم يرجع خادم قاعدة البيانات معرف العملية.');
         }
 
-        // 3. Generate QR Code pointing to public verification path
-        const baseDomain = window.location.origin;
-        const operationUrl = `${baseDomain}/app/v/${opData.public_token}`;
+        // 3. Generate QR Code pointing to the canonical public verification path
+        const operationUrl = `${getPublicAppUrl()}/v/${opData.public_token}`;
         const qrDataUrl = await QRCode.toDataURL(operationUrl, {
           width: 320, // Enlarged QR code for better visibility and scanning
           margin: 2,
