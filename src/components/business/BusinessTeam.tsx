@@ -3,41 +3,43 @@ import type { FormEvent } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
   Loader2,
   Phone,
   Plus,
-  RefreshCw,
+  Save,
   Search,
   ShieldCheck,
-  User,
-  UserCheck,
   UserMinus,
   UserPlus,
   UserX,
   Users
 } from 'lucide-react';
+import { getUserBusinessContexts } from '../../lib/businessApi';
 import {
-  createBusinessTeamInvitation,
-  getBusinessTeam,
-  getUserBusinessContexts,
-  updateBusinessTeamMemberStatus,
-  type BusinessInvitation,
-  type BusinessTeamMember
-} from '../../lib/businessApi';
-import { formatYemeniDisplay, toLatinDigits } from '../../lib/digits';
+  DEFAULT_TEAM_PERMISSIONS,
+  createBusinessTeamInvitationV2,
+  getBusinessTeamV2,
+  updateBusinessTeamMemberPermissions,
+  updateBusinessTeamMemberStatusV2,
+  type BusinessTeamMemberV2,
+  type BusinessTeamPermissionKey,
+  type BusinessTeamPermissions,
+  type BusinessTeamInvitationV2
+} from '../../lib/businessTeamApi';
+import { toLatinDigits } from '../../lib/digits';
 
 interface BusinessTeamProps {
   onNavigate: (page: string) => void;
+  businessId?: string;
+  businessName?: string;
 }
 
-type MemberAction = 'suspended' | 'reactivated' | 'removed';
-
-type TeamMemberWithStatus = BusinessTeamMember & {
-  status?: string | null;
-  label?: string | null;
+const PERMISSION_LABELS: Record<BusinessTeamPermissionKey, string> = {
+  view_customers: 'عرض العملاء',
+  contact_customers: 'التواصل مع العملاء',
+  manage_catalog: 'إدارة الكتالوج',
+  view_reports: 'عرض التقارير',
+  link_operations: 'إضافة العمليات إلى النشاط'
 };
 
 function formatDate(value?: string | null) {
@@ -51,358 +53,224 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-function roleLabel(member: TeamMemberWithStatus) {
-  if (member.role === 'owner') return 'مالك النشاط';
-  if (member.role === 'manager') return 'مدير';
-  if (member.role === 'cashier') return 'كاشير';
-  return member.label || 'عضو فريق';
+function normalizedPermissions(member: BusinessTeamMemberV2): BusinessTeamPermissions {
+  return { ...DEFAULT_TEAM_PERMISSIONS, ...(member.permissions || {}) };
 }
 
-function statusLabel(member: TeamMemberWithStatus) {
-  if (member.role === 'owner') return 'مالك';
-  if (member.status === 'suspended') return 'معلّق';
-  return 'نشط';
-}
-
-function statusClasses(member: TeamMemberWithStatus) {
-  if (member.role === 'owner') return 'border-slate-200 bg-slate-900 text-white';
-  if (member.status === 'suspended') return 'border-amber-100 bg-amber-50 text-amber-700';
-  return 'border-emerald-100 bg-emerald-50 text-emerald-700';
-}
-
-export default function BusinessTeam({ onNavigate: _onNavigate }: BusinessTeamProps) {
+export default function BusinessTeam({ businessId: providedBusinessId, businessName: providedBusinessName }: BusinessTeamProps) {
   const [loading, setLoading] = useState(true);
-  const [businessId, setBusinessId] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [teamMembers, setTeamMembers] = useState<TeamMemberWithStatus[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<BusinessInvitation[]>([]);
+  const [businessId, setBusinessId] = useState(providedBusinessId || '');
+  const [businessName, setBusinessName] = useState(providedBusinessName || '');
+  const [members, setMembers] = useState<BusinessTeamMemberV2[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<BusinessTeamInvitationV2[]>([]);
   const [search, setSearch] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
-  const [actionsOpenFor, setActionsOpenFor] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
-  const [label, setLabel] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [editing, setEditing] = useState<BusinessTeamMemberV2 | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPermissions, setEditPermissions] = useState<BusinessTeamPermissions>(DEFAULT_TEAM_PERMISSIONS);
+  const [savingMember, setSavingMember] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const loadTeamData = async () => {
+  const resolveBusiness = async () => {
+    if (providedBusinessId) {
+      return { id: providedBusinessId, name: providedBusinessName || '' };
+    }
+    const contexts = await getUserBusinessContexts();
+    const current = contexts.owned_businesses?.[0] || null;
+    if (!current) throw new Error('لا يوجد نشاط مملوك متاح لإدارة الفريق.');
+    return { id: current.id, name: current.name };
+  };
+
+  const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const contexts = await getUserBusinessContexts();
-      const currentBusiness = contexts.owned_businesses?.[0] || contexts.team_businesses?.[0];
-      if (!currentBusiness) throw new Error('لم يتم العثور على نشاط تجاري نشط.');
-
-      setBusinessId(currentBusiness.id);
-      setBusinessName(currentBusiness.name);
-      setPendingInvites(contexts.pending_invitations || []);
-      const members = await getBusinessTeam(currentBusiness.id);
-      setTeamMembers(Array.isArray(members) ? members as TeamMemberWithStatus[] : []);
+      const current = await resolveBusiness();
+      setBusinessId(current.id);
+      setBusinessName(current.name);
+      const data = await getBusinessTeamV2(current.id);
+      setMembers(data.items);
+      setPendingInvites(data.pending_invitations);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'فشل تحميل بيانات الفريق.');
+      setError(caught instanceof Error ? caught.message : 'تعذر تحميل فريق العمل.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadTeamData();
-  }, []);
-
-  const counts = useMemo(() => {
-    const active = teamMembers.filter((member) => member.status !== 'suspended').length;
-    const suspended = teamMembers.filter((member) => member.status === 'suspended').length;
-    return { total: teamMembers.length, active, suspended, pending: pendingInvites.length };
-  }, [pendingInvites.length, teamMembers]);
+    void load();
+  }, [providedBusinessId]);
 
   const filteredMembers = useMemo(() => {
     const term = toLatinDigits(search).trim().toLowerCase();
-    if (!term) return teamMembers;
-    return teamMembers.filter((member) => {
+    if (!term) return members;
+    return members.filter((member) => {
       const name = member.profile?.full_name || '';
       const phoneValue = toLatinDigits(member.profile?.phone || '');
-      return name.toLowerCase().includes(term) || phoneValue.includes(term) || roleLabel(member).includes(term);
+      const title = member.job_title || member.label || '';
+      return name.toLowerCase().includes(term) || phoneValue.includes(term) || title.toLowerCase().includes(term);
     });
-  }, [search, teamMembers]);
+  }, [members, search]);
 
-  const handleSendInvite = async (event: FormEvent<HTMLFormElement>) => {
+  const activeCount = members.filter((member) => member.status === 'active').length;
+  const suspendedCount = members.filter((member) => member.status === 'suspended').length;
+
+  const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const cleanPhone = toLatinDigits(phone.trim().replace(/\+/g, '')).replace(/\D/g, '');
+    const cleanPhone = toLatinDigits(phone).replace(/\D/g, '');
     if (!/^9677\d{8}$/.test(cleanPhone)) {
-      setError('رقم الهاتف يجب أن يكون بالصيغة الدولية اليمنية: 9677XXXXXXXX.');
+      setError('رقم الهاتف يجب أن يكون بالصيغة 9677XXXXXXXX.');
       return;
     }
+    if (!businessId) return;
 
     setInviting(true);
     setError(null);
-    setSuccessMsg(null);
+    setSuccess(null);
     try {
-      await createBusinessTeamInvitation(businessId, cleanPhone, label.trim() || null);
-      setSuccessMsg('تم إرسال دعوة الانضمام بنجاح.');
+      await createBusinessTeamInvitationV2(businessId, cleanPhone, jobTitle.trim() || null);
       setPhone('');
-      setLabel('');
+      setJobTitle('');
       setInviteOpen(false);
-      await loadTeamData();
+      setSuccess('تم إنشاء دعوة الموظف.');
+      await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'فشل إرسال دعوة الانضمام.');
+      setError(caught instanceof Error ? caught.message : 'تعذر إنشاء الدعوة.');
     } finally {
       setInviting(false);
     }
   };
 
-  const executeMemberAction = async (member: TeamMemberWithStatus, action: MemberAction) => {
+  const openEditor = (member: BusinessTeamMemberV2) => {
+    setEditing(member);
+    setEditTitle(member.job_title || member.label || '');
+    setEditPermissions(normalizedPermissions(member));
+    setError(null);
+    setSuccess(null);
+  };
+
+  const savePermissions = async () => {
+    if (!businessId || !editing) return;
+    setSavingMember(true);
+    setError(null);
+    try {
+      await updateBusinessTeamMemberPermissions(businessId, editing.user_id, editTitle, editPermissions);
+      setEditing(null);
+      setSuccess('تم حفظ المسمى الوظيفي والصلاحيات.');
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر حفظ صلاحيات الموظف.');
+    } finally {
+      setSavingMember(false);
+    }
+  };
+
+  const changeStatus = async (member: BusinessTeamMemberV2, action: 'suspended' | 'reactivated' | 'removed') => {
+    if (!businessId) return;
     setActionLoading(member.user_id);
     setError(null);
-    setSuccessMsg(null);
+    setSuccess(null);
     try {
-      await updateBusinessTeamMemberStatus(businessId, member.user_id, action);
-      const actionText = action === 'suspended' ? 'تعليق العضوية' : action === 'reactivated' ? 'إعادة تنشيط العضوية' : 'إزالة العضو';
-      setSuccessMsg(`تم ${actionText} بنجاح.`);
-      setActionsOpenFor(null);
-      setExpandedMemberId(null);
-      await loadTeamData();
+      await updateBusinessTeamMemberStatusV2(businessId, member.user_id, action);
+      setSuccess(action === 'suspended' ? 'تم تعليق الموظف.' : action === 'reactivated' ? 'تمت إعادة تفعيل الموظف.' : 'تمت إزالة الموظف.');
+      await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'تعذر تنفيذ الإجراء المطلوب.');
+      setError(caught instanceof Error ? caught.message : 'تعذر تحديث العضوية.');
     } finally {
       setActionLoading(null);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16 font-arabic">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-800" />
-        <span className="text-xs text-slate-500">جاري تحميل فريق العمل...</span>
-      </div>
-    );
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
 
   return (
-    <div className="-mx-2 space-y-4 font-arabic text-right sm:mx-0" dir="rtl">
-      <header className="flex items-start justify-between gap-3 px-2 sm:px-0">
+    <div className="space-y-4 font-arabic text-right" dir="rtl">
+      <header className="flex items-start justify-between gap-3 px-1">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-slate-950">فريق العمل</h2>
-          <p className="mt-1 text-[11px] leading-5 text-slate-500">إدارة أعضاء {businessName || 'النشاط'} ودعوات الانضمام والصلاحيات التشغيلية</p>
+          <p className="mt-1 text-[11px] text-slate-500">موظفو {businessName || 'النشاط'} ومسمياتهم وصلاحياتهم التشغيلية</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setInviteOpen((value) => !value)}
-          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-black"
-          aria-expanded={inviteOpen}
-        >
-          <UserPlus className="h-4 w-4" />
-          دعوة عضو
-          {inviteOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        <button onClick={() => setInviteOpen((value) => !value)} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-[10px] font-bold text-white">
+          <UserPlus className="h-4 w-4" />دعوة موظف
         </button>
       </header>
 
-      {error && (
-        <div className="mx-2 flex items-start gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700 sm:mx-0">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <div className="flex gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div>}
+      {success && <div className="flex gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" />{success}</div>}
 
-      {successMsg && (
-        <div className="mx-2 flex items-start gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700 sm:mx-0">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{successMsg}</span>
-        </div>
-      )}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{members.length}</strong><span className="text-[9px] text-slate-400">الموظفون</span></div>
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{activeCount}</strong><span className="text-[9px] text-slate-400">نشط</span></div>
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{pendingInvites.length}</strong><span className="text-[9px] text-slate-400">دعوات معلقة</span></div>
+      </div>
 
       {inviteOpen && (
-        <section className="border-y border-slate-200 bg-white px-3 py-4 sm:rounded-2xl sm:border">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-950">دعوة عضو جديد</h3>
-              <p className="mt-1 text-[10px] leading-5 text-slate-400">أرسل دعوة إلى مستخدم سند للانضمام إلى فريق النشاط.</p>
-            </div>
-            <button type="button" onClick={() => setInviteOpen(false)} className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-500">إغلاق</button>
-          </div>
-          <form onSubmit={handleSendInvite} className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-[10px] font-bold text-slate-600">رقم الجوال الدولي</label>
-              <div className="relative">
-                <Phone className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(event) => setPhone(toLatinDigits(event.target.value).replace(/\D/g, '').slice(0, 12))}
-                  placeholder="9677XXXXXXXX"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-3 text-left font-mono text-xs outline-none focus:border-slate-400 focus:bg-white"
-                  dir="ltr"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[10px] font-bold text-slate-600">المسمى الوظيفي <span className="font-normal text-slate-400">(اختياري)</span></label>
-              <input
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                placeholder="مثال: محاسب، كاشير، مدير فرع"
-                maxLength={80}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-slate-400 focus:bg-white"
-              />
-            </div>
-            <button type="submit" disabled={inviting || !phone} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white disabled:bg-slate-300 sm:col-span-2">
-              {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              إرسال دعوة الانضمام
-            </button>
-          </form>
-        </section>
+        <form onSubmit={submitInvite} className="grid gap-3 border-y border-slate-200 bg-white px-3 py-4 sm:grid-cols-2 sm:rounded-2xl sm:border">
+          <label className="space-y-1 text-[10px] font-bold text-slate-600">رقم الجوال
+            <div className="relative"><Phone className="absolute right-3 top-3.5 h-4 w-4 text-slate-400" /><input value={phone} onChange={(event) => setPhone(toLatinDigits(event.target.value).replace(/\D/g, '').slice(0, 12))} placeholder="9677XXXXXXXX" dir="ltr" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-3 text-left font-mono text-xs" /></div>
+          </label>
+          <label className="space-y-1 text-[10px] font-bold text-slate-600">المسمى الوظيفي
+            <input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} maxLength={80} placeholder="مثال: كاشير، محاسب" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" />
+          </label>
+          <button disabled={inviting || !phone} className="flex justify-center gap-2 rounded-xl bg-slate-900 p-3 text-xs font-bold text-white disabled:bg-slate-300 sm:col-span-2">
+            {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}إرسال الدعوة
+          </button>
+        </form>
       )}
 
-      <div className="flex gap-2 overflow-x-auto px-2 pb-1 no-scrollbar sm:px-0">
-        {[
-          { label: 'كل الأعضاء', value: counts.total },
-          { label: 'النشطون', value: counts.active },
-          { label: 'المعلّقون', value: counts.suspended },
-          { label: 'الدعوات', value: counts.pending }
-        ].map((item) => (
-          <div key={item.label} className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600">
-            {item.label} <span className="mr-1 font-mono text-slate-900">{toLatinDigits(String(item.value))}</span>
-          </div>
-        ))}
-      </div>
+      <div className="relative"><Search className="absolute right-3 top-3.5 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم أو الرقم أو المسمى..." className="w-full rounded-2xl border border-slate-200 bg-white py-3 pr-10 pl-3 text-xs" /></div>
 
-      <div className="relative mx-2 sm:mx-0">
-        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="ابحث بالاسم أو الهاتف أو الدور"
-          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pr-10 pl-3 text-xs outline-none transition focus:border-slate-400"
-        />
-      </div>
-
-      <section>
-        <div className="mb-2 flex items-center justify-between px-2 sm:px-0">
-          <h3 className="text-xs font-bold text-slate-900">أعضاء الفريق</h3>
-          <button type="button" onClick={() => void loadTeamData()} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="تحديث">
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-
+      <section className="divide-y divide-slate-100 border-y border-slate-200 bg-white sm:rounded-2xl sm:border">
         {filteredMembers.length === 0 ? (
-          <div className="border-y border-slate-100 py-10 text-center">
-            <Users className="mx-auto h-7 w-7 text-slate-300" />
-            <p className="mt-2 text-[11px] text-slate-400">لا توجد نتائج مطابقة.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100 border-y border-slate-100 bg-white sm:rounded-2xl sm:border">
-            {filteredMembers.map((member) => {
-              const memberKey = member.user_id;
-              const expanded = expandedMemberId === memberKey;
-              const actionsOpen = actionsOpenFor === memberKey;
-              const isOwner = member.role === 'owner';
-              const suspended = member.status === 'suspended';
-              return (
-                <article key={memberKey} className="overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpandedMemberId(expanded ? null : memberKey);
-                      setActionsOpenFor(null);
-                    }}
-                    className="flex w-full items-center gap-3 px-3 py-3.5 text-right transition hover:bg-slate-50"
-                    aria-expanded={expanded}
-                    aria-controls={`team-member-${memberKey}`}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                      {isOwner ? <ShieldCheck className="h-5 w-5" /> : <User className="h-5 w-5" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-xs font-bold text-slate-900">{member.profile?.full_name || 'عضو في فريق النشاط'}</p>
-                        <span className={`rounded-full border px-2 py-0.5 text-[8px] font-bold ${statusClasses(member)}`}>{statusLabel(member)}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] text-slate-400">
-                        <span>{roleLabel(member)}</span>
-                        <span className="font-mono" dir="ltr">{toLatinDigits(formatYemeniDisplay(member.profile?.phone || '')) || '—'}</span>
-                      </div>
-                    </div>
-                    {expanded ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-400" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />}
-                  </button>
-
-                  {expanded && (
-                    <div id={`team-member-${memberKey}`} className="border-t border-slate-100 bg-slate-50/60 px-3 py-4">
-                      <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-                        <div><span className="block text-[9px] font-bold text-slate-400">الدور</span><span className="mt-1 block text-xs font-bold text-slate-800">{roleLabel(member)}</span></div>
-                        <div><span className="block text-[9px] font-bold text-slate-400">تاريخ الانضمام</span><span className="mt-1 block text-xs font-bold text-slate-800">{formatDate(member.joined_at)}</span></div>
-                        <div><span className="block text-[9px] font-bold text-slate-400">حالة العضوية</span><span className="mt-1 block text-xs font-bold text-slate-800">{statusLabel(member)}</span></div>
-                        <div><span className="block text-[9px] font-bold text-slate-400">نوع الوصول</span><span className="mt-1 block text-xs font-bold text-slate-800">{isOwner ? 'وصول كامل' : 'وصول تشغيلي'}</span></div>
-                      </div>
-
-                      <div className="mt-4 border-t border-slate-200 pt-3">
-                        {isOwner ? (
-                          <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
-                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-700" />
-                            لا يمكن تعديل عضوية مالك النشاط من هذه الواجهة.
-                          </div>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setActionsOpenFor(actionsOpen ? null : memberKey)}
-                              className="flex w-full items-center justify-between rounded-xl bg-white px-3 py-3 text-right text-xs font-bold text-slate-800 shadow-sm"
-                              aria-expanded={actionsOpen}
-                            >
-                              <span>إجراءات العضو</span>
-                              {actionsOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                            </button>
-
-                            {actionsOpen && (
-                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                                {suspended ? (
-                                  <button type="button" disabled={actionLoading === member.user_id} onClick={() => void executeMemberAction(member, 'reactivated')} className="flex w-full items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-right text-xs font-bold text-emerald-800 disabled:opacity-50">
-                                    <UserCheck className="h-5 w-5" /> إعادة تنشيط العضوية
-                                  </button>
-                                ) : (
-                                  <button type="button" disabled={actionLoading === member.user_id} onClick={() => void executeMemberAction(member, 'suspended')} className="flex w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-right text-xs font-bold text-amber-800 disabled:opacity-50">
-                                    <UserX className="h-5 w-5" /> تعليق وصول العضو
-                                  </button>
-                                )}
-                                <button type="button" disabled={actionLoading === member.user_id} onClick={() => void executeMemberAction(member, 'removed')} className="flex w-full items-center gap-3 rounded-2xl border border-rose-100 bg-rose-50 p-4 text-right text-xs font-bold text-rose-800 disabled:opacity-50">
-                                  {actionLoading === member.user_id ? <Loader2 className="h-5 w-5 animate-spin" /> : <UserMinus className="h-5 w-5" />} إزالة العضو من الفريق
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-3 px-2 sm:px-0">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-900">الدعوات المعلقة</h3>
-          <span className="rounded-full bg-amber-50 px-2 py-1 font-mono text-[9px] font-bold text-amber-700">{toLatinDigits(String(pendingInvites.length))}</span>
-        </div>
-        {pendingInvites.length === 0 ? (
-          <p className="border-y border-slate-100 py-5 text-[11px] text-slate-400">لا توجد دعوات معلقة حاليًا.</p>
-        ) : (
-          <div className="divide-y divide-slate-100 border-y border-slate-100">
-            {pendingInvites.map((invite) => (
-              <div key={invite.id} className="flex items-center gap-3 py-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><Clock className="h-4 w-4" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs font-bold text-slate-800" dir="ltr">{toLatinDigits(invite.invited_phone)}</p>
-                  <p className="mt-1 text-[9px] text-slate-400">{invite.role || 'عضو فريق'} · بانتظار القبول</p>
-                </div>
+          <div className="py-12 text-center"><Users className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-xs text-slate-400">لا يوجد موظفون مطابقون.</p></div>
+        ) : filteredMembers.map((member) => (
+          <article key={member.membership_id} className="space-y-3 px-3 py-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100"><ShieldCheck className="h-5 w-5 text-slate-600" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-xs font-bold">{member.profile?.full_name || 'مستخدم سند'}</h3><span className={`rounded-full px-2 py-0.5 text-[8px] font-bold ${member.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{member.status === 'active' ? 'نشط' : 'معلّق'}</span></div>
+                <p className="mt-1 text-[10px] text-slate-500">{member.job_title || 'موظف'} · {member.profile?.phone || 'بدون رقم'}</p>
+                <p className="mt-1 text-[9px] text-slate-400">انضم في {formatDate(member.created_at)}</p>
               </div>
-            ))}
-          </div>
-        )}
+              <button onClick={() => openEditor(member)} className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-bold">الصلاحيات</button>
+            </div>
+            <div className="flex gap-2">
+              {member.status === 'active' ? (
+                <button disabled={actionLoading === member.user_id} onClick={() => void changeStatus(member, 'suspended')} className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-amber-200 py-2.5 text-[10px] font-bold text-amber-700"><UserX className="h-4 w-4" />تعليق</button>
+              ) : (
+                <button disabled={actionLoading === member.user_id} onClick={() => void changeStatus(member, 'reactivated')} className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-emerald-200 py-2.5 text-[10px] font-bold text-emerald-700"><ShieldCheck className="h-4 w-4" />إعادة تفعيل</button>
+              )}
+              <button disabled={actionLoading === member.user_id} onClick={() => window.confirm('إزالة هذا الموظف من النشاط؟') && void changeStatus(member, 'removed')} className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-rose-200 py-2.5 text-[10px] font-bold text-rose-700"><UserMinus className="h-4 w-4" />إزالة</button>
+            </div>
+          </article>
+        ))}
       </section>
+
+      {suspendedCount > 0 && <p className="px-1 text-[10px] text-slate-400">يوجد {suspendedCount} موظف معلّق لا يملك صلاحيات تشغيلية فعالة.</p>}
+
+      {pendingInvites.length > 0 && (
+        <section className="space-y-2"><h3 className="px-1 text-xs font-bold">الدعوات المعلقة</h3>{pendingInvites.map((invite) => <div key={invite.invitation_id} className="rounded-2xl bg-white p-3"><strong className="block font-mono text-xs" dir="ltr">{invite.invited_phone}</strong><span className="mt-1 block text-[10px] text-slate-500">{invite.job_title || 'موظف'} · تنتهي {formatDate(invite.expires_at)}</span></div>)}</section>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-[120] flex items-end bg-slate-950/60 sm:items-center sm:justify-center">
+          <button className="absolute inset-0" onClick={() => setEditing(null)} aria-label="إغلاق" />
+          <section className="relative z-10 w-full rounded-t-[28px] bg-white p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-3xl">
+            <h3 className="text-sm font-bold">صلاحيات {editing.profile?.full_name || 'الموظف'}</h3>
+            <label className="mt-4 block space-y-1 text-[10px] font-bold text-slate-600">المسمى الوظيفي<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" /></label>
+            <div className="mt-4 space-y-2">{(Object.keys(PERMISSION_LABELS) as BusinessTeamPermissionKey[]).map((key) => <label key={key} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-xs"><span>{PERMISSION_LABELS[key]}</span><input type="checkbox" checked={editPermissions[key]} onChange={(event) => setEditPermissions((current) => ({ ...current, [key]: event.target.checked }))} /></label>)}</div>
+            <div className="mt-4 flex gap-2"><button onClick={() => setEditing(null)} className="flex-1 rounded-xl border p-3 text-xs">إلغاء</button><button disabled={savingMember} onClick={() => void savePermissions()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 p-3 text-xs font-bold text-white">{savingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ</button></div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
