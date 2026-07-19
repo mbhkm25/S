@@ -4,6 +4,7 @@ import { Profile } from '../types';
 import { Upload, FileCode, CheckCircle2, QrCode, Clipboard, Loader2, RefreshCw, FileText, ArrowLeft, Check, Share2, ExternalLink, PlusCircle } from 'lucide-react';
 import QRCode from 'qrcode';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
+import { getPublicAppUrl } from '../lib/urlUtils';
 
 interface UploadProps {
   user: any;
@@ -174,14 +175,8 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           console.log('[operation_insert_success] operation database row created', opData);
         }
 
-        // Dynamically resolve target URL. Falling back to production domain if in mobile webview/development environments
-        let baseDomain = window.location.origin;
-        if (baseDomain.includes('localhost') || baseDomain.includes('capacitor') || baseDomain.startsWith('file:')) {
-          baseDomain = 'https://sanadflow.com';
-        }
-        const base = import.meta.env.VITE_APP_BASE_PATH || '/';
-        const cleanBase = base.endsWith('/') ? base : `${base}/`;
-        const operationUrl = `${baseDomain}${cleanBase}v/${opData.public_token}`;
+        // Build the verification URL from the canonical public application origin.
+        const operationUrl = `${getPublicAppUrl()}/v/${opData.public_token}`;
 
         const qrDataUrl = await QRCode.toDataURL(operationUrl, {
           width: 260,

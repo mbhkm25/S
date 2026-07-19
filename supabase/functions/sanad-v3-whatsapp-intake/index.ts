@@ -1,4 +1,4 @@
-﻿// SANAD Verify v3 - WhatsApp Intake
+// SANAD Verify v3 - WhatsApp Intake
 // Supabase Edge Function: sanad-v3-whatsapp-intake
 //
 // Required secrets:
@@ -10,7 +10,7 @@
 // - SANAD_INTERNAL_API_KEY
 //
 // Optional secrets:
-// - PUBLIC_APP_BASE_URL = https://sanadflow.com
+// - PUBLIC_APP_BASE_URL = https://app.sanadflow.com
 // - SUPABASE_STORAGE_BUCKET = operation-files
 // - SANAD_ANALYZE_FUNCTION_URL
 // - SEND_UNSUPPORTED_REPLY = true
@@ -35,7 +35,7 @@ const META_WA_PHONE_NUMBER_ID = mustGetEnv("META_WA_PHONE_NUMBER_ID");
 const SANAD_INTERNAL_API_KEY = mustGetEnv("SANAD_INTERNAL_API_KEY");
 
 const PUBLIC_APP_BASE_URL =
-  Deno.env.get("PUBLIC_APP_BASE_URL") || "https://sanadflow.com";
+  Deno.env.get("PUBLIC_APP_BASE_URL") || "https://app.sanadflow.com";
 
 const SUPABASE_STORAGE_BUCKET =
   Deno.env.get("SUPABASE_STORAGE_BUCKET") || "operation-files";

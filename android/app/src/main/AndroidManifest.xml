@@ -27,7 +27,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="sanadflow.com" android:pathPrefix="/app/v/" />
+                <data android:scheme="https" android:host="app.sanadflow.com" android:pathPrefix="/v/" />
             </intent-filter>
 
             <!-- Share sheet target for images and PDFs -->
