@@ -18,10 +18,8 @@ export function getPublicAppUrl(): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
-const rawFlag = import.meta.env.VITE_INTERNAL_BUSINESS_CATALOG_ENABLED;
-export const INTERNAL_BUSINESS_CATALOG_ENABLED = rawFlag !== undefined
-  ? String(rawFlag).toLowerCase() === 'true'
-  : true;
+// كتالوج سند الداخلي جزء أساسي من الملف العام، وليس ميزة تجريبية قابلة للتعطيل.
+export const INTERNAL_BUSINESS_CATALOG_ENABLED = true;
 
 export function buildPublicBusinessUrl(slug: string): string {
   const baseUrl = getPublicAppUrl();
