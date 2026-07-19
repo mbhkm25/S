@@ -9,6 +9,16 @@
   <meta name="theme-color" content="#111827">
   <title>تثبيت تطبيق سند</title>
 
+  <link
+    rel="manifest"
+    href="/manifest.webmanifest"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    href="/icon-192.png"
+  >
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     rel="preconnect"
@@ -387,6 +397,34 @@
   </main>
 
   <script>
+    async function registerSanadServiceWorker() {
+      if (!("serviceWorker" in navigator)) {
+        return;
+      }
+
+      try {
+        await navigator.serviceWorker.register(
+          "/sw.js",
+          {
+            scope: "/"
+          }
+        );
+
+        await navigator.serviceWorker.ready;
+      }
+      catch (error) {
+        console.error(
+          "SANAD service worker registration failed",
+          error
+        );
+      }
+    }
+
+    window.addEventListener(
+      "load",
+      registerSanadServiceWorker
+    );
+
     const ua = navigator.userAgent || "";
 
     const isIOS =
