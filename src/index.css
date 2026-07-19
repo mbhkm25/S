@@ -5,6 +5,23 @@
   .profile-input {
     @apply w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-slate-500;
   }
+
+  .sanad-page-gutter {
+    width: 100%;
+    padding-inline: 0.125rem;
+  }
+
+  @media (min-width: 640px) {
+    .sanad-page-gutter {
+      padding-inline: 0.75rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .sanad-page-gutter {
+      padding-inline: 1.25rem;
+    }
+  }
 }
 
 @theme {
@@ -17,3 +34,30 @@ body {
   direction: rtl;
 }
 
+/*
+ * قاعدة موحدة لكل واجهات التطبيق: المحتوى يقترب من حافة الهاتف،
+ * ثم يستعيد فراغًا مريحًا تدريجيًا على الشاشات الأكبر.
+ */
+@media (max-width: 639px) {
+  #app_main {
+    max-width: none !important;
+    padding-left: 0.125rem !important;
+    padding-right: 0.125rem !important;
+  }
+
+  #app_main main {
+    max-width: none !important;
+    padding-left: 0.125rem !important;
+    padding-right: 0.125rem !important;
+  }
+
+  #global_header {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  #global_header > div {
+    max-width: none !important;
+    width: 100% !important;
+  }
+}
