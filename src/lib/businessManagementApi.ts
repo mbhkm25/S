@@ -1,6 +1,18 @@
 import { supabase } from './supabase';
 import type { BusinessProfile } from './businessApi';
 
+const ACTIVE_MANAGED_BUSINESS_KEY = 'sanad.activeManagedBusinessId';
+
+export function rememberActiveManagedBusiness(businessId: string) {
+  if (typeof window === 'undefined' || !businessId) return;
+  window.sessionStorage.setItem(ACTIVE_MANAGED_BUSINESS_KEY, businessId);
+}
+
+export function getActiveManagedBusinessId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage.getItem(ACTIVE_MANAGED_BUSINESS_KEY);
+}
+
 export type FinancialAccount = {
   id: string;
   name: string;
@@ -71,12 +83,14 @@ function unwrap<T>(data: unknown, key: string): T {
 }
 
 export async function getBusinessManagementProfile(businessId: string): Promise<ManagementBusinessProfile> {
+  rememberActiveManagedBusiness(businessId);
   const { data, error } = await supabase.rpc('get_business_management_profile', { p_business_id: businessId });
   if (error) throw new Error(error.message || 'تعذر تحميل بيانات إدارة النشاط.');
   return data as ManagementBusinessProfile;
 }
 
 export async function getBusinessDashboardSummary(businessId: string): Promise<BusinessDashboardSummary> {
+  rememberActiveManagedBusiness(businessId);
   const { data, error } = await supabase.rpc('get_business_dashboard_summary', {
     p_business_id: businessId
   });
