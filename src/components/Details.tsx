@@ -428,7 +428,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
 
     // Fallback: Manual fetch request
     const metaEnv = (import.meta as any).env || {};
-    const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://hudbzlgclghlhazlduas.supabase.co';
+    const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://api.sanadflow.com';
     const isJWT = (key: any) => typeof key === 'string' && key.startsWith('eyJ');
 
     let resolvedKey = '';
