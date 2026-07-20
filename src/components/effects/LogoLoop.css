@@ -1,102 +1,33 @@
-.aurora-divider {
+.business-aurora-anchor {
+  display: none;
+}
+
+.business-aurora-section {
   position: relative;
-  width: 100%;
-  height: 54px;
-  overflow: hidden;
-  border-radius: 1.1rem;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.055), transparent 58%),
-    linear-gradient(90deg, rgba(247, 248, 250, 0), rgba(255, 255, 255, 0.72), rgba(247, 248, 250, 0));
   isolation: isolate;
+  margin-inline: -0.5rem;
+  overflow: hidden;
+  border-radius: 2rem 2rem 0 0;
+  padding: 1.75rem 0.5rem 2rem;
+  background: linear-gradient(180deg, #f0fdfa 0%, #eff6ff 52%, #eef2ff 100%);
 }
 
-.aurora-divider::before,
-.aurora-divider::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  width: 18%;
-  height: 34px;
-  pointer-events: none;
-  transform: translateY(-50%);
+.business-aurora-section > :not(.aurora-background) {
+  position: relative;
+  z-index: 1;
 }
 
-.aurora-divider::before {
-  left: 0;
-  background: linear-gradient(to right, #f7f8fa 10%, rgba(247, 248, 250, 0));
+.business-aurora-section > .aurora-background {
+  z-index: 0;
 }
 
-.aurora-divider::after {
-  right: 0;
-  background: linear-gradient(to left, #f7f8fa 10%, rgba(247, 248, 250, 0));
+.business-aurora-section > :first-child:not(.aurora-background) {
+  margin-top: 0;
 }
 
-.aurora-divider__svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.aurora-divider__wave {
-  transform-box: fill-box;
-  transform-origin: center;
-  will-change: transform, opacity;
-}
-
-.aurora-divider__wave--primary {
-  animation: aurora-wave-primary 4.8s ease-in-out infinite;
-}
-
-.aurora-divider__wave--secondary {
-  opacity: 0.62;
-  animation: aurora-wave-secondary 6.4s ease-in-out infinite;
-}
-
-.aurora-divider__highlight {
-  opacity: 0.22;
-  animation: aurora-highlight 4.8s ease-in-out infinite;
-}
-
-@keyframes aurora-wave-primary {
-  0%,
-  100% {
-    transform: translateY(0) scaleY(1);
-    opacity: 0.88;
-  }
-  50% {
-    transform: translateY(-4px) scaleY(1.14);
-    opacity: 1;
-  }
-}
-
-@keyframes aurora-wave-secondary {
-  0%,
-  100% {
-    transform: translateY(1px) scaleY(0.96);
-  }
-  50% {
-    transform: translateY(4px) scaleY(1.1);
-  }
-}
-
-@keyframes aurora-highlight {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.14;
-  }
-  50% {
-    transform: translateY(-3px);
-    opacity: 0.34;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora-divider__wave,
-  .aurora-divider__highlight {
-    animation: none !important;
-    transform: none !important;
+@media (min-width: 640px) {
+  .business-aurora-section {
+    margin-inline: -1rem;
+    padding-inline: 1rem;
   }
 }
