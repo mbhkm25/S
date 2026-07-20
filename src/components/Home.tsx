@@ -4,24 +4,21 @@ import { supabase } from '../lib/supabase';
 import {
   ArrowLeft,
   ArrowUpRight,
-  Building2,
+  BriefcaseBusiness,
+  ChartNoAxesCombined,
   CheckCircle2,
+  ChevronDown,
   Clock3,
-  FileBarChart2,
-  FileText,
+  History,
+  ListChecks,
+  Network,
   QrCode,
+  SearchCheck,
   ShieldCheck,
-  Store,
   UploadCloud,
   X
 } from 'lucide-react';
 import { getOperationCardDetails, toLatinDigits } from '../lib/digits';
-import {
-  getBusinessMediaSignedUrl,
-  getPublicBusinesses,
-  type PublicBusinessListItem
-} from '../lib/businessApi';
-import { FINANCIAL_ENTITIES } from '../lib/financialEntities';
 import FinancialEntityLogo from './FinancialEntityLogo';
 import LogoLoop from './effects/LogoLoop';
 import TrueFocus from './effects/TrueFocus';
@@ -32,17 +29,49 @@ interface HomeProps {
   onNavigate: (page: string, token?: string) => void;
 }
 
-type BusinessPreview = PublicBusinessListItem & {
-  verification_status?: string | null;
-  logo_path?: string | null;
-  profile_image_path?: string | null;
+type QuickAction = {
+  title: string;
+  description: string;
+  page: string;
+  icon: typeof UploadCloud;
+  iconClassName: string;
+  iconBackgroundClassName: string;
 };
 
-const financialLogos = FINANCIAL_ENTITIES.map((entity) => ({
-  src: entity.logo,
-  alt: entity.nameAr,
-  title: entity.nameAr
-}));
+const quickActions: QuickAction[] = [
+  {
+    title: 'رفع إشعار',
+    description: 'أرسل إشعارًا ماليًا جديدًا',
+    page: 'upload',
+    icon: UploadCloud,
+    iconClassName: 'text-sky-700',
+    iconBackgroundClassName: 'bg-sky-50'
+  },
+  {
+    title: 'تحقق من إشعار',
+    description: 'أدخل رمزًا أو رابطًا',
+    page: 'verify-notice',
+    icon: SearchCheck,
+    iconClassName: 'text-emerald-700',
+    iconBackgroundClassName: 'bg-emerald-50'
+  },
+  {
+    title: 'كل العمليات',
+    description: 'استعرض السجل المالي',
+    page: 'my-operations',
+    icon: History,
+    iconClassName: 'text-indigo-700',
+    iconBackgroundClassName: 'bg-indigo-50'
+  },
+  {
+    title: 'طلب تقرير',
+    description: 'أنشئ ملخصًا تحليليًا',
+    page: 'reports',
+    icon: ChartNoAxesCombined,
+    iconClassName: 'text-violet-700',
+    iconBackgroundClassName: 'bg-violet-50'
+  }
+];
 
 function isNativeApp(): boolean {
   try {
@@ -76,25 +105,16 @@ function formatRelativeTime(value?: string | null): string {
 
 export default function Home({ profile, onNavigate }: HomeProps) {
   const [latestOperations, setLatestOperations] = useState<MyOperationItem[]>([]);
-  const [businesses, setBusinesses] = useState<BusinessPreview[]>([]);
-  const [businessLogos, setBusinessLogos] = useState<Record<string, string>>({});
   const [cameraNotice, setCameraNotice] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function loadHome() {
-      const [uploadersResult, verifiersResult, businessesResult] = await Promise.allSettled([
+      const [uploadersResult, verifiersResult] = await Promise.allSettled([
         supabase.rpc('get_my_operations', { p_relation_type: 'uploader', p_limit: 10 }),
-        supabase.rpc('get_my_operations', { p_relation_type: 'verifier', p_limit: 10 }),
-        getPublicBusinesses({
-          p_search: null,
-          p_governorate: null,
-          p_city: null,
-          p_category_id: null,
-          p_limit: 3,
-          p_offset: 0
-        })
+        supabase.rpc('get_my_operations', { p_relation_type: 'verifier', p_limit: 10 })
       ]);
 
       if (!active) return;
@@ -127,17 +147,6 @@ export default function Home({ profile, onNavigate }: HomeProps) {
       } else if (active) {
         setLatestOperations(latest);
       }
-
-      const publicBusinesses = businessesResult.status === 'fulfilled' && Array.isArray(businessesResult.value)
-        ? businessesResult.value.slice(0, 3) as BusinessPreview[]
-        : [];
-      setBusinesses(publicBusinesses);
-
-      const logoEntries = await Promise.all(publicBusinesses.map(async (business) => {
-        const path = business.profile_image_path || business.logo_path || business.logo_url || '';
-        return [business.id, path ? await getBusinessMediaSignedUrl(path).catch(() => '') : ''] as const;
-      }));
-      if (active) setBusinessLogos(Object.fromEntries(logoEntries));
     }
 
     void loadHome();
@@ -217,26 +226,55 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onNavigate('verify-notice')} className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-            <CheckCircle2 className="h-5 w-5 text-slate-700" />
-            <span><strong className="block text-xs text-slate-950">تحقق من إشعار</strong><span className="mt-1 block text-[9px] leading-5 text-slate-400">أدخل الرمز أو الرابط يدويًا.</span></span>
+        <div className="overflow-hidden rounded-[1.65rem] border border-white/80 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.055)]">
+          <button
+            type="button"
+            onClick={() => setActionsOpen((open) => !open)}
+            className="flex w-full items-center gap-3 px-4 py-3.5 text-right"
+            aria-expanded={actionsOpen}
+            aria-controls="home-quick-actions"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+              <ListChecks className={`h-5 w-5 transition-transform duration-300 ${actionsOpen ? 'rotate-6 scale-110' : ''}`} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong className="block text-xs text-slate-950">إجراءات سند</strong>
+              <span className="mt-0.5 block text-[9px] text-slate-400">رفع، تحقق، عمليات وتقارير في مكان واحد</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">4</span>
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${actionsOpen ? 'rotate-180' : ''}`} />
+            </span>
           </button>
-          <button onClick={() => onNavigate('upload')} className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-            <UploadCloud className="h-5 w-5 text-slate-700" />
-            <span><strong className="block text-xs text-slate-950">رفع إشعار</strong><span className="mt-1 block text-[9px] leading-5 text-slate-400">رفع يدوي عند الحاجة.</span></span>
-          </button>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onNavigate('my-operations')} className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileText className="h-4 w-4" /></span>
-            <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">كل العمليات</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
-          </button>
-          <button onClick={() => onNavigate('reports')} className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileBarChart2 className="h-4 w-4" /></span>
-            <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">طلب تقرير</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
-          </button>
+          <div
+            id="home-quick-actions"
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${actionsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+          >
+            <div className="overflow-hidden">
+              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2.5">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.page}
+                      type="button"
+                      onClick={() => onNavigate(action.page)}
+                      className="group flex min-h-[82px] items-center gap-2.5 rounded-[1.2rem] bg-slate-50/80 p-3 text-right transition duration-200 active:scale-[0.98] active:bg-slate-100"
+                    >
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${action.iconBackgroundClassName} ${action.iconClassName}`}>
+                        <Icon className="h-[18px] w-[18px] transition-transform duration-200 group-active:scale-90" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block text-[11px] text-slate-900">{action.title}</strong>
+                        <span className="mt-1 block text-[8px] leading-4 text-slate-400">{action.description}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
         {latest && (() => {
@@ -258,7 +296,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
 
       <div className="overflow-hidden rounded-[1.25rem] border-y border-slate-200/70 bg-[#f7f8fa] py-1">
         <LogoLoop
-          logos={financialLogos}
+          logos={[]}
           speed={32}
           direction="left"
           logoHeight={28}
@@ -269,8 +307,10 @@ export default function Home({ profile, onNavigate }: HomeProps) {
       </div>
 
       <section className="space-y-4" aria-labelledby="business-sanad-title">
-        <div className="flex min-h-[72px] items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-sky-50/90 to-transparent px-4 py-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm"><Building2 className="h-5 w-5" /></span>
+        <div className="flex min-h-[72px] items-center gap-3 rounded-[1.4rem] bg-white/68 px-4 py-3 backdrop-blur-[2px]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm">
+            <BriefcaseBusiness className="h-5 w-5 animate-[pulse_3.4s_ease-in-out_infinite]" />
+          </span>
           <div className="min-w-0 flex-1">
             <p className="text-[9px] font-bold text-sky-700">سند التجاري</p>
             <h2 id="business-sanad-title" className="mt-0.5 flex min-h-7 items-center gap-1.5 overflow-hidden text-base font-bold text-slate-950">
@@ -292,26 +332,17 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </div>
         </div>
 
-        <button onClick={() => onNavigate('business-community')} className="flex w-full items-center gap-4 rounded-[2rem] bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm"><Building2 className="h-7 w-7" /></span>
-          <span className="min-w-0 flex-1"><span className="text-[9px] font-bold text-emerald-700">مجتمع أعمال سند</span><strong className="mt-1 block text-base text-slate-950">الأنشطة والكتالوجات العامة</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">ابحث، استعرض، وتواصل مع الأنشطة المنشورة.</span></span>
-          <ArrowLeft className="h-5 w-5 text-slate-500" />
+        <button onClick={() => onNavigate('business-community')} className="group flex w-full items-center gap-4 rounded-[2rem] bg-white/86 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)] backdrop-blur-sm">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-50 to-sky-50 text-emerald-700 shadow-sm">
+            <Network className="h-7 w-7 transition-transform duration-300 group-active:rotate-6 group-active:scale-90" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-[9px] font-bold text-emerald-700">مجتمع أعمال سند</span>
+            <strong className="mt-1 block text-base text-slate-950">الأنشطة والكتالوجات العامة</strong>
+            <span className="mt-1 block text-[10px] leading-5 text-slate-500">ابحث، استعرض، وتواصل مع الأنشطة المنشورة.</span>
+          </span>
+          <ArrowLeft className="h-5 w-5 text-slate-500 transition-transform duration-200 group-active:-translate-x-1" />
         </button>
-
-        {businesses.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1"><h3 className="text-xs font-bold text-slate-900">أنشطة منشورة</h3><button onClick={() => onNavigate('business-community')} className="text-[9px] font-bold text-slate-500">عرض الكل</button></div>
-            {businesses.map((business) => (
-              <button key={business.id} onClick={() => onNavigate('public-business-profile', business.slug)} className="flex w-full items-center gap-3 rounded-[1.5rem] bg-white p-3.5 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100">
-                  {businessLogos[business.id] ? <img src={businessLogos[business.id]} alt={business.name} className="h-full w-full object-cover" /> : <Store className="h-5 w-5 text-slate-400" />}
-                </span>
-                <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-950">{business.name}</strong><span className="mt-1 block truncate text-[9px] text-slate-400">{[business.category_name, [business.city, business.governorate].filter(Boolean).join('، ')].filter(Boolean).join(' · ')}</span></span>
-                <ArrowLeft className="h-4 w-4 text-slate-300" />
-              </button>
-            ))}
-          </div>
-        )}
       </section>
     </div>
   );
