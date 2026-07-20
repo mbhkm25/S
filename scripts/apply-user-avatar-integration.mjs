@@ -1,13 +1,16 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 function update(path, transform) {
-  const before = readFileSync(path, 'utf8');
+  const beforeRaw = readFileSync(path, 'utf8');
+  const usesCrlf = beforeRaw.includes('\r\n');
+  const before = beforeRaw.replace(/\r\n/g, '\n');
   const after = transform(before);
   if (after === before) {
     console.log(`No change: ${path}`);
     return;
   }
-  writeFileSync(path, after, 'utf8');
+  const output = usesCrlf ? after.replace(/\n/g, '\r\n') : after;
+  writeFileSync(path, output, 'utf8');
   console.log(`Updated: ${path}`);
 }
 
