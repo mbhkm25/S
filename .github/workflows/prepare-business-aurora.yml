@@ -1,9 +1,9 @@
 name: Prepare business Aurora integration
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/home-business-aurora-background
+      - main
 
 permissions:
   contents: write
