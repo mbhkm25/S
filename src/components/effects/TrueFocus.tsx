@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import './TrueFocus.css';
 
@@ -15,6 +16,11 @@ type TrueFocusProps = {
 };
 
 type FocusRect = { x: number; y: number; width: number; height: number };
+
+type TrueFocusStyle = CSSProperties & {
+  '--true-focus-border': string;
+  '--true-focus-glow': string;
+};
 
 export default function TrueFocus({
   sentence = 'True Focus',
@@ -74,18 +80,20 @@ export default function TrueFocus({
     if (manualMode) setCurrentIndex(lastActiveIndex);
   };
 
+  const containerStyle: TrueFocusStyle = {
+    '--true-focus-border': borderColor,
+    '--true-focus-glow': glowColor
+  };
+
   return (
     <span
       ref={containerRef}
       className={`true-focus-container ${className}`.trim()}
       aria-label={sentence}
-      style={{
-        '--true-focus-border': borderColor,
-        '--true-focus-glow': glowColor
-      } as React.CSSProperties}
+      style={containerStyle}
     >
       {words.map((word, index) => {
-        const active = reducedMotion || index === currentIndex;
+        const active = Boolean(reducedMotion) || index === currentIndex;
         return (
           <span
             key={`${word}-${index}`}
