@@ -1,6 +1,7 @@
 -- Optional user profile avatars. Avatar presence is not part of basic profile completion.
 -- The public bucket stores display images only; write access remains restricted to each user's folder.
 -- Supported formats: JPEG, PNG, and WebP up to 5 MB.
+-- Profile completion remains based on name, phone, and governorate only.
 alter table public.profiles
   add column if not exists avatar_path text;
 
