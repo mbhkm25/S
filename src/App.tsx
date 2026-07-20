@@ -258,91 +258,66 @@ export default function App() {
     const url = new URL(window.location.href);
     const notificationId = url.searchParams.get('notification');
     if (!notificationId) return;
+    if (!isValidNotificationId(notificationId)) {
+      url.searchParams.delete('notification');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      return;
+    }
+    if (processedPushNotificationIdsRef.current.has(notificationId)) return;
 
-    const removeIntentFromUrl = () => {
-      const current = new URL(window.location.href);
-      current.searchParams.delete('notification');
-      window.history.replaceState({}, '', `${current.pathname}${current.search}${current.hash}`);
+    processedPushNotificationIdsRef.current.add(notificationId);
+    let cancelled = false;
+
+    const consumeNotificationIntent = async () => {
+      try {
+        const notification = await markNotificationRead(notificationId);
+        if (!cancelled) {
+          handleNotificationAction(notification, (page, token, source) => navigateTo(page, token, source));
+        }
+      } catch (error) {
+        reportPushError(error);
+      } finally {
+        if (!cancelled) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('notification');
+          window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+        }
+      }
     };
 
-    if (!isValidNotificationId(notificationId)) {
-      removeIntentFromUrl();
-      return;
-    }
-    if (processedPushNotificationIdsRef.current.has(notificationId)) {
-      removeIntentFromUrl();
-      return;
-    }
-    processedPushNotificationIdsRef.current.add(notificationId);
-    void markNotificationRead(notificationId).catch(() => undefined).finally(removeIntentFromUrl);
+    void consumeNotificationIntent();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    const handlePushNavigationMessage = (event: MessageEvent<unknown>) => {
+      const parsed = parseNotificationClickMessage(event.data);
+      if (!parsed) return;
+      if (!isValidNotificationId(parsed.notificationId)) return;
+      if (processedPushNotificationIdsRef.current.has(parsed.notificationId)) return;
+      processedPushNotificationIdsRef.current.add(parsed.notificationId);
 
-    const handleServiceWorkerMessage = (event: MessageEvent<unknown>) => {
-      if (event.origin && event.origin !== window.location.origin) return;
-      if (event.data && typeof event.data === 'object' && !Array.isArray(event.data)
-          && (event.data as Record<string, unknown>).type === 'SANAD_PUSH_SUBSCRIPTION_REFRESH_REQUIRED') {
-        if (user?.id) {
-          void syncExistingPushSubscription(user.id, true).catch(error => {
-            reportPushError(error);
-          });
-        }
-        return;
-      }
-
-      const message = parseNotificationClickMessage(event.data);
-      if (!message) return;
-      const navigated = handleNotificationAction(
-        message.actionType,
-        message.actionPayload,
-        navigateTo,
-        () => undefined
-      );
-      if (!navigated) navigateTo('notifications');
-
-      if (message.notificationId) {
-        if (user?.id) {
-          processedPushNotificationIdsRef.current.add(message.notificationId);
-          void markNotificationRead(message.notificationId).catch(() => undefined);
-        } else {
-          const url = new URL(window.location.href);
-          url.searchParams.set('notification', message.notificationId);
-          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-        }
-      }
+      void markNotificationRead(parsed.notificationId)
+        .then(notification => {
+          handleNotificationAction(notification, (page, token, source) => navigateTo(page, token, source));
+        })
+        .catch(reportPushError);
     };
 
-    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
-  }, [user?.id]);
+    navigator.serviceWorker?.addEventListener('message', handlePushNavigationMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', handlePushNavigationMessage);
+  }, []);
 
-  // Listen to browser Back/Forward pops
   useEffect(() => {
     const handlePopState = () => {
-      if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
-        const path = window.location.pathname;
-        const bpMatch = path.match(/\/b\/([^/]+)\/p\/([^/]+)/);
-        if (bpMatch) {
-          const base = import.meta.env.VITE_APP_BASE_PATH || '/';
-          const cleanBase = base.endsWith('/') ? base : `${base}/`;
-          window.history.replaceState({}, '', `${cleanBase}b/${bpMatch[1]}`);
-        }
-      }
-
-      const parsed = parsePath();
+      const parsed = parsePath() as any;
       if (parsed.type === 'profile') {
-        setActiveToken(null);
-        setActiveSource('link');
         setCurrentPage('profile');
       } else if (parsed.type === 'share-intake') {
-        setActiveToken(null);
-        setActiveSource('link');
         setCurrentPage('share-intake');
       } else if (parsed.type === 'notifications') {
-        setActiveToken(null);
-        setActiveSource('link');
         setCurrentPage('notifications');
       } else if (parsed.type === 'reports') {
         setCurrentPage('reports');
@@ -366,53 +341,26 @@ export default function App() {
         setActiveToken(parsed.slug);
         setCurrentPage('public-business-profile');
       } else if (parsed.type === 'public-product-detail' && parsed.slug && parsed.productId) {
-        if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
-          setActiveToken(parsed.slug);
-          setCurrentPage('public-business-profile');
-        } else {
-          setActiveToken(parsed.slug);
-          setActiveProductToken(parsed.productId);
-          setProfileInitialTab('products');
-          setCurrentPage('public-product-detail');
-        }
+        setActiveToken(parsed.slug);
+        setActiveProductToken(parsed.productId);
+        setProfileInitialTab('products');
+        setCurrentPage('public-product-detail');
       } else if (parsed.type === 'details' && parsed.token) {
         const urlParams = new URLSearchParams(window.location.search);
         const src = (urlParams.get('src') as any) || 'link';
         setActiveToken(parsed.token);
         setActiveSource(src);
         setCurrentPage('details');
-      } else {
-        setActiveToken(null);
-        setActiveSource('link');
-        setCurrentPage('home');
       }
     };
 
     window.addEventListener('popstate', handlePopState);
-    
-    // Initial parse
-    if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
-      const path = window.location.pathname;
-      const bpMatch = path.match(/\/b\/([^/]+)\/p\/([^/]+)/);
-      if (bpMatch) {
-        const base = import.meta.env.VITE_APP_BASE_PATH || '/';
-        const cleanBase = base.endsWith('/') ? base : `${base}/`;
-        window.history.replaceState({}, '', `${cleanBase}b/${bpMatch[1]}`);
-      }
-    }
-
-    const parsed = parsePath();
+    const parsed = parsePath() as any;
     if (parsed.type === 'profile') {
-      setActiveToken(null);
-      setActiveSource('link');
       setCurrentPage('profile');
     } else if (parsed.type === 'share-intake') {
-      setActiveToken(null);
-      setActiveSource('link');
       setCurrentPage('share-intake');
     } else if (parsed.type === 'notifications') {
-      setActiveToken(null);
-      setActiveSource('link');
       setCurrentPage('notifications');
     } else if (parsed.type === 'reports') {
       setCurrentPage('reports');
@@ -453,7 +401,6 @@ export default function App() {
 
   // Check auth session on startup and subscribe to auth changes
   useEffect(() => {
-    // Transition to session_pending immediately on mount
     setAuthState('session_pending');
 
     const slowConnectionTimer = setTimeout(() => {
@@ -472,9 +419,7 @@ export default function App() {
       setProfileStatus('loading');
       setProfileError(null);
 
-      if (import.meta.env.DEV) {
-        performance.mark('profile_load_start');
-      }
+      if (import.meta.env.DEV) performance.mark('profile_load_start');
 
       try {
         const { data: prof, error } = await supabase
@@ -483,13 +428,7 @@ export default function App() {
           .eq('id', userId)
           .maybeSingle();
 
-        // Check if user changed or session reset since request started (race condition guard)
-        if (thisGen !== requestGenerationRef.current) {
-          if (import.meta.env.DEV) {
-            console.warn('[SW/Auth] Aborted profile state application: generation mismatch.');
-          }
-          return;
-        }
+        if (thisGen !== requestGenerationRef.current) return;
 
         if (!error && prof) {
           const missingSignupData: Partial<Profile> = {};
@@ -512,7 +451,6 @@ export default function App() {
           setProfile(resolvedProfile);
           setProfileStatus('ready');
         } else {
-          // Attempt upsert in background
           const { data: newProf, error: insError } = await supabase
             .from('profiles')
             .upsert({
@@ -554,17 +492,11 @@ export default function App() {
     const verifySession = async () => {
       requestGenerationRef.current += 1;
       const thisGen = requestGenerationRef.current;
-
-      if (import.meta.env.DEV) {
-        performance.mark('session_restore_start');
-      }
+      if (import.meta.env.DEV) performance.mark('session_restore_start');
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
-
-        if (thisGen !== requestGenerationRef.current) {
-          return;
-        }
+        if (thisGen !== requestGenerationRef.current) return;
 
         clearTimeout(slowConnectionTimer);
         setShowStatusBanner(false);
@@ -580,9 +512,7 @@ export default function App() {
           setAuthState('unauthenticated');
         }
       } catch (err: unknown) {
-        if (thisGen !== requestGenerationRef.current) {
-          return;
-        }
+        if (thisGen !== requestGenerationRef.current) return;
 
         clearTimeout(slowConnectionTimer);
         logAuthDiagnostic('session_verification_failed', err);
@@ -605,7 +535,6 @@ export default function App() {
 
     verifySession();
 
-    // Listen to network status changes to auto-retry
     const handleOnline = () => {
       setConnectivity('online');
       setStatusMessage('تم استعادة الاتصال. جاري التحديث...');
@@ -625,23 +554,18 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Subscribe to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       requestGenerationRef.current += 1;
 
       if (session?.user) {
         setPasskeyEnrollmentUser(candidate => candidate?.id === session.user.id ? candidate : null);
         setUser(prevUser => {
-          if (prevUser?.id === session.user.id) {
-            // User did not change, likely a TOKEN_REFRESHED event, skip profile reload
-            return prevUser;
-          }
+          if (prevUser?.id === session.user.id) return prevUser;
           loadProfileBackground(session.user.id, session.user.user_metadata);
           return session.user;
         });
         setAuthState('authenticated');
       } else {
-        // Safe clean up user data only, keep App Shell caches
         setPasskeyEnrollmentUser(null);
         setUser(null);
         setProfile(null);
@@ -658,22 +582,18 @@ export default function App() {
     };
   }, []);
 
-  // IndexedDB helper for Capacitor share sheet integration
   const openShareDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('sanad-share-db', 1);
       request.onupgradeneeded = (e: any) => {
         const db = e.target.result;
-        if (!db.objectStoreNames.contains('shares')) {
-          db.createObjectStore('shares', { keyPath: 'id' });
-        }
+        if (!db.objectStoreNames.contains('shares')) db.createObjectStore('shares', { keyPath: 'id' });
       };
       request.onsuccess = (e: any) => resolve(e.target.result);
       request.onerror = (e: any) => reject(e.target.error);
     });
   };
 
-  // Check and process files shared from Android Share Sheet
   useEffect(() => {
     const checkAndroidShare = async () => {
       const androidShare = (window as any).AndroidShare;
@@ -685,9 +605,7 @@ export default function App() {
             if (data && data.base64 && data.mimeType && data.name) {
               const byteCharacters = atob(data.base64);
               const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
+              for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
               const byteArray = new Uint8Array(byteNumbers);
               const blob = new Blob([byteArray], { type: data.mimeType });
 
@@ -695,21 +613,13 @@ export default function App() {
               await new Promise<void>((resolve, reject) => {
                 const tx = db.transaction('shares', 'readwrite');
                 const store = tx.objectStore('shares');
-                const req = store.put({
-                  id: 'latest-share',
-                  title: '',
-                  text: '',
-                  url: '',
-                  files: [{
-                    blob: blob,
-                    name: data.name,
-                    type: data.mimeType,
-                    size: blob.size
-                  }],
+                store.put({
+                  id: 'latest-share', title: '', text: '', url: '',
+                  files: [{ blob, name: data.name, type: data.mimeType, size: blob.size }],
                   timestamp: Date.now()
                 });
                 tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject(tx.error);
+                tx.onerror = () => reject(tx.error);
               });
 
               androidShare.clearSharedData();
@@ -722,24 +632,12 @@ export default function App() {
       }
     };
 
-    // Run when authenticated state resolves
-    if (user && profile) {
-      checkAndroidShare();
-    }
-
-    const handleHotShare = () => {
-      if (user && profile) {
-        checkAndroidShare();
-      }
-    };
-
+    if (user && profile) checkAndroidShare();
+    const handleHotShare = () => { if (user && profile) checkAndroidShare(); };
     window.addEventListener('androidShareReceived', handleHotShare);
-    return () => {
-      window.removeEventListener('androidShareReceived', handleHotShare);
-    };
+    return () => window.removeEventListener('androidShareReceived', handleHotShare);
   }, [user, profile]);
 
-  // Handle Capacitor native deep link opens
   useEffect(() => {
     let appListener: any = null;
     const setupDeepLinks = async () => {
@@ -750,10 +648,7 @@ export default function App() {
             try {
               const url = new URL(event.url);
               const match = url.pathname.match(/\/v\/([^/]+)/);
-              if (match) {
-                const token = match[1];
-                navigateTo('details', token, 'link');
-              }
+              if (match) navigateTo('details', match[1], 'link');
             } catch (err) {
               console.error('Failed to parse deep link URL:', err);
             }
@@ -764,28 +659,17 @@ export default function App() {
       }
     };
     setupDeepLinks();
-
-    return () => {
-      if (appListener && typeof appListener.remove === 'function') {
-        appListener.remove();
-      }
-    };
+    return () => { if (appListener && typeof appListener.remove === 'function') appListener.remove(); };
   }, []);
 
-
-  // Render Supabase Key missing alert screen
   if (!hasSupabaseConfig) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
         <div className="max-w-md bg-slate-800 border border-slate-700/50 p-8 rounded-3xl space-y-6 shadow-xl">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400"><ShieldAlert className="w-8 h-8" /></div>
           <div className="space-y-2">
             <h1 className="text-xl font-bold">مطلوب تهيئة مفاتيح الاتصال</h1>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              يرجى توفير مفاتيح Supabase البيئية لمشروع <code className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-rose-300">sanad_verify_v3</code> لتمكين قاعدة البيانات وتوثيق الدخول الحقيقي.
-            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">يرجى توفير مفاتيح Supabase البيئية لمشروع <code className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-rose-300">sanad_verify_v3</code> لتمكين قاعدة البيانات وتوثيق الدخول الحقيقي.</p>
           </div>
           <div className="bg-slate-900/60 p-4 rounded-2xl text-right font-mono text-xs text-slate-300 space-y-2 border border-slate-950">
             <div>VITE_SUPABASE_URL=https://api.sanadflow.com</div>
@@ -797,27 +681,16 @@ export default function App() {
     );
   }
 
-  // Booting and session pending states render ShellSkeleton
-  if (authState === 'booting_shell' || authState === 'session_pending') {
-    return <ShellSkeleton />;
-  }
+  if (authState === 'booting_shell' || authState === 'session_pending') return <ShellSkeleton />;
 
-  // Render Authentication Connection Error screen
   if (authState === 'auth_error') {
     return (
       <div className="min-h-screen bg-[#F7F7F5] flex flex-col items-center justify-center p-6 text-center space-y-6">
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100/80 max-w-sm space-y-4">
           <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
           <h2 className="text-base font-bold font-arabic text-slate-800">حدث خطأ أثناء الاتصال</h2>
-          <p className="text-xs text-slate-500 font-arabic leading-relaxed">
-            تعذر تأكيد حالتك الأمنية أو الاتصال بالخادم الرئيسي حالياً. يرجى التحقق من الشبكة وإعادة المحاولة.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-[#111111] hover:bg-slate-800 text-white font-arabic py-2 rounded-2xl text-xs font-bold transition-all shadow-sm"
-          >
-            إعادة المحاولة
-          </button>
+          <p className="text-xs text-slate-500 font-arabic leading-relaxed">تعذر تأكيد حالتك الأمنية أو الاتصال بالخادم الرئيسي حالياً. يرجى التحقق من الشبكة وإعادة المحاولة.</p>
+          <button onClick={() => window.location.reload()} className="w-full bg-[#111111] hover:bg-slate-800 text-white font-arabic py-2 rounded-2xl text-xs font-bold transition-all shadow-sm">إعادة المحاولة</button>
         </div>
       </div>
     );
@@ -836,10 +709,7 @@ export default function App() {
     if (!isValidNotificationId(notificationIntent)) navigateTo('home');
   };
 
-  const closePasskeyEnrollment = () => {
-    setPasskeyEnrollmentUser(null);
-  };
-
+  const closePasskeyEnrollment = () => setPasskeyEnrollmentUser(null);
   const handleLogoutSuccess = () => {
     setPasskeyEnrollmentUser(null);
     setUser(null);
@@ -851,352 +721,92 @@ export default function App() {
   return (
     <NotificationProvider userId={user?.id || null} isAuthenticated={isAuthenticated}>
       <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
-      
-      {/* Top Brand Navbar */}
-      {currentPage !== 'scan-qr' && (
-        <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
-          <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center">
-              <img
-                src={`${import.meta.env.BASE_URL}logo.png`}
-                alt="شعار سند"
-                className="h-10 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) {
-                    const span = document.createElement('span');
-                    span.className = "text-lg font-bold text-slate-900 font-arabic";
-                    span.innerText = "سند للتحقق";
-                    parent.appendChild(span);
-                  }
-                }}
-              />
-            </div>
+        {currentPage !== 'scan-qr' && (
+          <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
+            <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+              <div className="flex items-center">
+                <img src={`${import.meta.env.BASE_URL}logo.png`} alt="شعار سند" className="h-10 w-auto object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              </div>
 
-            <div>
-              {isAuthenticated && (
-                <div className="flex items-center gap-2">
-                  <NotificationBell onNavigate={() => navigateTo('notifications')} />
-                  <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
-                    <div className="w-6.5 h-6.5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
-                      {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
-                    </div>
-                    <div className="text-right hidden sm:block">
-                      <p className="text-[10px] font-bold leading-none text-slate-800">
-                        {profile ? profile.full_name : 'جاري التحميل...'}
-                      </p>
-                    </div>
+              <div>
+                {isAuthenticated && (
+                  <div className="flex items-center gap-2">
+                    <NotificationBell onNavigate={() => navigateTo('notifications')} />
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('profile')}
+                      className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50 p-1 pe-3 text-right transition active:scale-[0.98]"
+                      aria-label="فتح حسابي"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-bold text-white shadow-sm ring-2 ring-white">
+                        {profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}
+                      </span>
+                      <span className="hidden sm:block">
+                        <span className="block text-[10px] font-bold leading-none text-slate-800">{profile ? profile.full_name : 'جاري التحميل...'}</span>
+                        <span className="mt-1 block text-[8px] text-slate-400">حسابي</span>
+                      </span>
+                    </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        </header>
-      )}
+          </header>
+        )}
 
-      {showStatusBanner && currentPage !== 'scan-qr' && (
-        <div className={`text-white text-[11px] font-bold py-1.5 px-4 text-center font-arabic animate-slide-down flex items-center justify-center gap-2 shadow-sm sticky top-[53px] z-40 ${
-          connectivity === 'offline' ? 'bg-rose-600' : 'bg-amber-500'
-        }`}>
-          <span className="w-2 h-2 bg-white rounded-full animate-ping"></span>
-          <span>{statusMessage}</span>
-        </div>
-      )}
-
-      {/* Main Container Area */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 pb-24" id="app_main">
-        {shouldShowAuth ? (
-          <Auth onAuthSuccess={handleAuthSuccess} />
-        ) : (
-          <div className="animate-fade-in">
-             {currentPage === 'home' && (
-              <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
-            )}
-            
-            {currentPage === 'upload' && user && (
-              profile ? (
-                <UploadNotification
-                  user={user}
-                  profile={profile}
-                  onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
-                  onNavigate={(p: any) => navigateTo(p)}
-                  ensureProfileComplete={ensureProfileComplete}
-                />
-              ) : (
-                <ContentSkeleton />
-              )
-            )}
-
-            {currentPage === 'details' && activeToken && (
-              <NotificationDetails
-                token={activeToken}
-                user={user}
-                onNavigateToLogin={() => navigateTo('profile')}
-                ensureProfileComplete={ensureProfileComplete}
-                onNavigate={(p: any, t?: string, s?: any) => navigateTo(p, t, s)}
-                source={activeSource}
-              />
-            )}
-
-            {currentPage === 'my-operations' && (
-              <MyOperations onNavigateToDetails={(token) => navigateTo('details', token, 'app')} />
-            )}
-
-            {currentPage === 'verify-notice' && (
-              <VerifyNotice onNavigateToDetails={(token) => navigateTo('details', token, 'search')} />
-            )}
-
-            {currentPage === 'scan-qr' && (
-              <VerifyNotice
-                onNavigateToDetails={(token) => navigateTo('details', token, 'qr')}
-                directCameraOnly={true}
-                onCancelDirectCamera={() => navigateTo('home')}
-              />
-            )}
-
-            {currentPage === 'profile' && user && (
-              profile ? (
-                <MyProfile
-                  user={user}
-                  profile={profile}
-                  onLogout={handleLogoutSuccess}
-                  refreshProfile={refreshProfile}
-                  onNavigate={(page, token) => navigateTo(page, token)}
-                />
-              ) : (
-                <ContentSkeleton />
-              )
-            )}
-
-            {currentPage === 'reports' && (
-              profile ? (
-                <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                  <Suspense fallback={<ContentSkeleton />}>
-                    <Reports
-                      profile={profile}
-                      standalone={true}
-                      ensureProfileComplete={ensureProfileComplete}
-                    />
-                  </Suspense>
-                </ChunkErrorBoundary>
-              ) : (
-                <ContentSkeleton />
-              )
-            )}
-
-            {currentPage === 'share-intake' && user && (
-              profile ? (
-                <ShareIntake
-                  user={user}
-                  profile={profile}
-                  onNavigateToDetails={(token) => navigateTo('details', token, 'app')}
-                  onNavigate={(p: any) => navigateTo(p)}
-                  ensureProfileComplete={ensureProfileComplete}
-                />
-              ) : (
-                <ContentSkeleton />
-              )
-            )}
-
-            {currentPage === 'notifications' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <NotificationCenter
-                    userId={user?.id || null}
-                    onNavigate={(page, token, source) => navigateTo(page, token, source)}
-                  />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-create' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessCreate onNavigate={(page) => navigateTo(page)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-manage' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessManage onNavigate={(page, token) => navigateTo(page, token)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-operations' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-team' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessTeam onNavigate={(page) => navigateTo(page)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-manage-profile' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessProfileEditor onNavigate={(page) => navigateTo(page)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-whatsapp-catalog' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-customers' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'business-community' && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'public-business-profile' && activeToken && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <PublicBusinessProfile
-                    slug={activeToken}
-                    initialTab={profileInitialTab}
-                    onNavigate={(page, token) => {
-                      if (page !== 'public-product-detail') {
-                        setProfileInitialTab('overview');
-                      }
-                      navigateTo(page, token);
-                    }}
-                  />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
-
-            {currentPage === 'public-product-detail' && activeToken && activeProductToken && (
-              <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
-                <Suspense fallback={<ContentSkeleton />}>
-                  <PublicProductDetail
-                    businessSlug={activeToken}
-                    productId={activeProductToken}
-                    onNavigate={(page, token) => navigateTo(page, token)}
-                  />
-                </Suspense>
-              </ChunkErrorBoundary>
-            )}
+        {showStatusBanner && currentPage !== 'scan-qr' && (
+          <div className={`text-white text-[11px] font-bold py-1.5 px-4 text-center font-arabic animate-slide-down flex items-center justify-center gap-2 shadow-sm sticky top-[53px] z-40 ${connectivity === 'offline' ? 'bg-rose-600' : 'bg-amber-500'}`}>
+            <span className="w-2 h-2 bg-white rounded-full animate-ping"></span><span>{statusMessage}</span>
           </div>
         )}
-      </main>
 
-      {/* Bottom Sticky Tab Navigation */}
-      {isAuthenticated && currentPage !== 'scan-qr' && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 py-2 px-3 shadow-md z-50 animate-fade-in" id="bottom_nav">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            {/* Tab: Home */}
-            <button
-              onClick={() => navigateTo('home')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'home' 
-                  ? 'bg-[#111111] text-white' 
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <HomeIcon className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">الرئيسية</span>
-              </div>
-            </button>
+        <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 pb-24" id="app_main">
+          {shouldShowAuth ? (
+            <Auth onAuthSuccess={handleAuthSuccess} />
+          ) : (
+            <div className="animate-fade-in">
+              {currentPage === 'home' && <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />}
+              {currentPage === 'upload' && user && (profile ? <UploadNotification user={user} profile={profile} onNavigateToDetails={(token) => navigateTo('details', token, 'app')} onNavigate={(p: any) => navigateTo(p)} ensureProfileComplete={ensureProfileComplete} /> : <ContentSkeleton />)}
+              {currentPage === 'details' && activeToken && <NotificationDetails token={activeToken} user={user} onNavigateToLogin={() => navigateTo('profile')} ensureProfileComplete={ensureProfileComplete} onNavigate={(p: any, t?: string, s?: any) => navigateTo(p, t, s)} source={activeSource} />}
+              {currentPage === 'my-operations' && <MyOperations onNavigateToDetails={(token) => navigateTo('details', token, 'app')} />}
+              {currentPage === 'verify-notice' && <VerifyNotice onNavigateToDetails={(token) => navigateTo('details', token, 'search')} />}
+              {currentPage === 'scan-qr' && <VerifyNotice onNavigateToDetails={(token) => navigateTo('details', token, 'qr')} directCameraOnly={true} onCancelDirectCamera={() => navigateTo('home')} />}
+              {currentPage === 'profile' && user && (profile ? <MyProfile user={user} profile={profile} onLogout={handleLogoutSuccess} refreshProfile={refreshProfile} onNavigate={(page, token) => navigateTo(page, token)} /> : <ContentSkeleton />)}
+              {currentPage === 'reports' && (profile ? <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><Reports profile={profile} standalone={true} ensureProfileComplete={ensureProfileComplete} /></Suspense></ChunkErrorBoundary> : <ContentSkeleton />)}
+              {currentPage === 'share-intake' && user && (profile ? <ShareIntake user={user} profile={profile} onNavigateToDetails={(token) => navigateTo('details', token, 'app')} onNavigate={(p: any) => navigateTo(p)} ensureProfileComplete={ensureProfileComplete} /> : <ContentSkeleton />)}
+              {currentPage === 'notifications' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><NotificationCenter userId={user?.id || null} onNavigate={(page, token, source) => navigateTo(page, token, source)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-create' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessCreate onNavigate={(page) => navigateTo(page)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-manage' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessManage onNavigate={(page, token) => navigateTo(page, token)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-operations' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessOperations onNavigate={(page, token) => navigateTo(page, token)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-team' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessTeam onNavigate={(page) => navigateTo(page)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-manage-profile' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessProfileEditor onNavigate={(page) => navigateTo(page)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-whatsapp-catalog' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessWhatsAppCatalog onNavigate={(page) => navigateTo(page)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-customers' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessCustomers onNavigate={(page, token) => navigateTo(page, token)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'business-community' && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><BusinessCommunity onNavigate={(page, token) => navigateTo(page, token)} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'public-business-profile' && activeToken && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><PublicBusinessProfile slug={activeToken} onNavigate={(page, token) => navigateTo(page, token)} initialTab={profileInitialTab} /></Suspense></ChunkErrorBoundary>}
+              {currentPage === 'public-product-detail' && activeToken && activeProductToken && <ChunkErrorBoundary onGoHome={() => navigateTo('home')}><Suspense fallback={<ContentSkeleton />}><PublicProductDetail businessSlug={activeToken} productId={activeProductToken} onNavigate={(page, token) => navigateTo(page, token)} /></Suspense></ChunkErrorBoundary>}
+            </div>
+          )}
+        </main>
 
-            {/* Tab: Scan QR */}
-            <button
-              onClick={() => navigateTo('scan-qr')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'scan-qr' 
-                  ? 'bg-[#111111] text-white' 
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <QrCode className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">مسح QR</span>
-              </div>
-            </button>
+        {isAuthenticated && currentPage !== 'details' && currentPage !== 'scan-qr' && (
+          <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200/70 bg-white/95 px-4 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur" id="bottom_nav">
+            <div className="mx-auto grid max-w-2xl grid-cols-4 gap-1">
+              {[
+                { page: 'home', label: 'الرئيسية', icon: HomeIcon },
+                { page: 'scan-qr', label: 'مسح QR', icon: QrCode },
+                { page: 'upload', label: 'رفع إشعار', icon: Upload },
+                { page: 'profile', label: 'حسابي', icon: User }
+              ].map((item) => {
+                const Icon = item.icon;
+                const active = currentPage === item.page;
+                return <button key={item.page} onClick={() => navigateTo(item.page)} className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-bold ${active ? 'bg-slate-950 text-white' : 'text-slate-400'}`}><Icon className="h-5 w-5" /><span>{item.label}</span></button>;
+              })}
+            </div>
+          </nav>
+        )}
 
-            {/* Tab: Upload */}
-            <button
-              onClick={() => navigateTo('upload')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'upload' 
-                  ? 'bg-[#111111] text-white' 
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <Upload className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">رفع إشعار</span>
-              </div>
-            </button>
-
-            {/* Tab: Profile */}
-            <button
-              onClick={() => navigateTo('profile')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'profile' 
-                  ? 'bg-[#111111] text-white' 
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <User className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">حسابي</span>
-              </div>
-            </button>
-          </div>
-        </nav>
-      )}
-
-      <ProfileCompletionGateModal
-        isOpen={showCompletionGate}
-        profile={profile}
-        onClose={() => {
-          setShowCompletionGate(false);
-          setGatePendingAction(null);
-        }}
-        onSuccess={() => {
-          setShowCompletionGate(false);
-          if (gatePendingAction) {
-            gatePendingAction();
-            setGatePendingAction(null);
-          }
-        }}
-        refreshProfile={refreshProfile}
-      />
-
-      {passkeyEnrollmentUser && (
-        <PasskeyEnrollmentPrompt
-          user={passkeyEnrollmentUser}
-          onDone={closePasskeyEnrollment}
-        />
-      )}
-
+        {showCompletionGate && <ProfileCompletionGateModal onClose={() => setShowCompletionGate(false)} onComplete={() => { setShowCompletionGate(false); refreshProfile().then(() => { if (gatePendingAction) gatePendingAction(); setGatePendingAction(null); }); }} />}
+        {passkeyEnrollmentUser && <PasskeyEnrollmentPrompt user={passkeyEnrollmentUser} onClose={closePasskeyEnrollment} />}
       </div>
     </NotificationProvider>
   );
