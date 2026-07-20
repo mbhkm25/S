@@ -1,3 +1,4 @@
+-- Optional user profile avatars. Avatar presence is not part of basic profile completion.
 alter table public.profiles
   add column if not exists avatar_path text;
 
