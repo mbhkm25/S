@@ -1,0 +1,95 @@
+.financial-logo-loop {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  direction: ltr;
+  isolation: isolate;
+}
+
+.financial-logo-loop__track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  animation: financial-logo-loop-scroll var(--logoloop-duration) linear infinite;
+  will-change: transform;
+}
+
+.financial-logo-loop--right .financial-logo-loop__track {
+  animation-direction: reverse;
+}
+
+.financial-logo-loop__sequence {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--logoloop-gap);
+  padding-inline-end: var(--logoloop-gap);
+}
+
+.financial-logo-loop__item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--logoloop-logo-height) + 12px);
+  min-width: calc(var(--logoloop-logo-height) + 18px);
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
+  backdrop-filter: blur(8px);
+}
+
+.financial-logo-loop__item img,
+.financial-logo-loop__item > span {
+  display: block;
+  width: auto;
+  height: var(--logoloop-logo-height);
+  max-width: 88px;
+  object-fit: contain;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.financial-logo-loop--scale .financial-logo-loop__item:hover img,
+.financial-logo-loop--scale .financial-logo-loop__item:hover > span {
+  transform: scale(1.06);
+}
+
+.financial-logo-loop--fade::before,
+.financial-logo-loop--fade::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: clamp(28px, 10vw, 72px);
+  pointer-events: none;
+}
+
+.financial-logo-loop--fade::before {
+  left: 0;
+  background: linear-gradient(to right, var(--logoloop-fade-color), transparent);
+}
+
+.financial-logo-loop--fade::after {
+  right: 0;
+  background: linear-gradient(to left, var(--logoloop-fade-color), transparent);
+}
+
+@keyframes financial-logo-loop-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-33.333333%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .financial-logo-loop__track {
+    animation-play-state: paused;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .financial-logo-loop__item img,
+  .financial-logo-loop__item > span {
+    transition: none;
+  }
+}
