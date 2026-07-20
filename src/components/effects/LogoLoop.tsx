@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { memo, useId } from 'react';
+import type { ReactNode } from 'react';
 import './LogoLoop.css';
 
 type LogoImageItem = {
@@ -27,122 +27,76 @@ type LogoLoopProps = {
   className?: string;
 };
 
-type LogoLoopStyle = CSSProperties & {
-  '--logoloop-gap': string;
-  '--logoloop-logo-height': string;
-  '--logoloop-fade-color'?: string;
-};
-
-const MIN_COPIES = 2;
-const COPY_HEADROOM = 2;
-
-function LogoLoop({
-  logos,
-  speed = 34,
-  direction = 'left',
-  logoHeight = 30,
-  gap = 28,
-  fadeOut = true,
-  fadeOutColor = '#f7f8fa',
-  ariaLabel = 'شعارات الجهات المالية المدعومة',
-  className = ''
-}: LogoLoopProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const sequenceRef = useRef<HTMLUListElement | null>(null);
-  const frameRef = useRef<number | null>(null);
-  const lastTimestampRef = useRef<number | null>(null);
-  const offsetRef = useRef(0);
-  const [sequenceWidth, setSequenceWidth] = useState(0);
-  const [copyCount, setCopyCount] = useState(MIN_COPIES);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  const measure = useCallback(() => {
-    const containerWidth = containerRef.current?.clientWidth ?? 0;
-    const width = sequenceRef.current?.getBoundingClientRect().width ?? 0;
-    if (width <= 0) return;
-    const roundedWidth = Math.ceil(width);
-    setSequenceWidth(roundedWidth);
-    setCopyCount(Math.max(MIN_COPIES, Math.ceil(containerWidth / roundedWidth) + COPY_HEADROOM));
-  }, []);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => setReduceMotion(mediaQuery.matches);
-    sync();
-    mediaQuery.addEventListener?.('change', sync);
-    return () => mediaQuery.removeEventListener?.('change', sync);
-  }, []);
-
-  useEffect(() => {
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (containerRef.current) observer.observe(containerRef.current);
-    if (sequenceRef.current) observer.observe(sequenceRef.current);
-    return () => observer.disconnect();
-  }, [logos, gap, logoHeight, measure]);
-
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track || sequenceWidth <= 0 || reduceMotion) {
-      if (track) track.style.transform = 'translate3d(0, 0, 0)';
-      return;
-    }
-
-    const directionMultiplier = direction === 'left' ? 1 : -1;
-    const animate = (timestamp: number) => {
-      if (lastTimestampRef.current === null) lastTimestampRef.current = timestamp;
-      const delta = Math.max(0, timestamp - lastTimestampRef.current) / 1000;
-      lastTimestampRef.current = timestamp;
-      offsetRef.current = (offsetRef.current + speed * directionMultiplier * delta + sequenceWidth) % sequenceWidth;
-      track.style.transform = `translate3d(${-offsetRef.current}px, 0, 0)`;
-      frameRef.current = window.requestAnimationFrame(animate);
-    };
-
-    frameRef.current = window.requestAnimationFrame(animate);
-    return () => {
-      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
-      lastTimestampRef.current = null;
-    };
-  }, [direction, reduceMotion, sequenceWidth, speed]);
-
-  const style: LogoLoopStyle = {
-    '--logoloop-gap': `${gap}px`,
-    '--logoloop-logo-height': `${logoHeight}px`,
-    '--logoloop-fade-color': fadeOutColor
-  };
-
-  const lists = useMemo(() => Array.from({ length: copyCount }, (_, copyIndex) => (
-    <ul
-      key={`copy-${copyIndex}`}
-      ref={copyIndex === 0 ? sequenceRef : undefined}
-      className="financial-logo-loop__list"
-      aria-hidden={copyIndex > 0}
-    >
-      {logos.map((item, itemIndex) => (
-        <li key={`${copyIndex}-${itemIndex}`} className="financial-logo-loop__item">
-          {'src' in item ? (
-            <img src={item.src} alt={copyIndex === 0 ? item.alt : ''} title={item.title ?? item.alt} loading="eager" decoding="async" draggable={false} />
-          ) : (
-            <span title={item.title}>{item.node}</span>
-          )}
-        </li>
-      ))}
-    </ul>
-  )), [copyCount, logos]);
+function LogoLoop(props: LogoLoopProps) {
+  const {
+    ariaLabel = 'فاصل بصري متحرك بين سند المالي وسند التجاري',
+    className = ''
+  } = props;
+  const gradientId = useId().replace(/:/g, '');
+  const secondaryGradientId = useId().replace(/:/g, '');
+  const glowId = useId().replace(/:/g, '');
 
   return (
     <div
-      ref={containerRef}
-      className={`financial-logo-loop ${fadeOut ? 'financial-logo-loop--fade' : ''} ${className}`.trim()}
-      style={style}
-      role="region"
+      className={`aurora-divider ${className}`.trim()}
+      role="img"
       aria-label={ariaLabel}
     >
-      <div ref={trackRef} className="financial-logo-loop__track">
-        {lists}
-      </div>
+      <svg
+        className="aurora-divider__svg"
+        viewBox="0 0 1000 90"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#020617" stopOpacity="0.08" />
+            <stop offset="18%" stopColor="#0f766e" />
+            <stop offset="48%" stopColor="#4f46e5" />
+            <stop offset="76%" stopColor="#0284c7" />
+            <stop offset="100%" stopColor="#020617" stopOpacity="0.08" />
+          </linearGradient>
+          <linearGradient id={secondaryGradientId} x1="100%" y1="0%" x2="0%" y2="0%">
+            <stop offset="0%" stopColor="#0f172a" stopOpacity="0.04" />
+            <stop offset="24%" stopColor="#0ea5e9" />
+            <stop offset="52%" stopColor="#14b8a6" />
+            <stop offset="78%" stopColor="#6366f1" />
+            <stop offset="100%" stopColor="#0f172a" stopOpacity="0.04" />
+          </linearGradient>
+          <filter id={glowId} x="-15%" y="-80%" width="130%" height="260%">
+            <feGaussianBlur stdDeviation="7.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <path
+          className="aurora-divider__wave aurora-divider__wave--primary"
+          d="M -20 48 Q 225 -10 500 46 T 1020 48"
+          stroke={`url(#${gradientId})`}
+          strokeWidth="7"
+          strokeLinecap="round"
+          filter={`url(#${glowId})`}
+        />
+        <path
+          className="aurora-divider__wave aurora-divider__wave--secondary"
+          d="M -20 46 Q 240 95 500 47 T 1020 46"
+          stroke={`url(#${secondaryGradientId})`}
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
+        <path
+          className="aurora-divider__highlight"
+          d="M 80 47 Q 285 18 500 46 T 920 47"
+          stroke="rgba(255,255,255,0.72)"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
     </div>
   );
 }
