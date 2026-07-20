@@ -4,13 +4,14 @@ on:
   pull_request:
     branches:
       - main
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: write
 
 jobs:
   prepare:
-    if: github.head_ref == 'feature/user-profile-avatar-v2' && github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'feature/user-profile-avatar-v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +48,8 @@ jobs:
                         <span className="text-sm font-bold">{profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}</span>
                       )}
                     </button>'''
-          if old in text: text = text.replace(old, new, 1)
+          if old in text:
+            text = text.replace(old, new, 1)
           path.write_text(text)
 
           path = Path('src/components/Auth.tsx')
@@ -61,7 +63,8 @@ jobs:
             text = text.replace("  // Translate standard Supabase auth/db errors", "  useEffect(() => {\n    if (!avatarFile) { setAvatarPreview(''); return; }\n    const url = URL.createObjectURL(avatarFile);\n    setAvatarPreview(url);\n    return () => URL.revokeObjectURL(url);\n  }, [avatarFile]);\n\n  // Translate standard Supabase auth/db errors")
           target = "          const userProfile = await ensureProfileExists(authData.user);\n          setSuccessMessage('تم إنشاء الحساب بنجاح!');"
           replacement = "          let userProfile = await ensureProfileExists(authData.user);\n          if (avatarFile) {\n            const avatarPath = await uploadUserAvatar(authData.user.id, avatarFile);\n            const { data: updatedProfile, error: avatarError } = await supabase.from('profiles').update({ avatar_path: avatarPath, updated_at: new Date().toISOString() }).eq('id', authData.user.id).select().single();\n            if (avatarError) throw avatarError;\n            userProfile = updatedProfile as Profile;\n          }\n          setSuccessMessage('تم إنشاء الحساب بنجاح!');"
-          if target in text: text = text.replace(target, replacement, 1)
+          if target in text:
+            text = text.replace(target, replacement, 1)
           marker = "              {/* Full Name */}"
           if 'معاينة صورة البروفايل' not in text:
             avatar_ui = '''              <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
@@ -129,7 +132,8 @@ jobs:
             text = text.replace(insert_before, handlers + insert_before, 1)
           old_avatar = '<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><User className="h-6 w-6" /></div>'
           new_avatar = '''<button type="button" onClick={() => navigateSection('personal')} className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white ring-2 ring-white shadow-md" aria-label="تعديل صورة البروفايل">{profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} className="h-full w-full object-cover" /> : <User className="h-7 w-7" />}</button>'''
-          if old_avatar in text: text = text.replace(old_avatar, new_avatar, 1)
+          if old_avatar in text:
+            text = text.replace(old_avatar, new_avatar, 1)
           personal_start = '<div className="space-y-4 pb-24"><SubpageHeader title="البيانات الشخصية" /><form id="personal-data-form"'
           if personal_start in text:
             personal_replacement = '''<div className="space-y-4 pb-24"><SubpageHeader title="البيانات الشخصية" />
