@@ -21,7 +21,9 @@ import {
   getPublicBusinesses,
   type PublicBusinessListItem
 } from '../lib/businessApi';
+import { FINANCIAL_ENTITIES } from '../lib/financialEntities';
 import FinancialEntityLogo from './FinancialEntityLogo';
+import LogoLoop from './effects/LogoLoop';
 import TrueFocus from './effects/TrueFocus';
 import RotatingText from './effects/RotatingText';
 
@@ -35,6 +37,12 @@ type BusinessPreview = PublicBusinessListItem & {
   logo_path?: string | null;
   profile_image_path?: string | null;
 };
+
+const financialLogos = FINANCIAL_ENTITIES.map((entity) => ({
+  src: entity.logo,
+  alt: entity.nameAr,
+  title: entity.nameAr
+}));
 
 function isNativeApp(): boolean {
   try {
@@ -248,9 +256,16 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         })()}
       </section>
 
-      <div className="relative py-2" aria-hidden="true">
-        <div className="h-px w-full bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
-        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-200 ring-4 ring-[#f7f8fa]" />
+      <div className="overflow-hidden rounded-[1.25rem] border-y border-slate-200/70 bg-[#f7f8fa] py-1">
+        <LogoLoop
+          logos={financialLogos}
+          speed={32}
+          direction="left"
+          logoHeight={28}
+          gap={24}
+          fadeOut
+          fadeOutColor="#f7f8fa"
+        />
       </div>
 
       <section className="space-y-4" aria-labelledby="business-sanad-title">

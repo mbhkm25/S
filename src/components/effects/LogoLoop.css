@@ -1,0 +1,75 @@
+.financial-logo-loop {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 0.55rem 0;
+  --logoloop-gap: 28px;
+  --logoloop-logo-height: 30px;
+  --logoloop-fade-color: #f7f8fa;
+}
+
+.financial-logo-loop__track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  will-change: transform;
+}
+
+.financial-logo-loop__list {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--logoloop-gap);
+  padding-inline-end: var(--logoloop-gap);
+}
+
+.financial-logo-loop__item {
+  display: flex;
+  height: calc(var(--logoloop-logo-height) + 14px);
+  min-width: calc(var(--logoloop-logo-height) + 18px);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 7px 10px;
+  box-shadow: 0 7px 20px rgba(15, 23, 42, 0.045);
+}
+
+.financial-logo-loop__item img {
+  display: block;
+  width: auto;
+  max-width: 78px;
+  height: var(--logoloop-logo-height);
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.financial-logo-loop--fade::before,
+.financial-logo-loop--fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: clamp(28px, 10%, 72px);
+  pointer-events: none;
+}
+
+.financial-logo-loop--fade::before {
+  left: 0;
+  background: linear-gradient(to right, var(--logoloop-fade-color) 0%, rgba(247, 248, 250, 0) 100%);
+}
+
+.financial-logo-loop--fade::after {
+  right: 0;
+  background: linear-gradient(to left, var(--logoloop-fade-color) 0%, rgba(247, 248, 250, 0) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .financial-logo-loop__track {
+    transform: translate3d(0, 0, 0) !important;
+  }
+}
