@@ -1,4 +1,5 @@
 -- Optional user profile avatars. Avatar presence is not part of basic profile completion.
+-- The public bucket stores display images only; write access remains restricted to each user's folder.
 alter table public.profiles
   add column if not exists avatar_path text;
 
