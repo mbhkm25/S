@@ -23,6 +23,7 @@ import {
 } from '../lib/businessApi';
 import FinancialEntityLogo from './FinancialEntityLogo';
 import TrueFocus from './effects/TrueFocus';
+import RotatingText from './effects/RotatingText';
 
 interface HomeProps {
   profile: Profile | null;
@@ -253,9 +254,27 @@ export default function Home({ profile, onNavigate }: HomeProps) {
       </div>
 
       <section className="space-y-4" aria-labelledby="business-sanad-title">
-        <div className="flex items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-sky-50/90 to-transparent px-4 py-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm"><Building2 className="h-5 w-5" /></span>
-          <div><p className="text-[9px] font-bold text-sky-700">سند التجاري</p><h2 id="business-sanad-title" className="mt-0.5 text-base font-bold text-slate-950">اكتشف الأعمال من حولك</h2></div>
+        <div className="flex min-h-[72px] items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-sky-50/90 to-transparent px-4 py-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm"><Building2 className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-bold text-sky-700">سند التجاري</p>
+            <h2 id="business-sanad-title" className="mt-0.5 flex min-h-7 items-center gap-1.5 overflow-hidden text-base font-bold text-slate-950">
+              <span className="shrink-0">اكتشف</span>
+              <RotatingText
+                texts={['الأعمال من حولك', 'الكتالوجات العامة', 'الخدمات القريبة', 'الأنشطة الموثوقة']}
+                rotationInterval={2800}
+                splitBy="words"
+                staggerFrom="last"
+                staggerDuration={0.035}
+                initial={{ y: '110%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '-110%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 360 }}
+                mainClassName="min-w-0 overflow-hidden text-sky-800"
+                splitLevelClassName="overflow-hidden"
+              />
+            </h2>
+          </div>
         </div>
 
         <button onClick={() => onNavigate('business-community')} className="flex w-full items-center gap-4 rounded-[2rem] bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
