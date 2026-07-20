@@ -22,6 +22,7 @@ import {
   type PublicBusinessListItem
 } from '../lib/businessApi';
 import FinancialEntityLogo from './FinancialEntityLogo';
+import TrueFocus from './effects/TrueFocus';
 
 interface HomeProps {
   profile: Profile | null;
@@ -177,7 +178,16 @@ export default function Home({ profile, onNavigate }: HomeProps) {
             <QrCode className="h-8 w-8" />
           </span>
           <span className="min-w-0 flex-1">
-            <strong className="block text-lg">مسح QR</strong>
+            <strong className="block text-lg">
+              <TrueFocus
+                sentence="مسح QR"
+                blurAmount={1.6}
+                borderColor="#ffffff"
+                glowColor="rgba(255,255,255,0.5)"
+                animationDuration={0.7}
+                pauseBetweenAnimations={1.45}
+              />
+            </strong>
             <span className="mt-1 block text-[10px] leading-5 text-white/60">افتح كاميرا سند وادخل إلى التحقق مباشرة.</span>
           </span>
           <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
@@ -199,34 +209,22 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onNavigate('verify-notice')}
-            className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
-          >
+          <button onClick={() => onNavigate('verify-notice')} className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <CheckCircle2 className="h-5 w-5 text-slate-700" />
             <span><strong className="block text-xs text-slate-950">تحقق من إشعار</strong><span className="mt-1 block text-[9px] leading-5 text-slate-400">أدخل الرمز أو الرابط يدويًا.</span></span>
           </button>
-          <button
-            onClick={() => onNavigate('upload')}
-            className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
-          >
+          <button onClick={() => onNavigate('upload')} className="flex min-h-[108px] flex-col justify-between rounded-[1.6rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <UploadCloud className="h-5 w-5 text-slate-700" />
             <span><strong className="block text-xs text-slate-950">رفع إشعار</strong><span className="mt-1 block text-[9px] leading-5 text-slate-400">رفع يدوي عند الحاجة.</span></span>
           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onNavigate('my-operations')}
-            className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
-          >
+          <button onClick={() => onNavigate('my-operations')} className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileText className="h-4 w-4" /></span>
             <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">كل العمليات</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
           </button>
-          <button
-            onClick={() => onNavigate('reports')}
-            className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
-          >
+          <button onClick={() => onNavigate('reports')} className="flex min-h-[88px] flex-col justify-between rounded-[1.5rem] bg-white p-4 text-right shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><FileBarChart2 className="h-4 w-4" /></span>
             <span className="flex items-end justify-between gap-2"><strong className="text-xs text-slate-900">طلب تقرير</strong><ArrowLeft className="h-4 w-4 text-slate-300" /></span>
           </button>
@@ -237,12 +235,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           const relativeTime = formatRelativeTime(latest.created_at);
           return (
             <button onClick={() => onNavigate('details', latest.public_token)} className="flex w-full items-center gap-3 rounded-[1.5rem] bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              <FinancialEntityLogo
-                entity={card.entity || latest.financial_entity}
-                className="h-11 w-11 rounded-xl border border-slate-100"
-                imageClassName="h-full w-full object-contain p-1"
-                decorative
-              />
+              <FinancialEntityLogo entity={card.entity || latest.financial_entity} className="h-11 w-11 rounded-xl border border-slate-100" imageClassName="h-full w-full object-contain p-1" decorative />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-[9px] text-slate-400"><span>آخر نشاط</span>{relativeTime && <><span>·</span><Clock3 className="h-3 w-3" /><span>{relativeTime}</span></>}</span>
                 <strong className="mt-1 block truncate text-xs text-slate-900">{card.title}</strong>
@@ -261,19 +254,11 @@ export default function Home({ profile, onNavigate }: HomeProps) {
 
       <section className="space-y-4" aria-labelledby="business-sanad-title">
         <div className="flex items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-sky-50/90 to-transparent px-4 py-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm">
-            <Building2 className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-[9px] font-bold text-sky-700">سند التجاري</p>
-            <h2 id="business-sanad-title" className="mt-0.5 text-base font-bold text-slate-950">اكتشف الأعمال من حولك</h2>
-          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm"><Building2 className="h-5 w-5" /></span>
+          <div><p className="text-[9px] font-bold text-sky-700">سند التجاري</p><h2 id="business-sanad-title" className="mt-0.5 text-base font-bold text-slate-950">اكتشف الأعمال من حولك</h2></div>
         </div>
 
-        <button
-          onClick={() => onNavigate('business-community')}
-          className="flex w-full items-center gap-4 rounded-[2rem] bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)]"
-        >
+        <button onClick={() => onNavigate('business-community')} className="flex w-full items-center gap-4 rounded-[2rem] bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm"><Building2 className="h-7 w-7" /></span>
           <span className="min-w-0 flex-1"><span className="text-[9px] font-bold text-emerald-700">مجتمع أعمال سند</span><strong className="mt-1 block text-base text-slate-950">الأنشطة والكتالوجات العامة</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">ابحث، استعرض، وتواصل مع الأنشطة المنشورة.</span></span>
           <ArrowLeft className="h-5 w-5 text-slate-500" />
