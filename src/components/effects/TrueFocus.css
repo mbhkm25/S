@@ -32,8 +32,8 @@
 
 .true-focus-frame {
   position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
+  top: 0;
+  left: 0;
   pointer-events: none;
   box-sizing: border-box;
   z-index: 2;

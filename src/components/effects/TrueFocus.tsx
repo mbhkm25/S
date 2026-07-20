@@ -15,7 +15,7 @@ type TrueFocusProps = {
   className?: string;
 };
 
-type FocusRect = { x: number; y: number; width: number; height: number };
+type FocusRect = { left: number; top: number; width: number; height: number };
 
 type TrueFocusStyle = CSSProperties & {
   '--true-focus-border': string;
@@ -39,7 +39,7 @@ export default function TrueFocus({
   const [lastActiveIndex, setLastActiveIndex] = useState(0);
   const containerRef = useRef<HTMLSpanElement | null>(null);
   const wordRefs = useRef<Array<HTMLSpanElement | null>>([]);
-  const [focusRect, setFocusRect] = useState<FocusRect>({ x: 0, y: 0, width: 0, height: 0 });
+  const [focusRect, setFocusRect] = useState<FocusRect>({ left: 0, top: 0, width: 0, height: 0 });
 
   useEffect(() => {
     if (manualMode || reducedMotion || words.length < 2) return;
@@ -55,19 +55,35 @@ export default function TrueFocus({
       const container = containerRef.current;
       const activeWord = wordRefs.current[currentIndex];
       if (!container || !activeWord) return;
-      const parentRect = container.getBoundingClientRect();
-      const activeRect = activeWord.getBoundingClientRect();
+
       setFocusRect({
-        x: activeRect.left - parentRect.left,
-        y: activeRect.top - parentRect.top,
-        width: activeRect.width,
-        height: activeRect.height
+        left: activeWord.offsetLeft,
+        top: activeWord.offsetTop,
+        width: activeWord.offsetWidth,
+        height: activeWord.offsetHeight
       });
     };
 
     updateRect();
+
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateRect)
+      : null;
+
+    if (observer) {
+      observer.observe(containerRef.current);
+      wordRefs.current.forEach((word) => {
+        if (word) observer.observe(word);
+      });
+    }
+
     window.addEventListener('resize', updateRect);
-    return () => window.removeEventListener('resize', updateRect);
+    document.fonts?.ready.then(updateRect).catch(() => undefined);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateRect);
+    };
   }, [currentIndex, words.length]);
 
   const handleMouseEnter = (index: number) => {
@@ -115,7 +131,13 @@ export default function TrueFocus({
       {!reducedMotion && words.length > 0 && (
         <motion.span
           className="true-focus-frame"
-          animate={{ ...focusRect, opacity: 1 }}
+          animate={{
+            left: focusRect.left,
+            top: focusRect.top,
+            width: focusRect.width,
+            height: focusRect.height,
+            opacity: 1
+          }}
           transition={{ duration: animationDuration, ease: 'easeInOut' }}
           aria-hidden="true"
         >
