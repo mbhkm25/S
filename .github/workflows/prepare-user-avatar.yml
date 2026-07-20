@@ -1,9 +1,9 @@
 name: Prepare user profile avatar
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/user-profile-avatar-v1
+      - main
 
 permissions:
   contents: write
@@ -27,13 +27,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # types.ts
           path = Path('src/types.ts')
           text = path.read_text()
           text = text.replace("  governorate?: string | null;\n", "  governorate?: string | null;\n  avatar_path?: string | null;\n", 1)
           path.write_text(text)
 
-          # App.tsx
           path = Path('src/App.tsx')
           text = path.read_text()
           text = text.replace("import { isBasicProfileComplete } from './lib/profileUtils';\n", "import { isBasicProfileComplete } from './lib/profileUtils';\nimport { getUserAvatarUrl } from './lib/userAvatar';\n")
@@ -51,7 +49,6 @@ jobs:
           text = text.replace(old, new, 1)
           path.write_text(text)
 
-          # Auth.tsx
           path = Path('src/components/Auth.tsx')
           text = path.read_text()
           text = text.replace("import React, { useState } from 'react';", "import React, { useEffect, useState } from 'react';")
@@ -73,7 +70,6 @@ jobs:
           text = text.replace(marker, avatar_ui + marker, 1)
           path.write_text(text)
 
-          # ProfileV2.tsx
           path = Path('src/components/ProfileV2.tsx')
           text = path.read_text()
           text = text.replace("  User\n} from 'lucide-react';", "  User,\n  Camera,\n  ImagePlus\n} from 'lucide-react';")
