@@ -30,68 +30,45 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/components/Home.tsx')
           text = path.read_text(encoding='utf-8')
 
           text = text.replace("import { FINANCIAL_ENTITIES } from '../lib/financialEntities';\n", '')
           text = text.replace("import LogoLoop from './effects/LogoLoop';\n", "import Aurora from './effects/Aurora';\n")
+          text = re.sub(
+              r"const financialLogos = FINANCIAL_ENTITIES\.map\(\(entity\) => \(\{.*?\}\)\);\n\n",
+              '',
+              text,
+              count=1,
+              flags=re.S,
+          )
 
-          logos = """const financialLogos = FINANCIAL_ENTITIES.map((entity) => ({
-            src: entity.logo,
-            alt: entity.nameAr,
-            title: entity.nameAr
-          }));
+          divider_pattern = re.compile(
+              r'\n\s*<div className="overflow-hidden rounded-\[1\.25rem\] border-y border-slate-200/70 bg-\[#f7f8fa\] py-1">.*?</div>\n\s*<section className="space-y-4" aria-labelledby="business-sanad-title">',
+              re.S,
+          )
+          replacement = '''
+      <section
+        className="relative -mx-2 overflow-hidden rounded-t-[2rem] pb-8 pt-7 sm:-mx-4"
+        aria-labelledby="business-sanad-title"
+      >
+        <Aurora
+          colorStops={['#bbf7d0', '#bfdbfe', '#c7d2fe']}
+          blend={0.78}
+          amplitude={0.52}
+          speed={0.18}
+        />
+        <div className="relative z-10 space-y-4 px-2 sm:px-4">'''
+          text, count = divider_pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one divider block, replaced {count}')
 
-          """
-          text = text.replace(logos, '')
-
-          old = """      <div className=\"overflow-hidden rounded-[1.25rem] border-y border-slate-200/70 bg-[#f7f8fa] py-1\">
-                <LogoLoop
-                  logos={financialLogos}
-                  speed={32}
-                  direction=\"left\"
-                  logoHeight={28}
-                  gap={24}
-                  fadeOut
-                  fadeOutColor=\"#f7f8fa\"
-                />
-              </div>
-
-              <section className=\"space-y-4\" aria-labelledby=\"business-sanad-title\">
-          """
-          new = """      <section
-                className=\"relative -mx-2 overflow-hidden rounded-t-[2rem] pb-8 pt-7 sm:-mx-4\"
-                aria-labelledby=\"business-sanad-title\"
-              >
-                <Aurora
-                  colorStops={['#bbf7d0', '#bfdbfe', '#c7d2fe']}
-                  blend={0.78}
-                  amplitude={0.52}
-                  speed={0.18}
-                />
-                <div className=\"relative z-10 space-y-4 px-2 sm:px-4\">
-          """
-          if old not in text:
-              raise SystemExit('Could not find the existing divider/business section block')
-          text = text.replace(old, new, 1)
-
-          closing = """        )}
-              </section>
-            </div>
-          );
-          }
-          """
-          replacement = """        )}
-                </div>
-              </section>
-            </div>
-          );
-          }
-          """
+          closing = "      </section>\n    </div>\n  );\n}\n"
           if closing not in text:
-              raise SystemExit('Could not find final business section closing block')
-          text = text.replace(closing, replacement, 1)
+              raise SystemExit('Could not find final component closing block')
+          text = text.rsplit(closing, 1)[0] + "        </div>\n      </section>\n    </div>\n  );\n}\n"
 
           path.write_text(text, encoding='utf-8')
           PY
