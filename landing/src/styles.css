@@ -20,9 +20,6 @@
 footer{padding-top:44px}
 .product:before{content:'';position:absolute;inset:-35%;z-index:0;pointer-events:none;transform:translateX(55%) rotate(18deg);background:linear-gradient(90deg,transparent 38%,#ffffff20 50%,transparent 62%);animation:sanad-card-sheen 8s ease-in-out infinite}
 .product>*{position:relative;z-index:1}
-.reveal-cell,.reveal-cell .product{height:100%}
-.step-grid article,.security-grid article,.price{transition:transform .35s ease,box-shadow .35s ease,border-color .35s ease}
-.step-grid article:hover,.security-grid article:hover,.price:hover{transform:translateY(-5px);border-color:#10b98142;box-shadow:0 20px 45px #0f172a12}
 .product .icon{animation:sanad-icon-float 4.8s ease-in-out infinite;box-shadow:0 14px 34px #07101f18}
 .business:after{content:'';position:absolute;width:270px;height:270px;border-radius:50%;left:-85px;bottom:-110px;background:#38bdf82c;filter:blur(45px);animation:sanad-orb-drift 7s ease-in-out infinite alternate}
 @keyframes sanad-card-sheen{0%,35%{transform:translateX(60%) rotate(18deg)}65%,100%{transform:translateX(-60%) rotate(18deg)}}
@@ -31,3 +28,9 @@ footer{padding-top:44px}
 @media(max-width:900px){.hero{min-height:auto;padding-bottom:52px}.product{min-height:auto}.intro,.section-title{padding-top:48px}.split{padding-bottom:52px}}
 @media(max-width:540px){.brand img{width:88px;height:44px}.hero{padding-top:100px}.intro{padding-top:46px}.product{padding:28px 24px}.product .icon{margin-bottom:20px}.final{padding:30px 22px}}
 @media(prefers-reduced-motion:reduce){.product:before,.product:after,.product .icon{animation:none!important}}
+
+/* SEO landing refinements */
+.hero-prefix{display:inline-block}
+.reveal-cell,.reveal-cell .product{height:100%}
+.pro .price .text-link{background:transparent;color:#047857;padding:4px 0;border-radius:0;justify-content:flex-start}
+.pro .price .text-link:hover{text-decoration:underline}
