@@ -47,6 +47,7 @@ import {
 import PasskeyManagement from '../features/passkeys/PasskeyManagement';
 import { getAppPublicInformation, type AppPublicInformation } from '../lib/appPublicInformation';
 import { getUserAvatarUrl, removeUserAvatar, uploadUserAvatar } from '../lib/userAvatar';
+import { getPlatformAdminAccess } from '../lib/platformAdminApi';
 
 interface ProfileProps {
   user: { id: string; email?: string | null };
@@ -128,6 +129,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
   const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [appInfo, setAppInfo] = useState<AppPublicInformation | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const generationRef = useRef(0);
 
   const navigateSection = (next: ProfileSection) => {
@@ -204,6 +206,11 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
     void loadBusinessContext(generation);
     void getAppPublicInformation().then((data) => {
       if (generation === generationRef.current) setAppInfo(data);
+    });
+    void getPlatformAdminAccess().then((access) => {
+      if (generation === generationRef.current) setIsPlatformAdmin(access.allowed);
+    }).catch(() => {
+      if (generation === generationRef.current) setIsPlatformAdmin(false);
     });
     const handlePopState = () => setSection(sectionFromPath());
     window.addEventListener('popstate', handlePopState);
@@ -439,6 +446,16 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
             {limit > 0 && <><div className="flex justify-between text-[11px] text-slate-500"><span>الاستخدام الشهري</span><span>{toLatinDigits(used)} من {limit >= 999999 ? 'غير محدود' : toLatinDigits(limit)} عملية</span></div>{limit < 999999 && <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-900" style={{ width: `${usagePercent}%` }} /></div>}</>}
             <button type="button" onClick={(event) => { event.stopPropagation(); navigateSection('subscription'); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white"><Sparkles className="h-4 w-4" />إدارة الخطة والاشتراك</button>
           </section>
+        )}
+
+        {isPlatformAdmin && (
+          <button type="button" onClick={() => onNavigate('platform-admin')} className="flex w-full items-center justify-between gap-4 overflow-hidden rounded-[1.7rem] bg-slate-950 p-4 text-right text-white shadow-xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300"><ShieldCheck className="h-6 w-6" /></span>
+              <span><span className="block text-[10px] font-bold text-emerald-300">صلاحية مدير المنصة</span><span className="mt-1 block text-sm font-bold">لوحة إدارة سند</span><span className="mt-1 block text-[10px] text-slate-400">المستخدمون، العمليات، الأنشطة والاشتراكات</span></span>
+            </div>
+            <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400" />
+          </button>
         )}
 
         <SettingsGroup title="الحساب والهوية">
