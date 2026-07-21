@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { X, Check, Copy, UploadCloud, Sparkles, Loader2, AlertCircle, CreditCard, CheckCircle2, FileText, Send, PhoneCall } from 'lucide-react';
+import { X, Check, Copy, UploadCloud, Sparkles, Loader2, AlertCircle, CreditCard, CheckCircle2, FileText, Send } from 'lucide-react';
 import { toLatinDigits } from '../lib/digits';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 
@@ -28,6 +28,12 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
   const [webhookStatus, setWebhookStatus] = useState<'idle' | 'success' | 'failed'>('idle');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const plan = paymentOptions?.plan;
+  const planPrice = Number(plan?.price || 0);
+  const planCurrency = plan?.currency || 'YER';
+  const planDuration = Number(plan?.duration_days || 30);
+  const planLimit = Number(plan?.access_limit || 0);
+  const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(value);
 
   useEffect(() => {
     async function fetchOptions() {
@@ -120,11 +126,17 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
     setSubmitting(true);
     setErrorMessage(null);
 
+    let uploadedPath: string | null = null;
+    const cleanupUpload = async () => {
+      if (uploadedPath) await supabase.storage.from('operation-files').remove([uploadedPath]);
+      uploadedPath = null;
+    };
     try {
       // 1. Upload receipt file to Supabase Storage in 'operation-files' bucket
       const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const timestamp = Date.now();
       const storagePath = `pro-payment-receipts/${user.id}/${timestamp}_${safeFileName}`;
+      uploadedPath = storagePath;
 
       console.log('[SANAD Pro Test Log] selected payment_account_id:', selectedAccount.id);
       console.log('[SANAD Pro Test Log] receipt upload path:', storagePath);
@@ -159,6 +171,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
       const { data: result, error: rpcError } = await supabase.rpc('create_pro_payment_request', rpcParams);
 
       if (rpcError) {
+        await cleanupUpload();
         console.error('[SANAD Pro Test Log] RPC result (error):', rpcError);
         // Handle postgres RPC exceptions if any
         if (rpcError.message?.includes('duplicate_transfer_reference')) {
@@ -173,6 +186,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
 
       if (result) {
         if (result.ok === true) {
+          uploadedPath = null;
           // Trigger the intermediate payment gateway function
           let currentWebhookStatus: 'success' | 'failed' = 'success';
           try {
@@ -197,6 +211,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
             transfer_reference: result.transfer_reference || null
           });
         } else {
+          await cleanupUpload();
           console.warn('SANAD Pro payment request failed');
           const reason = result.reason;
           if (reason === 'duplicate_transfer_reference') {
@@ -210,10 +225,12 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
           }
         }
       } else {
+        await cleanupUpload();
         console.warn('SANAD Pro payment request failed');
         setErrorMessage('تعذر إرسال طلب التفعيل الآن. حاول مرة أخرى.');
       }
     } catch (err: any) {
+      await cleanupUpload();
       console.warn('SANAD Pro payment request failed');
       setErrorMessage(err.message || 'حدث خطأ غير متوقع أثناء إرسال الطلب.');
     } finally {
@@ -275,22 +292,12 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
                   <h3 className="text-xs font-bold text-slate-300 font-arabic">باقة سند Pro</h3>
                 </div>
                 <div className="mt-4 flex items-baseline justify-end gap-1.5 relative z-10">
-                  <span className="text-xs text-slate-400 font-arabic">ريال يمني / شهرياً</span>
-                  <span className="text-2xl font-bold font-mono">3,500</span>
+                  <span className="text-xs text-slate-400 font-arabic">{planCurrency} / {toLatinDigits(planDuration)} يومًا</span>
+                  <span className="text-2xl font-bold font-mono">{formatNumber(planPrice)}</span>
                 </div>
-                <ul className="mt-4 space-y-2 border-t border-white/10 pt-3 text-[10px] text-slate-300 space-y-1.5 font-arabic">
-                  <li className="flex items-center gap-1.5 justify-end">
-                    <span>وصول كامل وتدقيق غير محدود لكافة الإشعارات المالية</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  </li>
-                  <li className="flex items-center gap-1.5 justify-end">
-                    <span>استخراج شهادات التحقق المالي الرقمية المعتمدة للعملاء</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  </li>
-                  <li className="flex items-center gap-1.5 justify-end">
-                    <span>لوحة تحكم إحصائية وتحليل مالي شامل ومناسب للأعمال والشركات</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  </li>
+                <ul className="mt-4 space-y-2 border-t border-white/10 pt-3 text-[10px] text-slate-300 font-arabic">
+                  {(plan?.features || []).map((feature: string) => <li key={feature} className="flex items-center gap-1.5 justify-end"><span>{feature}</span><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /></li>)}
+                  <li className="flex items-center gap-1.5 justify-end"><span>{toLatinDigits(planLimit)} عملية خلال مدة الباقة، دون ترحيل المتبقي</span><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /></li>
                 </ul>
               </div>
 
@@ -302,7 +309,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
                 </div>
                 <div className="bg-white p-2.5 rounded-2xl border border-slate-200/60 shadow-sm space-y-1">
                   <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center mx-auto font-bold text-slate-700">2</span>
-                  <span className="text-slate-600 block font-semibold">أودع 3,500 ريال</span>
+                  <span className="text-slate-600 block font-semibold">أودع {formatNumber(planPrice)} {planCurrency}</span>
                 </div>
                 <div className="bg-white p-2.5 rounded-2xl border border-slate-200/60 shadow-sm space-y-1">
                   <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center mx-auto font-bold text-slate-700">3</span>
@@ -386,7 +393,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
                   <div className="bg-amber-50/55 rounded-2xl p-4 border border-amber-100/40 text-right space-y-1">
                     <p className="text-xs font-bold text-amber-900 font-arabic">2. أودع / حوّل مبلغ الاشتراك:</p>
                     <p className="text-[11px] text-amber-800 leading-relaxed font-arabic">
-                      يرجى تحويل مبلغ <span className="font-bold text-slate-900">3,500 ريال يمني</span> إلى الحساب المختار بالأعلى: <span className="font-bold text-slate-900">{selectedAccount.financial_entity}</span>.
+                      يرجى تحويل مبلغ <span className="font-bold text-slate-900">{formatNumber(planPrice)} {planCurrency}</span> إلى الحساب المختار بالأعلى: <span className="font-bold text-slate-900">{selectedAccount.financial_entity}</span>.
                     </p>
                   </div>
 
@@ -493,7 +500,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
                   </div>
                 )}
                 <div className="flex items-center justify-between text-xs border-b border-slate-200/40 pb-2">
-                  <span className="font-bold text-emerald-700 font-mono">3,500 ريال يمني</span>
+                  <span className="font-bold text-emerald-700 font-mono">{formatNumber(Number(successData.expected_amount))} {successData.expected_currency}</span>
                   <span className="text-slate-500 font-arabic">القيمة المتوقعة:</span>
                 </div>
                 <div className="space-y-1">
@@ -511,16 +518,6 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
               </div>
 
               <div className="pt-2 space-y-2.5">
-                <a
-                  href={`https://wa.me/967777000000?text=أريد%20التحقق%20من%20طلب%20تفعيل%20سند%20Pro%20رقم%20${successData.payment_request_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <PhoneCall className="w-4 h-4" />
-                  <span className="font-arabic font-bold">تواصل عبر واتساب لمتابعة الطلب</span>
-                </a>
-                
                 <button
                   type="button"
                   onClick={() => {
