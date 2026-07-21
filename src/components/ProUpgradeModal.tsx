@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { X, Check, Copy, UploadCloud, Sparkles, Loader2, AlertCircle, CreditCard, CheckCircle2, FileText, Send } from 'lucide-react';
+import { X, Check, Copy, UploadCloud, Sparkles, Loader2, AlertCircle, CreditCard, CheckCircle2, FileText, Send, PhoneCall } from 'lucide-react';
 import { toLatinDigits } from '../lib/digits';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
+import { getAppPublicInformation } from '../lib/appPublicInformation';
 
 interface ProUpgradeModalProps {
   user: any;
@@ -26,6 +27,7 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<'idle' | 'success' | 'failed'>('idle');
+  const [supportWhatsapp, setSupportWhatsapp] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plan = paymentOptions?.plan;
@@ -60,6 +62,12 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
       }
     }
     fetchOptions();
+  }, []);
+
+  useEffect(() => {
+    void getAppPublicInformation().then((info) => {
+      setSupportWhatsapp(info.support_whatsapp?.replace(/\D/g, '') || null);
+    });
   }, []);
 
   const handleCopy = (accountNumber: string, accountId: string) => {
@@ -518,6 +526,17 @@ export default function ProUpgradeModal({ user, profile, onClose, onSuccess }: P
               </div>
 
               <div className="pt-2 space-y-2.5">
+                {supportWhatsapp && (
+                  <a
+                    href={`https://wa.me/${supportWhatsapp}?text=${encodeURIComponent(`أريد متابعة طلب تفعيل سند Pro رقم ${successData.payment_request_id}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                    <span className="font-arabic font-bold">متابعة الطلب عبر واتساب</span>
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => {
