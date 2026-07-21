@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /r/
+Disallow: /verify/
+Disallow: /manage-numbers/
+Disallow: /app/
+Disallow: /internal/
 
 Sitemap: https://sanadflow.com/sitemap.xml
