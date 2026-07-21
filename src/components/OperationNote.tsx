@@ -4,7 +4,6 @@ import {
   FileText,
   Loader2,
   Mic,
-  Pause,
   Play,
   Save,
   Square,
