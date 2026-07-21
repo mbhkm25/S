@@ -254,7 +254,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
               <ListChecks className={`h-5 w-5 transition-transform duration-300 ${actionsOpen ? 'rotate-6 scale-110' : ''}`} />
             </span>
             <span className="min-w-0 flex-1">
-              <strong className="block text-sm text-slate-950">إجراءات سند</strong>
+              <strong className="block text-sm text-slate-950">إجراءات سريعة</strong>
               <span className="mt-0.5 block text-[9px] text-slate-500">4 أدوات لإدارة عملياتك في مكان واحد</span>
             </span>
             <span className="flex items-center gap-1.5">
