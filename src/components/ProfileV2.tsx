@@ -36,6 +36,7 @@ import { formatYemeniDisplay, parseYemeniLocalPhone, toLatinDigits } from '../li
 import { isBasicProfileComplete, isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
 import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 import ProUpgradeModal from './ProUpgradeModal';
+import SubscriptionCenter from './SubscriptionCenter';
 import { BusinessCardSkeleton, SubscriptionCardSkeleton } from './Skeletons';
 import {
   acceptBusinessInvitation,
@@ -71,7 +72,7 @@ interface UsageData {
   plan?: { is_pro?: boolean; code?: string; name?: string } | string | null;
 }
 
-type ProfileSection = 'overview' | 'personal' | 'financial' | 'financial-add' | 'security' | 'support' | 'about';
+type ProfileSection = 'overview' | 'personal' | 'financial' | 'financial-add' | 'subscription' | 'security' | 'support' | 'about';
 
 const FINANCIAL_ENTITIES = [
   'العمقي موبايل', 'البسيري موبايل', 'محفظة بي كاش (B-Cash)', 'الكريمي سعودي',
@@ -82,7 +83,7 @@ const FINANCIAL_ENTITIES = [
 function sectionFromPath(): ProfileSection {
   const segment = window.location.pathname.split('/').filter(Boolean).pop();
   return segment === 'personal' || segment === 'financial' || segment === 'financial-add' ||
-    segment === 'security' || segment === 'support' || segment === 'about'
+    segment === 'subscription' || segment === 'security' || segment === 'support' || segment === 'about'
     ? segment : 'overview';
 }
 
@@ -433,10 +434,10 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
         )}
 
         {loadingUsage ? <SubscriptionCardSkeleton /> : usage && (
-          <section className="space-y-3 rounded-[1.7rem] bg-white p-4 shadow-sm">
+          <section onClick={() => navigateSection('subscription')} className="cursor-pointer space-y-3 rounded-[1.7rem] bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] text-slate-400">خطتك الحالية</p><h2 className="mt-1 text-sm font-bold">{isPro ? (typeof usage.plan === 'object' ? usage.plan?.name || 'سند Pro' : 'سند Pro') : 'الخطة المجانية'}</h2></div><span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${isPro ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isPro ? 'فعال' : 'مجاني'}</span></div>
             {limit > 0 && <><div className="flex justify-between text-[11px] text-slate-500"><span>الاستخدام الشهري</span><span>{toLatinDigits(used)} من {limit >= 999999 ? 'غير محدود' : toLatinDigits(limit)} عملية</span></div>{limit < 999999 && <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-900" style={{ width: `${usagePercent}%` }} /></div>}</>}
-            {!isPro && <button type="button" onClick={() => setShowProUpgradeModal(true)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white"><Sparkles className="h-4 w-4" />الترقية إلى سند Pro</button>}
+            <button type="button" onClick={(event) => { event.stopPropagation(); navigateSection('subscription'); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white"><Sparkles className="h-4 w-4" />إدارة الخطة والاشتراك</button>
           </section>
         )}
 
@@ -511,6 +512,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
       {section === 'personal' && renderPersonal()}
       {section === 'financial' && renderFinancial()}
       {section === 'financial-add' && renderAddAccount()}
+      {section === 'subscription' && <div className="space-y-4"><SubpageHeader title="إدارة الاشتراك" /><SubscriptionCenter onUpgrade={() => setShowProUpgradeModal(true)} /></div>}
       {section === 'security' && renderSecurity()}
       {section === 'support' && renderSupport()}
       {section === 'about' && renderAbout()}
