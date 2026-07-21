@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle } from 'lucide-react';
+import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle, MessageSquareText, Mic } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatYemeniDisplay } from '../lib/digits';
 import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
 import ProUpgradeModal from './ProUpgradeModal';
 import FinancialEntityLogo from './FinancialEntityLogo';
+import OperationNote from './OperationNote';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 import {
   getLinkableBusinessesForUser, linkOperationToBusiness,
@@ -664,13 +665,13 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
               <span className="font-bold text-slate-700">توضيح:</span> عملية الوصول تعني فتح تفاصيل عملية مالية عبر رابط أو QR أو البحث داخل سند.
             </p>
             <p className="text-xs text-emerald-700 font-medium leading-relaxed font-arabic">
-              فعّل سند Pro لمتابعة الوصول إلى تفاصيل العمليات والتحقق منها ومطابقتها بشكل غير محدود.
+              فعّل سند Pro لمتابعة الوصول إلى تفاصيل العمليات ضمن رصيد ومدة الباقة الحالية.
             </p>
           </div>
 
           <div className="py-2.5 border-y border-slate-100 flex items-center justify-between px-2 text-right">
             <span className="text-xs text-slate-400 font-arabic">الاشتراك الموصى به:</span>
-            <span className="text-sm font-bold text-slate-800 font-arabic">سند Pro — 3,500 ريال يمني شهريًا</span>
+            <span className="text-sm font-bold text-slate-800 font-arabic">سند Pro — السعر والمدة حسب الباقة الحالية</span>
           </div>
         </div>
 
@@ -1194,6 +1195,16 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
             </p>
           </div>
 
+          <div className="mx-auto flex max-w-xs items-center gap-2.5 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-right">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm">
+              <MessageSquareText className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-[9px] leading-5 text-sky-900">
+              بعد التحقق يمكنك إضافة ملاحظة نصية أو تسجيل صوتي خاص بهذه العملية.
+            </p>
+            <Mic className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+          </div>
+
           {user ? (
             <button
               onClick={handleVerifyClick}
@@ -1226,6 +1237,10 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
             </div>
           )}
         </div>
+      )}
+
+      {user && operation && isVerifiedByMe && (
+        <OperationNote operationId={operation.id} userId={user.id} />
       )}
 
       {/* 6. Accordion for Additional Details */}

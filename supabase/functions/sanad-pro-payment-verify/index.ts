@@ -508,10 +508,9 @@ function validatePayment(params: {
       Number(extracted.amount) === Number(expected.amount),
 
     currency_matches:
-      !extracted.currency ||
-      String(extracted.currency).toUpperCase() ===
+      Boolean(extracted.currency) && (String(extracted.currency).toUpperCase() ===
         String(expected.currency || DEFAULT_CURRENCY).toUpperCase() ||
-      ["ريال", "يمني", "YER"].some((x) => includesLoose(extracted.currency, x)),
+      ["ريال", "يمني", "YER"].some((x) => includesLoose(extracted.currency, x))),
 
     receiver_account_matches:
       Boolean(expected.account_number) &&
@@ -534,9 +533,9 @@ function validatePayment(params: {
       includesLoose(extracted.raw_text, "سند") ||
       includesLoose(extracted.raw_text, "sanad"),
 
-    recent_or_unknown_date: (() => {
+    transfer_date_present_and_recent: (() => {
       const age = daysOld(extracted.transfer_datetime);
-      return age === null || age <= 10;
+      return age !== null && age >= 0 && age <= 10;
     })(),
 
     confidence_ok: Number(extracted.confidence || 0) >= 0.85,
@@ -565,7 +564,7 @@ function validatePayment(params: {
     reviewReasons.push("receiver_name_unclear");
   }
 
-  if (!checks.recent_or_unknown_date) reviewReasons.push("old_transfer_date");
+  if (!checks.transfer_date_present_and_recent) reviewReasons.push("missing_or_invalid_transfer_date");
   if (!checks.confidence_ok) reviewReasons.push("low_ai_confidence");
 
   const autoApprove = hardFailures.length === 0 && reviewReasons.length === 0;
@@ -637,7 +636,7 @@ function successMessage(validation: any): string {
     "✅ *تم تفعيل سند Pro*\n\n" +
     "تم اعتماد دفعتك وتفعيل اشتراك سند Pro لمدة شهر.\n\n" +
     "*الخطة:* سند Pro\n" +
-    `*المبلغ:* ${DEFAULT_AMOUNT.toLocaleString("en-US")} ريال يمني\n` +
+    `*المبلغ:* ${Number(validation.expected.amount).toLocaleString("en-US")} ${validation.expected.currency}\n` +
     `*رقم الحوالة:* ${validation.extracted.transfer_reference || "—"}\n\n` +
     "يمكنك الآن الوصول الموسع إلى تفاصيل العمليات داخل سند."
   );
@@ -660,19 +659,6 @@ function reviewMessage(validation: any): string {
 }
 
 async function processPaymentVerification(paymentRequestId: string, source: string) {
-  await markReview({
-    paymentRequestId,
-    status: "processing",
-    extracted: {},
-    confidence: null,
-    checks: {
-      stage: "started_by_edge_function",
-      source,
-      function: FUNCTION_NAME,
-    },
-    failureReason: null,
-  });
-
   const payload = await callRpc<any>("admin_get_pro_payment_request_payload", {
     p_payment_request_id: paymentRequestId,
   });
@@ -685,6 +671,9 @@ async function processPaymentVerification(paymentRequestId: string, source: stri
   const expectedReceiver = payload.expected_receiver || {};
 
   if (!paymentRequest.id) throw new Error("missing_payment_request_from_rpc");
+  if (["approved", "auto_approved", "rejected", "cancelled"].includes(paymentRequest.status)) {
+    return { ok: true, status: paymentRequest.status, payment_request_id: paymentRequestId, already_final: true };
+  }
   if (!paymentRequest.receipt_bucket || !paymentRequest.receipt_path) {
     throw new Error("missing_receipt_storage_path");
   }

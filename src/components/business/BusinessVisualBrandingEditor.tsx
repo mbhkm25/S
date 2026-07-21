@@ -89,7 +89,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
     setUploading(type);setError(null);setSuccess(null);
     try{
       const assetType=type==='profile'?'profile':'cover';
-      const result=await uploadBusinessMedia({businessId:business.id,assetType,file,altText:type==='horizontal-cover'?'غلاف أفقي للملف العام':null});
+      const result=await uploadBusinessMedia({businessId:business.id,assetType,file,imageVariant:type==='profile'?'logo':type,altText:type==='horizontal-cover'?'غلاف أفقي للملف العام':null});
       if(type==='profile'){setProfilePath(result.path);setProfilePreview(result.signedUrl);}
       else if(type==='cover'){setCoverPath(result.path);setCoverPreview(result.signedUrl);}
       else{setHorizontalCoverPath(result.path);setHorizontalCoverPreview(result.signedUrl);}
@@ -151,7 +151,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <h2 className="text-sm font-bold">الغلاف العمودي للواجهة الافتتاحية</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">يملأ الواجهة التي تحتوي على زري استعراض الملف والارتباط بالنشاط. استخدم صورة عمودية أو صورة تتحمل القص على الشاشات الطويلة.</p>
           <label className="relative mt-3 block aspect-[10/13] max-h-[24rem] cursor-pointer overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-100">
-            {coverPreview?<img src={coverPreview} alt="معاينة الغلاف العمودي" className="h-full w-full object-cover"/>:<span className="flex h-full flex-col items-center justify-center gap-2 text-xs text-slate-400"><UploadCloud className="h-7 w-7"/>رفع الغلاف العمودي</span>}
+            {coverPreview?<img src={coverPreview} alt="معاينة الغلاف العمودي" decoding="async" className="h-full w-full object-cover"/>:<span className="flex h-full flex-col items-center justify-center gap-2 text-xs text-slate-400"><UploadCloud className="h-7 w-7"/>رفع الغلاف العمودي</span>}
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>void upload(event,'cover')} className="absolute inset-0 opacity-0" disabled={uploading!==null}/>
             {uploading==='cover'&&<span className="absolute inset-0 flex items-center justify-center bg-white/80"><Loader2 className="h-5 w-5 animate-spin"/></span>}
           </label>
@@ -160,7 +160,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <h2 className="text-sm font-bold">الغلاف الأفقي للملف العام</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">يظهر ملتصقًا بالحافة العليا للبطاقة التعريفية. استخدم صورة أفقية بنسبة قريبة من 16:7 وتجنب وضع النصوص المهمة قرب الأطراف.</p>
           <label className="relative mt-3 block aspect-[16/7] cursor-pointer overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-100">
-            {horizontalCoverPreview?<img src={horizontalCoverPreview} alt="معاينة الغلاف الأفقي" className="h-full w-full object-cover"/>:<span className="flex h-full flex-col items-center justify-center gap-2 text-xs text-slate-400"><UploadCloud className="h-7 w-7"/>رفع الغلاف الأفقي</span>}
+            {horizontalCoverPreview?<img src={horizontalCoverPreview} alt="معاينة الغلاف الأفقي" decoding="async" className="h-full w-full object-cover"/>:<span className="flex h-full flex-col items-center justify-center gap-2 text-xs text-slate-400"><UploadCloud className="h-7 w-7"/>رفع الغلاف الأفقي</span>}
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>void upload(event,'horizontal-cover')} className="absolute inset-0 opacity-0" disabled={uploading!==null}/>
             {uploading==='horizontal-cover'&&<span className="absolute inset-0 flex items-center justify-center bg-white/80"><Loader2 className="h-5 w-5 animate-spin"/></span>}
           </label>
@@ -168,7 +168,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
 
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <h2 className="text-sm font-bold">صورة البروفايل / شعار النشاط</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">لأفضل مظهر استخدم شعارًا بصيغة PNG بخلفية شفافة، أو شعارًا واضحًا على خلفية بيضاء.</p>
-          <div className="mt-3 flex items-center gap-4"><div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-white p-2">{profilePreview?<img src={profilePreview} alt="معاينة الشعار" className="h-full w-full object-contain"/>:<ImageIcon className="h-8 w-8 text-slate-300"/>}</div><label className="relative flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white"><UploadCloud className="h-4 w-4"/>اختيار شعار<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>void upload(event,'profile')} className="absolute inset-0 opacity-0" disabled={uploading!==null}/></label>{uploading==='profile'&&<Loader2 className="h-5 w-5 animate-spin"/>}</div>
+          <div className="mt-3 flex items-center gap-4"><div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-white p-2">{profilePreview?<img src={profilePreview} alt="معاينة الشعار" decoding="async" className="h-full w-full object-contain"/>:<ImageIcon className="h-8 w-8 text-slate-300"/>}</div><label className="relative flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white"><UploadCloud className="h-4 w-4"/>اختيار شعار<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>void upload(event,'profile')} className="absolute inset-0 opacity-0" disabled={uploading!==null}/></label>{uploading==='profile'&&<Loader2 className="h-5 w-5 animate-spin"/>}</div>
         </section>
         <button disabled={saving||uploading!==null} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 p-3.5 text-xs font-bold text-white disabled:bg-slate-300">{saving?<Loader2 className="h-4 w-4 animate-spin"/>:<Save className="h-4 w-4"/>}حفظ الصور</button>
       </form>

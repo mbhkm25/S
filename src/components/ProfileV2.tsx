@@ -26,7 +26,9 @@ import {
   Sparkles,
   Store,
   Trash2,
-  User
+  User,
+  Camera,
+  ImagePlus
 } from 'lucide-react';
 import type { Profile } from '../types';
 import { supabase } from '../lib/supabase';
@@ -34,6 +36,7 @@ import { formatYemeniDisplay, parseYemeniLocalPhone, toLatinDigits } from '../li
 import { isBasicProfileComplete, isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
 import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 import ProUpgradeModal from './ProUpgradeModal';
+import SubscriptionCenter from './SubscriptionCenter';
 import { BusinessCardSkeleton, SubscriptionCardSkeleton } from './Skeletons';
 import {
   acceptBusinessInvitation,
@@ -43,6 +46,7 @@ import {
 } from '../lib/businessApi';
 import PasskeyManagement from '../features/passkeys/PasskeyManagement';
 import { getAppPublicInformation, type AppPublicInformation } from '../lib/appPublicInformation';
+import { getUserAvatarUrl, removeUserAvatar, uploadUserAvatar } from '../lib/userAvatar';
 
 interface ProfileProps {
   user: { id: string; email?: string | null };
@@ -68,7 +72,7 @@ interface UsageData {
   plan?: { is_pro?: boolean; code?: string; name?: string } | string | null;
 }
 
-type ProfileSection = 'overview' | 'personal' | 'financial' | 'financial-add' | 'security' | 'support' | 'about';
+type ProfileSection = 'overview' | 'personal' | 'financial' | 'financial-add' | 'subscription' | 'security' | 'support' | 'about';
 
 const FINANCIAL_ENTITIES = [
   'العمقي موبايل', 'البسيري موبايل', 'محفظة بي كاش (B-Cash)', 'الكريمي سعودي',
@@ -79,7 +83,7 @@ const FINANCIAL_ENTITIES = [
 function sectionFromPath(): ProfileSection {
   const segment = window.location.pathname.split('/').filter(Boolean).pop();
   return segment === 'personal' || segment === 'financial' || segment === 'financial-add' ||
-    segment === 'security' || segment === 'support' || segment === 'about'
+    segment === 'subscription' || segment === 'security' || segment === 'support' || segment === 'about'
     ? segment : 'overview';
 }
 
@@ -99,6 +103,8 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -249,6 +255,57 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
     }
   };
 
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || savingAvatar) return;
+    setProfileError(null);
+    setProfileSuccess(null);
+    setSavingAvatar(true);
+    let newPath = '';
+    try {
+      newPath = await uploadUserAvatar(user.id, file);
+      const previousPath = profile.avatar_path;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_path: newPath, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+      if (error) throw error;
+      await refreshProfile();
+      if (previousPath) await removeUserAvatar(previousPath).catch(() => undefined);
+      setProfileSuccess('تم تحديث صورة البروفايل.');
+    } catch (error) {
+      if (newPath) await removeUserAvatar(newPath).catch(() => undefined);
+      const message = error instanceof Error && error.message === 'avatar_too_large'
+        ? 'حجم الصورة يجب ألا يتجاوز 5 ميجابايت.'
+        : 'تعذر رفع صورة البروفايل الآن.';
+      setProfileError(message);
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!profile.avatar_path || savingAvatar || !window.confirm('هل تريد حذف صورة البروفايل؟')) return;
+    setSavingAvatar(true);
+    setProfileError(null);
+    try {
+      const previousPath = profile.avatar_path;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_path: null, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+      if (error) throw error;
+      await refreshProfile();
+      await removeUserAvatar(previousPath).catch(() => undefined);
+      setProfileSuccess('تم حذف صورة البروفايل.');
+    } catch {
+      setProfileError('تعذر حذف صورة البروفايل الآن.');
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
   const handleAddAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     setAccountError(null);
@@ -337,7 +394,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
       <div className="space-y-5">
         <div className="flex min-h-[96px] items-center justify-between gap-3 py-2">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><User className="h-6 w-6" /></div>
+            <button type="button" onClick={() => navigateSection('personal')} className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white ring-2 ring-white shadow-md" aria-label="تعديل صورة البروفايل">{profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} decoding="async" className="h-full w-full object-cover" /> : <User className="h-7 w-7" />}</button>
             <div className="min-w-0">
               <h1 className="line-clamp-2 text-base font-bold leading-snug text-slate-950">{profile.full_name || 'مستخدم سند'}</h1>
               <p className="mt-1 text-xs text-slate-500" dir="ltr">{formatYemeniDisplay(profile.phone) || user.email || 'لا يوجد رقم جوال'}</p>
@@ -359,7 +416,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
           <section className="space-y-3 rounded-[1.7rem] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-950 text-white">
-                {businessLogoUrls[ownedBusiness.id] ? <img src={businessLogoUrls[ownedBusiness.id]} alt={`شعار ${ownedBusiness.name}`} className="h-full w-full object-cover" /> : <Store className="h-5 w-5" />}
+                {businessLogoUrls[ownedBusiness.id] ? <img src={businessLogoUrls[ownedBusiness.id]} alt={`شعار ${ownedBusiness.name}`} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <Store className="h-5 w-5" />}
               </div>
               <div className="min-w-0"><p className="text-[10px] text-slate-400">نشاطي التجاري</p><h2 className="truncate text-sm font-bold text-slate-950">{ownedBusiness.name}</h2><p className="mt-1 text-[11px] text-slate-500">{ownedBusiness.public_status === 'published' ? 'نشط ومنشور' : ownedBusiness.public_status === 'pending_review' ? 'قيد المراجعة' : 'قيد الإعداد'}</p></div>
             </div>
@@ -377,10 +434,10 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
         )}
 
         {loadingUsage ? <SubscriptionCardSkeleton /> : usage && (
-          <section className="space-y-3 rounded-[1.7rem] bg-white p-4 shadow-sm">
+          <section onClick={() => navigateSection('subscription')} className="cursor-pointer space-y-3 rounded-[1.7rem] bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] text-slate-400">خطتك الحالية</p><h2 className="mt-1 text-sm font-bold">{isPro ? (typeof usage.plan === 'object' ? usage.plan?.name || 'سند Pro' : 'سند Pro') : 'الخطة المجانية'}</h2></div><span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${isPro ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{isPro ? 'فعال' : 'مجاني'}</span></div>
             {limit > 0 && <><div className="flex justify-between text-[11px] text-slate-500"><span>الاستخدام الشهري</span><span>{toLatinDigits(used)} من {limit >= 999999 ? 'غير محدود' : toLatinDigits(limit)} عملية</span></div>{limit < 999999 && <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-900" style={{ width: `${usagePercent}%` }} /></div>}</>}
-            {!isPro && <button type="button" onClick={() => setShowProUpgradeModal(true)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white"><Sparkles className="h-4 w-4" />الترقية إلى سند Pro</button>}
+            <button type="button" onClick={(event) => { event.stopPropagation(); navigateSection('subscription'); }} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white"><Sparkles className="h-4 w-4" />إدارة الخطة والاشتراك</button>
           </section>
         )}
 
@@ -404,7 +461,23 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
   };
 
   const renderPersonal = () => (
-    <div className="space-y-4 pb-24"><SubpageHeader title="البيانات الشخصية" /><form id="personal-data-form" onSubmit={handleSaveProfile} className="space-y-4 rounded-[1.7rem] bg-white p-4 shadow-sm">{profileError && <Message tone="error">{profileError}</Message>}{profileSuccess && <Message tone="success">{profileSuccess}</Message>}<Field label="الاسم الكامل"><input value={fullName} onChange={(event) => { setFullName(event.target.value); setProfileError(null); }} className="profile-input" required /></Field><Field label="رقم الجوال"><div className="flex overflow-hidden rounded-xl bg-slate-50 focus-within:ring-2 focus-within:ring-slate-500"><input value={localPhone} inputMode="numeric" dir="ltr" onChange={(event) => { setLocalPhone(parseYemeniLocalPhone(event.target.value).slice(0, 9)); setProfileError(null); }} className="min-w-0 flex-1 bg-transparent px-3 py-3 text-left outline-none" required /><span dir="ltr" className="bg-slate-100 px-3 py-3 text-sm">+967</span></div></Field><Field label="المحافظة"><div className="relative"><select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setProfileError(null); }} className="profile-input appearance-none" required><option value="">اختر المحافظة</option>{YEMEN_GOVERNORATES.map((item) => <option key={item}>{item}</option>)}</select><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /></div></Field></form>{profileDirty && <div className="fixed bottom-[calc(4.8rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 px-4"><div className="mx-auto max-w-2xl"><button form="personal-data-form" type="submit" disabled={savingProfile} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-bold text-white shadow-lg disabled:opacity-60">{savingProfile && <Loader2 className="h-4 w-4 animate-spin" />}حفظ التغييرات</button></div></div>}</div>
+    <div className="space-y-4 pb-24"><SubpageHeader title="البيانات الشخصية" />
+      <section className="flex items-center gap-4 rounded-[1.7rem] bg-white p-4 shadow-sm">
+        <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={savingAvatar} className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white disabled:opacity-60">
+          {profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} decoding="async" className="h-full w-full object-cover" /> : <ImagePlus className="h-7 w-7" />}
+          <span className="absolute bottom-1 left-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-800 shadow"><Camera className="h-3.5 w-3.5" /></span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-bold">صورة البروفايل</h3>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">اختيارية ولا تؤثر على اكتمال الحساب أو استخدام مزايا سند.</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" disabled={savingAvatar} onClick={() => avatarInputRef.current?.click()} className="rounded-lg bg-slate-100 px-3 py-2 text-[10px] font-bold">{savingAvatar ? 'جاري الحفظ...' : profile.avatar_path ? 'استبدال' : 'إضافة صورة'}</button>
+            {profile.avatar_path && <button type="button" disabled={savingAvatar} onClick={handleRemoveAvatar} className="rounded-lg bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-600">حذف</button>}
+          </div>
+        </div>
+        <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleAvatarChange} />
+      </section>
+      <form id="personal-data-form" onSubmit={handleSaveProfile} className="space-y-4 rounded-[1.7rem] bg-white p-4 shadow-sm">{profileError && <Message tone="error">{profileError}</Message>}{profileSuccess && <Message tone="success">{profileSuccess}</Message>}<Field label="الاسم الكامل"><input value={fullName} onChange={(event) => { setFullName(event.target.value); setProfileError(null); }} className="profile-input" required /></Field><Field label="رقم الجوال"><div className="flex overflow-hidden rounded-xl bg-slate-50 focus-within:ring-2 focus-within:ring-slate-500"><input value={localPhone} inputMode="numeric" dir="ltr" onChange={(event) => { setLocalPhone(parseYemeniLocalPhone(event.target.value).slice(0, 9)); setProfileError(null); }} className="min-w-0 flex-1 bg-transparent px-3 py-3 text-left outline-none" required /><span dir="ltr" className="bg-slate-100 px-3 py-3 text-sm">+967</span></div></Field><Field label="المحافظة"><div className="relative"><select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setProfileError(null); }} className="profile-input appearance-none" required><option value="">اختر المحافظة</option>{YEMEN_GOVERNORATES.map((item) => <option key={item}>{item}</option>)}</select><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /></div></Field></form>{profileDirty && <div className="fixed bottom-[calc(4.8rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 px-4"><div className="mx-auto max-w-2xl"><button form="personal-data-form" type="submit" disabled={savingProfile} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-sm font-bold text-white shadow-lg disabled:opacity-60">{savingProfile && <Loader2 className="h-4 w-4 animate-spin" />}حفظ التغييرات</button></div></div>}</div>
   );
 
   const renderFinancial = () => (
@@ -439,6 +512,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
       {section === 'personal' && renderPersonal()}
       {section === 'financial' && renderFinancial()}
       {section === 'financial-add' && renderAddAccount()}
+      {section === 'subscription' && <div className="space-y-4"><SubpageHeader title="إدارة الاشتراك" /><SubscriptionCenter onUpgrade={() => setShowProUpgradeModal(true)} /></div>}
       {section === 'security' && renderSecurity()}
       {section === 'support' && renderSupport()}
       {section === 'about' && renderAbout()}
