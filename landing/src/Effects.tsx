@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useInView, useMotionValue, useReducedMotion, useSpring } from 'motion/react';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import './Effects.css';
 
 export function RotatingText({ texts, interval = 2600 }: { texts: string[]; interval?: number }) {
@@ -10,8 +10,7 @@ export function RotatingText({ texts, interval = 2600 }: { texts: string[]; inte
     const id = window.setInterval(() => setIndex(value => (value + 1) % texts.length), interval);
     return () => window.clearInterval(id);
   }, [interval, reduceMotion, texts.length]);
-  const words = useMemo(() => texts[index].split(' '), [index, texts]);
-  return <span className="rotating-text" aria-live="polite"><span className="effect-sr-only">{texts[index]}</span><AnimatePresence mode="wait" initial={false}><motion.span key={index} className="rotating-line" aria-hidden="true" initial={reduceMotion ? false : { y: '85%', opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={reduceMotion ? undefined : { y: '-95%', opacity: 0 }} transition={{ type: 'spring', damping: 28, stiffness: 360 }}>{words.map((word, wordIndex) => <span className="rotating-word" key={`${word}-${wordIndex}`}>{Array.from(word).map((letter, letterIndex) => <motion.span className="rotating-letter" key={`${letter}-${letterIndex}`} transition={{ delay: letterIndex * .018 }}>{letter}</motion.span>)}{wordIndex < words.length - 1 && '\u00a0'}</span>)}</motion.span></AnimatePresence></span>;
+  return <span className="rotating-text" aria-live="polite" dir="rtl"><span className="effect-sr-only">{texts[index]}</span><AnimatePresence mode="wait" initial={false}><motion.span key={index} className="rotating-line" aria-hidden="true" initial={reduceMotion ? false : { y: '78%', opacity: 0, filter: 'blur(5px)' }} animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }} exit={reduceMotion ? undefined : { y: '-85%', opacity: 0, filter: 'blur(5px)' }} transition={{ type: 'spring', damping: 30, stiffness: 360 }}>{texts[index]}</motion.span></AnimatePresence></span>;
 }
 
 export function GradientText({ children, className = '' }: { children: ReactNode; className?: string }) {
