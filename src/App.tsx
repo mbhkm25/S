@@ -56,7 +56,7 @@ export default function App() {
   const requestGenerationRef = useRef(0);
   const processedPushNotificationIdsRef = useRef(new Set<string>());
   const [passkeyEnrollmentUser, setPasskeyEnrollmentUser] = useState<SupabaseUser | null>(null);
-  
+
   // Navigation states
   const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
@@ -163,7 +163,7 @@ export default function App() {
 
   // Safe navigation function
   const navigateTo = (
-    page: any, 
+    page: any,
     token?: string,
     source?: 'link' | 'qr' | 'search' | 'app'
   ) => {
@@ -390,7 +390,7 @@ export default function App() {
     };
 
     window.addEventListener('popstate', handlePopState);
-    
+
     // Initial parse
     if (!INTERNAL_BUSINESS_CATALOG_ENABLED) {
       const path = window.location.pathname;
@@ -852,7 +852,7 @@ export default function App() {
   return (
     <NotificationProvider userId={user?.id || null} isAuthenticated={isAuthenticated}>
       <div className="min-h-screen bg-[#F7F7F5] text-slate-800 flex flex-col" id="app_root">
-      
+
       {/* Top Brand Navbar */}
       {currentPage !== 'scan-qr' && (
         <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
@@ -918,7 +918,7 @@ export default function App() {
              {currentPage === 'home' && (
               <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
             )}
-            
+
             {currentPage === 'upload' && user && (
               profile ? (
                 <UploadNotification
@@ -1121,8 +1121,8 @@ export default function App() {
               className="flex-1 flex flex-col items-center justify-center transition-all"
             >
               <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'home' 
-                  ? 'bg-[#111111] text-white' 
+                currentPage === 'home'
+                  ? 'bg-[#111111] text-white'
                   : 'text-slate-400 hover:text-slate-600'
               }`}>
                 <HomeIcon className="w-4 h-4" />
@@ -1136,8 +1136,8 @@ export default function App() {
               className="flex-1 flex flex-col items-center justify-center transition-all"
             >
               <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'scan-qr' 
-                  ? 'bg-[#111111] text-white' 
+                currentPage === 'scan-qr'
+                  ? 'bg-[#111111] text-white'
                   : 'text-slate-400 hover:text-slate-600'
               }`}>
                 <QrCode className="w-4 h-4" />
@@ -1151,8 +1151,8 @@ export default function App() {
               className="flex-1 flex flex-col items-center justify-center transition-all"
             >
               <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'upload' 
-                  ? 'bg-[#111111] text-white' 
+                currentPage === 'upload'
+                  ? 'bg-[#111111] text-white'
                   : 'text-slate-400 hover:text-slate-600'
               }`}>
                 <Upload className="w-4 h-4" />
@@ -1166,8 +1166,8 @@ export default function App() {
               className="flex-1 flex flex-col items-center justify-center transition-all"
             >
               <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'profile' 
-                  ? 'bg-[#111111] text-white' 
+                currentPage === 'profile'
+                  ? 'bg-[#111111] text-white'
                   : 'text-slate-400 hover:text-slate-600'
               }`}>
                 <User className="w-4 h-4" />

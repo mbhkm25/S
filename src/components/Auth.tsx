@@ -16,7 +16,7 @@ interface AuthProps {
 
 export default function Auth({ onAuthSuccess }: AuthProps) {
   const [isSignUp, setIsSignUp] = useState(false);
-  
+
   // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +26,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [governorate, setGovernorate] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
-  
+
   // Status states
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,19 +49,19 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
       : {};
     const msg = typeof details.message === 'string' ? details.message : '';
     const errorName = typeof details.name === 'string' ? details.name : '';
-    
+
     // Distinguish between critical database/system errors and standard user authentication errors
-    const isSystemError = msg.includes('Database error saving new user') || 
-                          msg.toLowerCase().includes('row-level security') || 
-                          msg.toLowerCase().includes('rls') || 
+    const isSystemError = msg.includes('Database error saving new user') ||
+                          msg.toLowerCase().includes('row-level security') ||
+                          msg.toLowerCase().includes('rls') ||
                           msg.includes('database_error');
-                          
+
     if (isSystemError) {
       logAuthDiagnostic('database_error', err);
     } else {
       logAuthDiagnostic('auth_flow', err);
     }
-    
+
     if (isSystemError) {
       return 'تعذر إنشاء ملف المستخدم في قاعدة سند. يرجى المحاولة لاحقًا أو التواصل مع الدعم.';
     }
@@ -102,7 +102,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         const userFullName = user.user_metadata?.full_name || fullName || 'مستخدم سند';
         const userPhone = user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : '');
         const userGovernorate = user.user_metadata?.governorate || governorate || null;
-        
+
         const { data: newProfile, error: insertError } = await supabase
           .from('profiles')
           .upsert({
@@ -122,7 +122,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         }
         return newProfile as Profile;
       }
-      
+
       return profile as Profile;
     } catch (err: unknown) {
       logAuthDiagnostic('profile_ensure_failed', err);
@@ -226,7 +226,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             userProfile = updatedProfile as Profile;
           }
           setSuccessMessage('تم إنشاء الحساب بنجاح!');
-          
+
           setTimeout(() => {
             onAuthSuccess(authData.user, userProfile!);
           }, 1200);
@@ -260,14 +260,14 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-8" id="auth_container">
       <div className="w-full max-w-md bg-white rounded-3xl border border-slate-100 shadow-xl p-8 md:p-10 transition-all duration-300">
-        
+
         {/* Brand Header */}
         <div className="text-center mb-8" id="auth_header">
           <div className="inline-flex items-center justify-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm mb-4">
-            <img 
-              src={`${import.meta.env.BASE_URL}logo.png`} 
-              alt="سند للتحقق" 
-              className="h-12 object-contain" 
+            <img
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt="سند للتحقق"
+              className="h-12 object-contain"
               onError={(e) => {
                 // If logo.png fails, fall back to showing the icon/Sparkles styling
                 e.currentTarget.style.display = 'none';
