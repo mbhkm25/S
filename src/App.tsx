@@ -24,6 +24,7 @@ const BusinessProfileEditor = lazy(() => import('./components/business/BusinessP
 const BusinessWhatsAppCatalog = lazy(() => import('./components/business/BusinessWhatsAppCatalog'));
 const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
 const NotificationCenter = lazy(() => import('./components/notifications/NotificationCenter'));
+const PlatformAdmin = lazy(() => import('./components/admin/PlatformAdmin'));
 import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import { getUserAvatarUrl } from './lib/userAvatar';
@@ -58,7 +59,7 @@ export default function App() {
   const [passkeyEnrollmentUser, setPasskeyEnrollmentUser] = useState<SupabaseUser | null>(null);
 
   // Navigation states
-  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'upload' | 'my-operations' | 'profile' | 'details' | 'verify-notice' | 'login' | 'reports' | 'scan-qr' | 'share-intake' | 'business-create' | 'business-manage' | 'business-operations' | 'business-team' | 'business-manage-profile' | 'business-whatsapp-catalog' | 'business-community' | 'public-business-profile' | 'business-customers' | 'public-product-detail' | 'notifications' | 'platform-admin'>('home');
   const [activeToken, setActiveToken] = useState<string | null>(null);
   const [activeProductToken, setActiveProductToken] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<'link' | 'qr' | 'search' | 'app'>('link');
@@ -101,6 +102,9 @@ export default function App() {
   // Parse path after /v/, /b/, or business routes
   const parsePath = () => {
     const path = window.location.pathname;
+    if (path.includes('/platform-admin')) {
+      return { type: 'platform-admin' };
+    }
     if (!path.includes('/business/') && /\/profile(?:\/|$)/.test(path)) {
       return { type: 'profile' };
     }
@@ -191,6 +195,11 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('notifications');
+    } else if (page === 'platform-admin') {
+      window.history.pushState({}, '', `${cleanBase}platform-admin`);
+      setActiveToken(null);
+      setActiveSource('link');
+      setCurrentPage('platform-admin');
     } else if (page === 'business-create') {
       window.history.pushState({}, '', `${cleanBase}business/create`);
       setCurrentPage('business-create');
@@ -337,6 +346,9 @@ export default function App() {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('profile');
+      } else if (parsed.type === 'platform-admin') {
+        setActiveToken(null);
+        setCurrentPage('platform-admin');
       } else if (parsed.type === 'share-intake') {
         setActiveToken(null);
         setActiveSource('link');
@@ -407,6 +419,9 @@ export default function App() {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('profile');
+    } else if (parsed.type === 'platform-admin') {
+      setActiveToken(null);
+      setCurrentPage('platform-admin');
     } else if (parsed.type === 'share-intake') {
       setActiveToken(null);
       setActiveSource('link');
@@ -1015,6 +1030,14 @@ export default function App() {
               </ChunkErrorBoundary>
             )}
 
+            {currentPage === 'platform-admin' && user && (
+              <ChunkErrorBoundary onGoHome={() => navigateTo('profile')}>
+                <Suspense fallback={<ContentSkeleton />}>
+                  <PlatformAdmin onNavigate={(page, token) => navigateTo(page, token)} />
+                </Suspense>
+              </ChunkErrorBoundary>
+            )}
+
             {currentPage === 'business-create' && (
               <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
                 <Suspense fallback={<ContentSkeleton />}>
@@ -1112,7 +1135,7 @@ export default function App() {
       </main>
 
       {/* Bottom Sticky Tab Navigation */}
-      {isAuthenticated && currentPage !== 'scan-qr' && (
+      {isAuthenticated && currentPage !== 'scan-qr' && currentPage !== 'platform-admin' && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 py-2 px-3 shadow-md z-50 animate-fade-in" id="bottom_nav">
           <div className="max-w-2xl mx-auto flex items-center justify-between">
             {/* Tab: Home */}

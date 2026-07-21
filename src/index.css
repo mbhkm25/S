@@ -6,6 +6,18 @@
     @apply w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-slate-500;
   }
 
+  .admin-input {
+    @apply w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-slate-500;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .sanad-page-gutter {
     width: 100%;
     padding-inline: 0.5rem;
