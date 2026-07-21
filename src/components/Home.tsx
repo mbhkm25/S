@@ -336,7 +336,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         />
       </div>
 
-      <section className="-mx-2 -mb-24 space-y-4 bg-gradient-to-b from-sky-100/75 via-indigo-50/70 to-slate-100/85 px-2 pb-[calc(6rem+20px+env(safe-area-inset-bottom,0px))] pt-5 sm:-mx-4 sm:px-4" aria-labelledby="business-sanad-title">
+      <section className="-mx-2 -mb-24 space-y-4 bg-gradient-to-b from-sky-100/75 via-indigo-50/70 to-slate-100/85 px-2 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-5 sm:-mx-4 sm:px-4" aria-labelledby="business-sanad-title">
         <div className="flex min-h-[72px] items-center gap-3 px-3 py-2">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/75 text-sky-700 shadow-sm backdrop-blur-sm">
             <BriefcaseBusiness className="h-5 w-5 animate-[pulse_3.4s_ease-in-out_infinite]" />
@@ -362,6 +362,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </div>
         </div>
 
+        <div>
         <button onClick={() => onNavigate('business-community')} className="group flex w-full items-center gap-4 rounded-[2rem] bg-white/86 p-5 text-right shadow-[0_16px_40px_rgba(15,23,42,0.07)] backdrop-blur-sm">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-50 to-sky-50 text-emerald-700 shadow-sm">
             <Network className="h-7 w-7 transition-transform duration-300 group-active:rotate-6 group-active:scale-90" />
@@ -373,6 +374,8 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </span>
           <ArrowLeft className="h-5 w-5 text-slate-500 transition-transform duration-200 group-active:-translate-x-1" />
         </button>
+          <div className="h-5 w-full" aria-hidden="true" />
+        </div>
       </section>
     </div>
   );
