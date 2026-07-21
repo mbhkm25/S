@@ -313,7 +313,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
             <>
               <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
                 <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-white text-slate-500 shadow-sm">
-                  {avatarPreview ? <img src={avatarPreview} alt="معاينة صورة البروفايل" className="h-full w-full object-cover" /> : <Camera className="h-6 w-6" />}
+                  {avatarPreview ? <img src={avatarPreview} alt="معاينة صورة البروفايل" decoding="async" className="h-full w-full object-cover" /> : <Camera className="h-6 w-6" />}
                   <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} />
                 </label>
                 <div className="min-w-0">

@@ -882,7 +882,7 @@ export default function App() {
                   <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
                     <button type="button" onClick={() => navigateTo('profile')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-white ring-2 ring-white shadow-sm" aria-label="فتح حسابي">
                       {profile?.avatar_path ? (
-                        <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} className="h-full w-full object-cover" />
+                        <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} decoding="async" className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-sm font-bold">{profile ? (profile.full_name?.slice(0, 1) || 'أ') : '...'}</span>
                       )}

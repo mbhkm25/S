@@ -242,7 +242,7 @@ export default function BusinessCommunityV2({ onNavigate }: BusinessCommunityPro
                 <article key={business.id} className="overflow-hidden rounded-[1.8rem] bg-white shadow-[0_12px_34px_rgba(15,23,42,0.055)]">
                   <button onClick={() => onNavigate('public-business-profile', business.slug)} className="flex w-full items-start gap-4 p-4 text-right">
                     <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[1.35rem] bg-slate-100">
-                      {logos[business.id] ? <img src={logos[business.id]} alt={business.name} className="h-full w-full object-cover" /> : <Store className="h-6 w-6 text-slate-400" />}
+                      {logos[business.id] ? <img src={logos[business.id]} alt={business.name} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <Store className="h-6 w-6 text-slate-400" />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5"><strong className="truncate text-sm text-slate-950">{business.name}</strong>{business.verification_status === 'verified' && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />}</span>

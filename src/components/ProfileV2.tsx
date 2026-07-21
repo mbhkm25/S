@@ -393,7 +393,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
       <div className="space-y-5">
         <div className="flex min-h-[96px] items-center justify-between gap-3 py-2">
           <div className="flex min-w-0 items-center gap-3">
-            <button type="button" onClick={() => navigateSection('personal')} className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white ring-2 ring-white shadow-md" aria-label="تعديل صورة البروفايل">{profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} className="h-full w-full object-cover" /> : <User className="h-7 w-7" />}</button>
+            <button type="button" onClick={() => navigateSection('personal')} className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white ring-2 ring-white shadow-md" aria-label="تعديل صورة البروفايل">{profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} decoding="async" className="h-full w-full object-cover" /> : <User className="h-7 w-7" />}</button>
             <div className="min-w-0">
               <h1 className="line-clamp-2 text-base font-bold leading-snug text-slate-950">{profile.full_name || 'مستخدم سند'}</h1>
               <p className="mt-1 text-xs text-slate-500" dir="ltr">{formatYemeniDisplay(profile.phone) || user.email || 'لا يوجد رقم جوال'}</p>
@@ -415,7 +415,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
           <section className="space-y-3 rounded-[1.7rem] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-950 text-white">
-                {businessLogoUrls[ownedBusiness.id] ? <img src={businessLogoUrls[ownedBusiness.id]} alt={`شعار ${ownedBusiness.name}`} className="h-full w-full object-cover" /> : <Store className="h-5 w-5" />}
+                {businessLogoUrls[ownedBusiness.id] ? <img src={businessLogoUrls[ownedBusiness.id]} alt={`شعار ${ownedBusiness.name}`} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <Store className="h-5 w-5" />}
               </div>
               <div className="min-w-0"><p className="text-[10px] text-slate-400">نشاطي التجاري</p><h2 className="truncate text-sm font-bold text-slate-950">{ownedBusiness.name}</h2><p className="mt-1 text-[11px] text-slate-500">{ownedBusiness.public_status === 'published' ? 'نشط ومنشور' : ownedBusiness.public_status === 'pending_review' ? 'قيد المراجعة' : 'قيد الإعداد'}</p></div>
             </div>
@@ -463,7 +463,7 @@ export default function MyProfileV2({ user, profile, onLogout, refreshProfile, o
     <div className="space-y-4 pb-24"><SubpageHeader title="البيانات الشخصية" />
       <section className="flex items-center gap-4 rounded-[1.7rem] bg-white p-4 shadow-sm">
         <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={savingAvatar} className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-white disabled:opacity-60">
-          {profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} className="h-full w-full object-cover" /> : <ImagePlus className="h-7 w-7" />}
+          {profile.avatar_path ? <img src={getUserAvatarUrl(profile.avatar_path)} alt={profile.full_name || 'صورة المستخدم'} decoding="async" className="h-full w-full object-cover" /> : <ImagePlus className="h-7 w-7" />}
           <span className="absolute bottom-1 left-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-800 shadow"><Camera className="h-3.5 w-3.5" /></span>
         </button>
         <div className="min-w-0 flex-1">

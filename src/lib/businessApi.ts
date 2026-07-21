@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { optimizeImageForUpload, type ImageOptimizationPreset } from './imageOptimization';
 
 export interface BusinessProfile {
   id: string;
@@ -668,42 +669,35 @@ export async function uploadBusinessMedia(params: {
   businessId: string;
   assetType: 'cover' | 'profile' | 'gallery';
   file: File;
+  imageVariant?: 'logo' | 'cover' | 'horizontal-cover' | 'gallery';
   displayOrder?: number | null;
   altText?: string | null;
 }): Promise<UploadMediaResult> {
-  const { businessId, assetType, file, displayOrder = 1, altText = null } = params;
+  const { businessId, assetType, file, imageVariant, displayOrder = 1, altText = null } = params;
 
   if (!['cover', 'profile', 'gallery'].includes(assetType)) {
     throw new Error('غير مسموح برفع هذا النوع من الوسائط.');
   }
 
-  let normalizedMimeType = file.type.toLowerCase();
-  if (normalizedMimeType === 'image/jpg') {
-    normalizedMimeType = 'image/jpeg';
-  }
-
-  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-  if (!validTypes.includes(normalizedMimeType)) {
-    throw new Error('نوع الملف غير مدعوم. يرجى اختيار صورة بصيغة JPEG أو PNG أو WEBP.');
-  }
-
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    throw new Error('حجم الملف كبير جداً. الحد الأقصى هو 10 ميجابايت.');
-  }
-
-  const extension = file.name.split('.').pop() || 'jpg';
-  const cleanExt = ['jpg', 'jpeg', 'png', 'webp'].includes(extension.toLowerCase()) ? extension.toLowerCase() : 'jpg';
-  const filename = `${assetType}-${Date.now()}-${Math.floor(Math.random() * 1000)}.${cleanExt}`;
+  const preset: ImageOptimizationPreset = imageVariant === 'horizontal-cover'
+    ? 'business-horizontal-cover'
+    : imageVariant === 'logo' || assetType === 'profile'
+      ? 'business-logo'
+      : imageVariant === 'gallery' || assetType === 'gallery'
+        ? 'gallery'
+        : 'business-cover';
+  const optimizedFile = await optimizeImageForUpload(file, preset);
+  const normalizedMimeType = 'image/webp';
+  const filename = `${assetType}-${Date.now()}-${Math.floor(Math.random() * 1000)}.webp`;
   const storagePath = `${businessId}/${assetType}/${filename}`;
 
-  console.log('[business-media-upload]', { bucket: 'business-media', path: storagePath, type: normalizedMimeType, size: file.size });
+  console.log('[business-media-upload]', { bucket: 'business-media', path: storagePath, type: normalizedMimeType, sourceSize: file.size, outputSize: optimizedFile.size });
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('business-media')
-    .upload(storagePath, file, {
+    .upload(storagePath, optimizedFile, {
       contentType: normalizedMimeType,
-      cacheControl: '3600',
+      cacheControl: '31536000',
       upsert: true
     });
 
@@ -719,8 +713,8 @@ export async function uploadBusinessMedia(params: {
       p_asset_type: assetType,
       p_storage_path: storagePath,
       p_mime_type: normalizedMimeType,
-      p_file_name: file.name,
-      p_file_size: file.size,
+      p_file_name: optimizedFile.name,
+      p_file_size: optimizedFile.size,
       p_alt_text: altText,
       p_display_order: displayOrder
     };
@@ -733,8 +727,8 @@ export async function uploadBusinessMedia(params: {
           asset_type: assetType,
           storage_path: storagePath,
           mime_type: normalizedMimeType,
-          file_name: file.name,
-          file_size: file.size,
+          file_name: optimizedFile.name,
+          file_size: optimizedFile.size,
           alt_text: altText,
           display_order: displayOrder
         }

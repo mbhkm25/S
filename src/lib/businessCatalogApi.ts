@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { optimizeImageForUpload } from './imageOptimization';
 
 export type BusinessCatalogItemType = 'product' | 'service' | 'digital' | 'offer' | 'subscription' | 'other';
 export type BusinessCatalogItemStatus = 'draft' | 'active' | 'hidden' | 'archived';
@@ -6,10 +7,6 @@ export type BusinessCatalogAvailability = 'available' | 'on_request' | 'unavaila
 export type BusinessCatalogContactAction = 'whatsapp' | 'call' | 'none';
 
 export const MAX_CATALOG_IMAGES = 3;
-const MAX_SOURCE_IMAGE_BYTES = 12 * 1024 * 1024;
-const MAX_OUTPUT_EDGE = 1600;
-const OUTPUT_QUALITY = 0.78;
-const CATALOG_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export interface BusinessCatalogItem {
   id: string;
@@ -96,36 +93,6 @@ function extractCatalogItems(data: unknown): BusinessCatalogItem[] {
     });
 }
 
-function validateSourceImage(value: unknown): File {
-  if (!(value instanceof File)) throw new Error('تعذر قراءة ملف الصورة المختار.');
-  const mimeType = value.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : value.type.toLowerCase();
-  if (!CATALOG_IMAGE_TYPES.includes(mimeType)) throw new Error('الصورة غير مدعومة. استخدم JPEG أو PNG أو WEBP.');
-  if (value.size <= 0 || value.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('حجم الصورة الأصلية يجب ألا يتجاوز 12 ميجابايت.');
-  return value;
-}
-
-async function compressCatalogImage(source: File): Promise<File> {
-  const image = await createImageBitmap(source);
-  const scale = Math.min(1, MAX_OUTPUT_EDGE / Math.max(image.width, image.height));
-  const width = Math.max(1, Math.round(image.width * scale));
-  const height = Math.max(1, Math.round(image.height * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d', { alpha: false });
-  if (!context) {
-    image.close();
-    throw new Error('تعذر تجهيز الصورة للرفع.');
-  }
-  context.drawImage(image, 0, 0, width, height);
-  image.close();
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((value) => value ? resolve(value) : reject(new Error('تعذر ضغط الصورة.')), 'image/webp', OUTPUT_QUALITY);
-  });
-  const baseName = source.name.replace(/\.[^.]+$/, '').slice(0, 100) || 'catalog-image';
-  return new File([blob], `${baseName}.webp`, { type: 'image/webp', lastModified: Date.now() });
-}
-
 export async function getBusinessCatalog(businessId: string, includeHidden = true): Promise<BusinessCatalogItem[]> {
   const { data, error } = await supabase.rpc('get_business_catalog', {
     p_business_id: businessId,
@@ -140,8 +107,7 @@ export async function uploadCatalogItemImage(
   selectedFile: unknown,
   displayOrder: number
 ): Promise<CatalogImageUploadResult> {
-  const source = validateSourceImage(selectedFile);
-  const file = await compressCatalogImage(source);
+  const file = await optimizeImageForUpload(selectedFile, 'catalog');
   const randomPart = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   const path = `${businessId}/catalog/item-${randomPart}.webp`;
 
