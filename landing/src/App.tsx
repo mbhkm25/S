@@ -6,12 +6,26 @@ import { CountUp, GradientText, RevealCard, RotatingText, ShinyText } from './Ef
 const APP_URL = import.meta.env.VITE_APP_URL || 'https://app.sanadflow.com';
 const INSTALL_URL = `${APP_URL.replace(/\/$/, '')}/install/`;
 const API_URL = import.meta.env.VITE_SUPABASE_URL || 'https://api.sanadflow.com';
-const API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-const fallback = { support:{ support_whatsapp:'967777634971',support_email:'support@sanadflow.com' }, pro_plan:{ name:'سند Pro',price:3500,currency:'YER',duration_days:30,access_limit:1000,features:['تحقق موسع من العمليات','سجل وإدارة الاشتراك','شهادات تحقق رقمية'] } };
+const API_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const fallbackSupport = { support_whatsapp:'967777634971',support_email:'support@sanadflow.com' };
 
-function useLandingData(){ const [data,setData]=useState<any>(fallback); useEffect(()=>{ if(!API_KEY)return; fetch(`${API_URL}/rest/v1/rpc/get_public_landing_information`,{method:'POST',headers:{apikey:API_KEY,'Content-Type':'application/json'},body:'{}'}).then(r=>r.ok?r.json():null).then(v=>v&&setData(v)).catch(()=>{}); },[]); return data; }
+function isCurrentPlan(plan:any){ return plan && typeof plan.name==='string' && Number.isFinite(Number(plan.price)) && Number.isFinite(Number(plan.duration_days)) && Number.isFinite(Number(plan.access_limit)); }
+function useLandingData(){
+ const [data,setData]=useState<any>({support:fallbackSupport,pro_plan:null});
+ const [planState,setPlanState]=useState<'loading'|'ready'|'error'>('loading');
+ useEffect(()=>{
+  if(!API_KEY){ setPlanState('error'); return; }
+  const controller=new AbortController();
+  fetch(`${API_URL}/rest/v1/rpc/get_public_landing_information`,{method:'POST',headers:{apikey:API_KEY,'Content-Type':'application/json'},body:'{}',signal:controller.signal})
+   .then(async response=>{ if(!response.ok)throw new Error(`Landing information request failed: ${response.status}`); return response.json(); })
+   .then(value=>{ if(!isCurrentPlan(value?.pro_plan))throw new Error('Landing information returned no active plan'); setData({support:value.support||fallbackSupport,pro_plan:value.pro_plan}); setPlanState('ready'); })
+   .catch(error=>{ if(error?.name!=='AbortError'){ console.error('[SANAD landing] Failed to load current plan',error); setPlanState('error'); } });
+  return()=>controller.abort();
+ },[]);
+ return {data,planState};
+}
 export default function App(){
- const data=useLandingData(); const plan=data.pro_plan||fallback.pro_plan; const support=data.support||fallback.support;
+ const {data,planState}=useLandingData(); const plan=data.pro_plan; const support=data.support||fallbackSupport;
  const whatsapp=String(support.support_whatsapp||'').replace(/\D/g,'');
  return <div className="site">
   <header className="nav"><a className="brand" href="/" aria-label="سند فلو - الرئيسية"><img src="/sanad_logo.png" width="104" height="50" alt="سند فلو"/></a><nav aria-label="الصفحات العامة"><a href="/financial-verification/">سند المالي</a><a href="/business/">سند التجاري</a><a href="/sanad-pro/">سند برو</a><a href="/security/">الأمان</a></nav><a className="nav-cta" href={INSTALL_URL}>ثبّت التطبيق <ArrowLeft/></a></header>
@@ -27,7 +41,7 @@ export default function App(){
 
    <section className="steps"><div className="section-title"><span>كيف يعمل؟</span><h2>ثلاث خطوات من الإشعار إلى الوضوح</h2></div><div className="step-grid"><article><i>01</i><QrCode/><h3>امسح أو افتح</h3><p>استخدم QR أو رابط العملية داخل سند.</p></article><article><i>02</i><ScanLine/><h3>راجع التحليل</h3><p>اطلع على البيانات والمؤشرات المستخرجة.</p></article><article><i>03</i><FileCheck2/><h3>تحقق واحتفظ</h3><p>سجّل تحققك وأضف ملاحظتك الخاصة.</p></article></div></section>
 
-   <RevealCard><section id="pro" className="pro"><div><span className="eyebrow"><Sparkles/> <ShinyText text={plan.name}/></span><h2>مساحة أكبر للتحقق المستمر</h2><p>{plan.description||'باقة عملية للأفراد وأصحاب الأعمال الذين يحتاجون إلى استخدام موسع.'}</p><ul>{(plan.features||[]).map((x:string)=><li key={x}><Check/>{x}</li>)}</ul></div><div className="price"><small>الباقة الحالية</small><strong><CountUp to={plan.price}/> <i>{plan.currency}</i></strong><span><CountUp to={plan.duration_days}/> يومًا · <CountUp to={plan.access_limit}/> عملية</span><a href={`${APP_URL}/profile/subscription`}>اشترك في سند برو <ArrowLeft/></a><a className="text-link" href="/sanad-pro/">تفاصيل الباقة</a><small>لا تُرحّل العمليات غير المستخدمة بعد انتهاء المدة.</small></div></section></RevealCard>
+   <RevealCard><section id="pro" className="pro"><div><span className="eyebrow"><Sparkles/> <ShinyText text={plan?.name||'سند Pro'}/></span><h2>مساحة أكبر للتحقق المستمر</h2><p>{plan?.description||'باقة عملية للأفراد وأصحاب الأعمال الذين يحتاجون إلى استخدام موسع.'}</p><ul>{(plan?.features||[]).map((x:string)=><li key={x}><Check/>{x}</li>)}</ul></div><div className="price"><small>الباقة الحالية</small>{planState==='ready'&&plan?<><strong><CountUp to={Number(plan.price)}/> <i>{plan.currency}</i></strong><span><CountUp to={Number(plan.duration_days)}/> يومًا · <CountUp to={Number(plan.access_limit)}/> عملية</span></>:<><strong className="plan-status">{planState==='loading'?'جاري تحديث بيانات الباقة…':'بيانات الباقة متاحة داخل التطبيق'}</strong><span>لن نعرض سعرًا أو حد استخدام قديمًا.</span></>}<a href={`${APP_URL}/profile/subscription`}>اشترك في سند برو <ArrowLeft/></a><a className="text-link" href="/sanad-pro/">تفاصيل الباقة</a><small>تُطبّق المدة والحدود المعروضة عند الاشتراك.</small></div></section></RevealCard>
 
    <section id="security" className="security"><div className="section-title"><span>الثقة والخصوصية</span><h2>بياناتك لك، منذ اللحظة الأولى</h2></div><div className="security-grid"><article><LockKeyhole/><h3>وصول محكوم</h3><p>الملفات والملاحظات الحساسة تخضع لصلاحيات واضحة.</p></article><article><ShieldCheck/><h3>تخزين خاص</h3><p>لا تُعرض ملفات الدفع والملاحظات كروابط عامة.</p></article><article><FileCheck2/><h3>قرار أوضح</h3><p>سند أداة مساعدة للمراجعة ولا يستبدل تأكيد الجهة المالية.</p></article></div></section>
 
