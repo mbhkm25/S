@@ -3,6 +3,7 @@ export interface Profile {
   full_name: string;
   phone: string;
   governorate?: string | null;
+  avatar_path?: string | null;
   profile_completed_at?: string;
   status: 'active' | 'inactive';
   created_at?: string;
