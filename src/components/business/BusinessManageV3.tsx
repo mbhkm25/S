@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Package,
   Plus,
-  Save,
   Store,
   Trash2,
   UserCheck,
@@ -22,7 +21,6 @@ import {
 import {
   getBusinessOperations,
   getUserBusinessContexts,
-  updateBusinessProfile,
   type BusinessOperationItem
 } from '../../lib/businessApi';
 import {
@@ -58,20 +56,6 @@ type Tab =
 
 type Hours = Record<string, { open: string; close: string; closed: boolean }>;
 
-type ProfileDraft = {
-  name: string;
-  tagline: string;
-  description: string;
-  governorate: string;
-  city: string;
-  whatsapp: string;
-  address: string;
-  facebook: string;
-  instagram: string;
-  twitter: string;
-  website: string;
-};
-
 const DAYS = [
   ['saturday', 'السبت'],
   ['sunday', 'الأحد'],
@@ -97,36 +81,6 @@ const TABS = [
   { id: 'complaints', label: 'الشكاوى', icon: MessageSquare }
 ] as const;
 
-const EMPTY_DRAFT: ProfileDraft = {
-  name: '',
-  tagline: '',
-  description: '',
-  governorate: '',
-  city: '',
-  whatsapp: '',
-  address: '',
-  facebook: '',
-  instagram: '',
-  twitter: '',
-  website: ''
-};
-
-function profileDraftFromBusiness(business: ManagementBusinessProfile): ProfileDraft {
-  return {
-    name: business.name || '',
-    tagline: business.display_tagline || '',
-    description: business.description || '',
-    governorate: business.governorate || '',
-    city: business.city || '',
-    whatsapp: business.whatsapp || '',
-    address: business.address_text || '',
-    facebook: business.contact_links?.facebook || '',
-    instagram: business.contact_links?.instagram || '',
-    twitter: business.contact_links?.twitter || '',
-    website: business.contact_links?.website || ''
-  };
-}
-
 function statusLabel(status?: string | null) {
   if (status === 'published') return 'منشور';
   if (status === 'pending_review') return 'قيد المراجعة';
@@ -143,7 +97,6 @@ export default function BusinessManageV3({ onNavigate }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
   const [hours, setHours] = useState<Hours>(DEFAULT_HOURS);
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [complaints, setComplaints] = useState<BusinessComplaint[]>([]);
@@ -178,7 +131,6 @@ export default function BusinessManageV3({ onNavigate }: Props) {
 
       setBusiness(full);
       setDashboard(summary);
-      setProfileDraft(profileDraftFromBusiness(full));
       setHours(
         full.working_hours && Object.keys(full.working_hours).length
           ? full.working_hours
@@ -222,42 +174,6 @@ export default function BusinessManageV3({ onNavigate }: Props) {
     setMenuOpen(false);
     setError(null);
     setSuccess(null);
-  };
-
-  const updateDraft = (key: keyof ProfileDraft, value: string) => {
-    setProfileDraft((current) => ({ ...current, [key]: value }));
-  };
-
-  const saveIdentity = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!business) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await updateBusinessProfile({
-        p_business_id: business.id,
-        p_name: profileDraft.name.trim(),
-        p_tagline: profileDraft.tagline.trim() || null,
-        p_description: profileDraft.description.trim() || null,
-        p_governorate: profileDraft.governorate.trim(),
-        p_city: profileDraft.city.trim(),
-        p_whatsapp: profileDraft.whatsapp.trim() || null,
-        p_address_text: profileDraft.address.trim() || null,
-        p_contact_links: {
-          facebook: profileDraft.facebook.trim() || null,
-          instagram: profileDraft.instagram.trim() || null,
-          twitter: profileDraft.twitter.trim() || null,
-          website: profileDraft.website.trim() || null
-        }
-      });
-      setSuccess('تم حفظ معلومات النشاط.');
-      await load();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'تعذر حفظ معلومات النشاط.');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const persistHours = async () => {
@@ -380,19 +296,6 @@ export default function BusinessManageV3({ onNavigate }: Props) {
     ['أعضاء الفريق', dashboard?.team.active ?? 0]
   ] as const;
 
-  const fields: Array<[keyof ProfileDraft, string, string]> = [
-    ['name', 'اسم النشاط', 'text'],
-    ['tagline', 'العبارة التعريفية', 'text'],
-    ['governorate', 'المحافظة', 'text'],
-    ['city', 'المدينة', 'text'],
-    ['whatsapp', 'واتساب', 'tel'],
-    ['address', 'العنوان', 'text'],
-    ['facebook', 'فيسبوك', 'url'],
-    ['instagram', 'إنستغرام', 'url'],
-    ['twitter', 'X / تويتر', 'url'],
-    ['website', 'الموقع الإلكتروني', 'url']
-  ];
-
   return (
     <div className="min-h-screen bg-slate-50/60 pb-14 font-arabic text-right" dir="rtl">
       <header className="sticky top-0 z-40 flex items-center gap-2 border-b border-slate-200 bg-white/95 px-2 py-2.5 backdrop-blur sm:px-4">
@@ -468,23 +371,6 @@ export default function BusinessManageV3({ onNavigate }: Props) {
                     </p>
                   )}
                 </section>
-
-                <form onSubmit={saveIdentity} className="grid gap-3 border-y border-slate-200 bg-white px-3 py-4 sm:grid-cols-2 sm:rounded-3xl sm:border sm:p-5">
-                  <h3 className="text-sm font-bold sm:col-span-2">الهوية والتواصل</h3>
-                  {fields.map(([name, label, type]) => (
-                    <label key={name} className="space-y-1 text-[10px] font-bold text-slate-600">
-                      {label}
-                      <input type={type} value={profileDraft[name]} onChange={(event) => updateDraft(name, event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-slate-400" />
-                    </label>
-                  ))}
-                  <label className="space-y-1 text-[10px] font-bold text-slate-600 sm:col-span-2">
-                    الوصف
-                    <textarea value={profileDraft.description} onChange={(event) => updateDraft('description', event.target.value)} rows={4} maxLength={4000} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-slate-400" />
-                  </label>
-                  <button disabled={saving || !profileDraft.name.trim()} className="flex justify-center gap-2 rounded-2xl bg-slate-900 p-3 text-xs font-bold text-white disabled:bg-slate-300 sm:col-span-2">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ المعلومات
-                  </button>
-                </form>
               </div>
             )}
 
