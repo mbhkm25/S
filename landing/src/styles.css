@@ -32,5 +32,7 @@ footer{padding-top:44px}
 /* SEO landing refinements */
 .hero-prefix{display:inline-block}
 .reveal-cell,.reveal-cell .product{height:100%}
+.step-grid article,.security-grid article,.price{transition:transform .35s ease,box-shadow .35s ease,border-color .35s ease}
+.step-grid article:hover,.security-grid article:hover,.price:hover{transform:translateY(-5px);border-color:#10b98142;box-shadow:0 20px 45px #0f172a12}
 .pro .price .text-link{background:transparent;color:#047857;padding:4px 0;border-radius:0;justify-content:flex-start}
 .pro .price .text-link:hover{text-decoration:underline}
