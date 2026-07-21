@@ -3,20 +3,52 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function resolveBuildVersion(env: Record<string, string>): string {
+  if (env.VITE_APP_VERSION) return env.VITE_APP_VERSION;
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 12);
+  try {
+    return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+      cwd: __dirname,
+      encoding: 'utf8'
+    }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const base = env.VITE_APP_BASE_PATH || '/';
+  const buildVersion = resolveBuildVersion(env);
+  const buildTime = new Date().toISOString();
 
   return {
     base: base,
+    define: {
+      __SANAD_APP_VERSION__: JSON.stringify(buildVersion),
+      __SANAD_BUILD_TIME__: JSON.stringify(buildTime)
+    },
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'sanad-release-manifest',
+        apply: 'build',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'version.json',
+            source: JSON.stringify({ version: buildVersion, built_at: buildTime })
+          });
+        }
+      },
       VitePWA({
+        registerType: 'prompt',
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.js',

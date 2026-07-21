@@ -4,30 +4,18 @@ import App from './App.tsx';
 import './index.css';
 
 import { Capacitor } from '@capacitor/core';
+import PwaUpdatePrompt from './features/pwa/PwaUpdatePrompt';
 
-// Register Service Worker for PWA - exclude Capacitor and dev environments
+// PWA updates apply only to the browser-installed app. Capacitor releases are
+// updated through their native distribution channel.
 const isCapacitorNative = Capacitor.isNativePlatform() ||
                           window.location.origin.includes('capacitor') ||
                           window.location.origin.startsWith('file:');
-const isDev = import.meta.env.DEV;
-
-if ('serviceWorker' in navigator && !isCapacitorNative && !isDev) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((reg) => {
-        // Save registration instance globally for the future updates prompt phase
-        (window as any).swRegistration = reg;
-      })
-      .catch((err) => {
-        if (isDev) {
-          console.error('Service Worker registration failed:', err);
-        }
-      });
-  });
-}
+const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
+    {enablePwaUpdates && <PwaUpdatePrompt />}
   </StrictMode>,
 );
