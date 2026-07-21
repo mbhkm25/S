@@ -6,6 +6,7 @@ import { registerRoute, NavigationRoute } from 'workbox-routing';
 import { StaleWhileRevalidate, CacheFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { clientsClaim } from 'workbox-core';
 import { isNotificationActionType, type NotificationActionType } from './features/notifications/types';
 import {
   buildSafeNotificationPath,
@@ -75,9 +76,13 @@ precacheAndRoute(self.__WB_MANIFEST || []);
 // Cleanup old caches automatically
 cleanupOutdatedCaches();
 
-// Force immediate activation
-self.addEventListener('install', () => {
-  self.skipWaiting();
+// Keep a new release waiting until the user accepts the update. Once accepted,
+// claim all open SANAD windows so Workbox can reload them on the new app shell.
+clientsClaim();
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
 });
 
 self.addEventListener('push', (event: PushEvent) => {
