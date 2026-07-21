@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle } from 'lucide-react';
+import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle, MessageSquareText, Mic } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatYemeniDisplay } from '../lib/digits';
 import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
@@ -1193,6 +1193,16 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
             <p className="text-[10px] text-slate-500 leading-relaxed">
               بنقرك على الزر أدناه، تؤكد بصفتك مدققاً رسمياً ومسؤولاً أن المستند المالي الأصلي سليم ومطابق للمبلغ الفعلي للعملية المعروضة.
             </p>
+          </div>
+
+          <div className="mx-auto flex max-w-xs items-center gap-2.5 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-right">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm">
+              <MessageSquareText className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-[9px] leading-5 text-sky-900">
+              بعد التحقق يمكنك إضافة ملاحظة نصية أو تسجيل صوتي خاص بهذه العملية.
+            </p>
+            <Mic className="h-3.5 w-3.5 shrink-0 text-sky-500" />
           </div>
 
           {user ? (
