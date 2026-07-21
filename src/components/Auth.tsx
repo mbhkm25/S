@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, User, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { Lock, Mail, User, AlertCircle, CheckCircle2, Loader2, Sparkles, Camera } from 'lucide-react';
 import { Profile } from '../types';
 import { parseYemeniLocalPhone } from '../lib/digits';
 import { isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
 import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 import PasskeySignInButton from '../features/passkeys/PasskeySignInButton';
 import { logAuthDiagnostic } from '../lib/authDiagnostics';
+import { uploadUserAvatar } from '../lib/userAvatar';
 
 interface AuthProps {
   onAuthSuccess: (sessionUser: SupabaseUser, userProfile: Profile) => void;
@@ -23,11 +24,23 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [governorate, setGovernorate] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState('');
   
   // Status states
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview('');
+      return;
+    }
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
 
   // Translate standard Supabase auth/db errors to friendly Arabic
   const getArabicErrorMessage = (err: unknown): string => {
@@ -200,7 +213,18 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
         // If session is active immediately, ensure profile and trigger auth success
         if (authData.session) {
-          const userProfile = await ensureProfileExists(authData.user);
+          let userProfile = await ensureProfileExists(authData.user);
+          if (avatarFile) {
+            const avatarPath = await uploadUserAvatar(authData.user.id, avatarFile);
+            const { data: updatedProfile, error: avatarError } = await supabase
+              .from('profiles')
+              .update({ avatar_path: avatarPath, updated_at: new Date().toISOString() })
+              .eq('id', authData.user.id)
+              .select()
+              .single();
+            if (avatarError) throw avatarError;
+            userProfile = updatedProfile as Profile;
+          }
           setSuccessMessage('تم إنشاء الحساب بنجاح!');
           
           setTimeout(() => {
@@ -287,6 +311,18 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         <form onSubmit={handleAuthSubmit} className="space-y-5" id="auth_form">
           {isSignUp && (
             <>
+              <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
+                <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-white text-slate-500 shadow-sm">
+                  {avatarPreview ? <img src={avatarPreview} alt="معاينة صورة البروفايل" className="h-full w-full object-cover" /> : <Camera className="h-6 w-6" />}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} />
+                </label>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800">صورة البروفايل <span className="font-normal text-slate-400">(اختيارية)</span></p>
+                  <p className="mt-1 text-[10px] leading-5 text-slate-500">يمكنك تخطيها وإضافتها لاحقًا من حسابي.</p>
+                  {avatarFile && <button type="button" onClick={() => setAvatarFile(null)} className="mt-1 text-[10px] font-bold text-rose-600">إزالة الصورة</button>}
+                </div>
+              </div>
+
               {/* Full Name */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-700 block">الاسم الكامل</label>
