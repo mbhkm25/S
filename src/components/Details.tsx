@@ -665,13 +665,13 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
               <span className="font-bold text-slate-700">توضيح:</span> عملية الوصول تعني فتح تفاصيل عملية مالية عبر رابط أو QR أو البحث داخل سند.
             </p>
             <p className="text-xs text-emerald-700 font-medium leading-relaxed font-arabic">
-              فعّل سند Pro لمتابعة الوصول إلى تفاصيل العمليات والتحقق منها ومطابقتها بشكل غير محدود.
+              فعّل سند Pro لمتابعة الوصول إلى تفاصيل العمليات ضمن رصيد ومدة الباقة الحالية.
             </p>
           </div>
 
           <div className="py-2.5 border-y border-slate-100 flex items-center justify-between px-2 text-right">
             <span className="text-xs text-slate-400 font-arabic">الاشتراك الموصى به:</span>
-            <span className="text-sm font-bold text-slate-800 font-arabic">سند Pro — 3,500 ريال يمني شهريًا</span>
+            <span className="text-sm font-bold text-slate-800 font-arabic">سند Pro — السعر والمدة حسب الباقة الحالية</span>
           </div>
         </div>
 
