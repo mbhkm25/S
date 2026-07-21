@@ -3,7 +3,6 @@ import { Profile, MyOperationItem } from '../types';
 import { supabase } from '../lib/supabase';
 import {
   ArrowLeft,
-  ArrowUpRight,
   BriefcaseBusiness,
   ChartNoAxesCombined,
   CheckCircle2,
@@ -130,7 +129,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         if (!id || seen.has(id)) return false;
         seen.add(id);
         return true;
-      }).slice(0, 1);
+      }).slice(0, 2);
 
       const ids = latest.map((item) => item.operation_id).filter(Boolean);
       if (ids.length) {
@@ -153,7 +152,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
     return () => { active = false; };
   }, []);
 
-  const latest = useMemo(() => latestOperations[0] || null, [latestOperations]);
+  const recentOperations = useMemo(() => latestOperations.slice(0, 2), [latestOperations]);
   const displayName = profile?.full_name?.trim() || 'مستخدم سند';
 
   const openScanner = () => {
@@ -165,7 +164,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
   };
 
   return (
-    <div className="space-y-6 font-arabic" dir="rtl" id="home_view">
+    <div className="space-y-5 font-arabic" dir="rtl" id="home_view">
       <section className="flex items-center justify-between gap-3 px-1">
         <div className="min-w-0">
           <p className="text-[10px] font-bold text-slate-400">مرحبًا بك في سند</p>
@@ -178,13 +177,27 @@ export default function Home({ profile, onNavigate }: HomeProps) {
       </section>
 
       <section className="space-y-3" aria-labelledby="financial-sanad-title">
-        <div className="flex items-center gap-3 rounded-[1.4rem] bg-gradient-to-l from-emerald-50/90 to-transparent px-4 py-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+        <div className="flex min-h-[72px] items-center gap-3 overflow-hidden rounded-[1.55rem] bg-gradient-to-l from-emerald-100/90 via-emerald-50/65 to-transparent px-4 py-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-emerald-700 shadow-sm backdrop-blur-sm">
             <ShieldCheck className="h-5 w-5" />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[9px] font-bold text-emerald-700">سند المالي</p>
-            <h2 id="financial-sanad-title" className="mt-0.5 text-base font-bold text-slate-950">تحقق وشارك بثقة</h2>
+            <h2 id="financial-sanad-title" className="mt-0.5 flex min-h-7 items-center overflow-hidden text-base font-bold text-slate-950">
+              <RotatingText
+                texts={['تحقق وشارك بثقة', 'طابق الإشعارات بسهولة', 'احتفظ بسجل موثوق']}
+                rotationInterval={2800}
+                splitBy="words"
+                staggerFrom="last"
+                staggerDuration={0.035}
+                initial={{ y: '110%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '-110%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 360 }}
+                mainClassName="min-w-0 overflow-hidden text-emerald-950"
+                splitLevelClassName="overflow-hidden"
+              />
+            </h2>
           </div>
         </div>
 
@@ -226,20 +239,27 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-[1.65rem] border border-white/80 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.055)]">
+        <div className="relative overflow-hidden rounded-[1.65rem] border border-slate-200/80 bg-gradient-to-l from-slate-100 via-white to-indigo-50/55 shadow-[0_14px_34px_rgba(15,23,42,0.07)]">
+          <span className="pointer-events-none absolute -left-8 -top-10 h-28 w-28 rounded-full bg-indigo-200/20 blur-2xl" />
           <button
             type="button"
             onClick={() => setActionsOpen((open) => !open)}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-right"
+            className="relative flex w-full items-center gap-3 px-4 py-4 text-right"
             aria-expanded={actionsOpen}
             aria-controls="home-quick-actions"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_8px_20px_rgba(15,23,42,0.2)]">
               <ListChecks className={`h-5 w-5 transition-transform duration-300 ${actionsOpen ? 'rotate-6 scale-110' : ''}`} />
+              <span className="absolute -bottom-1 -left-2 flex -space-x-1.5 space-x-reverse" aria-hidden="true">
+                {quickActions.slice(0, 3).map((action) => {
+                  const Icon = action.icon;
+                  return <span key={action.page} className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-600"><Icon className="h-2.5 w-2.5" /></span>;
+                })}
+              </span>
             </span>
             <span className="min-w-0 flex-1">
-              <strong className="block text-xs text-slate-950">إجراءات سند</strong>
-              <span className="mt-0.5 block text-[9px] text-slate-400">رفع، تحقق، عمليات وتقارير في مكان واحد</span>
+              <strong className="block text-sm text-slate-950">إجراءات سند</strong>
+              <span className="mt-0.5 block text-[9px] text-slate-500">4 أدوات لإدارة عملياتك في مكان واحد</span>
             </span>
             <span className="flex items-center gap-2">
               <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">4</span>
@@ -277,21 +297,31 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           </div>
         </div>
 
-        {latest && (() => {
-          const card = getOperationCardDetails(latest);
-          const relativeTime = formatRelativeTime(latest.created_at);
-          return (
-            <button onClick={() => onNavigate('details', latest.public_token)} className="flex w-full items-center gap-3 rounded-[1.5rem] bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              <FinancialEntityLogo entity={card.entity || latest.financial_entity} className="h-11 w-11 rounded-xl border border-slate-100" imageClassName="h-full w-full object-contain p-1" decorative />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-[9px] text-slate-400"><span>آخر نشاط</span>{relativeTime && <><span>·</span><Clock3 className="h-3 w-3" /><span>{relativeTime}</span></>}</span>
-                <strong className="mt-1 block truncate text-xs text-slate-900">{card.title}</strong>
-                <span className="mt-1 block text-[9px] text-slate-500">{toLatinDigits([card.amount, card.entity].filter(Boolean).join(' · '))}</span>
-              </span>
-              <ArrowUpRight className="h-4 w-4 text-slate-400" />
-            </button>
-          );
-        })()}
+        {recentOperations.length > 0 && (
+          <div className="overflow-hidden rounded-[1.65rem] border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <span className="flex items-center gap-2 text-[10px] font-bold text-slate-700"><Clock3 className="h-3.5 w-3.5 text-slate-400" />آخر النشاط</span>
+              <button type="button" onClick={() => onNavigate('my-operations')} className="text-[9px] font-bold text-emerald-700">عرض الكل</button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {recentOperations.map((operation) => {
+                const card = getOperationCardDetails(operation);
+                const relativeTime = formatRelativeTime(operation.created_at);
+                return (
+                  <button key={operation.operation_id || operation.public_token} onClick={() => onNavigate('details', operation.public_token)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition-colors active:bg-slate-50">
+                    <FinancialEntityLogo entity={card.entity || operation.financial_entity} className="h-10 w-10 rounded-xl border border-slate-100" imageClassName="h-full w-full object-contain p-1" decorative />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 text-[8px] text-slate-400">{relativeTime && <><Clock3 className="h-3 w-3" /><span>{relativeTime}</span></>}</span>
+                      <strong className="mt-0.5 block truncate text-[11px] text-slate-900">{card.title}</strong>
+                      <span className="mt-0.5 block text-[8px] text-slate-500">{toLatinDigits([card.amount, card.entity].filter(Boolean).join(' · '))}</span>
+                    </span>
+                    <ArrowLeft className="h-4 w-4 text-slate-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="overflow-hidden rounded-[1.25rem] border-y border-slate-200/70 bg-[#f7f8fa] py-1">
@@ -306,9 +336,9 @@ export default function Home({ profile, onNavigate }: HomeProps) {
         />
       </div>
 
-      <section className="space-y-4" aria-labelledby="business-sanad-title">
-        <div className="flex min-h-[72px] items-center gap-3 rounded-[1.4rem] bg-white/68 px-4 py-3 backdrop-blur-[2px]">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm">
+      <section className="-mx-2 -mb-24 space-y-4 bg-gradient-to-b from-sky-100/75 via-indigo-50/70 to-slate-100/85 px-2 pb-28 pt-5 sm:-mx-4 sm:px-4" aria-labelledby="business-sanad-title">
+        <div className="flex min-h-[72px] items-center gap-3 px-3 py-2">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/75 text-sky-700 shadow-sm backdrop-blur-sm">
             <BriefcaseBusiness className="h-5 w-5 animate-[pulse_3.4s_ease-in-out_infinite]" />
           </span>
           <div className="min-w-0 flex-1">
