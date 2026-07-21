@@ -18,6 +18,10 @@
     display: none;
   }
 
+  .platform-admin-console {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
   .sanad-page-gutter {
     width: 100%;
     padding-inline: 0.5rem;

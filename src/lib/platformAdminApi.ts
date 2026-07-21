@@ -99,6 +99,39 @@ export interface AdminPaymentRequest {
   created_at: string;
 }
 
+export interface AdminPaymentRequestDetails {
+  request: AdminPaymentRequest & {
+    user_full_name: string | null;
+    user_phone: string | null;
+    user_governorate: string | null;
+    receipt_bucket: string | null;
+    receipt_path: string | null;
+    receipt_mime_type: string | null;
+    receipt_file_name: string | null;
+    receipt_file_size: number | null;
+    ai_extracted_json: Record<string, unknown>;
+    verification_checks: Record<string, unknown>;
+    approved_at: string | null;
+    approved_by: string | null;
+    subscription_id: string | null;
+    metadata: Record<string, unknown>;
+    updated_at: string;
+  };
+  expected_receiver: {
+    financial_entity: string | null;
+    account_number: string | null;
+    account_holder_name: string | null;
+    currency: string | null;
+  };
+  subscription: null | {
+    id: string;
+    status: string;
+    current_period_start: string;
+    current_period_end: string | null;
+    activated_by: string | null;
+  };
+}
+
 export interface AdminPlan {
   code: string;
   display_name: string;
@@ -202,6 +235,38 @@ export async function updateAdminPlan(plan: AdminPlan, reason: string): Promise<
 export async function updateAdminPublicInformation(payload: Partial<AdminPublicInformation>, reason: string): Promise<void> {
   const { error } = await supabase.rpc('platform_admin_update_public_information', {
     p_payload: payload,
+    p_reason: reason
+  });
+  throwIfError(error);
+}
+
+export async function getAdminPaymentRequestDetails(paymentRequestId: string): Promise<AdminPaymentRequestDetails> {
+  const { data, error } = await supabase.rpc('platform_admin_get_payment_request_details', {
+    p_payment_request_id: paymentRequestId
+  });
+  throwIfError(error);
+  return data as AdminPaymentRequestDetails;
+}
+
+export async function getAdminPaymentReceiptUrl(details: AdminPaymentRequestDetails): Promise<string | null> {
+  const { receipt_bucket: bucket, receipt_path: path } = details.request;
+  if (!bucket || !path) return null;
+  if (bucket !== 'operation-files' || !path.startsWith('pro-payment-receipts/')) {
+    throw new Error('invalid_payment_receipt_path');
+  }
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
+  throwIfError(error);
+  return data.signedUrl;
+}
+
+export async function reviewAdminPaymentRequest(
+  paymentRequestId: string,
+  decision: 'approve' | 'reject',
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.rpc('platform_admin_review_payment_request', {
+    p_payment_request_id: paymentRequestId,
+    p_decision: decision,
     p_reason: reason
   });
   throwIfError(error);
