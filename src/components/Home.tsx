@@ -22,6 +22,7 @@ import FinancialEntityLogo from './FinancialEntityLogo';
 import LogoLoop from './effects/LogoLoop';
 import TrueFocus from './effects/TrueFocus';
 import RotatingText from './effects/RotatingText';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 
 interface HomeProps {
   profile: Profile | null;
@@ -106,6 +107,7 @@ export default function Home({ profile, onNavigate }: HomeProps) {
   const [latestOperations, setLatestOperations] = useState<MyOperationItem[]>([]);
   const [cameraNotice, setCameraNotice] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     let active = true;
@@ -250,36 +252,42 @@ export default function Home({ profile, onNavigate }: HomeProps) {
           >
             <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-[0_8px_20px_rgba(15,23,42,0.2)]">
               <ListChecks className={`h-5 w-5 transition-transform duration-300 ${actionsOpen ? 'rotate-6 scale-110' : ''}`} />
-              <span className="absolute -bottom-1 -left-2 flex -space-x-1.5 space-x-reverse" aria-hidden="true">
-                {quickActions.slice(0, 3).map((action) => {
-                  const Icon = action.icon;
-                  return <span key={action.page} className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-slate-600"><Icon className="h-2.5 w-2.5" /></span>;
-                })}
-              </span>
             </span>
             <span className="min-w-0 flex-1">
               <strong className="block text-sm text-slate-950">إجراءات سند</strong>
               <span className="mt-0.5 block text-[9px] text-slate-500">4 أدوات لإدارة عملياتك في مكان واحد</span>
             </span>
-            <span className="flex items-center gap-2">
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-500">4</span>
+            <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1 rounded-full border border-white/80 bg-white/45 p-1 shadow-sm backdrop-blur-md" aria-hidden="true">
+                {quickActions.slice(0, 3).map((action) => {
+                  const Icon = action.icon;
+                  return <span key={action.page} className={`flex h-5 w-5 items-center justify-center rounded-full ${action.iconBackgroundClassName} ${action.iconClassName}`}><Icon className="h-2.5 w-2.5" /></span>;
+                })}
+                <span className="rounded-full bg-slate-950 px-2 py-1 text-[9px] font-bold text-white">4</span>
+              </span>
               <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${actionsOpen ? 'rotate-180' : ''}`} />
             </span>
           </button>
 
-          <div
-            id="home-quick-actions"
-            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${actionsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
-          >
-            <div className="overflow-hidden">
-              <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2.5">
+          <AnimatePresence initial={false}>
+            {actionsOpen && <motion.div
+              id="home-quick-actions"
+              initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.38, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <motion.div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2.5" initial="closed" animate="open" variants={{ open: { transition: { staggerChildren: reduceMotion ? 0 : 0.07, delayChildren: reduceMotion ? 0 : 0.08 } }, closed: {} }}>
                 {quickActions.map((action) => {
                   const Icon = action.icon;
                   return (
-                    <button
+                    <motion.button
                       key={action.page}
                       type="button"
                       onClick={() => onNavigate(action.page)}
+                      variants={{ closed: { y: reduceMotion ? 0 : 24, opacity: 0, scale: reduceMotion ? 1 : 0.96 }, open: { y: 0, opacity: 1, scale: 1 } }}
+                      transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
                       className="group flex min-h-[82px] items-center gap-2.5 rounded-[1.2rem] bg-slate-50/80 p-3 text-right transition duration-200 active:scale-[0.98] active:bg-slate-100"
                     >
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${action.iconBackgroundClassName} ${action.iconClassName}`}>
@@ -289,12 +297,12 @@ export default function Home({ profile, onNavigate }: HomeProps) {
                         <strong className="block text-[11px] text-slate-900">{action.title}</strong>
                         <span className="mt-1 block text-[8px] leading-4 text-slate-400">{action.description}</span>
                       </span>
-                    </button>
+                    </motion.button>
                   );
                 })}
-              </div>
-            </div>
-          </div>
+              </motion.div>
+            </motion.div>}
+          </AnimatePresence>
         </div>
 
         {recentOperations.length > 0 && (

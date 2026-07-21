@@ -24,6 +24,7 @@
     "noEmit": true
   },
   "exclude": [
+    "landing",
     "supabase/functions",
     "services/push-worker"
   ]
