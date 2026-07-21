@@ -6,6 +6,7 @@ import { formatYemeniDisplay } from '../lib/digits';
 import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
 import ProUpgradeModal from './ProUpgradeModal';
 import FinancialEntityLogo from './FinancialEntityLogo';
+import OperationNote from './OperationNote';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 import {
   getLinkableBusinessesForUser, linkOperationToBusiness,
@@ -1226,6 +1227,10 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
             </div>
           )}
         </div>
+      )}
+
+      {user && operation && isVerifiedByMe && (
+        <OperationNote operationId={operation.id} userId={user.id} />
       )}
 
       {/* 6. Accordion for Additional Details */}
