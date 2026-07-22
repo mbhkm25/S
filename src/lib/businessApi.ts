@@ -78,6 +78,36 @@ export interface PublicBusinessListItem {
   description: string | null;
   logo_url: string | null;
   whatsapp: string | null;
+  verification_status?: string | null;
+  profile_image_path?: string | null;
+  logo_path?: string | null;
+}
+
+export type BusinessCommunityPhase = 'prelaunch' | 'early_access' | 'public' | 'maintenance';
+export type BusinessDiscoveryScope = 'profile_governorate' | 'governorate' | 'all_yemen';
+
+export interface BusinessCommunityCategory {
+  id: string;
+  name_ar: string;
+  business_count: number;
+}
+
+export interface BusinessCommunityContext {
+  phase: BusinessCommunityPhase;
+  registration_open: boolean;
+  minimum_category_size: number;
+  enabled_governorates: string[];
+  prelaunch_title: string;
+  prelaunch_body: string;
+  early_access_title: string;
+  early_access_body: string;
+  profile_governorate: string | null;
+  discovery_scope: BusinessDiscoveryScope;
+  preferred_governorate: string | null;
+  effective_governorate: string | null;
+  visible_categories: BusinessCommunityCategory[];
+  available_governorates: string[];
+  has_launch_interest: boolean;
 }
 
 export interface PublicBusinessDetail {
@@ -234,10 +264,6 @@ export async function getPublicBusinesses(filters: {
   });
   if (error) {
     console.error('Error in getPublicBusinesses:', error);
-    const fallback = await getPublicBusinessesFallback(filters);
-    if (fallback.length > 0) {
-      return fallback;
-    }
     throw new Error(error.message || 'Failed to fetch public businesses');
   }
   
@@ -253,6 +279,30 @@ export async function getPublicBusinesses(filters: {
   return [];
 }
 
+export async function getBusinessCommunityContext(): Promise<BusinessCommunityContext> {
+  const { data, error } = await supabase.rpc('get_business_community_context');
+  if (error) throw new Error(error.message || 'Failed to load business community context');
+  return data as BusinessCommunityContext;
+}
+
+export async function setBusinessDiscoveryPreference(
+  scope: BusinessDiscoveryScope,
+  governorate?: string | null
+): Promise<void> {
+  const { error } = await supabase.rpc('set_my_business_discovery_preference', {
+    p_scope: scope,
+    p_governorate: governorate || null
+  });
+  if (error) throw new Error(error.message || 'Failed to save discovery preference');
+}
+
+export async function registerBusinessCommunityInterest(governorate?: string | null): Promise<void> {
+  const { error } = await supabase.rpc('register_business_community_interest', {
+    p_governorate: governorate || null
+  });
+  if (error) throw new Error(error.message || 'Failed to register business community interest');
+}
+
 function normalizePublicBusinessListItem(item: any): PublicBusinessListItem {
   return {
     id: item.id,
@@ -263,7 +313,10 @@ function normalizePublicBusinessListItem(item: any): PublicBusinessListItem {
     city: item.city,
     description: item.description || null,
     logo_url: item.profile_image_path || item.logo_path || item.logo_url || null,
-    whatsapp: item.whatsapp || null
+    whatsapp: item.whatsapp || null,
+    verification_status: item.verification_status || null,
+    profile_image_path: item.profile_image_path || null,
+    logo_path: item.logo_path || null
   };
 }
 
@@ -277,44 +330,6 @@ export async function getPublicBusinessProfile(slug: string): Promise<PublicBusi
     return getPublicBusinessProfileFallback(slug, error.message || 'Failed to fetch business profile');
   }
   return data as PublicBusinessDetail;
-}
-
-async function getPublicBusinessesFallback(filters: {
-  p_search?: string | null;
-  p_governorate?: string | null;
-  p_city?: string | null;
-  p_limit?: number;
-  p_offset?: number;
-}): Promise<PublicBusinessListItem[]> {
-  try {
-    let query = supabase
-      .from('business_profiles')
-      .select('*')
-      .eq('public_status', 'published')
-      .order('created_at', { ascending: false })
-      .range(filters.p_offset ?? 0, (filters.p_offset ?? 0) + (filters.p_limit ?? 20) - 1);
-
-    if (filters.p_search) {
-      query = query.or(`name.ilike.%${filters.p_search}%,city.ilike.%${filters.p_search}%,governorate.ilike.%${filters.p_search}%`);
-    }
-    if (filters.p_governorate) {
-      query = query.eq('governorate', filters.p_governorate);
-    }
-    if (filters.p_city) {
-      query = query.eq('city', filters.p_city);
-    }
-
-    const { data, error } = await query;
-    if (error || !data) {
-      console.warn('Fallback public businesses query failed:', error);
-      return [];
-    }
-
-    return data.map(normalizePublicBusinessListItem);
-  } catch (fallbackError) {
-    console.warn('Fallback public businesses exception:', fallbackError);
-    return [];
-  }
 }
 
 async function getPublicBusinessProfileFallback(slug: string, originalMessage: string): Promise<PublicBusinessDetail> {
