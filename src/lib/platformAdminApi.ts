@@ -493,11 +493,15 @@ export async function queueAdminWhatsAppCampaign(campaignId: string, reason: str
   throwIfError(error);
   const result = data as { recipient_count?: number };
 
-  const { error: invokeError } = await supabase.functions.invoke('sanad-v3-whatsapp-campaign-worker', {
+  await runAdminWhatsAppCampaign(campaignId);
+  return Number(result.recipient_count || 0);
+}
+
+export async function runAdminWhatsAppCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('sanad-v3-whatsapp-campaign-worker', {
     body: { campaign_id: campaignId }
   });
-  throwIfError(invokeError);
-  return Number(result.recipient_count || 0);
+  throwIfError(error);
 }
 
 export async function cancelAdminWhatsAppCampaign(campaignId: string, reason: string): Promise<void> {

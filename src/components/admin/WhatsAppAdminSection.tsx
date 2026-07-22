@@ -6,7 +6,7 @@ import {
 import {
   cancelAdminWhatsAppCampaign, createAdminWhatsAppCampaign,
   getAdminWhatsAppContactDetails, getAdminWhatsAppOverview,
-  queueAdminWhatsAppCampaign, setAdminWhatsAppContactStatus,
+  queueAdminWhatsAppCampaign, runAdminWhatsAppCampaign, setAdminWhatsAppContactStatus,
   type AdminWhatsAppCampaign, type AdminWhatsAppContact,
   type AdminWhatsAppContactDetails, type AdminWhatsAppOverview
 } from '../../lib/platformAdminApi';
@@ -99,6 +99,7 @@ function CampaignCard({ campaign, reload, setError, setSuccess }: { campaign: Ad
   const [reason, setReason] = useState('');
   const [working, setWorking] = useState(false);
   const canQueue = campaign.status === 'draft';
+  const canContinue = ['queued', 'processing'].includes(campaign.status) && campaign.pending_count > 0;
   const canCancel = ['draft', 'queued', 'processing'].includes(campaign.status);
   const submit = async (action: 'queue' | 'cancel') => {
     if (reason.trim().length < 5) return;
@@ -117,7 +118,16 @@ function CampaignCard({ campaign, reload, setError, setSuccess }: { campaign: Ad
       setError(action === 'queue' ? 'تعذر تشغيل الحملة. تأكد من وجود موافقات ومن صحة اسم قالب Meta.' : 'تعذر إلغاء الحملة.');
     } finally { setWorking(false); }
   };
-  return <article className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xs font-bold">{campaign.name}</h4><p dir="ltr" className="mt-1 text-right text-[9px] text-slate-500">{campaign.template_name} · {campaign.template_language}</p></div><Badge value={campaign.status} /></div><div className="mt-3 grid grid-cols-4 gap-1 text-center"><Metric label="الجمهور" value={campaign.total_recipients} /><Metric label="مرسلة" value={campaign.sent_count} /><Metric label="مقروءة" value={campaign.read_count} /><Metric label="فشلت" value={campaign.failed_count} /></div>{(canQueue || canCancel) && <div className="mt-3 border-t border-slate-100 pt-3"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="سبب الإجراء الإداري (5 أحرف على الأقل)" className="admin-input min-h-16 resize-none" /><div className="mt-2 grid grid-cols-2 gap-2">{canQueue && <button disabled={working || reason.trim().length < 5} onClick={() => void submit('queue')} className="min-h-10 rounded-xl bg-emerald-600 text-[10px] font-bold text-white disabled:opacity-40">إرسال القالب</button>}{canCancel && <button disabled={working || reason.trim().length < 5} onClick={() => void submit('cancel')} className="min-h-10 rounded-xl bg-rose-50 text-[10px] font-bold text-rose-700 disabled:opacity-40">إلغاء الحملة</button>}</div></div>}</article>;
+  const continueSending = async () => {
+    setWorking(true);
+    try {
+      await runAdminWhatsAppCampaign(campaign.id);
+      setSuccess('تمت متابعة دفعة الإرسال وتحديث نتائج الحملة.');
+      await reload();
+    } catch { setError('تعذر متابعة الإرسال. يمكنك المحاولة مجددًا دون تكرار الرسائل المرسلة.'); }
+    finally { setWorking(false); }
+  };
+  return <article className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h4 className="text-xs font-bold">{campaign.name}</h4><p dir="ltr" className="mt-1 text-right text-[9px] text-slate-500">{campaign.template_name} · {campaign.template_language}</p></div><Badge value={campaign.status} /></div><div className="mt-3 grid grid-cols-4 gap-1 text-center"><Metric label="الجمهور" value={campaign.total_recipients} /><Metric label="مرسلة" value={campaign.sent_count} /><Metric label="مقروءة" value={campaign.read_count} /><Metric label="فشلت" value={campaign.failed_count} /></div>{canContinue && <button disabled={working} onClick={() => void continueSending()} className="mt-3 min-h-10 w-full rounded-xl bg-sky-50 text-[10px] font-bold text-sky-700 disabled:opacity-40">متابعة الإرسال ({numberFormat.format(campaign.pending_count)} متبقية)</button>}{(canQueue || canCancel) && <div className="mt-3 border-t border-slate-100 pt-3"><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="سبب الإجراء الإداري (5 أحرف على الأقل)" className="admin-input min-h-16 resize-none" /><div className="mt-2 grid grid-cols-2 gap-2">{canQueue && <button disabled={working || reason.trim().length < 5} onClick={() => void submit('queue')} className="min-h-10 rounded-xl bg-emerald-600 text-[10px] font-bold text-white disabled:opacity-40">إرسال القالب</button>}{canCancel && <button disabled={working || reason.trim().length < 5} onClick={() => void submit('cancel')} className="min-h-10 rounded-xl bg-rose-50 text-[10px] font-bold text-rose-700 disabled:opacity-40">إلغاء الحملة</button>}</div></div>}</article>;
 }
 
 function CampaignForm({ onClose, onCreated, setError }: { onClose: () => void; onCreated: () => Promise<void>; setError: (value: string | null) => void }) {
