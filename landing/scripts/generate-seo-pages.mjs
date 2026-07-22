@@ -40,6 +40,22 @@ const pages = [
     ctaUrl: `${appUrl}/businesses`
   },
   {
+    slug: 'business-directory',
+    title: 'دليل الأنشطة والمنتجات والخدمات في اليمن | سند فلو',
+    description: 'ابحث في الأنشطة التجارية المنشورة في مجتمع أعمال سند، واستكشف المنتجات والخدمات والكتالوجات حسب التصنيف والمحافظة.',
+    eyebrow: 'دليل أعمال سند',
+    heading: 'اكتشف الأنشطة والمنتجات والخدمات المنشورة',
+    intro: 'يعرض دليل سند البيانات العامة المعتمدة للنشر فقط، ويحترم مرحلة إطلاق المجتمع وحالة كل نشاط وتصنيف ومحافظة.',
+    sections: [
+      ['بحث موحد', 'ابحث باسم النشاط أو بكلمات من المنتجات والخدمات والكتالوجات المنشورة.'],
+      ['تصفية حسب المحافظة', 'اختر المحافظة المناسبة أو اعرض جميع النتائج المتاحة في اليمن.'],
+      ['بيانات عامة محكومة', 'لا يعرض الدليل بيانات المالك أو الفريق الخاصة، ويقود إلى الملف العام الرسمي للنشاط.'],
+      ['حالة تحقق واضحة', 'تظهر شارة التحقق للنشاط الموثق فقط، ولا يعني مجرد النشر أن النشاط موثق.']
+    ],
+    cta: 'افتح دليل الأعمال المباشر',
+    ctaUrl: `${siteUrl}/#business-directory`
+  },
+  {
     slug: 'sanad-pro',
     title: 'اشتراك سند Pro للتحقق المستمر | سند فلو',
     description: 'تعرّف على سند Pro لإتاحة موسعة بمدة وحدود استخدام واضحة، وإدارة الاشتراك وطلبات الدفع وسجل الاستخدام من حسابك في سند.',
@@ -104,6 +120,26 @@ const pages = [
     ctaUrl: 'https://wa.me/967777634971'
   },
   {
+    slug: 'faq',
+    title: 'الأسئلة الشائعة عن سند | التحقق وسند برو ومجتمع الأعمال',
+    description: 'إجابات موثوقة ومحدثة عن سند والتحقق المالي والحساب والخصوصية وسند برو ومجتمع الأعمال والدعم.',
+    eyebrow: 'الأسئلة الشائعة',
+    heading: 'إجابات واضحة عن استخدام سند',
+    intro: 'تُدار قاعدة معرفة سند من مصدر منظم، وتُقرأ الأسعار والمدد وحدود الاستخدام وبيانات الدعم من الإعدادات الحالية بدل أرقام ثابتة.',
+    sections: [
+      ['ما هو سند؟', 'سند منصة عربية تجمع التحقق المنظم من بيانات الإشعارات والمعاملات المالية مع مجتمع أعمال وكتالوجات تجارية في تجربة واحدة.'],
+      ['هل سند بنك أو محفظة مالية؟', 'لا. سند منصة تقنية لتنظيم البيانات والمراجعة وإدارة الحضور التجاري، ولا ينفذ التحويل المالي.'],
+      ['هل نتيجة سند ضمان نهائي للعملية؟', 'لا. سند يعرض مؤشرات مساعدة ولا يستبدل تأكيد البنك أو المحفظة أو الجهة المالية عند النزاع.'],
+      ['كيف أتحقق من عملية؟', 'افتح رابط التحقق أو امسح رمز QR، ثم راجع البيانات وسجّل تحققك من حسابك.'],
+      ['هل يمكن إضافة ملاحظة؟', 'نعم. بعد التحقق يمكن حفظ ملاحظة نصية أو صوتية خاصة لا تظهر في رابط التحقق العام.'],
+      ['هل الإتاحة المجانية تتجدد؟', 'لا. الإتاحة المجانية تأسيسية لمرة واحدة طوال عمر الحساب وليست رصيدًا شهريًا متجددًا.'],
+      ['كيف أبحث عن نشاط أو خدمة؟', 'استخدم دليل الأعمال للبحث بالاسم أو المحافظة أو التصنيف أو كلمات من المنتجات والخدمات المنشورة.'],
+      ['كيف أتواصل مع الدعم؟', 'استخدم قنوات الدعم الرسمية الظاهرة في الموقع والتطبيق، ولا تشارك كلمة المرور أو رمز التحقق أو بيانات البطاقة.']
+    ],
+    cta: 'افتح قاعدة الأسئلة الكاملة',
+    ctaUrl: `${siteUrl}/#faq`
+  },
+  {
     slug: 'privacy',
     title: 'سياسة الخصوصية | سند فلو',
     description: 'سياسة الخصوصية العامة لمنصة سند وشرح أنواع البيانات واستخدامها وحمايتها وخيارات المستخدم.',
@@ -159,9 +195,7 @@ const css = `@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans
 
 function pageHtml(page) {
   const url = `${siteUrl}/${page.slug}/`;
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@graph': [
+  const graph = [
       organization,
       {
         '@type': 'WebPage',
@@ -181,7 +215,20 @@ function pageHtml(page) {
           { '@type': 'ListItem', position: 2, name: page.eyebrow, item: url }
         ]
       }
-    ]
+    ];
+  if (page.slug === 'faq' || page.slug === 'help') {
+    graph.push({
+      '@type': 'FAQPage',
+      mainEntity: page.sections.map(([question, answer]) => ({
+        '@type': 'Question',
+        name: question,
+        acceptedAnswer: { '@type': 'Answer', text: answer }
+      }))
+    });
+  }
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': graph
   };
   const cards = page.sections.map(([title, body]) => `<article class="seo-card"><h2>${title}</h2><p>${body}</p></article>`).join('');
   return `<!doctype html>
@@ -195,7 +242,7 @@ function pageHtml(page) {
 <meta property="og:title" content="${page.title}"><meta property="og:description" content="${page.description}"><meta property="og:url" content="${url}"><meta property="og:image" content="${siteUrl}/sanad_logo.png">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${page.title}"><meta name="twitter:description" content="${page.description}"><meta name="twitter:image" content="${siteUrl}/sanad_logo.png">
 <script type="application/ld+json">${JSON.stringify(structuredData)}</script></head><body>
-<header class="seo-nav"><a href="/"><img src="/sanad_logo.png" width="106" height="52" alt="سند فلو"></a><div><a href="/financial-verification/">سند المالي</a><a href="/business/">سند التجاري</a><a href="/sanad-pro/">سند Pro</a><a href="/security/">الأمان</a><a href="/help/">المساعدة</a></div><a class="install" href="${appUrl}/install/">ثبّت التطبيق</a></header>
+<header class="seo-nav"><a href="/"><img src="/sanad_logo.png" width="106" height="52" alt="سند فلو"></a><div><a href="/financial-verification/">سند المالي</a><a href="/business/">سند التجاري</a><a href="/business-directory/">دليل الأعمال</a><a href="/sanad-pro/">سند Pro</a><a href="/faq/">الأسئلة الشائعة</a></div><a class="install" href="${appUrl}/install/">ثبّت التطبيق</a></header>
 <main><section class="seo-hero"><span>${page.eyebrow}</span><h1>${page.heading}</h1><p>${page.intro}</p></section><section class="seo-content">${cards}<div class="seo-cta"><strong>${page.cta}</strong><a href="${page.ctaUrl}">انتقل الآن</a></div></section></main>
 <footer class="seo-footer"><div><a href="/about/">عن سند</a><a href="/privacy/">الخصوصية</a><a href="/terms/">الشروط</a><a href="/help/">الدعم</a></div><small>© 2026 سند. جميع الحقوق محفوظة.</small></footer>
 </body></html>`;
