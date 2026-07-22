@@ -9,6 +9,7 @@ import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovern
 import PasskeySignInButton from '../features/passkeys/PasskeySignInButton';
 import { logAuthDiagnostic } from '../lib/authDiagnostics';
 import { uploadUserAvatar } from '../lib/userAvatar';
+import { clearManualAuthAttempt, markManualAuthAttempt } from '../lib/authSessionIntent';
 
 interface AuthProps {
   onAuthSuccess: (sessionUser: SupabaseUser, userProfile: Profile) => void;
@@ -172,6 +173,8 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
     }
 
     try {
+      markManualAuthAttempt();
+
       if (isSignUp) {
         // Build clean email redirection URL for PWA route deployment
         const base = import.meta.env.VITE_APP_BASE_PATH || import.meta.env.BASE_URL || '/';
@@ -201,6 +204,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
         // 4. Handle Email Confirmation state
         if (authData.user && !authData.session) {
+          clearManualAuthAttempt();
           setSuccessMessage('تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتأكيد الحساب، ثم تسجيل الدخول.');
           setLoading(false);
           // Auto switch to sign-in view after 6 seconds
@@ -250,6 +254,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
         onAuthSuccess(authData.user, userProfile!);
       }
     } catch (err: unknown) {
+      clearManualAuthAttempt();
       logAuthDiagnostic('authentication_failed', err);
       setErrorMessage(getArabicErrorMessage(err));
     } finally {
