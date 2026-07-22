@@ -13,6 +13,7 @@
 // - PUBLIC_APP_BASE_URL = https://app.sanadflow.com
 // - SUPABASE_STORAGE_BUCKET = operation-files
 // - SANAD_ANALYZE_FUNCTION_URL
+// - SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL
 // - SEND_UNSUPPORTED_REPLY = true
 // - SEND_QR_REPLY = true
 // - TRIGGER_ANALYSIS = true
@@ -48,6 +49,10 @@ const SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL =
   Deno.env.get("SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-onboarding`;
 
+const SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL =
+  Deno.env.get("SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL") ||
+  `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-assistant`;
+
 const SEND_UNSUPPORTED_REPLY =
   (Deno.env.get("SEND_UNSUPPORTED_REPLY") || "true") !== "false";
 
@@ -55,6 +60,8 @@ const SEND_QR_REPLY = (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
 const TRIGGER_ANALYSIS = (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
 const TRIGGER_ONBOARDING =
   (Deno.env.get("TRIGGER_ONBOARDING") || "true") !== "false";
+const TRIGGER_ASSISTANT =
+  (Deno.env.get("TRIGGER_ASSISTANT") || "true") !== "false";
 
 const META_GRAPH_VERSION = "v20.0";
 const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -124,6 +131,11 @@ function extensionFromMime(mimeType: string | null | undefined): string {
   if (mime.includes("png")) return "png";
   if (mime.includes("webp")) return "webp";
   if (mime.includes("pdf")) return "pdf";
+  if (mime.includes("ogg") || mime.includes("opus")) return "ogg";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
+  if (mime.includes("mp4") || mime.includes("m4a")) return "m4a";
+  if (mime.includes("wav")) return "wav";
+  if (mime.includes("webm")) return "webm";
 
   return "bin";
 }
@@ -250,7 +262,7 @@ function normalizeWhatsAppPayload(body: any) {
   }
 
   const messageType = message.type || "unknown";
-  const media = message.image || message.document || null;
+  const media = message.image || message.document || message.audio || null;
 
   const from = message.from || contact.wa_id || "";
   const senderPhone = cleanPhone(from);
@@ -404,9 +416,9 @@ async function findExistingOperationByMessageId(messageId: string): Promise<any 
 async function registerWhatsAppInbound(
   normalized: any,
   supported: boolean,
-): Promise<void> {
+): Promise<any | null> {
   try {
-    await supabaseJson(
+    return await supabaseJson(
       "/rest/v1/rpc/register_whatsapp_inbound",
       {
         method: "POST",
@@ -452,6 +464,66 @@ async function registerWhatsAppInbound(
           : String(error),
       ),
     }));
+    return null;
+  }
+}
+
+function whatsappTimestamp(value: unknown): string | null {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0
+    ? new Date(seconds * 1000).toISOString()
+    : null;
+}
+
+async function enqueueAndTriggerAssistant(normalized: any): Promise<void> {
+  if (!TRIGGER_ASSISTANT) {
+    await sendUnsupportedMessage(normalized.senderPhone);
+    return;
+  }
+
+  const queued = await supabaseJson<any>(
+    "/rest/v1/rpc/enqueue_sanad_assistant_message",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_phone: normalized.senderPhone,
+        p_message_id: normalized.messageId,
+        p_message_type: normalized.messageType,
+        p_body_text: normalized.text || null,
+        p_media_id: normalized.mediaId || null,
+        p_media_mime_type: normalized.mimeType || null,
+        p_meta_timestamp: whatsappTimestamp(normalized.timestamp),
+        p_metadata: {
+          source: FUNCTION_NAME,
+          sender_name: normalized.senderName || null,
+          sender_wa_id: normalized.senderWaId || null,
+        },
+      }),
+    },
+  );
+
+  if (!queued?.message_id || queued.status !== "queued" || queued.duplicate) {
+    return;
+  }
+
+  const response = await fetch(SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+    },
+    body: JSON.stringify({
+      message_id: queued.message_id,
+      source: FUNCTION_NAME,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `assistant_trigger_rejected ${response.status}: ${truncateText(text)}`,
+    );
   }
 }
 
@@ -855,10 +927,19 @@ async function processWebhookInBackground(body: any): Promise<void> {
     mediaId,
   );
 
+  const supportedAssistantMessage =
+    messageType === "text" ||
+    (messageType === "audio" && Boolean(mediaId));
+
   await registerWhatsAppInbound(
     normalized,
-    supportedMedia,
+    supportedMedia || supportedAssistantMessage,
   );
+
+  if (supportedAssistantMessage) {
+    await enqueueAndTriggerAssistant(normalized);
+    return;
+  }
 
   if (!supportedMedia) {
     await sendUnsupportedMessage(senderPhone);

@@ -315,6 +315,72 @@ export interface AdminWhatsAppContactDetails {
   }>;
 }
 
+export interface AdminAssistantSettings {
+  enabled: boolean;
+  model: string;
+  temperature: number;
+  recent_messages_limit: number;
+  search_results_limit: number;
+  rate_limit_per_minute: number;
+  audio_max_bytes: number;
+  memory_enabled: boolean;
+  prompt_version: string;
+  updated_at: string;
+}
+
+export interface AdminAssistantConversation {
+  id: string;
+  status: 'active' | 'paused' | 'human_handoff' | 'blocked';
+  last_intent: string | null;
+  last_message_at: string | null;
+  preferred_governorate: string | null;
+  phone_normalized: string;
+  display_name: string | null;
+  linked_user_id: string | null;
+  message_count: number;
+  last_message: string | null;
+}
+
+export interface AdminAssistantOverview {
+  settings: AdminAssistantSettings;
+  stats: {
+    conversations: number;
+    active_30d: number;
+    inbound_messages: number;
+    audio_messages: number;
+    failed_messages: number;
+    avg_latency_ms: number;
+  };
+  intents: Array<{ intent: string; count: number }>;
+  conversations: AdminAssistantConversation[];
+  generated_at: string;
+}
+
+export interface AdminAssistantThread {
+  conversation: AdminAssistantConversation & { summary: string | null };
+  contact: AdminWhatsAppContact;
+  messages: Array<{
+    id: string;
+    direction: 'inbound' | 'outbound';
+    message_type: 'text' | 'audio' | 'image' | 'system';
+    status: string;
+    body_text: string | null;
+    transcript: string | null;
+    intent: string | null;
+    latency_ms: number | null;
+    error_code: string | null;
+    created_at: string;
+  }>;
+  memories: Array<{
+    id: string;
+    memory_key: string;
+    category: string;
+    value_text: string;
+    confidence: number;
+    updated_at: string;
+  }>;
+}
+
 function throwIfError(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
 }
@@ -507,6 +573,31 @@ export async function runAdminWhatsAppCampaign(campaignId: string): Promise<void
 export async function cancelAdminWhatsAppCampaign(campaignId: string, reason: string): Promise<void> {
   const { error } = await supabase.rpc('platform_admin_cancel_whatsapp_campaign', {
     p_campaign_id: campaignId,
+    p_reason: reason
+  });
+  throwIfError(error);
+}
+
+export async function getAdminAssistantOverview(limit = 60): Promise<AdminAssistantOverview> {
+  const { data, error } = await supabase.rpc('platform_admin_get_assistant_overview', { p_limit: limit });
+  throwIfError(error);
+  return data as AdminAssistantOverview;
+}
+
+export async function getAdminAssistantThread(conversationId: string): Promise<AdminAssistantThread> {
+  const { data, error } = await supabase.rpc('platform_admin_get_assistant_thread', {
+    p_conversation_id: conversationId
+  });
+  throwIfError(error);
+  return data as AdminAssistantThread;
+}
+
+export async function updateAdminAssistantSettings(
+  payload: Pick<AdminAssistantSettings, 'enabled' | 'memory_enabled'>,
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.rpc('platform_admin_update_assistant_settings', {
+    p_payload: payload,
     p_reason: reason
   });
   throwIfError(error);
