@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { createBusinessProfile } from '../../lib/businessApi';
+import React, { useEffect, useState } from 'react';
+import { createBusinessProfile, getBusinessCommunityContext } from '../../lib/businessApi';
 import { ArrowRight, Store, Loader2, CheckCircle2, AlertTriangle, Link2 } from 'lucide-react';
 
 interface BusinessCreateProps {
@@ -22,6 +22,17 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [checkingRegistration, setCheckingRegistration] = useState(true);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void getBusinessCommunityContext()
+      .then((context) => { if (active) setRegistrationOpen(context.registration_open); })
+      .catch(() => { if (active) setRegistrationOpen(false); })
+      .finally(() => { if (active) setCheckingRegistration(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +76,9 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
       });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ أثناء إنشاء الملف التجاري.');
+      setError(String(err?.message || '').includes('business_registration_closed')
+        ? 'تسجيل الأنشطة متوقف مؤقتًا.'
+        : err.message || 'حدث خطأ أثناء إنشاء الملف التجاري.');
     } finally {
       setLoading(false);
     }
@@ -96,6 +109,14 @@ export default function BusinessCreate({ onNavigate }: BusinessCreateProps) {
         </div>
       </div>
     );
+  }
+
+  if (checkingRegistration) {
+    return <div className="flex min-h-[45vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>;
+  }
+
+  if (!registrationOpen) {
+    return <div className="rounded-3xl border border-slate-200/60 bg-white p-7 text-center font-arabic shadow-sm" dir="rtl"><Store className="mx-auto h-10 w-10 text-slate-300" /><h1 className="mt-4 text-base font-bold text-slate-900">تسجيل الأنشطة متوقف مؤقتًا</h1><p className="mt-2 text-xs leading-6 text-slate-500">سنفتح التسجيل مجددًا بعد اكتمال التجهيزات الحالية.</p><button onClick={() => onNavigate('business-community')} className="mt-5 min-h-11 w-full rounded-xl bg-slate-950 text-xs font-bold text-white">العودة لمجتمع الأعمال</button></div>;
   }
 
   return (
