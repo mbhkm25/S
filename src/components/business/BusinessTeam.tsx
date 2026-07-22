@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   AlertTriangle,
+  Activity,
   CheckCircle2,
+  Crown,
   Loader2,
   Phone,
   Plus,
@@ -27,9 +29,11 @@ import {
   type BusinessTeamInvitationV2
 } from '../../lib/businessTeamApi';
 import { toLatinDigits } from '../../lib/digits';
+import BusinessTeamMemberOperations from './BusinessTeamMemberOperations';
+import BusinessTeamProPurchase from './BusinessTeamProPurchase';
 
 interface BusinessTeamProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, token?: string) => void;
   businessId?: string;
   businessName?: string;
 }
@@ -57,7 +61,11 @@ function normalizedPermissions(member: BusinessTeamMemberV2): BusinessTeamPermis
   return { ...DEFAULT_TEAM_PERMISSIONS, ...(member.permissions || {}) };
 }
 
-export default function BusinessTeam({ businessId: providedBusinessId, businessName: providedBusinessName }: BusinessTeamProps) {
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+export default function BusinessTeam({ onNavigate, businessId: providedBusinessId, businessName: providedBusinessName }: BusinessTeamProps) {
   const [loading, setLoading] = useState(true);
   const [businessId, setBusinessId] = useState(providedBusinessId || '');
   const [businessName, setBusinessName] = useState(providedBusinessName || '');
@@ -73,6 +81,8 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
   const [editPermissions, setEditPermissions] = useState<BusinessTeamPermissions>(DEFAULT_TEAM_PERMISSIONS);
   const [savingMember, setSavingMember] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [operationsMember, setOperationsMember] = useState<BusinessTeamMemberV2 | null>(null);
+  const [proPurchaseMemberId, setProPurchaseMemberId] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -120,6 +130,7 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
 
   const activeCount = members.filter((member) => member.status === 'active').length;
   const suspendedCount = members.filter((member) => member.status === 'suspended').length;
+  const proCount = members.filter((member) => member.pro_subscription).length;
 
   const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -198,18 +209,24 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
           <h2 className="text-lg font-bold text-slate-950">فريق العمل</h2>
           <p className="mt-1 text-[11px] text-slate-500">موظفو {businessName || 'النشاط'} ومسمياتهم وصلاحياتهم التشغيلية</p>
         </div>
-        <button onClick={() => setInviteOpen((value) => !value)} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-[10px] font-bold text-white">
-          <UserPlus className="h-4 w-4" />دعوة موظف
-        </button>
+        <div className="flex shrink-0 gap-2">
+          <button onClick={() => setProPurchaseMemberId(null)} className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[10px] font-bold text-emerald-800">
+            <Crown className="h-4 w-4" />تفعيل Pro
+          </button>
+          <button onClick={() => setInviteOpen((value) => !value)} className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-[10px] font-bold text-white">
+            <UserPlus className="h-4 w-4" />دعوة
+          </button>
+        </div>
       </header>
 
       {error && <div className="flex gap-2 rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div>}
       {success && <div className="flex gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" />{success}</div>}
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{members.length}</strong><span className="text-[9px] text-slate-400">الموظفون</span></div>
-        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{activeCount}</strong><span className="text-[9px] text-slate-400">نشط</span></div>
-        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{pendingInvites.length}</strong><span className="text-[9px] text-slate-400">دعوات معلقة</span></div>
+      <div className="grid grid-cols-4 gap-2">
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{formatNumber(members.length)}</strong><span className="text-[9px] text-slate-400">الموظفون</span></div>
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{formatNumber(activeCount)}</strong><span className="text-[9px] text-slate-400">نشط</span></div>
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{formatNumber(proCount)}</strong><span className="text-[9px] text-slate-400">Pro</span></div>
+        <div className="rounded-2xl bg-white p-3 text-center"><strong className="block text-lg">{formatNumber(pendingInvites.length)}</strong><span className="text-[9px] text-slate-400">دعوات</span></div>
       </div>
 
       {inviteOpen && (
@@ -237,12 +254,33 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100"><ShieldCheck className="h-5 w-5 text-slate-600" /></div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-xs font-bold">{member.profile?.full_name || 'مستخدم سند'}</h3><span className={`rounded-full px-2 py-0.5 text-[8px] font-bold ${member.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{member.status === 'active' ? 'نشط' : 'معلّق'}</span></div>
-                <p className="mt-1 text-[10px] text-slate-500">{member.job_title || 'موظف'} · {member.profile?.phone || 'بدون رقم'}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{member.job_title || 'موظف'} · <bdi dir="ltr">{toLatinDigits(member.profile?.phone || 'بدون رقم')}</bdi></p>
                 <p className="mt-1 text-[9px] text-slate-400">انضم في {formatDate(member.created_at)}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {member.pro_subscription ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-[8px] font-bold text-emerald-700">
+                      سند Pro · حتى {formatDate(member.pro_subscription.current_period_end)}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[8px] font-bold text-slate-500">الخطة الأساسية</span>
+                  )}
+                  <span className="rounded-full bg-blue-50 px-2 py-1 text-[8px] font-bold text-blue-700">
+                    ربط {formatNumber(member.activity?.linked_count || 0)}
+                  </span>
+                  <span className="rounded-full bg-violet-50 px-2 py-1 text-[8px] font-bold text-violet-700">
+                    تحقق {formatNumber(member.activity?.verified_count || 0)}
+                  </span>
+                </div>
               </div>
               <button onClick={() => openEditor(member)} className="rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-bold">الصلاحيات</button>
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setOperationsMember(member)} className="flex items-center justify-center gap-1 rounded-xl border border-blue-200 py-2.5 text-[10px] font-bold text-blue-700">
+                <Activity className="h-4 w-4" />سجل العمليات
+              </button>
+              <button disabled={member.status !== 'active'} onClick={() => setProPurchaseMemberId(member.user_id)} className="flex items-center justify-center gap-1 rounded-xl border border-emerald-200 py-2.5 text-[10px] font-bold text-emerald-700 disabled:border-slate-200 disabled:text-slate-300">
+                <Crown className="h-4 w-4" />{member.pro_subscription ? 'تجديد Pro' : 'تفعيل Pro'}
+              </button>
               {member.status === 'active' ? (
                 <button disabled={actionLoading === member.user_id} onClick={() => void changeStatus(member, 'suspended')} className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-amber-200 py-2.5 text-[10px] font-bold text-amber-700"><UserX className="h-4 w-4" />تعليق</button>
               ) : (
@@ -254,7 +292,7 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
         ))}
       </section>
 
-      {suspendedCount > 0 && <p className="px-1 text-[10px] text-slate-400">يوجد {suspendedCount} موظف معلّق لا يملك صلاحيات تشغيلية فعالة.</p>}
+      {suspendedCount > 0 && <p className="px-1 text-[10px] text-slate-400">يوجد {formatNumber(suspendedCount)} موظف معلّق لا يملك صلاحيات تشغيلية فعالة.</p>}
 
       {pendingInvites.length > 0 && (
         <section className="space-y-2"><h3 className="px-1 text-xs font-bold">الدعوات المعلقة</h3>{pendingInvites.map((invite) => <div key={invite.invitation_id} className="rounded-2xl bg-white p-3"><strong className="block font-mono text-xs" dir="ltr">{invite.invited_phone}</strong><span className="mt-1 block text-[10px] text-slate-500">{invite.job_title || 'موظف'} · تنتهي {formatDate(invite.expires_at)}</span></div>)}</section>
@@ -270,6 +308,31 @@ export default function BusinessTeam({ businessId: providedBusinessId, businessN
             <div className="mt-4 flex gap-2"><button onClick={() => setEditing(null)} className="flex-1 rounded-xl border p-3 text-xs">إلغاء</button><button disabled={savingMember} onClick={() => void savePermissions()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 p-3 text-xs font-bold text-white">{savingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ</button></div>
           </section>
         </div>
+      )}
+
+      {operationsMember && (
+        <BusinessTeamMemberOperations
+          businessId={businessId}
+          memberUserId={operationsMember.user_id}
+          memberName={operationsMember.profile?.full_name || 'الموظف'}
+          onClose={() => setOperationsMember(null)}
+          onOpenOperation={(token) => {
+            setOperationsMember(null);
+            onNavigate('details', token);
+          }}
+        />
+      )}
+
+      {proPurchaseMemberId !== undefined && (
+        <BusinessTeamProPurchase
+          businessId={businessId}
+          defaultMemberUserId={proPurchaseMemberId}
+          onSubmitted={() => setSuccess('تم إنشاء طلب تفعيل سند Pro للفريق.')}
+          onClose={() => {
+            setProPurchaseMemberId(undefined);
+            void load();
+          }}
+        />
       )}
     </div>
   );

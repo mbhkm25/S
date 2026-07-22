@@ -1065,7 +1065,7 @@ export default function App() {
             {currentPage === 'business-team' && (
               <ChunkErrorBoundary onGoHome={() => navigateTo('home')}>
                 <Suspense fallback={<ContentSkeleton />}>
-                  <BusinessTeam onNavigate={(page) => navigateTo(page)} />
+                  <BusinessTeam onNavigate={(page, token) => navigateTo(page, token)} />
                 </Suspense>
               </ChunkErrorBoundary>
             )}

@@ -12,8 +12,6 @@
 // Optional:
 // - GEMINI_MODEL = gemini-2.5-flash
 // - GEMINI_MAX_ATTEMPTS = 3
-// - PRO_PAYMENT_EXPECTED_DEFAULT_AMOUNT = 3500
-// - PRO_PAYMENT_EXPECTED_DEFAULT_CURRENCY = YER
 // - SEND_PRO_PAYMENT_WHATSAPP = true
 
 type JsonRecord = Record<string, unknown>;
@@ -28,12 +26,6 @@ const META_WA_PHONE_NUMBER_ID = mustGetEnv("META_WA_PHONE_NUMBER_ID");
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
 const GEMINI_MAX_ATTEMPTS = Number(Deno.env.get("GEMINI_MAX_ATTEMPTS") || "3");
-
-const DEFAULT_AMOUNT = Number(
-  Deno.env.get("PRO_PAYMENT_EXPECTED_DEFAULT_AMOUNT") || "3500",
-);
-const DEFAULT_CURRENCY =
-  Deno.env.get("PRO_PAYMENT_EXPECTED_DEFAULT_CURRENCY") || "YER";
 
 const SEND_PRO_PAYMENT_WHATSAPP =
   (Deno.env.get("SEND_PRO_PAYMENT_WHATSAPP") || "true") !== "false";
@@ -329,8 +321,11 @@ function buildPrompt(expected: any): string {
 تحليل صورة أو ملف إيصال الدفع المرفق، واستخراج بيانات الحوالة بدقة، ثم إرجاع JSON فقط.
 
 السياق المتوقع من النظام:
-- المبلغ المتوقع: ${expected.amount ?? DEFAULT_AMOUNT}
-- العملة المتوقعة: ${expected.currency ?? DEFAULT_CURRENCY}
+- نوع الطلب: ${expected.purchase_scope}
+- عدد المستفيدين: ${expected.beneficiary_count}
+- سعر الوحدة: ${expected.unit_amount}
+- المبلغ الإجمالي المتوقع: ${expected.amount}
+- العملة المتوقعة: ${expected.currency}
 - الجهة المالية المتوقعة: ${expected.financial_entity ?? null}
 - رقم حساب/محفظة المستلم المتوقع: ${expected.account_number ?? null}
 - اسم حساب المستلم المتوقع: ${expected.account_holder_name ?? null}
@@ -509,7 +504,7 @@ function validatePayment(params: {
 
     currency_matches:
       Boolean(extracted.currency) && (String(extracted.currency).toUpperCase() ===
-        String(expected.currency || DEFAULT_CURRENCY).toUpperCase() ||
+        String(expected.currency).toUpperCase() ||
       ["ريال", "يمني", "YER"].some((x) => includesLoose(extracted.currency, x))),
 
     receiver_account_matches:
@@ -632,10 +627,17 @@ async function sendWhatsAppText(toRaw: unknown, body: string): Promise<any | nul
 }
 
 function successMessage(validation: any): string {
+  const beneficiaryCount = Number(validation.expected.beneficiary_count || 1);
+  const durationDays = Number(validation.expected.duration_days || 30);
+  const activationText = beneficiaryCount > 1
+    ? `تم اعتماد دفعتك وتفعيل سند Pro لعدد ${beneficiaryCount.toLocaleString("en-US")} من أعضاء الفريق.`
+    : "تم اعتماد دفعتك وتفعيل اشتراك سند Pro.";
+
   return (
     "✅ *تم تفعيل سند Pro*\n\n" +
-    "تم اعتماد دفعتك وتفعيل اشتراك سند Pro لمدة شهر.\n\n" +
+    activationText + "\n\n" +
     "*الخطة:* سند Pro\n" +
+    `*المدة:* ${durationDays.toLocaleString("en-US")} يوم\n` +
     `*المبلغ:* ${Number(validation.expected.amount).toLocaleString("en-US")} ${validation.expected.currency}\n` +
     `*رقم الحوالة:* ${validation.extracted.transfer_reference || "—"}\n\n` +
     "يمكنك الآن الوصول الموسع إلى تفاصيل العمليات داخل سند."
@@ -669,6 +671,9 @@ async function processPaymentVerification(paymentRequestId: string, source: stri
 
   const paymentRequest = payload.payment_request || {};
   const expectedReceiver = payload.expected_receiver || {};
+  const beneficiaries = Array.isArray(payload.beneficiaries)
+    ? payload.beneficiaries
+    : [];
 
   if (!paymentRequest.id) throw new Error("missing_payment_request_from_rpc");
   if (["approved", "auto_approved", "rejected", "cancelled"].includes(paymentRequest.status)) {
@@ -679,9 +684,37 @@ async function processPaymentVerification(paymentRequestId: string, source: stri
   }
   if (!paymentRequest.user_phone) throw new Error("missing_user_phone");
 
+  const expectedAmount = Number(paymentRequest.expected_amount);
+  const expectedCurrency = cleanText(paymentRequest.expected_currency);
+  const beneficiaryCount = Number(paymentRequest.beneficiary_count || beneficiaries.length || 1);
+  const unitAmount = Number(paymentRequest.unit_amount || expectedAmount);
+
+  if (!Number.isFinite(expectedAmount) || expectedAmount <= 0) {
+    throw new Error("invalid_database_expected_amount");
+  }
+  if (!expectedCurrency) {
+    throw new Error("missing_database_expected_currency");
+  }
+  if (!Number.isInteger(beneficiaryCount) || beneficiaryCount < 1) {
+    throw new Error("invalid_database_beneficiary_count");
+  }
+  if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
+    throw new Error("invalid_database_unit_amount");
+  }
+  if (beneficiaries.length > 0 && beneficiaries.length !== beneficiaryCount) {
+    throw new Error("beneficiary_snapshot_count_mismatch");
+  }
+  if (unitAmount * beneficiaryCount !== expectedAmount) {
+    throw new Error("commercial_snapshot_amount_mismatch");
+  }
+
   const expected = {
-    amount: Number(paymentRequest.expected_amount || DEFAULT_AMOUNT),
-    currency: paymentRequest.expected_currency || DEFAULT_CURRENCY,
+    amount: expectedAmount,
+    currency: expectedCurrency,
+    purchase_scope: paymentRequest.purchase_scope || "self",
+    beneficiary_count: beneficiaryCount,
+    unit_amount: unitAmount,
+    duration_days: Number(beneficiaries[0]?.duration_days || 30),
     financial_entity:
       expectedReceiver.financial_entity || paymentRequest.payment_network || null,
     account_number: expectedReceiver.account_number || null,
@@ -820,6 +853,48 @@ async function processPaymentVerification(paymentRequestId: string, source: stri
       p_note: "Auto approved by SANAD Pro Payment Verification Edge Function",
     });
 
+    if (approval?.ok !== true) {
+      const approvalFailure = approval?.reason || "database_approval_rejected";
+      const checks = {
+        ...validation.checks,
+        database_approval_failed: true,
+        database_approval_reason: approvalFailure,
+      };
+
+      await markReview({
+        paymentRequestId,
+        status: "pending_review",
+        extracted: rawAi,
+        confidence: extracted.confidence,
+        checks,
+        failureReason: approvalFailure,
+      });
+
+      let whatsappResponse = null;
+      try {
+        whatsappResponse = await sendWhatsAppText(
+          validation.user_phone,
+          reviewMessage({ ...validation, decision: "pending_review" }),
+        );
+      } catch (error) {
+        whatsappResponse = {
+          ok: false,
+          error: truncateText(error instanceof Error ? error.message : String(error)),
+        };
+      }
+
+      return {
+        ok: true,
+        status: "pending_review",
+        branch: "database_approval_rejected",
+        payment_request_id: paymentRequestId,
+        reason: approvalFailure,
+        validation,
+        approval,
+        whatsapp_response: whatsappResponse,
+      };
+    }
+
     let whatsappResponse = null;
 
     try {
@@ -839,6 +914,7 @@ async function processPaymentVerification(paymentRequestId: string, source: stri
       status: "auto_approved",
       payment_request_id: paymentRequestId,
       subscription_id: approval?.subscription_id || null,
+      subscriptions: approval?.subscriptions || [],
       validation,
       approval,
       whatsapp_response: whatsappResponse,

@@ -97,6 +97,33 @@ export interface AdminPaymentRequest {
   approved_at: string | null;
   approved_by: string | null;
   created_at: string;
+  purchase_scope?: 'self' | 'business_team';
+  business_id?: string | null;
+  business_name?: string | null;
+  beneficiary_count?: number;
+  unit_amount?: number | null;
+}
+
+export interface AdminPaymentBeneficiary {
+  id: string;
+  beneficiary_user_id: string;
+  full_name: string | null;
+  phone: string | null;
+  business_id: string | null;
+  plan_code: string;
+  unit_amount: number;
+  currency_code: string;
+  duration_days: number;
+  access_limit: number;
+  status: string;
+  subscription_id: string | null;
+  subscription: null | {
+    id: string;
+    status: string;
+    current_period_start: string;
+    current_period_end: string | null;
+    activated_by: string | null;
+  };
 }
 
 export interface AdminPaymentRequestDetails {
@@ -116,6 +143,11 @@ export interface AdminPaymentRequestDetails {
     subscription_id: string | null;
     metadata: Record<string, unknown>;
     updated_at: string;
+    purchase_scope: 'self' | 'business_team';
+    business_id: string | null;
+    business_name: string | null;
+    beneficiary_count: number;
+    unit_amount: number | null;
   };
   expected_receiver: {
     financial_entity: string | null;
@@ -130,6 +162,7 @@ export interface AdminPaymentRequestDetails {
     current_period_end: string | null;
     activated_by: string | null;
   };
+  beneficiaries: AdminPaymentBeneficiary[];
 }
 
 export interface AdminPlan {
