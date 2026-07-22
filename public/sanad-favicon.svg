@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">شعار سند</title>
+  <desc id="desc">نسخة داكنة عالية التباين من شعار سند بخلفية شفافة</desc>
+  <g fill="#111827" text-anchor="middle">
+    <text x="48" y="43" direction="rtl" unicode-bidi="bidi-override" font-family="Tahoma, Arial, sans-serif" font-size="31" font-weight="700">سند</text>
+    <text x="48" y="66" font-family="Georgia, 'Times New Roman', serif" font-size="17" font-weight="700" letter-spacing="1.4">SANAD</text>
+  </g>
+</svg>
