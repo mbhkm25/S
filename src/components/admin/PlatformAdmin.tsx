@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   Activity, AlertTriangle, ArrowLeft, BadgeCheck, Building2, CheckCircle2,
   ClipboardList, CreditCard, ExternalLink, Eye, FileClock, FileText, Loader2,
-  RefreshCw, Save, Search, Settings2, ShieldCheck, Users, XCircle
+  MapPin, RefreshCw, Save, Search, Settings2, ShieldCheck, Users, XCircle
 } from 'lucide-react';
 import {
-  getAdminPaymentReceiptUrl, getAdminPaymentRequestDetails, getPlatformAdminAccess,
+  getAdminBusinessCommunitySettings, getAdminPaymentReceiptUrl, getAdminPaymentRequestDetails, getPlatformAdminAccess,
   getPlatformAdminSnapshot, reviewAdminBusiness, reviewAdminPaymentRequest,
-  setAdminUserStatus, updateAdminPlan, updateAdminPublicInformation,
-  type AdminBusiness, type AdminPlan, type AdminPublicInformation,
+  setAdminUserStatus, updateAdminBusinessCommunitySettings, updateAdminPlan, updateAdminPublicInformation,
+  type AdminBusiness, type AdminBusinessCommunityOverview, type AdminBusinessCommunitySettings, type AdminPlan, type AdminPublicInformation,
   type AdminPaymentRequestDetails, type AdminUser, type PlatformAdminSnapshot
 } from '../../lib/platformAdminApi';
 
@@ -39,6 +39,10 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof Activity }> = [
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', hour12: true });
 const numberFormat = new Intl.NumberFormat('en-US');
+const YEMEN_GOVERNORATES = [
+  'صنعاء', 'عدن', 'حضرموت', 'تعز', 'إب', 'الحديدة', 'ذمار', 'شبوة', 'المهرة', 'مأرب',
+  'الجوف', 'صعدة', 'حجة', 'عمران', 'البيضاء', 'لحج', 'أبين', 'الضالع', 'ريمة', 'سقطرى', 'المحويت'
+];
 
 function latinText(value: unknown): string {
   return String(value ?? '')
@@ -205,9 +209,12 @@ export default function PlatformAdmin({ onNavigate }: Props) {
       {tab === 'operations' && <ListSection title="آخر العمليات" search={search} setSearch={setSearch}>
         <div className="space-y-2">{operations.map((operation) => <article key={operation.id} className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-bold">{latinText(operation.financial_entity || 'جهة غير محددة')}</h3><p className="mt-1 text-[10px] text-slate-500">{latinText(operation.transaction_type || 'عملية مالية')} • {latinText(operation.submitted_by_name || operation.submitted_by_phone || 'مستخدم')}</p></div><div className="flex gap-1"><Badge tone={statusTone(operation.ai_status)}>{operation.ai_status}</Badge>{operation.possible_fraud && <Badge tone="red">اشتباه</Badge>}</div></div><div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3"><div><p className="text-sm font-bold">{operation.amount == null ? '—' : numberFormat.format(operation.amount)} <span className="text-[10px] text-slate-400">{operation.currency || ''}</span></p><p className="mt-1 text-[9px] text-slate-400">{formatDate(operation.created_at)}</p></div><Badge tone={statusTone(operation.sanad_risk_level)}>{operation.sanad_risk_level}</Badge></div></article>)}{!operations.length && <Empty text="لا توجد عمليات مطابقة." />}</div>
       </ListSection>}
-      {tab === 'businesses' && <ListSection title="الأنشطة التجارية" search={search} setSearch={setSearch}>
-        <div className="space-y-2">{businesses.map((business) => <div key={business.id}><BusinessCard business={business} onReview={requestBusinessReview} /></div>)}{!businesses.length && <Empty text="لا توجد أنشطة مطابقة." />}</div>
-      </ListSection>}
+      {tab === 'businesses' && <section className="space-y-5">
+        <BusinessCommunityControls setError={setError} setSuccess={setSuccess} />
+        <ListSection title="الأنشطة التجارية" search={search} setSearch={setSearch}>
+          <div className="space-y-2">{businesses.map((business) => <div key={business.id}><BusinessCard business={business} onReview={requestBusinessReview} /></div>)}{!businesses.length && <Empty text="لا توجد أنشطة مطابقة." />}</div>
+        </ListSection>
+      </section>}
       {tab === 'pro' && <ProSection snapshot={snapshot} onSaved={() => void load(true)} setError={setError} setSuccess={setSuccess} />}
       {tab === 'settings' && <SettingsSection info={snapshot.public_information} onSaved={() => void load(true)} setError={setError} setSuccess={setSuccess} />}
       {tab === 'audit' && <section className="space-y-2"><h2 className="px-1 text-sm font-bold">سجل الإجراءات الإدارية</h2>{snapshot.audit_log.map((item) => <article key={item.id} className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-bold">{item.action}</h3><p className="mt-1 text-[10px] text-slate-500">{latinText(item.reason || 'دون ملاحظة')} • {latinText(item.actor_name || 'مدير سند')}</p></div><Badge>{item.target_type}</Badge></div><p className="mt-3 text-[9px] text-slate-400">{formatDate(item.created_at)}</p></article>)}{!snapshot.audit_log.length && <Empty text="لم تُسجل إجراءات إدارية بعد." />}</section>}
@@ -241,6 +248,90 @@ function UserCard({ user, onStatus }: { user: AdminUser; onStatus: (user: AdminU
 
 function BusinessCard({ business, onReview }: { business: AdminBusiness; onReview: (business: AdminBusiness, decision: string) => void }) {
   return <article className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-bold">{latinText(business.name)}</h3><p className="mt-1 text-[10px] text-slate-500">{latinText(business.owner_name || business.owner_phone || 'مالك غير محدد')}</p><p className="mt-1 text-[9px] text-slate-400">{latinText([business.governorate, business.city].filter(Boolean).join('، ') || 'الموقع غير محدد')}</p></div><div className="flex flex-col items-end gap-1"><Badge tone={statusTone(business.public_status)}>{business.public_status}</Badge><Badge tone={statusTone(business.verification_status)}>{business.verification_status}</Badge></div></div><div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3"><button onClick={() => onReview(business, 'published')} className="min-h-10 rounded-xl bg-emerald-50 text-[10px] font-bold text-emerald-700">اعتماد</button><button onClick={() => onReview(business, 'rejected')} className="min-h-10 rounded-xl bg-rose-50 text-[10px] font-bold text-rose-700">رفض</button><button onClick={() => onReview(business, 'suspended')} className="min-h-10 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-700">تعليق</button></div></article>;
+}
+
+function BusinessCommunityControls({ setError, setSuccess }: { setError: (value: string | null) => void; setSuccess: (value: string | null) => void }) {
+  const [overview, setOverview] = useState<AdminBusinessCommunityOverview | null>(null);
+  const [form, setForm] = useState<AdminBusinessCommunitySettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [reason, setReason] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await getAdminBusinessCommunitySettings();
+      setOverview(data);
+      setForm(data.settings);
+    } catch {
+      setError('تعذر تحميل إعدادات مجتمع الأعمال.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const toggleGovernorate = (governorate: string) => {
+    if (!form) return;
+    const exists = form.enabled_governorates.includes(governorate);
+    setForm({
+      ...form,
+      enabled_governorates: exists
+        ? form.enabled_governorates.filter((item) => item !== governorate)
+        : [...form.enabled_governorates, governorate]
+    });
+  };
+
+  const save = async () => {
+    if (!form || reason.trim().length < 5) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updateAdminBusinessCommunitySettings({
+        phase: form.phase,
+        registration_open: form.registration_open,
+        minimum_category_size: form.minimum_category_size,
+        enabled_governorates: form.enabled_governorates,
+        prelaunch_title: form.prelaunch_title,
+        prelaunch_body: form.prelaunch_body,
+        early_access_title: form.early_access_title,
+        early_access_body: form.early_access_body
+      }, reason.trim());
+      setReason('');
+      setSuccess('تم تحديث مرحلة مجتمع الأعمال وتسجيل الإجراء.');
+      await load();
+    } catch {
+      setError('تعذر حفظ إعدادات مجتمع الأعمال.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="flex min-h-28 items-center justify-center rounded-2xl bg-white"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>;
+  if (!form || !overview) return <Empty text="لا تتوفر إعدادات المجتمع." />;
+
+  const published = overview.distribution.reduce((sum, item) => sum + item.published_count, 0);
+  const verified = overview.distribution.reduce((sum, item) => sum + item.verified_count, 0);
+  return <section className="space-y-3">
+    <div><h2 className="text-sm font-bold">تشغيل مجتمع الأعمال</h2><p className="mt-1 text-[10px] text-slate-500">تطبّق هذه الإعدادات فورًا على العرض العام.</p></div>
+    <div className="grid grid-cols-3 gap-2">{[['منشور', published], ['موثق', verified], ['طلب إشعار', overview.interest_count]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white p-3 text-center shadow-sm"><p className="text-lg font-bold">{numberFormat.format(Number(value))}</p><p className="mt-1 text-[8px] text-slate-400">{label}</p></div>)}</div>
+    <div className="space-y-4 rounded-2xl bg-white p-4 shadow-sm">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AdminField label="مرحلة العرض"><select className="admin-input" value={form.phase} onChange={(event) => setForm({ ...form, phase: event.target.value as AdminBusinessCommunitySettings['phase'] })}><option value="prelaunch">قبل الإطلاق</option><option value="early_access">وصول مبكر</option><option value="public">إطلاق عام</option><option value="maintenance">صيانة مؤقتة</option></select></AdminField>
+        <AdminField label="الحد الأدنى لعرض الفئة"><input lang="en" dir="ltr" type="number" min="1" max="100" className="admin-input text-left" value={form.minimum_category_size} onChange={(event) => setForm({ ...form, minimum_category_size: Number(event.target.value) })} /></AdminField>
+      </div>
+      <label className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs font-bold"><span>السماح بتسجيل أنشطة جديدة</span><input type="checkbox" checked={form.registration_open} onChange={(event) => setForm({ ...form, registration_open: event.target.checked })} /></label>
+      <AdminField label="عنوان ما قبل الإطلاق"><input className="admin-input" value={form.prelaunch_title} onChange={(event) => setForm({ ...form, prelaunch_title: event.target.value })} /></AdminField>
+      <AdminField label="رسالة ما قبل الإطلاق"><textarea className="admin-input min-h-20 resize-none" value={form.prelaunch_body} onChange={(event) => setForm({ ...form, prelaunch_body: event.target.value })} /></AdminField>
+      <AdminField label="عنوان الوصول المبكر"><input className="admin-input" value={form.early_access_title} onChange={(event) => setForm({ ...form, early_access_title: event.target.value })} /></AdminField>
+      <AdminField label="رسالة الوصول المبكر"><textarea className="admin-input min-h-20 resize-none" value={form.early_access_body} onChange={(event) => setForm({ ...form, early_access_body: event.target.value })} /></AdminField>
+      <div><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold text-slate-600">المحافظات المفتوحة</p><p className="mt-1 text-[8px] text-slate-400">عدم اختيار أي محافظة يعني كل اليمن.</p></div>{form.enabled_governorates.length > 0 && <button onClick={() => setForm({ ...form, enabled_governorates: [] })} className="rounded-lg bg-slate-100 px-2 py-1 text-[8px] font-bold">كل اليمن</button>}</div><div className="mt-3 grid grid-cols-3 gap-2">{YEMEN_GOVERNORATES.map((governorate) => { const selected = form.enabled_governorates.includes(governorate); return <button type="button" key={governorate} onClick={() => toggleGovernorate(governorate)} className={`flex min-h-9 items-center justify-center gap-1 rounded-lg text-[8px] font-bold ${selected ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-500'}`}><MapPin className="h-3 w-3" />{governorate}</button>; })}</div></div>
+      <AdminField label="سبب التعديل"><textarea className="admin-input min-h-20 resize-none" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="سبب واضح للتغيير" /></AdminField>
+      <button onClick={() => void save()} disabled={saving || reason.trim().length < 5} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white disabled:opacity-40">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ إعدادات المجتمع</button>
+    </div>
+    {overview.distribution.length > 0 && <div className="rounded-2xl bg-white p-4 shadow-sm"><h3 className="text-xs font-bold">التوزيع حسب المحافظة</h3><div className="mt-3 space-y-2">{overview.distribution.map((item) => <div key={item.governorate || 'غير محدد'} className="flex items-center justify-between rounded-xl bg-slate-50 p-3"><span className="text-[10px] font-bold">{item.governorate || 'غير محدد'}</span><span className="text-[9px] text-slate-500">{numberFormat.format(item.verified_count)} موثق / {numberFormat.format(item.published_count)} منشور</span></div>)}</div></div>}
+  </section>;
 }
 
 function ProSection({ snapshot, onSaved, setError, setSuccess }: { snapshot: PlatformAdminSnapshot; onSaved: () => void; setError: (v: string | null) => void; setSuccess: (v: string | null) => void }) {

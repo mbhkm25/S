@@ -167,6 +167,36 @@ export interface AdminAuditItem {
   created_at: string;
 }
 
+export interface AdminBusinessCommunitySettings {
+  singleton: boolean;
+  phase: 'prelaunch' | 'early_access' | 'public' | 'maintenance';
+  registration_open: boolean;
+  minimum_category_size: number;
+  enabled_governorates: string[];
+  prelaunch_title: string;
+  prelaunch_body: string;
+  early_access_title: string;
+  early_access_body: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AdminBusinessCommunityMetric {
+  governorate?: string | null;
+  id?: string;
+  name_ar?: string;
+  total_count: number;
+  published_count: number;
+  verified_count: number;
+}
+
+export interface AdminBusinessCommunityOverview {
+  settings: AdminBusinessCommunitySettings;
+  interest_count: number;
+  distribution: AdminBusinessCommunityMetric[];
+  categories: AdminBusinessCommunityMetric[];
+}
+
 export interface PlatformAdminSnapshot {
   generated_at: string;
   stats: AdminStats;
@@ -234,6 +264,23 @@ export async function updateAdminPlan(plan: AdminPlan, reason: string): Promise<
 
 export async function updateAdminPublicInformation(payload: Partial<AdminPublicInformation>, reason: string): Promise<void> {
   const { error } = await supabase.rpc('platform_admin_update_public_information', {
+    p_payload: payload,
+    p_reason: reason
+  });
+  throwIfError(error);
+}
+
+export async function getAdminBusinessCommunitySettings(): Promise<AdminBusinessCommunityOverview> {
+  const { data, error } = await supabase.rpc('platform_admin_get_business_community_settings');
+  throwIfError(error);
+  return data as AdminBusinessCommunityOverview;
+}
+
+export async function updateAdminBusinessCommunitySettings(
+  payload: Partial<AdminBusinessCommunitySettings>,
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.rpc('platform_admin_update_business_community_settings', {
     p_payload: payload,
     p_reason: reason
   });
