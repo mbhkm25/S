@@ -10,6 +10,7 @@ import {
   type AdminWhatsAppCampaign, type AdminWhatsAppContact,
   type AdminWhatsAppContactDetails, type AdminWhatsAppOverview
 } from '../../lib/platformAdminApi';
+import WhatsAppAssistantAdmin from './WhatsAppAssistantAdmin';
 
 const numberFormat = new Intl.NumberFormat('en-US');
 const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', hour12: true });
@@ -74,6 +75,8 @@ export default function WhatsAppAdminSection({ setError, setSuccess }: {
       <div><h2 className="text-sm font-bold">مستخدمو سند عبر واتساب</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">سجل فعلي للمرسلين والتحويل إلى التطبيق، مع إرسال مقيد بالموافقة وقوالب Meta المعتمدة.</p></div>
       <button type="button" onClick={() => void load()} disabled={loading} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
     </div>
+
+    <WhatsAppAssistantAdmin setError={setError} setSuccess={setSuccess} />
 
     <div className="grid grid-cols-2 gap-2">{cards.map(([label, value, Icon]) => <div key={label} className="rounded-2xl bg-white p-4 shadow-sm"><Icon className="h-5 w-5 text-emerald-600" /><p className="mt-3 text-xl font-bold">{numberFormat.format(value)}</p><p className="mt-1 text-[9px] text-slate-500">{label}</p></div>)}</div>
     <div className="rounded-2xl bg-amber-50 p-4 text-[10px] leading-6 text-amber-900"><strong>ضابط الإرسال:</strong> الجهة التي حالتها «غير محدد» لا تدخل في أي حملة. لا يُرسل إلا لمن سُجلت موافقته صراحة، وباسم قالب معتمد في WhatsApp Manager.</div>
