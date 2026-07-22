@@ -243,6 +243,78 @@ export interface PlatformAdminSnapshot {
   audit_log: AdminAuditItem[];
 }
 
+export interface AdminWhatsAppStats {
+  contacts: number;
+  whatsapp_only: number;
+  registered: number;
+  marketing_opted_in: number;
+  messages: number;
+  operations: number;
+  active_30d: number;
+}
+
+export interface AdminWhatsAppContact {
+  id: string;
+  phone_normalized: string;
+  display_name: string | null;
+  linked_user_id: string | null;
+  linked_user_name: string | null;
+  registration_status: string;
+  onboarding_status: string;
+  transactional_status: 'active' | 'blocked';
+  marketing_status: 'unknown' | 'opted_in' | 'opted_out';
+  first_seen_at: string;
+  last_seen_at: string;
+  first_operation_at: string | null;
+  last_operation_at: string | null;
+  messages_count: number;
+  supported_messages_count: number;
+  operations_count: number;
+  blocked_at: string | null;
+}
+
+export interface AdminWhatsAppCampaign {
+  id: string;
+  name: string;
+  purpose: 'install_app' | 'service_update' | 'transactional_notice';
+  template_name: string;
+  template_language: string;
+  template_parameters: string[];
+  audience_filter: Record<string, unknown>;
+  status: 'draft' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  total_recipients: number;
+  pending_count: number;
+  sent_count: number;
+  delivered_count: number;
+  read_count: number;
+  failed_count: number;
+  admin_reason: string | null;
+  created_at: string;
+  queued_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_by_name: string | null;
+}
+
+export interface AdminWhatsAppOverview {
+  generated_at: string;
+  stats: AdminWhatsAppStats;
+  contacts: AdminWhatsAppContact[];
+  campaigns: AdminWhatsAppCampaign[];
+}
+
+export interface AdminWhatsAppContactDetails {
+  contact: AdminWhatsAppContact & { metadata: Record<string, unknown> };
+  events: Array<{
+    id: string;
+    event_type: string;
+    external_message_id: string | null;
+    operation_id: string | null;
+    occurred_at: string;
+    metadata: Record<string, unknown>;
+  }>;
+}
+
 function throwIfError(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
 }
@@ -347,6 +419,90 @@ export async function reviewAdminPaymentRequest(
   const { error } = await supabase.rpc('platform_admin_review_payment_request', {
     p_payment_request_id: paymentRequestId,
     p_decision: decision,
+    p_reason: reason
+  });
+  throwIfError(error);
+}
+
+export async function getAdminWhatsAppOverview(
+  search = '',
+  registrationStatus = '',
+  limit = 100
+): Promise<AdminWhatsAppOverview> {
+  const { data, error } = await supabase.rpc('platform_admin_get_whatsapp_overview', {
+    p_limit: limit,
+    p_search: search || null,
+    p_registration_status: registrationStatus || null
+  });
+  throwIfError(error);
+  return data as AdminWhatsAppOverview;
+}
+
+export async function getAdminWhatsAppContactDetails(contactId: string): Promise<AdminWhatsAppContactDetails> {
+  const { data, error } = await supabase.rpc('platform_admin_get_whatsapp_contact_details', {
+    p_contact_id: contactId
+  });
+  throwIfError(error);
+  return data as AdminWhatsAppContactDetails;
+}
+
+export async function setAdminWhatsAppContactStatus(
+  contactId: string,
+  payload: {
+    transactionalStatus?: 'active' | 'blocked';
+    marketingStatus?: 'unknown' | 'opted_in' | 'opted_out';
+    reason: string;
+    consentSource?: string;
+  }
+): Promise<void> {
+  const { error } = await supabase.rpc('platform_admin_set_whatsapp_contact_status', {
+    p_contact_id: contactId,
+    p_transactional_status: payload.transactionalStatus || null,
+    p_marketing_status: payload.marketingStatus || null,
+    p_reason: payload.reason,
+    p_consent_source: payload.consentSource || null
+  });
+  throwIfError(error);
+}
+
+export async function createAdminWhatsAppCampaign(payload: {
+  name: string;
+  purpose: AdminWhatsAppCampaign['purpose'];
+  templateName: string;
+  templateLanguage: string;
+  templateParameters: string[];
+  registrationStatus?: string;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc('platform_admin_create_whatsapp_campaign', {
+    p_name: payload.name,
+    p_purpose: payload.purpose,
+    p_template_name: payload.templateName,
+    p_template_language: payload.templateLanguage,
+    p_template_parameters: payload.templateParameters,
+    p_audience_filter: payload.registrationStatus ? { registration_status: payload.registrationStatus } : {}
+  });
+  throwIfError(error);
+  return data as string;
+}
+
+export async function queueAdminWhatsAppCampaign(campaignId: string, reason: string): Promise<number> {
+  const { data, error } = await supabase.rpc('platform_admin_queue_whatsapp_campaign', {
+    p_campaign_id: campaignId,
+    p_reason: reason
+  });
+  throwIfError(error);
+  const result = data as { recipient_count?: number };
+
+  const { error: invokeError } = await supabase.functions.invoke('sanad-v3-whatsapp-campaign-worker', {
+    body: { campaign_id: campaignId }
+  });
+  throwIfError(invokeError);
+  return Number(result.recipient_count || 0);
+}
+
+export async function cancelAdminWhatsAppCampaign(campaignId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('platform_admin_cancel_whatsapp_campaign', {
+    p_campaign_id: campaignId,
     p_reason: reason
   });
   throwIfError(error);
