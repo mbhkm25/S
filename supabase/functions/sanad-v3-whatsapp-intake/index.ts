@@ -352,6 +352,21 @@ async function processDeliveryStatuses(statuses: any[]): Promise<void> {
         message_id: messageId,
         status: deliveryStatus,
       }));
+
+      await supabaseJson(
+        "/rest/v1/rpc/apply_whatsapp_campaign_delivery_status",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            p_message_id: messageId,
+            p_status: deliveryStatus,
+            p_event_at: eventAt,
+            p_error_code: errorCode,
+            p_error_message: errorMessage,
+          }),
+        },
+      );
     } catch (error) {
       console.error(JSON.stringify({
         function: FUNCTION_NAME,
