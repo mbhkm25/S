@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase, hasSupabaseConfig } from './lib/supabase';
+import { clearPersistedSupabaseSession, supabase, hasSupabaseConfig } from './lib/supabase';
 import { Profile } from './types';
 import Auth from './components/Auth';
 import Home from './components/Home';
@@ -42,6 +42,13 @@ import {
 } from './features/push/pushNavigation';
 import { reportPushError } from './features/push/pushErrors';
 import { syncExistingPushSubscription } from './features/push/pushSubscription';
+import {
+  clearManualAuthAttempt,
+  clearExplicitSignOutIntent,
+  hasManualAuthAttempt,
+  hasExplicitSignOutIntent,
+  markExplicitSignOutIntent
+} from './lib/authSessionIntent';
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 
@@ -576,6 +583,19 @@ export default function App() {
       }
 
       try {
+        if (hasExplicitSignOutIntent()) {
+          clearPersistedSupabaseSession();
+          await supabase.auth.signOut({ scope: 'local' });
+
+          if (thisGen !== requestGenerationRef.current) return;
+
+          setUser(null);
+          setProfile(null);
+          setProfileStatus('idle');
+          setAuthState('unauthenticated');
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
 
         if (thisGen !== requestGenerationRef.current) {
@@ -642,10 +662,24 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
 
     // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       requestGenerationRef.current += 1;
 
       if (session?.user) {
+        if (hasExplicitSignOutIntent()) {
+          if (hasManualAuthAttempt()) {
+            clearManualAuthAttempt();
+            clearExplicitSignOutIntent();
+          } else {
+            setPasskeyEnrollmentUser(null);
+            setUser(null);
+            setProfile(null);
+            setProfileStatus('idle');
+            setAuthState('unauthenticated');
+            return;
+          }
+        }
+
         setPasskeyEnrollmentUser(candidate => candidate?.id === session.user.id ? candidate : null);
         setUser(prevUser => {
           if (prevUser?.id === session.user.id) {
@@ -844,6 +878,8 @@ export default function App() {
   const shouldShowAuth = authState === 'unauthenticated' && !isDetailsView;
 
   const handleAuthSuccess = (sessionUser: SupabaseUser, userProfile: Profile) => {
+    clearManualAuthAttempt();
+    clearExplicitSignOutIntent();
     setUser(sessionUser);
     setProfile(userProfile);
     setAuthState('authenticated');
@@ -856,12 +892,25 @@ export default function App() {
     setPasskeyEnrollmentUser(null);
   };
 
-  const handleLogoutSuccess = () => {
+  const handleLogoutSuccess = async () => {
+    clearManualAuthAttempt();
+    markExplicitSignOutIntent();
+    requestGenerationRef.current += 1;
     setPasskeyEnrollmentUser(null);
     setUser(null);
     setProfile(null);
+    setProfileStatus('idle');
     setAuthState('unauthenticated');
     navigateTo('home');
+
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) logAuthDiagnostic('explicit_sign_out_failed', error);
+    } catch (error) {
+      logAuthDiagnostic('explicit_sign_out_failed', error);
+    } finally {
+      clearPersistedSupabaseSession();
+    }
   };
 
   return (

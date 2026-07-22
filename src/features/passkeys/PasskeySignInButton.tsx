@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Fingerprint, Loader2 } from 'lucide-react';
 import { signInWithPasskey } from './passkeyApi';
 import { isPasskeySupported } from './passkeySupport';
+import { clearManualAuthAttempt, markManualAuthAttempt } from '../../lib/authSessionIntent';
 
 interface PasskeySignInButtonProps {
   onError: (message: string) => void;
@@ -36,9 +37,11 @@ export default function PasskeySignInButton({ onError }: PasskeySignInButtonProp
     abortRef.current = controller;
 
     try {
+      markManualAuthAttempt();
       await signInWithPasskey(controller.signal);
       // Supabase dispatches SIGNED_IN; App.onAuthStateChange is the sole session/bootstrap owner.
     } catch (error) {
+      clearManualAuthAttempt();
       if (mountedRef.current) {
         onError(error instanceof Error ? error.message : 'تعذر تسجيل الدخول بالبصمة.');
       }
