@@ -3,6 +3,10 @@ import type { BusinessProfile } from './businessApi';
 
 const ACTIVE_MANAGED_BUSINESS_KEY = 'sanad.activeManagedBusinessId';
 
+export type BusinessProfileMode = 'products' | 'services' | 'appointments' | 'menu' | 'portfolio' | 'custom';
+export type BusinessPrimaryAction = 'whatsapp' | 'call' | 'browse' | 'request_service' | 'request_booking' | 'request_quote';
+export type BusinessPublicSection = 'overview' | 'catalog' | 'services' | 'appointments' | 'offers' | 'portfolio' | 'hours' | 'financial' | 'contact' | 'about' | 'location';
+
 export function rememberActiveManagedBusiness(businessId: string) {
   if (typeof window === 'undefined' || !businessId) return;
   window.sessionStorage.setItem(ACTIVE_MANAGED_BUSINESS_KEY, businessId);
@@ -54,9 +58,15 @@ export type ManagementBusinessProfile = BusinessProfile & {
   address_text?: string | null;
   profile_image_path?: string | null;
   cover_image_path?: string | null;
+  horizontal_cover_image_path?: string | null;
   gallery_paths?: string[] | null;
   contact_links?: Record<string, string | null> | null;
   working_hours?: Record<string, { open: string; close: string; closed: boolean }> | null;
+  profile_mode?: BusinessProfileMode;
+  primary_action?: BusinessPrimaryAction;
+  primary_action_label?: string | null;
+  enabled_sections?: BusinessPublicSection[];
+  featured_item_ids?: string[];
   profile_sections?: {
     financial_accounts?: FinancialAccount[];
     complaints?: BusinessComplaint[];
@@ -81,6 +91,26 @@ export async function getBusinessDashboardSummary(businessId: string): Promise<B
   const { data, error } = await supabase.rpc('get_business_dashboard_summary', { p_business_id: businessId });
   if (error) throw new Error(error.message || 'تعذر تحميل ملخص لوحة النشاط.');
   return data as BusinessDashboardSummary;
+}
+
+export async function setBusinessPublicProfileSettings(input: {
+  businessId: string;
+  profileMode: BusinessProfileMode;
+  primaryAction: BusinessPrimaryAction;
+  primaryActionLabel?: string | null;
+  enabledSections: BusinessPublicSection[];
+  featuredItemIds?: string[];
+}): Promise<ManagementBusinessProfile> {
+  const { data, error } = await supabase.rpc('set_business_public_profile_settings', {
+    p_business_id: input.businessId,
+    p_profile_mode: input.profileMode,
+    p_primary_action: input.primaryAction,
+    p_primary_action_label: input.primaryActionLabel?.trim() || null,
+    p_enabled_sections: input.enabledSections,
+    p_featured_item_ids: input.featuredItemIds || []
+  });
+  if (error) throw new Error(error.message || 'تعذر حفظ إعدادات الملف العام.');
+  return unwrap<ManagementBusinessProfile>(data, 'business');
 }
 
 export async function upsertFinancialAccount(input: {
