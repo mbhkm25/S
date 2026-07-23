@@ -1,198 +1,170 @@
 /*
- * SANAD motion experience
+ * SANAD motion experience — restrained edition
  *
- * A lightweight, CSS-first adaptation of the most useful React Bits patterns:
- * FadeContent / BlurText, GradientText / ShinyText, AnimatedList,
- * SpotlightCard / GlareHover.
- *
- * The home screen is intentionally excluded. All effects respect
- * prefers-reduced-motion and avoid changing document flow.
+ * Global motion is intentionally limited to safe, layout-neutral effects.
+ * Rich effects are opt-in through explicit utility classes so dialogs,
+ * sheets, menus, and fixed overlays keep their native positioning.
  */
 
 :root {
-  --sanad-motion-emerald: 16, 185, 129;
   --sanad-motion-sky: 14, 165, 233;
-  --sanad-motion-indigo: 99, 102, 241;
   --sanad-motion-ink: 15, 23, 42;
 }
 
-/* Scope every enhancement to non-home application views only. */
+/*
+ * 1. Page reveal.
+ * Important: the final frame uses transform/filter: none so fixed dialogs
+ * never inherit a transformed containing block after the animation finishes.
+ */
 #app_main > .animate-fade-in:not(:has(#home_view)) {
-  position: relative;
-  isolation: isolate;
-  animation: sanad-page-reveal 560ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: sanad-page-reveal 380ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-/* 1. FadeContent + BlurText: page-level reveal. */
 @keyframes sanad-page-reveal {
   from {
     opacity: 0;
-    filter: blur(9px);
-    transform: translateY(12px) scale(.992);
+    filter: blur(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
+    filter: none;
+    transform: none;
   }
 }
 
-/* 2. GradientText + ShinyText: restrained heading treatment. */
-#app_main > .animate-fade-in:not(:has(#home_view)) :is(h1, h2)[class*="font-bold"],
-#app_main > .animate-fade-in:not(:has(#home_view)) :is(h1, h2)[class*="font-semibold"] {
+/*
+ * 2. Restrained heading shine.
+ * Only the first direct page heading is affected, once. It is not an
+ * infinite GradientText treatment and does not recolor every h1/h2.
+ */
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type {
   background-image: linear-gradient(
     105deg,
-    rgb(var(--sanad-motion-ink)) 0%,
-    rgb(var(--sanad-motion-ink)) 34%,
-    rgb(var(--sanad-motion-indigo)) 46%,
-    rgb(var(--sanad-motion-sky)) 54%,
-    rgb(var(--sanad-motion-ink)) 66%,
-    rgb(var(--sanad-motion-ink)) 100%
+    currentColor 0%,
+    currentColor 42%,
+    rgba(var(--sanad-motion-sky), .9) 50%,
+    currentColor 58%,
+    currentColor 100%
   );
-  background-size: 240% 100%;
+  background-size: 260% 100%;
   background-position: 120% 50%;
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: sanad-heading-shine 6.5s ease-in-out 700ms infinite;
+  animation: sanad-heading-shine-once 1.35s ease-out 180ms 1 both;
 }
 
-@keyframes sanad-heading-shine {
-  0%, 18% { background-position: 120% 50%; }
-  46%, 100% { background-position: -120% 50%; }
+@keyframes sanad-heading-shine-once {
+  from { background-position: 120% 50%; }
+  to { background-position: -120% 50%; }
 }
 
-/* 3. AnimatedList: stagger the first meaningful children in each screen. */
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > * {
-  animation: sanad-item-rise 460ms cubic-bezier(.22, 1, .36, 1) both;
+/*
+ * 3. Stagger only top-level screen sections/cards.
+ * Avoid forms, modal internals, generic space-y containers, and nested lists.
+ */
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article) {
+  animation: sanad-section-rise 360ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > *:nth-child(1) { animation-delay: 55ms; }
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > *:nth-child(2) { animation-delay: 95ms; }
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > *:nth-child(3) { animation-delay: 135ms; }
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > *:nth-child(4) { animation-delay: 175ms; }
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article, form, ul, ol, [role="list"], [class*="space-y-"]) > *:nth-child(n+5) { animation-delay: 210ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article):nth-of-type(1) { animation-delay: 35ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article):nth-of-type(2) { animation-delay: 70ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article):nth-of-type(3) { animation-delay: 105ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article):nth-of-type(n+4) { animation-delay: 130ms; }
 
-@keyframes sanad-item-rise {
+@keyframes sanad-section-rise {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(.985);
+    transform: translateY(7px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
-/* 4. SpotlightCard + GlareHover: interactive surfaces feel responsive. */
-#app_main > .animate-fade-in:not(:has(#home_view)) :is(
-  article,
-  [class*="rounded-2xl"],
-  [class*="rounded-3xl"],
-  [class*="rounded-[1."],
-  [class*="rounded-[2."]
-):not(input):not(textarea):not(select) {
+/*
+ * 4. Interaction feedback.
+ * Buttons and links only; cards, dialogs, sheets, and generic rounded
+ * containers are deliberately excluded.
+ */
+@media (hover: hover) and (pointer: fine) {
+  #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled) {
+    transition:
+      transform 180ms cubic-bezier(.22, 1, .36, 1),
+      box-shadow 220ms ease,
+      border-color 220ms ease,
+      background-color 220ms ease;
+  }
+
+  #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+}
+
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled):active {
+  transform: scale(.99);
+  transition-duration: 80ms;
+}
+
+/* Rich glare/spotlight is opt-in instead of being applied to every card. */
+.sanad-motion-glare {
   position: relative;
+  overflow: hidden;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(
-    article,
-    button,
-    a,
-    [role="button"],
-    [class*="rounded-2xl"],
-    [class*="rounded-3xl"]
-  ):not(:disabled) {
-    transition:
-      transform 220ms cubic-bezier(.22, 1, .36, 1),
-      box-shadow 260ms ease,
-      border-color 260ms ease,
-      background-color 260ms ease;
-  }
-
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(
-    article,
-    button,
-    a,
-    [role="button"],
-    [class*="rounded-2xl"],
-    [class*="rounded-3xl"]
-  ):not(:disabled):hover {
-    transform: translateY(-2px);
-  }
-
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(
-    article,
-    [class*="rounded-2xl"],
-    [class*="rounded-3xl"]
-  ):not(button):not(a):not(input):not(textarea):not(select)::after {
+  .sanad-motion-glare::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
     opacity: 0;
-    background:
-      radial-gradient(circle at 76% 18%, rgba(var(--sanad-motion-sky), .14), transparent 34%),
-      linear-gradient(112deg, transparent 34%, rgba(255,255,255,.42) 48%, transparent 62%);
-    background-size: 100% 100%, 230% 100%;
-    background-position: center, 135% 0;
-    transition: opacity 280ms ease, background-position 720ms cubic-bezier(.22, 1, .36, 1);
-    z-index: 1;
+    background: linear-gradient(112deg, transparent 36%, rgba(255,255,255,.38) 49%, transparent 62%);
+    background-size: 230% 100%;
+    background-position: 135% 0;
+    transition: opacity 220ms ease, background-position 650ms cubic-bezier(.22, 1, .36, 1);
   }
 
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(
-    article,
-    [class*="rounded-2xl"],
-    [class*="rounded-3xl"]
-  ):not(button):not(a):not(input):not(textarea):not(select):hover::after,
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(
-    article,
-    [class*="rounded-2xl"],
-    [class*="rounded-3xl"]
-  ):not(button):not(a):not(input):not(textarea):not(select):focus-within::after {
-    opacity: 1;
-    background-position: center, -135% 0;
+  .sanad-motion-glare:hover::after,
+  .sanad-motion-glare:focus-within::after {
+    opacity: .65;
+    background-position: -135% 0;
   }
 }
 
-/* Touch feedback: subtle, fast, and without hover-only assumptions. */
-#app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled):active {
-  transform: scale(.985);
-  transition-duration: 90ms;
-}
-
-/* Keep pseudo overlays behind actual card content. */
-#app_main > .animate-fade-in:not(:has(#home_view)) :is(
-  article,
-  [class*="rounded-2xl"],
-  [class*="rounded-3xl"]
-) > * {
-  position: relative;
-  z-index: 2;
-}
-
-/* Focus remains explicit and accessible despite visual enhancements. */
 #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, input, textarea, select, [tabindex]):focus-visible {
-  outline: 2px solid rgba(var(--sanad-motion-sky), .85);
+  outline: 2px solid rgba(var(--sanad-motion-sky), .82);
   outline-offset: 3px;
 }
 
-/* Disable decorative motion for users and devices that request it. */
+/* Explicitly preserve overlay geometry and stacking. */
+#app_main [role="dialog"],
+#app_main [aria-modal="true"],
+#app_main .fixed,
+#app_main .sticky {
+  animation: none;
+  filter: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #app_main > .animate-fade-in:not(:has(#home_view)),
-  #app_main > .animate-fade-in:not(:has(#home_view)) *,
-  #app_main > .animate-fade-in:not(:has(#home_view)) *::before,
-  #app_main > .animate-fade-in:not(:has(#home_view)) *::after {
-    animation-duration: 1ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
+  #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article),
+  #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
+  #app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type,
+  .sanad-motion-glare::after {
+    animation: none !important;
+    transition: none !important;
+    filter: none !important;
+    transform: none !important;
   }
 
-  #app_main > .animate-fade-in:not(:has(#home_view)) :is(h1, h2) {
+  #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
+  #app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type {
     background: none !important;
     color: inherit !important;
     -webkit-text-fill-color: currentColor !important;
