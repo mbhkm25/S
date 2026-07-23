@@ -5,6 +5,7 @@ import type {
   DeliveryServiceSettings,
   PublicDeliveryProvider
 } from './businessCatalogExperience';
+import type { BusinessWorkingHours } from './businessWorkingHours';
 
 const ACTIVE_MANAGED_BUSINESS_KEY = 'sanad.activeManagedBusinessId';
 
@@ -66,7 +67,7 @@ export type ManagementBusinessProfile = BusinessProfile & {
   horizontal_cover_image_path?: string | null;
   gallery_paths?: string[] | null;
   contact_links?: Record<string, string | null> | null;
-  working_hours?: Record<string, { open: string; close: string; closed: boolean }> | null;
+  working_hours?: BusinessWorkingHours | null;
   profile_mode?: BusinessProfileMode;
   primary_action?: BusinessPrimaryAction;
   primary_action_label?: string | null;
@@ -181,14 +182,14 @@ export async function deleteFinancialAccount(businessId: string, accountId: stri
 
 export async function saveWorkingHours(
   businessId: string,
-  hours: Record<string, { open: string; close: string; closed: boolean }>
-): Promise<typeof hours> {
+  hours: BusinessWorkingHours
+): Promise<BusinessWorkingHours> {
   const { data, error } = await supabase.rpc('set_business_working_hours', {
     p_business_id: businessId,
     p_working_hours: hours
   });
   if (error) throw new Error(error.message || 'تعذر حفظ ساعات العمل.');
-  return unwrap<typeof hours>(data, 'working_hours');
+  return unwrap<BusinessWorkingHours>(data, 'working_hours');
 }
 
 export async function setComplaintStatus(
