@@ -5,6 +5,7 @@ import {
   Settings2, ShieldCheck, Users, X
 } from 'lucide-react';
 import PlatformAdmin from '../../src/components/admin/PlatformAdmin';
+import BusinessSlugAdministration from './BusinessSlugAdministration';
 import './admin-workspace.css';
 
 type NavigationItem = {
@@ -54,11 +55,7 @@ export default function AdminWorkspace({ onNavigate }: Props) {
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = item.label === activeLabel;
-            return (
-              <button key={item.label} className={active ? 'is-active' : ''} onClick={() => selectSection(item)}>
-                <Icon /><span>{item.label}</span>
-              </button>
-            );
+            return <button key={item.label} className={active ? 'is-active' : ''} onClick={() => selectSection(item)}><Icon /><span>{item.label}</span></button>;
           })}
         </nav>
 
@@ -88,6 +85,7 @@ export default function AdminWorkspace({ onNavigate }: Props) {
             <div><Activity /><span>بيانات تشغيلية مباشرة من قاعدة البيانات</span></div>
             <span>آخر تحديث تلقائي عند فتح اللوحة</span>
           </div>
+          {activeLabel === 'الأنشطة' && <BusinessSlugAdministration />}
           <PlatformAdmin onNavigate={onNavigate} />
         </section>
       </main>
