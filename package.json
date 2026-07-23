@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:admin": "vite --config admin/vite.config.ts --port=3001 --host=0.0.0.0",
     "build": "vite build --configLoader bundle",
+    "build:admin": "vite build --config admin/vite.config.ts --configLoader bundle",
     "build:android": "vite build --mode android",
     "cap:sync": "npx cap sync android",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "preview:admin": "vite preview --config admin/vite.config.ts --port=4174",
+    "clean": "rm -rf dist dist-admin server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
