@@ -223,37 +223,39 @@ export function createOrderReference(prefix = 'SND-ORD'): string {
   return `${prefix}-${time}${random}`;
 }
 
-function appendOrderItems(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
-  lines.push('تفاصيل الطلب:');
+function appendCompactItems(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
   context.items.forEach((item, index) => {
     const price = settings.show_prices
       ? ` — ${formatCatalogPrice(item.price, item.currency, settings.price_display, settings.missing_price_label)}`
       : '';
-    lines.push(`${index + 1}. ${cleanLine(item.title, 140)} × ${item.quantity}${price}`);
+    lines.push(`${index + 1}) ${cleanLine(item.title, 140)} × ${item.quantity}${price}`);
     if (settings.allow_item_notes && item.note) lines.push(`   ملاحظة: ${cleanLine(item.note, 180)}`);
   });
 }
 
-function appendOrderTotals(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
+function appendCompactTotals(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
   if (!settings.show_total) return;
   const totals = cartTotals(context.items);
   if (!Object.keys(totals).length) return;
-  lines.push('', 'الإجمالي:');
+  lines.push('');
   Object.entries(totals).forEach(([currency, total]) => {
-    lines.push(`- ${formatCatalogPrice(total, currency, settings.price_display, settings.missing_price_label)}`);
+    lines.push(`الإجمالي: ${formatCatalogPrice(total, currency, settings.price_display, settings.missing_price_label)}`);
   });
 }
 
-function appendCustomerDetails(lines: string[], customer: CatalogCustomerDetails): void {
-  if (!customer.name && !customer.phone && !customer.area && !customer.address && !customer.note && !customer.paymentMethod) return;
-  lines.push('', 'بيانات العميل:');
-  if (customer.name) lines.push(`الاسم: ${cleanLine(customer.name, 100)}`);
-  if (customer.phone) lines.push(`رقم التواصل: ${cleanPhone(customer.phone)}`);
-  if (customer.area) lines.push(`المنطقة: ${cleanLine(customer.area, 100)}`);
-  if (customer.address) lines.push(`العنوان: ${cleanLine(customer.address, 240)}`);
-  if (customer.paymentMethod === 'paid') lines.push('حالة الدفع: مدفوع');
-  if (customer.paymentMethod === 'cash_on_delivery') lines.push('حالة الدفع: الدفع عند الاستلام');
-  if (customer.note) lines.push(`ملاحظات عامة: ${cleanLine(customer.note, 240)}`);
+function appendCompactCustomer(lines: string[], customer: CatalogCustomerDetails): void {
+  const name = cleanLine(customer.name, 100);
+  const phone = cleanPhone(customer.phone);
+  const location = [cleanLine(customer.area, 100), cleanLine(customer.address, 240)].filter(Boolean).join(' – ');
+  const hasDetails = Boolean(name || phone || location || customer.note || (customer.paymentMethod && customer.paymentMethod !== 'unspecified'));
+  if (!hasDetails) return;
+  lines.push('', 'العميل:');
+  if (name) lines.push(name);
+  if (phone) lines.push(phone);
+  if (location) lines.push(location);
+  if (customer.paymentMethod === 'paid') lines.push('مدفوع');
+  if (customer.paymentMethod === 'cash_on_delivery') lines.push('الدفع عند الاستلام');
+  if (customer.note) lines.push(`ملاحظة: ${cleanLine(customer.note, 240)}`);
 }
 
 function finalizeMessage(lines: string[]): string {
@@ -264,17 +266,18 @@ export function buildMerchantWhatsAppMessage(
   context: CatalogOrderContext,
   settings: CatalogDisplaySettings
 ): string {
+  const intro = cleanLine(settings.whatsapp_message_intro, 240);
   const lines = [
-    cleanLine(settings.whatsapp_message_intro, 240),
+    intro || 'طلب جديد عبر سند',
+    `المرجع: ${context.reference}`,
     '',
-    `مرجع الطلب: ${context.reference}`,
-    `النشاط: ${cleanLine(context.businessName, 140)}`,
-    `رابط النشاط: ${buildPublicBusinessUrl(context.businessSlug)}`,
+    `المتجر: ${cleanLine(context.businessName, 140)}`,
     ''
   ];
-  appendOrderItems(lines, context, settings);
-  appendOrderTotals(lines, context, settings);
-  appendCustomerDetails(lines, context.customer);
+  appendCompactItems(lines, context, settings);
+  appendCompactTotals(lines, context, settings);
+  appendCompactCustomer(lines, context.customer);
+  lines.push('', 'رابط النشاط:', buildPublicBusinessUrl(context.businessSlug));
   return finalizeMessage(lines);
 }
 
@@ -285,21 +288,21 @@ export function buildDeliveryWhatsAppMessage(
   deliverySettings: DeliveryServiceSettings
 ): string {
   const lines = [
-    'مرحبًا، أريد طلب خدمة توصيل للطلب التالي:',
+    'طلب توصيل جديد عبر سند',
+    `المرجع: ${context.reference}`,
     '',
-    `مرجع الطلب: ${context.reference}`,
-    `شركة التوصيل المختارة: ${cleanLine(provider.name, 140)}`,
+    `شركة التوصيل: ${cleanLine(provider.name, 140)}`,
     '',
-    'بيانات الاستلام من المتجر:',
-    `اسم المتجر: ${cleanLine(context.businessName, 140)}`,
-    `رقم المتجر: ${cleanPhone(context.businessWhatsapp)}`,
-    `رابط المتجر: ${buildPublicBusinessUrl(context.businessSlug)}`
+    'الاستلام من:',
+    cleanLine(context.businessName, 140),
+    cleanPhone(context.businessWhatsapp)
   ];
-  if (context.businessAddress) lines.push(`عنوان المتجر: ${cleanLine(context.businessAddress, 240)}`);
-  lines.push('');
-  appendOrderItems(lines, context, catalogSettings);
-  if (deliverySettings.share_order_total) appendOrderTotals(lines, context, catalogSettings);
-  appendCustomerDetails(lines, context.customer);
+  if (context.businessAddress) lines.push(cleanLine(context.businessAddress, 240));
+  lines.push('', 'محتوى الطلب:');
+  appendCompactItems(lines, context, catalogSettings);
+  if (deliverySettings.share_order_total) appendCompactTotals(lines, context, catalogSettings);
+  appendCompactCustomer(lines, context.customer);
+  lines.push('', 'رابط المتجر:', buildPublicBusinessUrl(context.businessSlug));
   return finalizeMessage(lines);
 }
 
