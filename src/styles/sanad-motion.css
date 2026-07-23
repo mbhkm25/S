@@ -109,100 +109,6 @@
 #app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(4) { animation-delay: 135ms; }
 #app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(n+5) { animation-delay: 170ms; }
 
-/*
- * React Bits Carousel adaptation for the detailed public business profile.
- * Tabs keep their navigation semantics while the active tab and its content
- * receive a restrained 3D carousel transition. Autoplay and looping are
- * intentionally omitted because these panels are user-controlled navigation.
- */
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav {
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  mask-image: linear-gradient(to left, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to left, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav::-webkit-scrollbar {
-  display: none;
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav button {
-  scroll-snap-align: center;
-  transform-style: preserve-3d;
-  transform-origin: 50% 100%;
-  border-radius: 14px 14px 0 0;
-  transition:
-    color 220ms ease,
-    background-color 220ms ease,
-    box-shadow 260ms ease,
-    transform 420ms cubic-bezier(.22, 1, .36, 1);
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav button:has(> span) {
-  color: #047857;
-  background: linear-gradient(180deg, rgba(236,253,245,.96), rgba(255,255,255,.9));
-  box-shadow: 0 9px 22px rgba(16,185,129,.09);
-  transform: translateY(-1px) rotateX(0deg) scale(1.025);
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav button:not(:has(> span)) {
-  transform: perspective(600px) rotateX(4deg) scale(.985);
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > nav button > span {
-  height: 3px;
-  box-shadow: 0 0 14px rgba(16,185,129,.55);
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > main {
-  perspective: 1200px;
-  perspective-origin: 50% 24%;
-  overflow-x: clip;
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > main > div > * {
-  backface-visibility: hidden;
-  transform-origin: 92% 50%;
-  animation: sanad-profile-carousel-panel 520ms cubic-bezier(.22, 1, .36, 1) both;
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > main > div > :nth-child(2) {
-  animation-delay: 45ms;
-}
-
-#app_main > .animate-fade-in:not(:has(#home_view))
-  div[dir="rtl"]:has(> header + nav + main) > main > div > :nth-child(n+3) {
-  animation-delay: 80ms;
-}
-
-@keyframes sanad-profile-carousel-panel {
-  0% {
-    opacity: 0;
-    filter: blur(2px);
-    transform: translate3d(24px, 4px, -30px) rotateY(-7deg) scale(.982);
-  }
-  58% {
-    opacity: 1;
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    filter: none;
-    transform: none;
-  }
-}
-
 /* Interaction feedback. */
 @media (hover: hover) and (pointer: fine) {
   #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled) {
@@ -270,8 +176,6 @@
   #app_main > .animate-fade-in:not(:has(#home_view)) h1,
   #app_main > .animate-fade-in:not(:has(#home_view)) h2,
   #app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article,
-  #app_main > .animate-fade-in:not(:has(#home_view)) div[dir="rtl"]:has(> header + nav + main) > nav button,
-  #app_main > .animate-fade-in:not(:has(#home_view)) div[dir="rtl"]:has(> header + nav + main) > main > div > *,
   .sanad-stagger-cards > *,
   .sanad-motion-glare::after {
     animation: none !important;
