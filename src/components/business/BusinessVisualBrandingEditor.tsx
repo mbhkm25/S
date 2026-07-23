@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import {
-  ArrowRight, Check, ContactRound, Eye, Image as ImageIcon, Images,
+  ArrowRight, Check, ContactRound, Image as ImageIcon, Images,
   LayoutTemplate, Loader2, Save, ShoppingBag, UploadCloud
 } from 'lucide-react';
 import {
@@ -22,8 +22,8 @@ import {
   type ManagementBusinessProfile
 } from '../../lib/businessManagementApi';
 import { supabase } from '../../lib/supabase';
-import { buildPublicBusinessUrl } from '../../lib/urlUtils';
 import AnimatedDisclosure from '../ui/AnimatedDisclosure';
+import ShinyText from '../ui/ShinyText';
 import BusinessCatalogExperienceSettings from './BusinessCatalogExperienceSettings';
 
 interface Props { onNavigate: (page: string, token?: string) => void; }
@@ -61,7 +61,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
   const [loading,setLoading]=useState(true); const [saving,setSaving]=useState(false);
   const [uploading,setUploading]=useState<UploadingField>(null);
   const [error,setError]=useState<string|null>(null); const [success,setSuccess]=useState<string|null>(null);
-  const [openSection,setOpenSection]=useState<SectionKey>('profile');
+  const [openSection,setOpenSection]=useState<SectionKey|null>('profile');
   const [draft,setDraft]=useState<Draft>(EMPTY_DRAFT);
   const [profilePath,setProfilePath]=useState(''); const [profilePreview,setProfilePreview]=useState('');
   const [coverPath,setCoverPath]=useState(''); const [coverPreview,setCoverPreview]=useState('');
@@ -71,7 +71,7 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
 
   const modeMeta=useMemo(()=>MODE_OPTIONS.find(item=>item.id===mode)||MODE_OPTIONS[0],[mode]);
   const actionMeta=ACTION_OPTIONS.find(item=>item.id===action)?.label||'تواصل';
-  const toggleSection=(section:SectionKey)=>setOpenSection(current=>current===section?'profile':section);
+  const toggleSection=(section:SectionKey)=>setOpenSection(current=>current===section?null:section);
 
   const load=async()=>{setLoading(true);setError(null);try{
     const contexts=await getUserBusinessContexts(); const preferred=getActiveManagedBusinessId();
@@ -109,12 +109,12 @@ export default function BusinessVisualBrandingEditor({onNavigate}:Props){
 
   if(loading)return <div className="min-h-[60vh] space-y-4 bg-slate-50 p-4"><div className="h-16 animate-pulse rounded-2xl bg-slate-200"/><div className="h-64 animate-pulse rounded-3xl bg-slate-200"/></div>;
   return <div className="min-h-screen bg-slate-50/70 pb-16 font-arabic text-right" dir="rtl">
-    <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur"><button onClick={()=>onNavigate('business-manage')} className="rounded-xl border border-slate-200 p-2.5" aria-label="العودة"><ArrowRight className="h-4 w-4"/></button><div className="min-w-0 flex-1"><h1 className="truncate text-sm font-bold">الملف العام</h1><p className="text-[10px] text-slate-400">{business?.name}</p></div>{business&&<a href={buildPublicBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-[10px] font-bold text-white"><Eye className="h-4 w-4"/>معاينة</a>}</header>
+    <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur"><button onClick={()=>onNavigate('business-manage')} className="rounded-xl border border-slate-200 p-2.5" aria-label="العودة"><ArrowRight className="h-4 w-4"/></button><div className="min-w-0 flex-1"><h1 className="truncate text-sm font-bold"><ShinyText text="الملف العام" speed={2.5} delay={1.5} color="#0f172a" shineColor="#10b981" spread={110} pauseOnHover /></h1><p className="text-[10px] text-slate-400">{business?.name}</p></div></header>
     <main className="mx-auto w-full max-w-3xl space-y-3 px-2 py-3 sm:px-3">
       {error&&<motion.div initial={reduceMotion?false:{opacity:0,y:-6}} animate={{opacity:1,y:0}} className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{error}</motion.div>}{success&&<motion.div initial={reduceMotion?false:{opacity:0,y:-6}} animate={{opacity:1,y:0}} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</motion.div>}
 
       <AnimatedDisclosure open={openSection==='profile'} onToggle={()=>toggleSection('profile')} title="نوع وتجربة الملف" summary={`${modeMeta.title} · ${actionLabel||actionMeta}`} icon={LayoutTemplate} badge="الأساس">
-        <form onSubmit={saveSettings} className="space-y-4"><div className="grid gap-2 sm:grid-cols-2">{MODE_OPTIONS.map((item,index)=><motion.button type="button" key={item.id} initial={reduceMotion?false:{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:reduceMotion?0:index*.035}} onClick={()=>chooseMode(item.id)} className={`relative rounded-2xl border p-3 text-right transition active:scale-[.99] ${mode===item.id?'border-emerald-500 bg-emerald-50':'border-slate-200 bg-slate-50'}`}>{mode===item.id&&<Check className="absolute left-3 top-3 h-4 w-4 text-emerald-600"/>}<strong className="block text-xs">{item.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{item.description}</span></motion.button>)}</div><label className="block space-y-1 text-[10px] font-bold text-slate-600">الإجراء الرئيسي<select value={action} onChange={event=>setAction(event.target.value as BusinessPrimaryAction)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{ACTION_OPTIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label className="block space-y-1 text-[10px] font-bold text-slate-600">تسمية مخصصة للزر - اختياري<input value={actionLabel} maxLength={60} onChange={event=>setActionLabel(event.target.value)} placeholder={actionMeta} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/></label><div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-600">الأقسام المفعلة تلقائيًا</p><div className="mt-2 flex flex-wrap gap-2">{modeMeta.sections.map(item=><span key={item} className="rounded-full bg-white px-3 py-1.5 text-[9px] font-bold text-slate-600 shadow-sm">{item}</span>)}</div></div><button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 p-3.5 text-xs font-bold text-white disabled:bg-slate-300">{saving?<Loader2 className="h-4 w-4 animate-spin"/>:<Save className="h-4 w-4"/>}حفظ إعدادات الملف</button></form>
+        <form onSubmit={saveSettings} className="space-y-4"><div className="sanad-stagger-cards grid gap-2 sm:grid-cols-2">{MODE_OPTIONS.map((item,index)=><motion.button type="button" key={item.id} initial={reduceMotion?false:{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:reduceMotion?0:index*.035}} onClick={()=>chooseMode(item.id)} className={`relative rounded-2xl border p-3 text-right transition active:scale-[.99] ${mode===item.id?'border-emerald-500 bg-emerald-50':'border-slate-200 bg-slate-50'}`}>{mode===item.id&&<Check className="absolute left-3 top-3 h-4 w-4 text-emerald-600"/>}<strong className="block text-xs">{item.title}</strong><span className="mt-1 block text-[10px] leading-5 text-slate-500">{item.description}</span></motion.button>)}</div><label className="block space-y-1 text-[10px] font-bold text-slate-600">الإجراء الرئيسي<select value={action} onChange={event=>setAction(event.target.value as BusinessPrimaryAction)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">{ACTION_OPTIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label className="block space-y-1 text-[10px] font-bold text-slate-600">تسمية مخصصة للزر - اختياري<input value={actionLabel} maxLength={60} onChange={event=>setActionLabel(event.target.value)} placeholder={actionMeta} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/></label><div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-600">الأقسام المفعلة تلقائيًا</p><div className="mt-2 flex flex-wrap gap-2">{modeMeta.sections.map(item=><span key={item} className="rounded-full bg-white px-3 py-1.5 text-[9px] font-bold text-slate-600 shadow-sm">{item}</span>)}</div></div><button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 p-3.5 text-xs font-bold text-white disabled:bg-slate-300">{saving?<Loader2 className="h-4 w-4 animate-spin"/>:<Save className="h-4 w-4"/>}حفظ إعدادات الملف</button></form>
       </AnimatedDisclosure>
 
       <AnimatedDisclosure open={openSection==='catalog'} onToggle={()=>toggleSection('catalog')} title="الكتالوج والطلبات والتوصيل" summary={`${business?.featured_item_ids?.length||0} عناصر مميزة · إعدادات الطلب والتوصيل`} icon={ShoppingBag}>

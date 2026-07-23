@@ -9,6 +9,7 @@ import {
   workingDaySummary,
   type BusinessWorkingHours
 } from '../../lib/businessWorkingHours';
+import ShinyText from '../ui/ShinyText';
 
 interface Props {
   hours: BusinessWorkingHours;
@@ -23,7 +24,7 @@ export default function BusinessWorkingHoursEditor({ hours, saving, onChange, on
   return <section className="space-y-4 rounded-[1.8rem] border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
     <div className="flex items-start gap-3">
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><Clock3 className="h-5 w-5" /></span>
-      <div className="min-w-0 flex-1"><h2 className="text-sm font-bold text-slate-950">إدارة ساعات العمل والدوام</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">حدد دوامًا متواصلًا أو فترتين صباحية ومسائية لكل يوم. تنعكس الحالة مباشرة على الملف العام.</p></div>
+      <div className="min-w-0 flex-1"><h2 className="text-sm font-bold"><ShinyText text="إدارة ساعات العمل والدوام" speed={2.5} delay={1.4} color="#0f172a" shineColor="#10b981" spread={110} pauseOnHover /></h2><p className="mt-1 text-[10px] leading-5 text-slate-500">حدد دوامًا متواصلًا أو فترتين صباحية ومسائية لكل يوم. تنعكس الحالة مباشرة على الملف العام.</p></div>
     </div>
 
     <div className="space-y-3">{BUSINESS_DAYS.map(([key, label], index) => {

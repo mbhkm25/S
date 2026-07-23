@@ -2,6 +2,8 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import './lib/publicBusinessProfileSwipe';
+import './lib/publicBusinessProfileShare';
 
 import { Capacitor } from '@capacitor/core';
 
