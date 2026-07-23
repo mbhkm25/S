@@ -29,6 +29,30 @@
   }
 }
 
+/* React Bits ShinyText visual treatment for prominent non-home headings.
+ * Explicit <ShinyText /> instances are excluded to avoid applying the effect twice.
+ */
+#app_main > .animate-fade-in:not(:has(#home_view)) h1:not(:has(.shiny-text)),
+#app_main > .animate-fade-in:not(:has(#home_view)) header h2:first-of-type:not(:has(.shiny-text)),
+#app_main > .animate-fade-in:not(:has(#home_view)) main > :is(section, div) > h2:first-child:not(:has(.shiny-text)) {
+  display: inline-block;
+  max-width: 100%;
+  background-image: linear-gradient(110deg, #0f172a 0%, #0f172a 35%, #10b981 50%, #0f172a 65%, #0f172a 100%);
+  background-size: 200% auto;
+  background-position: 150% center;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: sanad-shiny-text 4.2s linear infinite;
+}
+
+@keyframes sanad-shiny-text {
+  0% { background-position: 150% center; }
+  58% { background-position: -50% center; }
+  100% { background-position: -50% center; }
+}
+
 /* Stagger only top-level screen sections/cards. */
 #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article) {
   animation: sanad-section-rise 360ms cubic-bezier(.22, 1, .36, 1) both;
@@ -73,6 +97,17 @@
     transform: none;
   }
 }
+
+/* Automatically stagger semantic card grids without touching forms or overlays. */
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article {
+  animation: sanad-card-reveal 360ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(1) { animation-delay: 30ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(2) { animation-delay: 65ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(3) { animation-delay: 100ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(4) { animation-delay: 135ms; }
+#app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article:nth-child(n+5) { animation-delay: 170ms; }
 
 /* Interaction feedback. */
 @media (hover: hover) and (pointer: fine) {
@@ -138,11 +173,21 @@
 @media (prefers-reduced-motion: reduce) {
   #app_main > .animate-fade-in:not(:has(#home_view)),
   #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article),
+  #app_main > .animate-fade-in:not(:has(#home_view)) h1,
+  #app_main > .animate-fade-in:not(:has(#home_view)) h2,
+  #app_main > .animate-fade-in:not(:has(#home_view)) :is(.grid, [id$="_list"]) > article,
   .sanad-stagger-cards > *,
   .sanad-motion-glare::after {
     animation: none !important;
     transition: none !important;
     filter: none !important;
     transform: none !important;
+  }
+
+  #app_main > .animate-fade-in:not(:has(#home_view)) h1:not(:has(.shiny-text)),
+  #app_main > .animate-fade-in:not(:has(#home_view)) h2:not(:has(.shiny-text)) {
+    background: none !important;
+    color: inherit !important;
+    -webkit-text-fill-color: currentColor !important;
   }
 }
