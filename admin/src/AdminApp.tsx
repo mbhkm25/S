@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react
 import { supabase } from '../../src/lib/supabase';
 import { getPublicAppUrl } from '../../src/lib/urlUtils';
 
-const PlatformAdmin = lazy(() => import('../../src/components/admin/PlatformAdmin'));
+const AdminWorkspace = lazy(() => import('./AdminWorkspace'));
 
 function FullPageLoader() {
   return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><Loader2 className="h-7 w-7 animate-spin" /></div>;
@@ -86,7 +86,7 @@ export default function AdminApp() {
 
   return <div className="min-h-screen bg-slate-50 font-arabic" dir="rtl">
     <Suspense fallback={<FullPageLoader />}>
-      <PlatformAdmin onNavigate={returnToApp} />
+      <AdminWorkspace onNavigate={returnToApp} />
     </Suspense>
   </div>;
 }
