@@ -1,35 +1,38 @@
-export function getPublicAppUrl(): string {
-  const envUrl = import.meta.env.VITE_PUBLIC_APP_URL;
+const DEFAULT_PUBLIC_APP_URL = 'https://app.sanadflow.com';
 
-  const isCapacitor = !!(window as any).Capacitor ||
-                      window.location.origin.includes('capacitor') ||
-                      window.location.origin.startsWith('file:');
-
-  let baseUrl = '';
-
-  if (envUrl) {
-    baseUrl = envUrl;
-  } else if (!isCapacitor && import.meta.env.DEV) {
-    baseUrl = window.location.origin;
-  } else {
-    baseUrl = 'https://app.sanadflow.com';
-  }
-
-  return baseUrl.replace(/\/+$/, '');
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value == null || value.trim() === '') return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
 }
 
-// كتالوج سند الداخلي جزء أساسي من الملف العام، وليس ميزة تجريبية قابلة للتعطيل.
-export const INTERNAL_BUSINESS_CATALOG_ENABLED = true;
+export function getPublicAppUrl(): string {
+  const configured = String(import.meta.env.VITE_PUBLIC_APP_URL || '').trim();
+  const isCapacitor = Boolean((window as Window & { Capacitor?: unknown }).Capacitor)
+    || window.location.origin.includes('capacitor')
+    || window.location.origin.startsWith('file:');
+
+  if (configured) return configured.replace(/\/+$/, '');
+  if (!isCapacitor && import.meta.env.DEV) return window.location.origin.replace(/\/+$/, '');
+  return DEFAULT_PUBLIC_APP_URL;
+}
+
+// الكتالوج الداخلي مفعّل افتراضيًا، ويمكن تعطيله صراحةً فقط عبر متغير البيئة.
+export const INTERNAL_BUSINESS_CATALOG_ENABLED = parseBoolean(
+  import.meta.env.VITE_INTERNAL_BUSINESS_CATALOG_ENABLED,
+  true
+);
+
+function cleanSegment(value: string): string {
+  return encodeURIComponent(String(value || '').trim().replace(/^\/+|\/+$/g, ''));
+}
 
 export function buildPublicBusinessUrl(slug: string): string {
-  const baseUrl = getPublicAppUrl();
-  const cleanSlug = encodeURIComponent(String(slug || '').trim().replace(/^\/+|\/+$/g, ''));
-  return `${baseUrl}/b/${cleanSlug}`;
+  return `${getPublicAppUrl()}/b/${cleanSegment(slug)}`;
 }
 
 export function buildPublicProductUrl(slug: string, productId: string): string {
-  const baseUrl = getPublicAppUrl();
-  const cleanSlug = encodeURIComponent(String(slug || '').trim().replace(/^\/+|\/+$/g, ''));
-  const cleanProductId = encodeURIComponent(String(productId || '').trim().replace(/^\/+|\/+$/g, ''));
-  return `${baseUrl}/b/${cleanSlug}/p/${cleanProductId}`;
+  return `${buildPublicBusinessUrl(slug)}/p/${cleanSegment(productId)}`;
 }
