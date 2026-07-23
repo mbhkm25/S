@@ -50,6 +50,30 @@
   }
 }
 
+/* Opt-in reveal for nested card collections and repeated dashboard tiles. */
+.sanad-stagger-cards > * {
+  animation: sanad-card-reveal 360ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.sanad-stagger-cards > :nth-child(1) { animation-delay: 30ms; }
+.sanad-stagger-cards > :nth-child(2) { animation-delay: 65ms; }
+.sanad-stagger-cards > :nth-child(3) { animation-delay: 100ms; }
+.sanad-stagger-cards > :nth-child(4) { animation-delay: 135ms; }
+.sanad-stagger-cards > :nth-child(5) { animation-delay: 170ms; }
+.sanad-stagger-cards > :nth-child(6) { animation-delay: 205ms; }
+.sanad-stagger-cards > :nth-child(n+7) { animation-delay: 235ms; }
+
+@keyframes sanad-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Interaction feedback. */
 @media (hover: hover) and (pointer: fine) {
   #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled) {
@@ -114,6 +138,7 @@
 @media (prefers-reduced-motion: reduce) {
   #app_main > .animate-fade-in:not(:has(#home_view)),
   #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article),
+  .sanad-stagger-cards > *,
   .sanad-motion-glare::after {
     animation: none !important;
     transition: none !important;
