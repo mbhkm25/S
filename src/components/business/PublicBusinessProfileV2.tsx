@@ -93,14 +93,14 @@ export default function PublicBusinessProfileV2({slug,onNavigate,initialTab}:Pro
   const enabled=new Set(profile?.enabled_sections?.length?profile.enabled_sections:['overview','catalog','hours','financial','contact']);
   const whatsapp=phone(profile?.whatsapp);const links=profile?.contact_links||{};const status=openStatus(profile?.working_hours);
   const featured=useMemo(()=>{const ids=profile?.featured_item_ids||[];const selected=ids.map(id=>catalog.find(x=>x.id===id)).filter(Boolean) as CatalogItem[];return (selected.length?selected:catalog.filter(x=>x.is_featured)).slice(0,3);},[catalog,profile?.featured_item_ids]);
-  const tabs: Array<{id:ViewSection;label:string;show:boolean}> = [
+  const tabs = ([
     {id:'overview',label:'الرئيسية',show:true},
     {id:'catalog',label:copy.content,show:enabled.has('catalog')||enabled.has('services')||enabled.has('portfolio')},
     {id:'hours',label:'الدوام',show:enabled.has('hours')&&Boolean(profile?.working_hours)},
     {id:'financial',label:'الحسابات',show:enabled.has('financial')&&accounts.length>0},
     {id:'contact',label:'التواصل',show:enabled.has('contact')},
     {id:'about',label:'نبذة',show:enabled.has('about')}
-  ].filter(x=>x.show);
+  ] satisfies Array<{id:ViewSection;label:string;show:boolean}>).filter(item=>item.show);
 
   const leave=()=>window.history.length>1?window.history.back():onNavigate('profile');
   const setView=(nextMode:Mode,nextSection:ViewSection='overview')=>{setMode(nextMode);setSection(nextSection);const u=new URL(window.location.href);if(nextMode==='intro'){u.searchParams.delete('view');u.searchParams.delete('section');}else{u.searchParams.set('view','details');u.searchParams.set('section',nextSection);}window.history.replaceState(window.history.state,'',`${u.pathname}${u.search}`);window.scrollTo(0,0);};
