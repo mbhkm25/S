@@ -1,1 +1,1 @@
-export { default } from './PublicBusinessProfileV2';
+export { default } from './PublicBusinessProfileV3';
