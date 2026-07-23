@@ -12,6 +12,7 @@
     "cap:sync": "npx cap sync android",
     "preview": "vite preview",
     "preview:admin": "vite preview --config admin/vite.config.ts --port=4174",
+    "check:routes": "tsx scripts/check-app-routes.ts",
     "clean": "rm -rf dist dist-admin server.js",
     "lint": "tsc --noEmit"
   },
