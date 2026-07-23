@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { MyOperationItem } from '../types';
 import { Calendar, Loader2, ArrowUpRight, FolderOpen, RefreshCcw } from 'lucide-react';
 import { getOperationCardDetails } from '../lib/digits';
 import FinancialEntityLogo from './FinancialEntityLogo';
+import ShinyText from './ui/ShinyText';
 
 interface MyOperationsProps {
   onNavigateToDetails: (token: string) => void;
@@ -12,6 +14,7 @@ interface MyOperationsProps {
 type FilterType = 'uploader' | 'verifier';
 
 export default function MyOperations({ onNavigateToDetails }: MyOperationsProps) {
+  const reduceMotion = useReducedMotion();
   const [operations, setOperations] = useState<MyOperationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +69,7 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
     <div className="space-y-6" id="my_operations_view">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">سجل عملياتي</h1>
+          <h1 className="text-xl font-bold"><ShinyText text="سجل عملياتي" speed={2.4} delay={1.5} color="#0f172a" shineColor="#10b981" spread={110} pauseOnHover /></h1>
           <p className="text-xs text-slate-500 font-arabic">مراجعة الإشعارات التي أرسلتها أو تحققت من صحتها</p>
         </div>
         <button
@@ -114,7 +117,7 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
           <span className="text-xs text-slate-400 font-arabic">جاري تحميل سجل العمليات الموثقة...</span>
         </div>
       ) : operations.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4 animate-fade-in" id="empty_operations_state">
+        <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4" id="empty_operations_state">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 mb-2">
             <FolderOpen className="w-6 h-6" />
           </div>
@@ -124,14 +127,17 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
               {activeFilter === 'uploader' ? 'لم ترسل أي إشعار إلى سند بعد.' : 'لم تتحقق من أي إشعار بعد.'}
             </p>
           </div>
-        </div>
+        </motion.div>
       ) : (
         <div className="space-y-3.5" id="operations_list">
-          {operations.map((item) => {
+          {operations.map((item, index) => {
             const card = getOperationCardDetails(item);
             return (
-              <div
+              <motion.div
                 key={item.operation_id || item.public_token}
+                initial={reduceMotion ? false : { opacity: 0, y: 18, scale: .985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: reduceMotion ? 0 : Math.min(index * .045, .36), duration: .3, ease: [0.22, 1, 0.36, 1] }}
                 className="bg-white rounded-2xl border border-slate-100 hover:border-emerald-200/50 p-4 shadow-sm flex items-center justify-between gap-4 hover:shadow-md transition-all group"
               >
                 <div className="flex items-center gap-3 text-right overflow-hidden min-w-0">
@@ -172,7 +178,7 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
                   <span>تفاصيل</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
-              </div>
+              </motion.div>
             );
           })}
         </div>
