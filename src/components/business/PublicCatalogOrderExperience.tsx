@@ -1,8 +1,9 @@
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  CheckCircle2, Image as ImageIcon, Loader2, MapPin, MessageCircle, Minus,
-  PackageCheck, Plus, RotateCcw, Send, ShoppingBag, Trash2, Truck
+  ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Image as ImageIcon, Loader2,
+  MapPin, MessageCircle, Minus, PackageCheck, Plus, RotateCcw, Send,
+  ShoppingBag, Trash2, Truck
 } from 'lucide-react';
 import {
   buildDeliveryWhatsAppMessage,
@@ -35,6 +36,8 @@ export type PublicOrderCatalogItem = {
   image_paths?: string[] | null;
   availability_status?: string | null;
 };
+
+type OrderStep = 'review' | 'details' | 'delivery';
 
 interface Props {
   business: {
@@ -79,12 +82,13 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
   const [cart, setCart] = useState<CatalogCartItem[]>(() => readCatalogCart(business.id));
   const [orderReference, setOrderReference] = useState(() => createOrderReference());
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [step, setStep] = useState<OrderStep>('review');
   const [providers, setProviders] = useState<PublicDeliveryProvider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<PublicDeliveryProvider | null>(null);
   const [customer, setCustomer] = useState<CatalogCustomerDetails>(EMPTY_CUSTOMER);
   const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentState, setSentState] = useState<'merchant' | 'delivery' | null>(null);
 
@@ -95,6 +99,7 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
     setSelectedProvider(null);
     setPrivacyConsent(false);
     setSentState(null);
+    setStep('review');
   }, [business.id]);
   useEffect(() => { writeCatalogCart(business.id, cart); }, [business.id, cart]);
 
@@ -113,6 +118,7 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
       currency: item.currency || null
     }, settings.max_item_quantity));
     setSentState(null);
+    setStep('review');
     setSheetOpen(true);
   };
 
@@ -128,9 +134,10 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
     setCustomer(EMPTY_CUSTOMER);
     setSelectedProvider(null);
     setPrivacyConsent(false);
-    setDeliveryOpen(false);
+    setShowOptional(false);
     setSentState(null);
     setError(null);
+    setStep('review');
     setSheetOpen(false);
   };
 
@@ -165,8 +172,9 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
   };
 
   const loadProviders = async () => {
-    if (!deliverySettings.customer_delivery_enabled) return;
-    setDeliveryOpen(true); setLoadingProviders(true); setError(null);
+    setStep('delivery');
+    if (providers.length || loadingProviders) return;
+    setLoadingProviders(true); setError(null);
     try {
       const result = await getPublicDeliveryProviders({ governorate: business.governorate, city: business.city, limit: 30 });
       setProviders(result.filter(provider => provider.id !== business.id));
@@ -183,6 +191,17 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
       setSentState('delivery'); setError(null);
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر فتح واتساب.'); }
   };
+
+  const goToDetails = () => {
+    if (!cart.length) { setError('أضف عنصرًا واحدًا على الأقل.'); return; }
+    setError(null); setStep('details');
+  };
+
+  const footer = step === 'review'
+    ? <button type="button" onClick={goToDetails} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-bold text-white">متابعة إلى بيانات الاستلام<ArrowLeft className="h-4 w-4"/></button>
+    : step === 'details'
+      ? <div className="grid gap-2 sm:grid-cols-2"><button type="button" onClick={sendMerchant} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-xs font-bold text-white"><MessageCircle className="h-4 w-4"/>{settings.send_button_label}</button>{deliverySettings.customer_delivery_enabled&&<button type="button" onClick={()=>void loadProviders()} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 text-xs font-bold text-white"><Truck className="h-4 w-4"/>اختيار شركة توصيل</button>}</div>
+      : <button type="button" onClick={sendDelivery} disabled={!selectedProvider} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 text-xs font-bold text-white disabled:bg-slate-300"><Send className="h-4 w-4"/>إرسال طلب التوصيل عبر واتساب</button>;
 
   const cardGrid = settings.card_style === 'compact' ? 'grid gap-2 sm:grid-cols-2' : 'grid grid-cols-2 gap-3 sm:grid-cols-3';
   return <section className="space-y-3">
@@ -211,24 +230,35 @@ export default function PublicCatalogOrderExperience({ business, items, images, 
       </motion.article>;
     })}</div>
 
-    {settings.ordering_enabled&&count>0&&<button type="button" onClick={()=>setSheetOpen(true)} className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-40 flex w-[calc(100%-24px)] max-w-lg -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 p-3.5 text-white shadow-[0_18px_45px_rgba(15,23,42,.3)] active:scale-[.99]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-sm font-bold text-emerald-950">{count}</span><span className="min-w-0 flex-1 text-right"><strong className="block text-xs">قائمة الطلب</strong><span className="text-[9px] text-white/60">مرجع {orderReference}</span></span><ShoppingBag className="h-5 w-5"/></button>}
+    {settings.ordering_enabled&&count>0&&<button type="button" onClick={()=>{setStep('review');setSheetOpen(true);}} className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-40 flex w-[calc(100%-24px)] max-w-lg -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-950 p-3.5 text-white shadow-[0_18px_45px_rgba(15,23,42,.3)] active:scale-[.99]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-sm font-bold text-emerald-950">{count}</span><span className="min-w-0 flex-1 text-right"><strong className="block text-xs">قائمة الطلب</strong><span className="text-[9px] text-white/60">مرجع {orderReference}</span></span><ShoppingBag className="h-5 w-5"/></button>}
 
     <ResponsiveSheet
       open={sheetOpen&&settings.ordering_enabled}
       onClose={()=>setSheetOpen(false)}
-      title="مراجعة الطلب"
+      title={step==='review'?'مراجعة الطلب':step==='details'?'بيانات الاستلام':'اختيار شركة التوصيل'}
       description={`مرجع الطلب: ${orderReference}`}
       className="sm:max-w-2xl"
-      footer={<div className="grid gap-2 sm:grid-cols-2"><button type="button" onClick={sendMerchant} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-xs font-bold text-white"><MessageCircle className="h-4 w-4"/>{settings.send_button_label}</button>{deliverySettings.customer_delivery_enabled&&<button type="button" onClick={()=>void loadProviders()} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 text-xs font-bold text-white"><Truck className="h-4 w-4"/>اختيار شركة توصيل</button>}</div>}
+      footer={footer}
     >
       <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">{(['review','details','delivery'] as OrderStep[]).map((item,index)=>{
+          const active=item===step;const disabled=item==='delivery'&&!deliverySettings.customer_delivery_enabled;
+          return <div key={item} className={`rounded-xl px-2 py-2 text-center text-[9px] font-bold ${active?'bg-slate-950 text-white':disabled?'bg-slate-50 text-slate-300':'bg-slate-100 text-slate-500'}`}>{index+1}. {item==='review'?'الطلب':item==='details'?'الاستلام':'التوصيل'}</div>;
+        })}</div>
         {error&&<div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
-        <div className="space-y-2">{cart.map(item=><article key={item.id} className="rounded-2xl border border-slate-200 p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><h3 className="truncate text-xs font-bold">{item.title}</h3>{settings.show_prices&&<p className="mt-1 text-[10px] text-slate-500">{formatCatalogPrice(item.price,item.currency,settings.price_display,settings.missing_price_label)}</p>}</div><button type="button" onClick={()=>remove(item.id)} className="rounded-lg p-1.5 text-rose-600" aria-label="حذف العنصر"><Trash2 className="h-4 w-4"/></button></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={()=>updateQuantity(item.id,-1)} className="rounded-xl border p-2"><Minus className="h-3.5 w-3.5"/></button><strong className="min-w-8 text-center text-xs">{item.quantity}</strong><button type="button" onClick={()=>updateQuantity(item.id,1)} className="rounded-xl border p-2"><Plus className="h-3.5 w-3.5"/></button></div>{settings.allow_item_notes&&<input value={item.note||''} onChange={event=>updateNote(item.id,event.target.value)} maxLength={180} placeholder="ملاحظة على هذا العنصر" className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-[10px]"/>}</article>)}</div>
-        {settings.show_total&&totalEntries.length>0&&<div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-600">الإجمالي بحسب العملة</p><div className="mt-2 flex flex-wrap gap-2">{totalEntries.map(([currency,total])=><strong key={currency} className="rounded-full bg-white px-3 py-2 text-[10px] shadow-sm">{formatCatalogPrice(total,currency,settings.price_display,settings.missing_price_label)}</strong>)}</div></div>}
-        <section className="space-y-3"><div><h3 className="text-xs font-bold text-slate-900">بيانات العميل والاستلام</h3><p className="mt-1 text-[9px] text-slate-500">تُستخدم فقط لتجهيز الطلب والتواصل.</p></div><div className="grid gap-2 sm:grid-cols-2"><input value={customer.name||''} onChange={event=>setCustomer(current=>({...current,name:event.target.value}))} placeholder={`اسم العميل${settings.require_customer_name?' *':''}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.phone||''} onChange={event=>setCustomer(current=>({...current,phone:event.target.value}))} placeholder="رقم التواصل" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.area||''} onChange={event=>setCustomer(current=>({...current,area:event.target.value}))} placeholder="المنطقة" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.address||''} onChange={event=>setCustomer(current=>({...current,address:event.target.value}))} placeholder={`عنوان الاستلام${settings.require_address?' *':''}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><select value={customer.paymentMethod||'unspecified'} onChange={event=>setCustomer(current=>({...current,paymentMethod:event.target.value as CatalogCustomerDetails['paymentMethod']}))} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs sm:col-span-2"><option value="unspecified">حالة الدفع غير محددة</option><option value="paid">مدفوع</option><option value="cash_on_delivery">الدفع عند الاستلام</option></select><textarea value={customer.note||''} onChange={event=>setCustomer(current=>({...current,note:event.target.value}))} rows={2} maxLength={240} placeholder="ملاحظات عامة" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs sm:col-span-2"/></div></section>
-        {sentState&&<div className="flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4"/>{sentState==='merchant'?'تم فتح محادثة المتجر بهذا المرجع.':'تم فتح محادثة شركة التوصيل بالمرجع نفسه.'}</div>}
-        {deliveryOpen&&<section className="rounded-2xl border border-sky-100 bg-sky-50/40 p-3"><div className="flex items-center gap-2"><Truck className="h-4 w-4 text-sky-600"/><strong className="text-xs">شركات التوصيل المتاحة</strong></div>{loadingProviders?<Loader2 className="mx-auto mt-4 h-5 w-5 animate-spin"/>:<div className="mt-3 space-y-2">{providers.length?providers.map(provider=><button type="button" key={provider.id} onClick={()=>{setSelectedProvider(provider);setPrivacyConsent(false);}} className={`w-full rounded-2xl border p-3 text-right ${selectedProvider?.id===provider.id?'border-sky-500 bg-white':'border-slate-200 bg-white/70'}`}><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><strong className="truncate text-xs">{provider.name}</strong>{provider.verification_status==='verified'&&<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600"/>}</div><p className="mt-1 flex items-center gap-1 text-[9px] text-slate-500"><MapPin className="h-3 w-3"/>{provider.city}، {provider.governorate}</p>{provider.pricing_note&&<p className="mt-1 text-[9px] text-slate-500">{provider.pricing_note}</p>}{provider.availability_note&&<p className="mt-1 text-[9px] text-slate-500">{provider.availability_note}</p>}</div>{selectedProvider?.id===provider.id&&<PackageCheck className="h-5 w-5 text-sky-600"/>}</div></button>):<p className="py-4 text-center text-[10px] text-slate-500">لا توجد شركة توصيل مطابقة حاليًا.</p>}</div>}{selectedProvider&&<>{deliverySettings.require_privacy_consent&&<label className="mt-3 flex items-start gap-2 rounded-xl bg-white p-3 text-[10px] leading-5 text-slate-600"><input type="checkbox" checked={privacyConsent} onChange={event=>setPrivacyConsent(event.target.checked)} className="mt-1"/>أوافق على مشاركة بيانات الطلب ورقم التواصل والعنوان مع شركة التوصيل المختارة لغرض تنسيق التوصيل فقط.</label>}<button type="button" onClick={sendDelivery} className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 p-3.5 text-xs font-bold text-white"><Send className="h-4 w-4"/>إرسال طلب التوصيل عبر واتساب</button></>}</section>}
-        <button type="button" onClick={startNewOrder} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 p-3 text-[10px] font-bold text-slate-600"><RotateCcw className="h-4 w-4"/>بدء طلب جديد ومسح القائمة</button>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={step} initial={reduceMotion?false:{opacity:0,x:16}} animate={{opacity:1,x:0}} exit={reduceMotion?{opacity:0}:{opacity:0,x:-12}} transition={{duration:reduceMotion?0:.2}}>
+            {step==='review'&&<div className="space-y-3">
+              <div className="space-y-2">{cart.map(item=><article key={item.id} className="rounded-2xl border border-slate-200 p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><h3 className="truncate text-xs font-bold">{item.title}</h3>{settings.show_prices&&<p className="mt-1 text-[10px] text-slate-500">{formatCatalogPrice(item.price,item.currency,settings.price_display,settings.missing_price_label)}</p>}</div><button type="button" onClick={()=>remove(item.id)} className="rounded-lg p-1.5 text-rose-600" aria-label="حذف العنصر"><Trash2 className="h-4 w-4"/></button></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={()=>updateQuantity(item.id,-1)} className="rounded-xl border p-2"><Minus className="h-3.5 w-3.5"/></button><strong className="min-w-8 text-center text-xs">{item.quantity}</strong><button type="button" onClick={()=>updateQuantity(item.id,1)} className="rounded-xl border p-2"><Plus className="h-3.5 w-3.5"/></button></div>{settings.allow_item_notes&&<input value={item.note||''} onChange={event=>updateNote(item.id,event.target.value)} maxLength={180} placeholder="ملاحظة على هذا العنصر" className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-[10px]"/>}</article>)}</div>
+              {settings.show_total&&totalEntries.length>0&&<div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold text-slate-600">الإجمالي</p><div className="mt-2 flex flex-wrap gap-2">{totalEntries.map(([currency,total])=><strong key={currency} className="rounded-full bg-white px-3 py-2 text-[10px] shadow-sm">{formatCatalogPrice(total,currency,settings.price_display,settings.missing_price_label)}</strong>)}</div></div>}
+            </div>}
+
+            {step==='details'&&<section className="space-y-4"><div><h3 className="text-xs font-bold text-slate-900">بيانات العميل والاستلام</h3><p className="mt-1 text-[9px] text-slate-500">أدخل المعلومات الضرورية فقط. الحقول الإضافية اختيارية.</p></div><div className="grid gap-2 sm:grid-cols-2"><input value={customer.name||''} onChange={event=>setCustomer(current=>({...current,name:event.target.value}))} placeholder={`اسم العميل${settings.require_customer_name?' *':''}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.phone||''} onChange={event=>setCustomer(current=>({...current,phone:event.target.value}))} placeholder="رقم التواصل" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.area||''} onChange={event=>setCustomer(current=>({...current,area:event.target.value}))} placeholder="المنطقة" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/><input value={customer.address||''} onChange={event=>setCustomer(current=>({...current,address:event.target.value}))} placeholder={`عنوان الاستلام${settings.require_address?' *':''}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/></div><button type="button" onClick={()=>setShowOptional(value=>!value)} className="flex w-full items-center justify-between rounded-xl border border-dashed border-slate-300 p-3 text-[10px] font-bold text-slate-600"><span>خيارات إضافية</span><motion.span animate={{rotate:showOptional?180:0}}><ChevronDown className="h-4 w-4"/></motion.span></button><AnimatePresence initial={false}>{showOptional&&<motion.div initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} className="overflow-hidden"><div className="space-y-2 pt-1"><select value={customer.paymentMethod||'unspecified'} onChange={event=>setCustomer(current=>({...current,paymentMethod:event.target.value as CatalogCustomerDetails['paymentMethod']}))} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"><option value="unspecified">حالة الدفع غير محددة</option><option value="paid">مدفوع</option><option value="cash_on_delivery">الدفع عند الاستلام</option></select><textarea value={customer.note||''} onChange={event=>setCustomer(current=>({...current,note:event.target.value}))} rows={2} maxLength={240} placeholder="ملاحظات عامة" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"/></div></motion.div>}</AnimatePresence>{sentState&&<div className="flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4"/>{sentState==='merchant'?'تم فتح محادثة المتجر بهذا المرجع.':'تم فتح محادثة شركة التوصيل بالمرجع نفسه.'}</div>}<button type="button" onClick={()=>setStep('review')} className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><ArrowRight className="h-4 w-4"/>العودة إلى مراجعة الطلب</button></section>}
+
+            {step==='delivery'&&<section className="space-y-3">{loadingProviders?<div className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-sky-600"/><p className="mt-2 text-[10px] text-slate-500">جارٍ تحميل شركات التوصيل...</p></div>:providers.length?<div className="space-y-2">{providers.map(provider=><button type="button" key={provider.id} onClick={()=>{setSelectedProvider(provider);setPrivacyConsent(false);setError(null);}} className={`w-full rounded-2xl border p-3 text-right ${selectedProvider?.id===provider.id?'border-sky-500 bg-sky-50':'border-slate-200 bg-white'}`}><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><strong className="truncate text-xs">{provider.name}</strong>{provider.verification_status==='verified'&&<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600"/>}</div><p className="mt-1 flex items-center gap-1 text-[9px] text-slate-500"><MapPin className="h-3 w-3"/>{provider.city}، {provider.governorate}</p>{provider.pricing_note&&<p className="mt-1 text-[9px] text-slate-500">{provider.pricing_note}</p>}{provider.availability_note&&<p className="mt-1 text-[9px] text-slate-500">{provider.availability_note}</p>}</div>{selectedProvider?.id===provider.id&&<PackageCheck className="h-5 w-5 text-sky-600"/>}</div></button>)}</div>:<p className="rounded-2xl bg-slate-50 p-6 text-center text-[10px] text-slate-500">لا توجد شركة توصيل مطابقة حاليًا.</p>}{selectedProvider&&deliverySettings.require_privacy_consent&&<label className="flex items-start gap-2 rounded-xl bg-sky-50 p-3 text-[10px] leading-5 text-slate-600"><input type="checkbox" checked={privacyConsent} onChange={event=>setPrivacyConsent(event.target.checked)} className="mt-1"/>أوافق على مشاركة بيانات الطلب ورقم التواصل والعنوان مع شركة التوصيل المختارة لغرض تنسيق التوصيل فقط.</label>}<button type="button" onClick={()=>setStep('details')} className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><ArrowRight className="h-4 w-4"/>العودة إلى بيانات الاستلام</button></section>}
+          </motion.div>
+        </AnimatePresence>
+        <button type="button" onClick={startNewOrder} className="flex w-full items-center justify-center gap-2 p-2 text-[9px] font-bold text-slate-400"><RotateCcw className="h-3.5 w-3.5"/>بدء طلب جديد ومسح القائمة</button>
       </div>
     </ResponsiveSheet>
   </section>;
