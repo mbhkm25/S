@@ -1,10 +1,15 @@
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { ArrowLeft, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
-import PlatformAdmin from '../../src/components/admin/PlatformAdmin';
 import { supabase } from '../../src/lib/supabase';
 import { getPublicAppUrl } from '../../src/lib/urlUtils';
+
+const PlatformAdmin = lazy(() => import('../../src/components/admin/PlatformAdmin'));
+
+function FullPageLoader() {
+  return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><Loader2 className="h-7 w-7 animate-spin" /></div>;
+}
 
 export default function AdminApp() {
   const reduceMotion = useReducedMotion();
@@ -56,7 +61,7 @@ export default function AdminApp() {
     }
   };
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><Loader2 className="h-7 w-7 animate-spin" /></div>;
+  if (loading) return <FullPageLoader />;
 
   if (!session) return <main className="flex min-h-screen items-center justify-center bg-slate-950 p-5 font-arabic" dir="rtl">
     <motion.section
@@ -80,6 +85,8 @@ export default function AdminApp() {
   </main>;
 
   return <div className="min-h-screen bg-slate-50 font-arabic" dir="rtl">
-    <PlatformAdmin onNavigate={returnToApp} />
+    <Suspense fallback={<FullPageLoader />}>
+      <PlatformAdmin onNavigate={returnToApp} />
+    </Suspense>
   </div>;
 }
