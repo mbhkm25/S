@@ -21,6 +21,16 @@ function resolveBuildVersion(env: Record<string, string>): string {
   }
 }
 
+function resolveVendorChunk(id: string): string | undefined {
+  if (!id.includes('node_modules')) return undefined;
+  if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react';
+  if (id.includes('/@supabase/')) return 'vendor-supabase';
+  if (id.includes('/motion/') || id.includes('/framer-motion/')) return 'vendor-motion';
+  if (id.includes('/@capacitor/')) return 'vendor-capacitor';
+  if (id.includes('/html5-qrcode/') || id.includes('/qrcode/')) return 'vendor-qr';
+  return 'vendor';
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const base = env.VITE_APP_BASE_PATH || '/';
@@ -124,6 +134,13 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: resolveVendorChunk
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -131,7 +148,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
