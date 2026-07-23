@@ -1,4 +1,5 @@
 import { toLatinDigits } from './digits';
+import { buildPublicBusinessUrl } from './urlUtils';
 
 export type CatalogCardStyle = 'modern' | 'compact' | 'visual';
 export type CatalogCardEffect = 'none' | 'spotlight' | 'glow';
@@ -222,6 +223,43 @@ export function createOrderReference(prefix = 'SND-ORD'): string {
   return `${prefix}-${time}${random}`;
 }
 
+function appendOrderItems(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
+  lines.push('تفاصيل الطلب:');
+  context.items.forEach((item, index) => {
+    const price = settings.show_prices
+      ? ` — ${formatCatalogPrice(item.price, item.currency, settings.price_display, settings.missing_price_label)}`
+      : '';
+    lines.push(`${index + 1}. ${cleanLine(item.title, 140)} × ${item.quantity}${price}`);
+    if (settings.allow_item_notes && item.note) lines.push(`   ملاحظة: ${cleanLine(item.note, 180)}`);
+  });
+}
+
+function appendOrderTotals(lines: string[], context: CatalogOrderContext, settings: CatalogDisplaySettings): void {
+  if (!settings.show_total) return;
+  const totals = cartTotals(context.items);
+  if (!Object.keys(totals).length) return;
+  lines.push('', 'الإجمالي:');
+  Object.entries(totals).forEach(([currency, total]) => {
+    lines.push(`- ${formatCatalogPrice(total, currency, settings.price_display, settings.missing_price_label)}`);
+  });
+}
+
+function appendCustomerDetails(lines: string[], customer: CatalogCustomerDetails): void {
+  if (!customer.name && !customer.phone && !customer.area && !customer.address && !customer.note && !customer.paymentMethod) return;
+  lines.push('', 'بيانات العميل:');
+  if (customer.name) lines.push(`الاسم: ${cleanLine(customer.name, 100)}`);
+  if (customer.phone) lines.push(`رقم التواصل: ${cleanPhone(customer.phone)}`);
+  if (customer.area) lines.push(`المنطقة: ${cleanLine(customer.area, 100)}`);
+  if (customer.address) lines.push(`العنوان: ${cleanLine(customer.address, 240)}`);
+  if (customer.paymentMethod === 'paid') lines.push('حالة الدفع: مدفوع');
+  if (customer.paymentMethod === 'cash_on_delivery') lines.push('حالة الدفع: الدفع عند الاستلام');
+  if (customer.note) lines.push(`ملاحظات عامة: ${cleanLine(customer.note, 240)}`);
+}
+
+function finalizeMessage(lines: string[]): string {
+  return lines.filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n').slice(0, 3500);
+}
+
 export function buildMerchantWhatsAppMessage(
   context: CatalogOrderContext,
   settings: CatalogDisplaySettings
@@ -231,40 +269,13 @@ export function buildMerchantWhatsAppMessage(
     '',
     `مرجع الطلب: ${context.reference}`,
     `النشاط: ${cleanLine(context.businessName, 140)}`,
-    `رابط النشاط: https://app.sanadflow.com/b/${encodeURIComponent(context.businessSlug)}`,
-    '',
-    'تفاصيل الطلب:'
+    `رابط النشاط: ${buildPublicBusinessUrl(context.businessSlug)}`,
+    ''
   ];
-
-  context.items.forEach((item, index) => {
-    const price = settings.show_prices ? ` — ${formatCatalogPrice(item.price, item.currency, settings.price_display, settings.missing_price_label)}` : '';
-    lines.push(`${index + 1}. ${cleanLine(item.title, 140)} × ${item.quantity}${price}`);
-    if (settings.allow_item_notes && item.note) lines.push(`   ملاحظة: ${cleanLine(item.note, 180)}`);
-  });
-
-  if (settings.show_total) {
-    const totals = cartTotals(context.items);
-    if (Object.keys(totals).length) {
-      lines.push('', 'الإجمالي:');
-      Object.entries(totals).forEach(([currency, total]) => {
-        lines.push(`- ${formatCatalogPrice(total, currency, settings.price_display, settings.missing_price_label)}`);
-      });
-    }
-  }
-
-  const customer = context.customer;
-  if (customer.name || customer.phone || customer.area || customer.address || customer.note || customer.paymentMethod) {
-    lines.push('', 'بيانات العميل:');
-    if (customer.name) lines.push(`الاسم: ${cleanLine(customer.name, 100)}`);
-    if (customer.phone) lines.push(`رقم التواصل: ${cleanPhone(customer.phone)}`);
-    if (customer.area) lines.push(`المنطقة: ${cleanLine(customer.area, 100)}`);
-    if (customer.address) lines.push(`العنوان: ${cleanLine(customer.address, 240)}`);
-    if (customer.paymentMethod === 'paid') lines.push('حالة الدفع: مدفوع');
-    if (customer.paymentMethod === 'cash_on_delivery') lines.push('حالة الدفع: الدفع عند الاستلام');
-    if (customer.note) lines.push(`ملاحظات عامة: ${cleanLine(customer.note, 240)}`);
-  }
-
-  return lines.filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n').slice(0, 3500);
+  appendOrderItems(lines, context, settings);
+  appendOrderTotals(lines, context, settings);
+  appendCustomerDetails(lines, context.customer);
+  return finalizeMessage(lines);
 }
 
 export function buildDeliveryWhatsAppMessage(
@@ -273,25 +284,23 @@ export function buildDeliveryWhatsAppMessage(
   catalogSettings: CatalogDisplaySettings,
   deliverySettings: DeliveryServiceSettings
 ): string {
-  const merchantMessage = buildMerchantWhatsAppMessage(context, {
-    ...catalogSettings,
-    whatsapp_message_intro: 'مرحبًا، أريد طلب خدمة توصيل للطلب التالي:'
-  });
   const lines = [
-    merchantMessage,
+    'مرحبًا، أريد طلب خدمة توصيل للطلب التالي:',
+    '',
+    `مرجع الطلب: ${context.reference}`,
+    `شركة التوصيل المختارة: ${cleanLine(provider.name, 140)}`,
     '',
     'بيانات الاستلام من المتجر:',
     `اسم المتجر: ${cleanLine(context.businessName, 140)}`,
     `رقم المتجر: ${cleanPhone(context.businessWhatsapp)}`,
-    `رابط المتجر: https://app.sanadflow.com/b/${encodeURIComponent(context.businessSlug)}`
+    `رابط المتجر: ${buildPublicBusinessUrl(context.businessSlug)}`
   ];
   if (context.businessAddress) lines.push(`عنوان المتجر: ${cleanLine(context.businessAddress, 240)}`);
-  lines.push('', `شركة التوصيل المختارة: ${cleanLine(provider.name, 140)}`);
-  if (deliverySettings.share_order_total === false) {
-    const totalIndex = lines.findIndex(line => line === 'الإجمالي:');
-    if (totalIndex >= 0) lines.splice(totalIndex, lines.length - totalIndex);
-  }
-  return lines.join('\n').slice(0, 3500);
+  lines.push('');
+  appendOrderItems(lines, context, catalogSettings);
+  if (deliverySettings.share_order_total) appendOrderTotals(lines, context, catalogSettings);
+  appendCustomerDetails(lines, context.customer);
+  return finalizeMessage(lines);
 }
 
 export function openWhatsApp(phoneNumber: string, message: string): void {
