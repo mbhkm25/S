@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 import type { BusinessProfile } from './businessApi';
+import type {
+  CatalogDisplaySettings,
+  DeliveryServiceSettings,
+  PublicDeliveryProvider
+} from './businessCatalogExperience';
 
 const ACTIVE_MANAGED_BUSINESS_KEY = 'sanad.activeManagedBusinessId';
 
@@ -67,6 +72,8 @@ export type ManagementBusinessProfile = BusinessProfile & {
   primary_action_label?: string | null;
   enabled_sections?: BusinessPublicSection[];
   featured_item_ids?: string[];
+  catalog_display_settings?: CatalogDisplaySettings;
+  delivery_service_settings?: DeliveryServiceSettings;
   profile_sections?: {
     financial_accounts?: FinancialAccount[];
     complaints?: BusinessComplaint[];
@@ -107,10 +114,40 @@ export async function setBusinessPublicProfileSettings(input: {
     p_primary_action: input.primaryAction,
     p_primary_action_label: input.primaryActionLabel?.trim() || null,
     p_enabled_sections: input.enabledSections,
-    p_featured_item_ids: input.featuredItemIds || []
+    p_featured_item_ids: (input.featuredItemIds || []).slice(0, 2)
   });
   if (error) throw new Error(error.message || 'تعذر حفظ إعدادات الملف العام.');
   return unwrap<ManagementBusinessProfile>(data, 'business');
+}
+
+export async function setBusinessCatalogExperienceSettings(input: {
+  businessId: string;
+  catalogDisplaySettings: CatalogDisplaySettings;
+  deliveryServiceSettings: DeliveryServiceSettings;
+  featuredItemIds: string[];
+}): Promise<ManagementBusinessProfile> {
+  const { data, error } = await supabase.rpc('set_business_catalog_experience_settings', {
+    p_business_id: input.businessId,
+    p_catalog_display_settings: input.catalogDisplaySettings,
+    p_delivery_service_settings: input.deliveryServiceSettings,
+    p_featured_item_ids: input.featuredItemIds.slice(0, 2)
+  });
+  if (error) throw new Error(error.message || 'تعذر حفظ إعدادات الكتالوج والطلبات والتوصيل.');
+  return unwrap<ManagementBusinessProfile>(data, 'business');
+}
+
+export async function getPublicDeliveryProviders(input?: {
+  governorate?: string | null;
+  city?: string | null;
+  limit?: number;
+}): Promise<PublicDeliveryProvider[]> {
+  const { data, error } = await supabase.rpc('get_public_delivery_providers', {
+    p_governorate: input?.governorate?.trim() || null,
+    p_city: input?.city?.trim() || null,
+    p_limit: Math.max(1, Math.min(input?.limit || 30, 50))
+  });
+  if (error) throw new Error(error.message || 'تعذر تحميل شركات التوصيل.');
+  return Array.isArray(data) ? data as PublicDeliveryProvider[] : [];
 }
 
 export async function upsertFinancialAccount(input: {
