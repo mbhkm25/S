@@ -11,11 +11,7 @@
   --sanad-motion-ink: 15, 23, 42;
 }
 
-/*
- * 1. Page reveal.
- * Important: the final frame uses transform/filter: none so fixed dialogs
- * never inherit a transformed containing block after the animation finishes.
- */
+/* Page reveal. Final frame clears transform/filter so fixed overlays remain stable. */
 #app_main > .animate-fade-in:not(:has(#home_view)) {
   animation: sanad-page-reveal 380ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -33,39 +29,7 @@
   }
 }
 
-/*
- * 2. Restrained heading shine.
- * Only the first direct page heading is affected, once. It is not an
- * infinite GradientText treatment and does not recolor every h1/h2.
- */
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
-#app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type {
-  background-image: linear-gradient(
-    105deg,
-    currentColor 0%,
-    currentColor 42%,
-    rgba(var(--sanad-motion-sky), .9) 50%,
-    currentColor 58%,
-    currentColor 100%
-  );
-  background-size: 260% 100%;
-  background-position: 120% 50%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: sanad-heading-shine-once 1.35s ease-out 180ms 1 both;
-}
-
-@keyframes sanad-heading-shine-once {
-  from { background-position: 120% 50%; }
-  to { background-position: -120% 50%; }
-}
-
-/*
- * 3. Stagger only top-level screen sections/cards.
- * Avoid forms, modal internals, generic space-y containers, and nested lists.
- */
+/* Stagger only top-level screen sections/cards. */
 #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article) {
   animation: sanad-section-rise 360ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -86,11 +50,7 @@
   }
 }
 
-/*
- * 4. Interaction feedback.
- * Buttons and links only; cards, dialogs, sheets, and generic rounded
- * containers are deliberately excluded.
- */
+/* Interaction feedback. */
 @media (hover: hover) and (pointer: fine) {
   #app_main > .animate-fade-in:not(:has(#home_view)) :is(button, a, [role="button"]):not(:disabled) {
     transition:
@@ -110,7 +70,7 @@
   transition-duration: 80ms;
 }
 
-/* Rich glare/spotlight is opt-in instead of being applied to every card. */
+/* Rich glare/spotlight remains opt-in. */
 .sanad-motion-glare {
   position: relative;
   overflow: hidden;
@@ -154,19 +114,10 @@
 @media (prefers-reduced-motion: reduce) {
   #app_main > .animate-fade-in:not(:has(#home_view)),
   #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(section, article),
-  #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
-  #app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type,
   .sanad-motion-glare::after {
     animation: none !important;
     transition: none !important;
     filter: none !important;
     transform: none !important;
-  }
-
-  #app_main > .animate-fade-in:not(:has(#home_view)) > * > :is(h1, h2):first-child,
-  #app_main > .animate-fade-in:not(:has(#home_view)) > * > header:first-child :is(h1, h2):first-of-type {
-    background: none !important;
-    color: inherit !important;
-    -webkit-text-fill-color: currentColor !important;
   }
 }
