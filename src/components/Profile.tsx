@@ -31,6 +31,14 @@ export default function Profile(props: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLButtonElement>('#profile_view button'));
+    rows.forEach((row) => {
+      const title = row.querySelector('span.block.text-sm.font-bold')?.textContent?.trim();
+      if (title === 'البيانات الشخصية') row.style.display = view === 'overview' ? 'none' : '';
+    });
+  }, [view]);
+
   const openRelationships = () => {
     const base = import.meta.env.VITE_APP_BASE_PATH || '/';
     const cleanBase = base.endsWith('/') ? base : `${base}/`;
