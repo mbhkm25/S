@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { updateBusinessCustomerRelationshipStatus } from './businessRelationshipApi';
 
-export type CustomerEngagementState = 'all' | 'contacted_recently' | 'not_contacted_recently' | 'new';
+export type CustomerEngagementState = 'all' | 'active' | 'inactive' | 'new';
 export type CustomerRelationshipStatus =
   | 'active'
   | 'paused_by_customer'
@@ -73,18 +73,13 @@ export interface BusinessCustomerDetail {
 }
 
 export async function getBusinessCustomers(businessId: string): Promise<BusinessCustomerItem[]> {
-  const { data, error } = await supabase.rpc('get_business_customers', {
-    p_business_id: businessId
-  });
+  const { data, error } = await supabase.rpc('get_business_customers', { p_business_id: businessId });
   if (error) throw new Error(error.message || 'تعذر تحميل العملاء.');
   const items = Array.isArray(data) ? data : (data as { items?: unknown[] } | null)?.items;
   return Array.isArray(items) ? items as BusinessCustomerItem[] : [];
 }
 
-export async function getBusinessCustomerDetail(
-  businessId: string,
-  customerUserId: string
-): Promise<BusinessCustomerDetail> {
+export async function getBusinessCustomerDetail(businessId: string, customerUserId: string): Promise<BusinessCustomerDetail> {
   const { data, error } = await supabase.rpc('get_business_customer_detail', {
     p_business_id: businessId,
     p_customer_user_id: customerUserId
@@ -94,11 +89,7 @@ export async function getBusinessCustomerDetail(
   return { ...value, relationship_events: Array.isArray(value?.relationship_events) ? value.relationship_events : [] };
 }
 
-export async function addBusinessCustomerNote(
-  businessId: string,
-  customerUserId: string,
-  noteText: string
-): Promise<string> {
+export async function addBusinessCustomerNote(businessId: string, customerUserId: string, noteText: string): Promise<string> {
   const { data, error } = await supabase.rpc('add_business_customer_note', {
     p_business_id: businessId,
     p_customer_user_id: customerUserId,
