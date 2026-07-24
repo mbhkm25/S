@@ -106,15 +106,15 @@ const pages = [
   {
     slug: 'help',
     title: 'مركز مساعدة سند | التحقق والاشتراك والأعمال',
-    description: 'إجابات واضحة عن استخدام سند للتحقق من العمليات، والملاحظات الخاصة، وسند Pro، والملفات التجارية والكتالوجات.',
+    description: 'إجابات واضحة عن استخدام سند للتحقق من العمليات، والملاحظات، والاشتراك، وإدارة النشاط التجاري.',
     eyebrow: 'مركز المساعدة',
-    heading: 'إجابات سريعة قبل أن تبدأ',
-    intro: 'ابدأ من السؤال الأقرب إلى احتياجك، ثم انتقل إلى التطبيق لإكمال الإجراء من حسابك.',
+    heading: 'مساعدة عملية لكل خطوة في سند',
+    intro: 'تعرف على أهم مسارات الحساب والتحقق والملاحظات وسند Pro وسند التجاري، واستخدم قنوات الدعم الرسمية عند الحاجة.',
     sections: [
-      ['هل سند يضمن العملية ماليًا؟', 'لا. سند ينظم البيانات ويعرض مؤشرات مساعدة، ويجب الرجوع إلى الجهة المالية للتأكيد النهائي عند النزاع.'],
-      ['كيف أتحقق من عملية؟', 'افتح رابط التحقق أو امسح رمز QR ثم راجع البيانات الظاهرة وسجل تحققك داخل الحساب.'],
-      ['هل يمكن إضافة ملاحظة؟', 'نعم، بعد التحقق تستطيع إضافة ملاحظة نصية أو صوتية خاصة مرتبطة بالعملية.'],
-      ['كيف أتواصل مع الدعم؟', 'يمكن التواصل عبر واتساب على الرقم +967777634971 أو البريد support@sanadflow.com.']
+      ['الحساب والدخول', 'أنشئ حسابك باستخدام بيانات صحيحة، واحم كلمة المرور، واستخدم استعادة الحساب من المسارات الرسمية فقط.'],
+      ['التحقق والملاحظات', 'افتح رابط العملية أو QR ثم راجع البيانات وأضف ملاحظتك النصية أو الصوتية من حسابك.'],
+      ['سند Pro', 'راجع الباقة الحالية والمدة وحد الاستخدام وطلبات الدفع من قسم الاشتراك في حسابك.'],
+      ['الأعمال', 'أنشئ ملف النشاط وأدر بياناته وكتالوجاته وعملاءه وفريقه من لوحة النشاط.']
     ],
     cta: 'تواصل مع دعم سند',
     ctaUrl: 'https://wa.me/967777634971'
@@ -237,7 +237,7 @@ function pageHtml(page) {
 <meta name="theme-color" content="#07101f"><meta name="robots" content="index, follow, max-image-preview:large">
 <title>${page.title}</title><meta name="description" content="${page.description}">
 <link rel="canonical" href="${url}"><link rel="alternate" hreflang="ar-YE" href="${url}"><link rel="alternate" hreflang="x-default" href="${url}">
-<link rel="icon" href="/sanad_logo.png"><link rel="stylesheet" href="/seo-pages.css">
+<link rel="icon" type="image/svg+xml" href="/sanad-favicon.svg"><link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png"><link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="stylesheet" href="/seo-pages.css">
 <meta property="og:locale" content="ar_YE"><meta property="og:type" content="website"><meta property="og:site_name" content="سند">
 <meta property="og:title" content="${page.title}"><meta property="og:description" content="${page.description}"><meta property="og:url" content="${url}"><meta property="og:image" content="${siteUrl}/sanad_logo.png">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${page.title}"><meta name="twitter:description" content="${page.description}"><meta name="twitter:image" content="${siteUrl}/sanad_logo.png">
