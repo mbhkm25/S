@@ -9,3 +9,4 @@ coverage/
 !.env.example
 .vscode/
 .recovery/
+supabase/.temp/
