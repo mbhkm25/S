@@ -1,18 +1,29 @@
 import { supabase } from './supabase';
+import { updateBusinessCustomerRelationshipStatus } from './businessRelationshipApi';
 
-export type CustomerEngagementState = 'all' | 'active' | 'inactive' | 'new';
+export type CustomerEngagementState = 'all' | 'contacted_recently' | 'not_contacted_recently' | 'new';
+export type CustomerRelationshipStatus =
+  | 'active'
+  | 'paused_by_customer'
+  | 'left_by_customer'
+  | 'removed_by_business'
+  | 'blocked_by_business';
 
 export interface BusinessCustomerItem {
   id: string;
   business_id: string;
   user_id: string;
-  status: string;
+  status: CustomerRelationshipStatus;
   source: string;
   created_at: string;
   updated_at: string;
+  ended_at: string | null;
   full_name: string | null;
   phone: string | null;
   marketing_opt_in: boolean;
+  in_app_notifications_enabled: boolean;
+  whatsapp_service_enabled: boolean;
+  whatsapp_marketing_enabled: boolean;
   tags: string[];
   last_contacted_at: string | null;
   contact_count: number;
@@ -31,7 +42,7 @@ export interface BusinessCustomerNote {
 export interface BusinessCustomerCommunication {
   id: string;
   channel: 'in_app' | 'whatsapp' | 'manual';
-  communication_type: 'message' | 'notification' | 'offer' | 'advertisement' | 'follow_up';
+  communication_type: 'message' | 'notification' | 'offer' | 'advertisement' | 'follow_up' | 'whatsapp_opened';
   title: string | null;
   body: string | null;
   delivery_status: 'draft' | 'queued' | 'sent' | 'delivered' | 'opened' | 'failed' | 'recorded';
@@ -40,10 +51,25 @@ export interface BusinessCustomerCommunication {
   opened_at: string | null;
 }
 
+export interface BusinessCustomerRelationshipEvent {
+  id: string;
+  event_type: string;
+  actor_role: 'customer' | 'business' | 'platform' | 'system';
+  previous_status: string | null;
+  new_status: string | null;
+  reason_code: string | null;
+  reason_text: string | null;
+  created_at: string;
+}
+
 export interface BusinessCustomerDetail {
-  customer: Omit<BusinessCustomerItem, 'engagement_state'>;
+  customer: Omit<BusinessCustomerItem, 'engagement_state'> & {
+    end_reason_code: string | null;
+    end_reason_text: string | null;
+  };
   notes: BusinessCustomerNote[];
   communications: BusinessCustomerCommunication[];
+  relationship_events: BusinessCustomerRelationshipEvent[];
 }
 
 export async function getBusinessCustomers(businessId: string): Promise<BusinessCustomerItem[]> {
@@ -64,7 +90,8 @@ export async function getBusinessCustomerDetail(
     p_customer_user_id: customerUserId
   });
   if (error) throw new Error(error.message || 'تعذر تحميل ملف العميل.');
-  return data as BusinessCustomerDetail;
+  const value = data as BusinessCustomerDetail;
+  return { ...value, relationship_events: Array.isArray(value?.relationship_events) ? value.relationship_events : [] };
 }
 
 export async function addBusinessCustomerNote(
@@ -104,4 +131,13 @@ export async function recordBusinessCustomerCommunication(params: {
   });
   if (error) throw new Error(error.message || 'تعذر تسجيل التواصل.');
   return String(data);
+}
+
+export async function changeBusinessCustomerRelationship(params: {
+  businessId: string;
+  customerUserId: string;
+  action: 'remove' | 'block' | 'reactivate';
+  reason?: string | null;
+}): Promise<void> {
+  await updateBusinessCustomerRelationshipStatus(params);
 }
