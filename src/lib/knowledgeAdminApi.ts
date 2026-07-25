@@ -134,6 +134,7 @@ export interface KnowledgeSourceDetail {
 
 export interface KnowledgeSearchItem {
   source_id: string;
+  unit_id: string;
   source_code: string;
   source_type: KnowledgeSourceType;
   title: string;
