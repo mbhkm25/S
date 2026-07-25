@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, ArrowRight, Bell, Check, ChevronDown, Eye, EyeOff,
   Loader2, MessageCircle, Settings2, ShieldCheck, Unlink, X
@@ -29,7 +29,7 @@ const REASONS = [
 ] as const;
 
 function ToggleRow({ icon, title, description, checked, disabled, onChange }: {
-  icon: React.ReactNode; title: string; description: string; checked: boolean;
+  icon: ReactNode; title: string; description: string; checked: boolean;
   disabled?: boolean; onChange: (next: boolean) => void;
 }) {
   return (

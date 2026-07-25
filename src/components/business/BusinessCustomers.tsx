@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ArrowRight,
   Ban,
@@ -345,7 +345,7 @@ function Info({ label, value, mono = false }: { label: string; value: string; mo
   return <div><span className="block text-[9px] font-bold text-slate-400">{label}</span><span className={`mt-1 block text-xs font-bold text-slate-800 ${mono ? 'font-mono' : ''}`}>{value}</span></div>;
 }
 
-function ActionButton({ icon, label, tone, loading, onClick }: { icon: React.ReactNode; label: string; tone: 'amber' | 'rose' | 'emerald'; loading: boolean; onClick: () => void }) {
+function ActionButton({ icon, label, tone, loading, onClick }: { icon: ReactNode; label: string; tone: 'amber' | 'rose' | 'emerald'; loading: boolean; onClick: () => void }) {
   const classes = tone === 'rose' ? 'border-rose-200 bg-rose-50 text-rose-700' : tone === 'emerald' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700';
   return <button type="button" disabled={loading} onClick={onClick} className={`flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-bold disabled:opacity-60 ${classes}`}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}{label}</button>;
 }
