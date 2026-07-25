@@ -160,6 +160,43 @@ export interface KnowledgeFileItem {
   updated_at: string;
 }
 
+export interface KnowledgeFileUploadResult {
+  source_id: string;
+  source_code: string;
+  file_id: string;
+  processing_status: string;
+  extraction_started: boolean;
+  extraction_error?: string;
+}
+
+const MAX_KNOWLEDGE_FILE_BYTES = 25 * 1024 * 1024;
+const ALLOWED_FILE_EXTENSIONS = new Set([
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  'md', 'markdown', 'txt', 'csv', 'html', 'htm', 'json',
+  'png', 'jpg', 'jpeg', 'webp'
+]);
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  html: 'text/html',
+  htm: 'text/html',
+  json: 'application/json',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp'
+};
+
 function normalizeOverview(value: unknown): KnowledgeOverview {
   const raw = (value || {}) as Partial<KnowledgeOverview>;
   return {
@@ -299,47 +336,99 @@ export async function getKnowledgeFiles(limit = 100): Promise<KnowledgeFileItem[
   return Array.isArray(data) ? data : [];
 }
 
-function safeFileName(name: string): string {
-  const ext = name.includes('.') ? `.${name.split('.').pop()!.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
-  const base = name.replace(/\.[^.]+$/, '').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').slice(0, 80) || 'knowledge-file';
-  return `${base}${ext}`;
+function fileExtension(name: string): string {
+  const match = name.trim().toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match?.[1] || '';
 }
 
-export async function uploadKnowledgeFile(file: File, title?: string): Promise<{
-  source_id: string;
-  source_code: string;
-  file_id: string;
-  processing_status: string;
-}> {
-  if (file.size <= 0 || file.size > 25 * 1024 * 1024) throw new Error('يجب ألا يتجاوز حجم الملف 25 ميجابايت.');
+function safeFileName(name: string): string {
+  const extension = fileExtension(name);
+  const suffix = extension ? `.${extension}` : '';
+  const base = name
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'knowledge-file';
+  return `${base}${suffix}`;
+}
+
+function resolveFileMimeType(file: File): string {
+  const extension = fileExtension(file.name);
+  return MIME_BY_EXTENSION[extension] || file.type || 'application/octet-stream';
+}
+
+function readableUploadError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('row-level security') || normalized.includes('unauthorized')) {
+    return 'لا توجد صلاحية لرفع الملف. أعد تسجيل الدخول بحساب مدير منصة سند.';
+  }
+  if (normalized.includes('payload too large') || normalized.includes('maximum allowed size')) {
+    return 'حجم الملف أكبر من الحد المسموح وهو 25 ميجابايت.';
+  }
+  if (normalized.includes('mime') || normalized.includes('content type')) {
+    return 'تعذر التعرف على نوع الملف. غيّر اسم الملف بحيث ينتهي بامتداد واضح مثل PDF أو DOCX أو TXT.';
+  }
+  if (normalized.includes('unsupported_file_extension')) {
+    return 'امتداد الملف غير مدعوم في إدارة المعرفة.';
+  }
+  return message || 'تعذر رفع ملف المعرفة.';
+}
+
+export async function retryKnowledgeFileProcessing(fileId: string): Promise<boolean> {
+  const { error } = await supabase.functions.invoke('sanad-v3-knowledge-ingest', {
+    body: { file_id: fileId }
+  });
+  if (error) throw new Error(readableUploadError(error));
+  return true;
+}
+
+export async function uploadKnowledgeFile(file: File, title?: string): Promise<KnowledgeFileUploadResult> {
+  const extension = fileExtension(file.name);
+  if (!extension || !ALLOWED_FILE_EXTENSIONS.has(extension)) {
+    throw new Error('امتداد الملف غير مدعوم. استخدم PDF أو Word أو Excel أو PowerPoint أو Markdown أو TXT أو CSV أو JSON أو صورة.');
+  }
+  if (file.size <= 0) throw new Error('الملف فارغ ولا يمكن إضافته إلى إدارة المعرفة.');
+  if (file.size > MAX_KNOWLEDGE_FILE_BYTES) throw new Error('يجب ألا يتجاوز حجم الملف 25 ميجابايت.');
+
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('يجب تسجيل الدخول لرفع ملفات المعرفة.');
 
+  const mimeType = resolveFileMimeType(file);
   const objectPath = `${userData.user.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
   const { error: uploadError } = await supabase.storage
     .from('sanad-knowledge-files')
-    .upload(objectPath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
-  if (uploadError) throw uploadError;
+    .upload(objectPath, file, { contentType: mimeType, cacheControl: '3600', upsert: false });
+  if (uploadError) throw new Error(readableUploadError(uploadError));
 
+  let registered = false;
   try {
     const derivedTitle = title?.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'وثيقة معرفة';
     const { data, error } = await supabase.rpc('platform_admin_register_knowledge_file', {
       p_title: derivedTitle,
       p_original_name: file.name,
-      p_mime_type: file.type || 'application/octet-stream',
+      p_mime_type: mimeType,
       p_size_bytes: file.size,
       p_object_path: objectPath,
       p_reason: 'رفع ملف جديد إلى إدارة المعرفة'
     });
     if (error) throw error;
+    registered = true;
 
     const invoke = await supabase.functions.invoke('sanad-v3-knowledge-ingest', {
       body: { file_id: data.file_id }
     });
-    if (invoke.error) console.warn('Knowledge extraction queued but did not start immediately:', invoke.error);
-    return data;
+
+    return {
+      ...data,
+      extraction_started: !invoke.error,
+      extraction_error: invoke.error ? readableUploadError(invoke.error) : undefined
+    };
   } catch (error) {
-    await supabase.storage.from('sanad-knowledge-files').remove([objectPath]).catch(() => null);
-    throw error;
+    if (!registered) {
+      await supabase.storage.from('sanad-knowledge-files').remove([objectPath]).catch(() => null);
+    }
+    throw new Error(readableUploadError(error));
   }
 }
