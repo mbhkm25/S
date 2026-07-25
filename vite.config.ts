@@ -62,7 +62,7 @@ export default defineConfig(({ mode }) => {
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.js',
-        injectRegister: null, // manual registration in main.tsx
+        injectRegister: null,
         includeManifestIcons: false,
         manifest: {
           name: 'سند',
@@ -87,55 +87,31 @@ export default defineConfig(({ mode }) => {
               files: [
                 {
                   name: 'files',
-                  accept: [
-                    'image/*',
-                    'application/pdf'
-                  ]
+                  accept: ['image/*', 'application/pdf']
                 }
               ]
             }
           },
           icons: [
-            {
-              src: 'icon-96.png',
-              sizes: '96x96',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: 'icon-192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: 'icon-512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any'
-            },
-            {
-              src: 'icon-maskable-192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'maskable'
-            },
-            {
-              src: 'icon-maskable-512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable'
-            }
+            { src: 'icon-96.png', sizes: '96x96', type: 'image/png', purpose: 'any' },
+            { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: 'icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+            { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
           ]
         },
         injectManifest: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico,txt,json}'],
-          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024 // 3MB limit
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024
         }
       })
     ],
     build: {
       rollupOptions: {
+        input: {
+          app: path.resolve(__dirname, 'index.html'),
+          'reset-password': path.resolve(__dirname, 'reset-password.html')
+        },
         output: {
           manualChunks: resolveVendorChunk
         }
@@ -147,10 +123,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

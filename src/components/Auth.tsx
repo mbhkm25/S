@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { AlertCircle, Camera, CheckCircle2, Loader2, Lock, Mail, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, User, AlertCircle, CheckCircle2, Loader2, Sparkles, Camera } from 'lucide-react';
 import { Profile } from '../types';
 import { parseYemeniLocalPhone } from '../lib/digits';
 import { isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
@@ -15,11 +15,21 @@ interface AuthProps {
   onAuthSuccess: (sessionUser: SupabaseUser, userProfile: Profile) => void;
 }
 
-export default function Auth({ onAuthSuccess }: AuthProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
+type AuthView = 'sign-in' | 'sign-up' | 'confirm-email' | 'forgot-password';
 
-  // Form fields
-  const [email, setEmail] = useState('');
+const PENDING_EMAIL_KEY = 'sanad_pending_confirmation_email';
+const RESEND_COOLDOWN_SECONDS = 60;
+
+function getAppRootUrl(): string {
+  const base = import.meta.env.VITE_APP_BASE_PATH || import.meta.env.BASE_URL || '/';
+  const cleanBase = base.startsWith('/') ? base : `/${base}`;
+  const root = `${window.location.origin}${cleanBase}`;
+  return root.endsWith('/') ? root : `${root}/`;
+}
+
+export default function Auth({ onAuthSuccess }: AuthProps) {
+  const [view, setView] = useState<AuthView>('sign-in');
+  const [email, setEmail] = useState(() => sessionStorage.getItem(PENDING_EMAIL_KEY) || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -27,11 +37,13 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
   const [governorate, setGovernorate] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
-
-  // Status states
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const isSignUp = view === 'sign-up';
+  const pendingEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
   useEffect(() => {
     if (!avatarFile) {
@@ -43,437 +55,269 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
 
-  // Translate standard Supabase auth/db errors to friendly Arabic
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown(current => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  const resetMessages = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
+  const switchView = (next: AuthView) => {
+    resetMessages();
+    setView(next);
+  };
+
   const getArabicErrorMessage = (err: unknown): string => {
-    const details = typeof err === 'object' && err !== null
-      ? err as { message?: unknown; name?: unknown }
-      : {};
+    const details = typeof err === 'object' && err !== null ? err as { message?: unknown; name?: unknown } : {};
     const msg = typeof details.message === 'string' ? details.message : '';
     const errorName = typeof details.name === 'string' ? details.name : '';
+    const lower = msg.toLowerCase();
+    const isSystemError = msg.includes('Database error saving new user') || lower.includes('row-level security') || lower.includes('rls') || msg.includes('database_error');
 
-    // Distinguish between critical database/system errors and standard user authentication errors
-    const isSystemError = msg.includes('Database error saving new user') ||
-                          msg.toLowerCase().includes('row-level security') ||
-                          msg.toLowerCase().includes('rls') ||
-                          msg.includes('database_error');
+    logAuthDiagnostic(isSystemError ? 'database_error' : 'auth_flow', err);
 
-    if (isSystemError) {
-      logAuthDiagnostic('database_error', err);
-    } else {
-      logAuthDiagnostic('auth_flow', err);
-    }
-
-    if (isSystemError) {
-      return 'تعذر إنشاء ملف المستخدم في قاعدة سند. يرجى المحاولة لاحقًا أو التواصل مع الدعم.';
-    }
-    if (msg.includes('duplicate key') || msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already_registered') || msg.includes('user_already_exists')) {
-      return 'البريد الإلكتروني مسجل بالفعل، يرجى تسجيل الدخول.';
-    }
-    if (msg.includes('Password should be at least') || msg.toLowerCase().includes('password_too_short')) {
-      return 'كلمة المرور قصيرة جدًا. يجب أن تتكون من 6 أحرف على الأقل.';
-    }
-    if (msg.includes('Invalid login credentials') || msg.toLowerCase().includes('invalid_credentials')) {
-      return 'بيانات الدخول غير صحيحة، يرجى التحقق من البريد وكلمة المرور.';
-    }
-    if (msg.includes('Email not confirmed') || msg.toLowerCase().includes('email_not_confirmed') || msg.toLowerCase().includes('email not confirmed')) {
-      return 'يرجى تأكيد بريدك الإلكتروني أولًا عن طريق الرابط المرسل إليك.';
-    }
-    if (msg.includes('Failed to fetch') || errorName === 'TypeError') {
-      logAuthDiagnostic('network_error', err);
-      return 'فشل الاتصال بالخادم الآمن لسند. يرجى التحقق من اتصالك بالإنترنت وتأكيد صحة تهيئة مفاتيح Supabase في لوحة الإعدادات.';
-    }
+    if (isSystemError) return 'تعذر إنشاء ملف المستخدم في قاعدة سند. يرجى المحاولة لاحقًا أو التواصل مع الدعم.';
+    if (msg.includes('duplicate key') || lower.includes('already registered') || lower.includes('already_registered') || msg.includes('user_already_exists')) return 'البريد الإلكتروني مسجل بالفعل، يرجى تسجيل الدخول.';
+    if (msg.includes('Password should be at least') || lower.includes('password_too_short')) return 'كلمة المرور قصيرة جدًا. يجب أن تتكون من 6 أحرف على الأقل.';
+    if (msg.includes('Invalid login credentials') || lower.includes('invalid_credentials')) return 'بيانات الدخول غير صحيحة، يرجى التحقق من البريد وكلمة المرور.';
+    if (msg.includes('Email not confirmed') || lower.includes('email_not_confirmed') || lower.includes('email not confirmed')) return 'لم يتم تأكيد البريد الإلكتروني بعد. يمكنك إعادة إرسال رسالة التأكيد.';
+    if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) return 'تم طلب الرسالة عدة مرات. انتظر قليلًا ثم أعد المحاولة.';
+    if (msg.includes('Failed to fetch') || errorName === 'TypeError') return 'تعذر الاتصال بخادم سند. تحقق من الإنترنت ثم أعد المحاولة.';
     return msg || 'تعذر إتمام العملية حاليًا. يرجى المحاولة مرة أخرى.';
   };
 
-  // Helper to ensure profile exists
   const ensureProfileExists = async (user: SupabaseUser) => {
-    try {
-      const { data: profile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
+    const { data: profile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (fetchError) logAuthDiagnostic('profile_fetch_fallback', fetchError);
+    if (profile) return profile as Profile;
 
-      if (fetchError) {
-        logAuthDiagnostic('profile_fetch_fallback', fetchError);
-      }
+    const { data: newProfile, error: insertError } = await supabase.from('profiles').upsert({
+      id: user.id,
+      full_name: user.user_metadata?.full_name || fullName || 'مستخدم سند',
+      phone: user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : ''),
+      governorate: user.user_metadata?.governorate || governorate || null,
+      status: 'active',
+      profile_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).select().single();
 
-      if (!profile) {
-        // Profile does not exist, insert/upsert it
-        const userFullName = user.user_metadata?.full_name || fullName || 'مستخدم سند';
-        const userPhone = user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : '');
-        const userGovernorate = user.user_metadata?.governorate || governorate || null;
-
-        const { data: newProfile, error: insertError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            full_name: userFullName,
-            phone: userPhone,
-            governorate: userGovernorate,
-            status: 'active',
-            profile_completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          throw insertError;
-        }
-        return newProfile as Profile;
-      }
-
-      return profile as Profile;
-    } catch (err: unknown) {
-      logAuthDiagnostic('profile_ensure_failed', err);
-      throw new Error('تعذر إنشاء ملف المستخدم في قاعدة سند. أعد المحاولة.');
-    }
+    if (insertError) throw insertError;
+    return newProfile as Profile;
   };
 
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleResendConfirmation = async () => {
+    if (!pendingEmail || resendCooldown > 0) return;
     setLoading(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    // Validation
-    if (!email || !password) {
-      setErrorMessage('يرجى ملء البريد الإلكتروني وكلمة المرور.');
-      setLoading(false);
-      return;
-    }
-
-    if (isSignUp) {
-      if (!fullName) {
-        setErrorMessage('يرجى كتابة الاسم الكامل.');
-        setLoading(false);
-        return;
-      }
-      if (!phone) {
-        setErrorMessage('يرجى إدخال رقم الجوال.');
-        setLoading(false);
-        return;
-      }
-      if (!isValidYemenLocalPhone(phone)) {
-        setErrorMessage(phone.length !== 9 ? 'رقم الجوال يجب أن يتكون من 9 أرقام.' : 'رقم الجوال اليمني يجب أن يبدأ بالرقم 7.');
-        setLoading(false);
-        return;
-      }
-      if (!isYemenGovernorate(governorate)) {
-        setErrorMessage('يرجى اختيار المحافظة');
-        setLoading(false);
-        return;
-      }
-      if (password !== confirmPassword) {
-        setErrorMessage('كلمتا المرور غير متطابقتين.');
-        setLoading(false);
-        return;
-      }
-    }
-
+    resetMessages();
     try {
-      markManualAuthAttempt();
-
-      if (isSignUp) {
-        // Build clean email redirection URL for PWA route deployment
-        const base = import.meta.env.VITE_APP_BASE_PATH || import.meta.env.BASE_URL || '/';
-        const cleanBase = base.startsWith('/') ? base : `/${base}`;
-        const baseUrl = window.location.origin + cleanBase;
-        const cleanRedirectUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-
-        // Sign up
-        const { data: authData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: cleanRedirectUrl,
-            data: {
-              full_name: fullName,
-              phone: normalizeYemenPhone(phone),
-              governorate
-            }
-          }
-        });
-
-        if (signUpError) throw signUpError;
-
-        if (!authData.user) {
-          throw new Error('لم نتمكن من إتمام التسجيل، يرجى المحاولة لاحقاً.');
-        }
-
-        // 4. Handle Email Confirmation state
-        if (authData.user && !authData.session) {
-          clearManualAuthAttempt();
-          setSuccessMessage('تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتأكيد الحساب، ثم تسجيل الدخول.');
-          setLoading(false);
-          // Auto switch to sign-in view after 6 seconds
-          setTimeout(() => {
-            setIsSignUp(false);
-            setSuccessMessage(null);
-          }, 6000);
-          return;
-        }
-
-        // If session is active immediately, ensure profile and trigger auth success
-        if (authData.session) {
-          let userProfile = await ensureProfileExists(authData.user);
-          if (avatarFile) {
-            const avatarPath = await uploadUserAvatar(authData.user.id, avatarFile);
-            const { data: updatedProfile, error: avatarError } = await supabase
-              .from('profiles')
-              .update({ avatar_path: avatarPath, updated_at: new Date().toISOString() })
-              .eq('id', authData.user.id)
-              .select()
-              .single();
-            if (avatarError) throw avatarError;
-            userProfile = updatedProfile as Profile;
-          }
-          setSuccessMessage('تم إنشاء الحساب بنجاح!');
-
-          setTimeout(() => {
-            onAuthSuccess(authData.user, userProfile!);
-          }, 1200);
-        }
-
-      } else {
-        // Sign in
-        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (signInError) throw signInError;
-
-        if (!authData.user) {
-          throw new Error('فشل تسجيل الدخول، لم يتم العثور على المستخدم.');
-        }
-
-        // Fetch / Ensure profile exists
-        const userProfile = await ensureProfileExists(authData.user);
-        onAuthSuccess(authData.user, userProfile!);
-      }
-    } catch (err: unknown) {
-      clearManualAuthAttempt();
-      logAuthDiagnostic('authentication_failed', err);
-      setErrorMessage(getArabicErrorMessage(err));
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingEmail,
+        options: { emailRedirectTo: getAppRootUrl() }
+      });
+      if (error) throw error;
+      sessionStorage.setItem(PENDING_EMAIL_KEY, pendingEmail);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      setSuccessMessage('أعدنا إرسال رسالة التأكيد. راجع البريد الوارد والرسائل غير المرغوب فيها.');
+    } catch (error) {
+      setErrorMessage(getArabicErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleForgotPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    resetMessages();
+    if (!pendingEmail) {
+      setErrorMessage('أدخل بريدك الإلكتروني أولًا.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const redirectTo = new URL('reset-password.html', getAppRootUrl()).toString();
+      const { error } = await supabase.auth.resetPasswordForEmail(pendingEmail, { redirectTo });
+      if (error) throw error;
+      setSuccessMessage('إذا كان البريد مرتبطًا بحساب في سند، فستصلك رسالة لاستعادة كلمة المرور. راجع أيضًا الرسائل غير المرغوب فيها.');
+    } catch (error) {
+      setErrorMessage(getArabicErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAuthSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    resetMessages();
+    if (!pendingEmail || !password) {
+      setErrorMessage('يرجى ملء البريد الإلكتروني وكلمة المرور.');
+      return;
+    }
+    if (isSignUp) {
+      if (!fullName.trim()) return setErrorMessage('يرجى كتابة الاسم الكامل.');
+      if (!phone) return setErrorMessage('يرجى إدخال رقم الجوال.');
+      if (!isValidYemenLocalPhone(phone)) return setErrorMessage(phone.length !== 9 ? 'رقم الجوال يجب أن يتكون من 9 أرقام.' : 'رقم الجوال اليمني يجب أن يبدأ بالرقم 7.');
+      if (!isYemenGovernorate(governorate)) return setErrorMessage('يرجى اختيار المحافظة.');
+      if (password !== confirmPassword) return setErrorMessage('كلمتا المرور غير متطابقتين.');
+    }
+
+    setLoading(true);
+    try {
+      markManualAuthAttempt();
+      if (isSignUp) {
+        const { data: authData, error } = await supabase.auth.signUp({
+          email: pendingEmail,
+          password,
+          options: {
+            emailRedirectTo: getAppRootUrl(),
+            data: { full_name: fullName.trim(), phone: normalizeYemenPhone(phone), governorate }
+          }
+        });
+        if (error) throw error;
+        if (!authData.user) throw new Error('لم نتمكن من إتمام التسجيل، يرجى المحاولة لاحقًا.');
+
+        if (!authData.session) {
+          clearManualAuthAttempt();
+          sessionStorage.setItem(PENDING_EMAIL_KEY, pendingEmail);
+          setResendCooldown(RESEND_COOLDOWN_SECONDS);
+          setView('confirm-email');
+          setPassword('');
+          setConfirmPassword('');
+          return;
+        }
+
+        let userProfile = await ensureProfileExists(authData.user);
+        if (avatarFile) {
+          const avatarPath = await uploadUserAvatar(authData.user.id, avatarFile);
+          const { data: updatedProfile, error: avatarError } = await supabase.from('profiles').update({ avatar_path: avatarPath, updated_at: new Date().toISOString() }).eq('id', authData.user.id).select().single();
+          if (avatarError) throw avatarError;
+          userProfile = updatedProfile as Profile;
+        }
+        sessionStorage.removeItem(PENDING_EMAIL_KEY);
+        onAuthSuccess(authData.user, userProfile);
+      } else {
+        const { data: authData, error } = await supabase.auth.signInWithPassword({ email: pendingEmail, password });
+        if (error) {
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            clearManualAuthAttempt();
+            sessionStorage.setItem(PENDING_EMAIL_KEY, pendingEmail);
+            setView('confirm-email');
+            setErrorMessage('لم يتم تأكيد البريد الإلكتروني بعد. أعد إرسال رسالة التأكيد أو راجع عنوان البريد أدناه.');
+            return;
+          }
+          throw error;
+        }
+        if (!authData.user) throw new Error('فشل تسجيل الدخول، لم يتم العثور على المستخدم.');
+        sessionStorage.removeItem(PENDING_EMAIL_KEY);
+        const userProfile = await ensureProfileExists(authData.user);
+        onAuthSuccess(authData.user, userProfile);
+      }
+    } catch (error) {
+      clearManualAuthAttempt();
+      logAuthDiagnostic('authentication_failed', error);
+      setErrorMessage(getArabicErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const brandHeader = (
+    <div className="text-center mb-7" id="auth_header">
+      <div className="inline-flex items-center justify-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm mb-4">
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt="شعار سند" className="h-12 object-contain" />
+      </div>
+      <h2 className="text-2xl font-bold text-slate-900 tracking-tight">سند | SANAD</h2>
+      <p className="text-slate-500 text-sm mt-2">
+        {view === 'sign-up' ? 'أنشئ حسابك للبدء' : view === 'confirm-email' ? 'أكمل تفعيل حسابك' : view === 'forgot-password' ? 'استعادة الوصول إلى حسابك' : 'سجل دخولك إلى سند'}
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-8" id="auth_container">
-      <div className="w-full max-w-md bg-white rounded-3xl border border-slate-100 shadow-xl p-8 md:p-10 transition-all duration-300">
+      <div className="w-full max-w-md bg-white rounded-3xl border border-slate-100 shadow-xl p-6 md:p-10 transition-all duration-300">
+        {brandHeader}
 
-        {/* Brand Header */}
-        <div className="text-center mb-8" id="auth_header">
-          <div className="inline-flex items-center justify-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm mb-4">
-            <img
-              src={`${import.meta.env.BASE_URL}logo.png`}
-              alt="سند للتحقق"
-              className="h-12 object-contain"
-              onError={(e) => {
-                // If logo.png fails, fall back to showing the icon/Sparkles styling
-                e.currentTarget.style.display = 'none';
-                const parent = e.currentTarget.parentElement;
-                if (parent) {
-                  parent.className = "inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-50 mb-4 text-emerald-600 animate-pulse";
-                  // Render a Sparkles icon style inside
-                  parent.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z"/><path d="m5 3 1 2.5L8.5 6 6 7 5 9.5 4 7 1.5 6 4 5Z"/><path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1Z"/></svg>';
-                }
-              }}
-            />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">سند للتحقق | SANAD Verify</h2>
-          <p className="text-slate-500 text-sm mt-2">
-            {isSignUp ? 'أنشئ حسابك الشخصي الموثق للبدء' : 'سجل دخولك للوصول إلى إشعاراتك المالية'}
-          </p>
-        </div>
+        {errorMessage && <div className="flex items-start gap-3 bg-rose-50 border border-rose-100 text-rose-800 p-4 rounded-xl mb-5 text-sm" id="auth_error"><AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" /><span>{errorMessage}</span></div>}
+        {successMessage && <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 text-emerald-800 p-4 rounded-xl mb-5 text-sm" id="auth_success"><CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" /><span>{successMessage}</span></div>}
 
-        {/* Info alerts */}
-        {errorMessage && (
-          <div className="flex items-start gap-3 bg-rose-50 border border-rose-100 text-rose-800 p-4 rounded-xl mb-6 text-sm" id="auth_error">
-            <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {successMessage && (
-          <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 text-emerald-800 p-4 rounded-xl mb-6 text-sm" id="auth_success">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
-            <span>{successMessage}</span>
-          </div>
-        )}
-
-        {!isSignUp && (
-          <PasskeySignInButton
-            onError={(message) => setErrorMessage(message || null)}
-          />
-        )}
-
-        {/* Auth Form */}
-        <form onSubmit={handleAuthSubmit} className="space-y-5" id="auth_form">
-          {isSignUp && (
-            <>
-              <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
-                <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-white text-slate-500 shadow-sm">
-                  {avatarPreview ? <img src={avatarPreview} alt="معاينة صورة البروفايل" decoding="async" className="h-full w-full object-cover" /> : <Camera className="h-6 w-6" />}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} />
-                </label>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-800">صورة البروفايل <span className="font-normal text-slate-400">(اختيارية)</span></p>
-                  <p className="mt-1 text-[10px] leading-5 text-slate-500">يمكنك تخطيها وإضافتها لاحقًا من حسابي.</p>
-                  {avatarFile && <button type="button" onClick={() => setAvatarFile(null)} className="mt-1 text-[10px] font-bold text-rose-600">إزالة الصورة</button>}
-                </div>
-              </div>
-
-              {/* Full Name */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 block">الاسم الكامل</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                    placeholder="محمد بن عبد الله"
-                  />
-                </div>
-              </div>
-
-              {/* Phone Number */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 block">رقم الجوال</label>
-                <div className="flex rounded-xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500">
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    inputMode="numeric"
-                    onChange={(e) => setPhone(parseYemeniLocalPhone(e.target.value).slice(0, 9))}
-                    className="min-w-0 flex-1 px-3.5 py-3 bg-transparent text-slate-900 text-sm focus:outline-none text-left font-mono"
-                    placeholder="771234567"
-                    dir="ltr"
-                  />
-                  <span className="bg-slate-100 border-r border-slate-200 px-3.5 py-3 text-sm text-slate-600 font-mono select-none" dir="ltr">+967</span>
-                </div>
-                <p className="text-[10px] text-slate-400">أدخل رقم الجوال المكوّن من 9 أرقام</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 block">المحافظة</label>
-                <select
-                  required
-                  value={governorate}
-                  onChange={(e) => setGovernorate(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                >
-                  <option value="">اختر المحافظة</option>
-                  {YEMEN_GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* Email */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-700 block">البريد الإلكتروني</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-400">
-                <Mail className="w-4 h-4" />
-              </span>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-left"
-                placeholder="name@example.com"
-                dir="ltr"
-              />
+        {view === 'confirm-email' ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5 text-center">
+              <Mail className="mx-auto h-9 w-9 text-emerald-600" />
+              <h3 className="mt-3 text-lg font-bold text-slate-900">تحقق من بريدك الإلكتروني</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">أرسلنا رسالة تأكيد إلى:</p>
+              <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-sm font-bold text-slate-900" dir="ltr">{pendingEmail}</p>
+            </div>
+            <button type="button" onClick={handleResendConfirmation} disabled={loading || resendCooldown > 0} className="w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-bold text-white disabled:bg-emerald-300 flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+              {resendCooldown > 0 ? `إعادة الإرسال بعد ${resendCooldown} ثانية` : 'إعادة إرسال رسالة التأكيد'}
+            </button>
+            <div className="rounded-xl bg-slate-50 p-4 text-xs leading-6 text-slate-600">لم تجد الرسالة؟ راجع البريد غير المرغوب فيه، والعروض الترويجية، وجميع الرسائل. وتأكد أن عنوان البريد أعلاه مكتوب بصورة صحيحة.</div>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => switchView('sign-up')} className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold text-slate-700">البريد غير صحيح</button>
+              <button type="button" onClick={() => switchView('sign-in')} className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-bold text-slate-700">العودة للدخول</button>
             </div>
           </div>
-
-          {/* Password */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-700 block">كلمة المرور</label>
-            <div className="relative">
-              <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-400">
-                <Lock className="w-4 h-4" />
-              </span>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-left"
-                placeholder="••••••"
-                dir="ltr"
-              />
-            </div>
-          </div>
-
-          {/* Confirm Password (Sign Up Only) */}
-          {isSignUp && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 block">تأكيد كلمة المرور</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </span>
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-left"
-                  placeholder="••••••"
-                  dir="ltr"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Action Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            id="auth_submit_btn"
-            className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-600/10 hover:shadow-emerald-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>يرجى الانتظار...</span>
-              </>
-            ) : (
-              <span>{isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}</span>
-            )}
-          </button>
-        </form>
-
-        {/* Toggle Screen */}
-        <div className="mt-8 text-center border-t border-slate-100 pt-6">
-          <button
-            type="button"
-            id="auth_toggle_btn"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            className="text-emerald-600 hover:text-emerald-700 font-medium text-sm focus:outline-none"
-          >
-            {isSignUp ? 'لديك حساب بالفعل؟ سجل الدخول الآن' : 'ليس لديك حساب؟ أنشئ حساباً جديداً'}
-          </button>
-        </div>
-
+        ) : view === 'forgot-password' ? (
+          <form onSubmit={handleForgotPassword} className="space-y-5">
+            <p className="text-sm leading-6 text-slate-600">أدخل البريد المرتبط بحسابك، وسنرسل رابطًا آمنًا لإنشاء كلمة مرور جديدة.</p>
+            <EmailField email={email} setEmail={setEmail} />
+            <button type="submit" disabled={loading} className="w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-bold text-white disabled:bg-emerald-300 flex items-center justify-center gap-2">{loading && <Loader2 className="h-5 w-5 animate-spin" />}إرسال رابط الاستعادة</button>
+            <button type="button" onClick={() => switchView('sign-in')} className="w-full text-sm font-bold text-emerald-700">العودة إلى تسجيل الدخول</button>
+          </form>
+        ) : (
+          <>
+            {!isSignUp && <PasskeySignInButton onError={(message) => setErrorMessage(message || null)} />}
+            <form onSubmit={handleAuthSubmit} className="space-y-5" id="auth_form">
+              {isSignUp && (
+                <>
+                  <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
+                    <label className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-white text-slate-500 shadow-sm">
+                      {avatarPreview ? <img src={avatarPreview} alt="معاينة صورة البروفايل" className="h-full w-full object-cover" /> : <Camera className="h-6 w-6" />}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => setAvatarFile(event.target.files?.[0] || null)} />
+                    </label>
+                    <div><p className="text-xs font-bold text-slate-800">صورة البروفايل <span className="font-normal text-slate-400">(اختيارية)</span></p><p className="mt-1 text-[10px] leading-5 text-slate-500">يمكنك إضافتها لاحقًا من حسابي.</p></div>
+                  </div>
+                  <TextField label="الاسم الكامل" value={fullName} setValue={setFullName} icon={<User className="h-4 w-4" />} placeholder="محمد بن عبد الله" />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-slate-700">رقم الجوال</label>
+                    <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:ring-2 focus-within:ring-emerald-500">
+                      <input type="tel" value={phone} inputMode="numeric" onChange={event => setPhone(parseYemeniLocalPhone(event.target.value).slice(0, 9))} className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-left font-mono text-sm outline-none" placeholder="771234567" dir="ltr" />
+                      <span className="border-r border-slate-200 bg-slate-100 px-3.5 py-3 font-mono text-sm" dir="ltr">+967</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5"><label className="block text-xs font-medium text-slate-700">المحافظة</label><select value={governorate} onChange={event => setGovernorate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500"><option value="">اختر المحافظة</option>{YEMEN_GOVERNORATES.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
+                </>
+              )}
+              <EmailField email={email} setEmail={setEmail} />
+              <PasswordField label="كلمة المرور" value={password} setValue={setPassword} />
+              {!isSignUp && <button type="button" onClick={() => switchView('forgot-password')} className="-mt-2 block text-sm font-bold text-emerald-700">هل نسيت كلمة المرور؟</button>}
+              {isSignUp && <PasswordField label="تأكيد كلمة المرور" value={confirmPassword} setValue={setConfirmPassword} />}
+              <button type="submit" disabled={loading} id="auth_submit_btn" className="w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-bold text-white shadow-lg shadow-emerald-600/10 disabled:bg-emerald-300 flex items-center justify-center gap-2">{loading && <Loader2 className="h-5 w-5 animate-spin" />}{isSignUp ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}</button>
+            </form>
+            <div className="mt-8 border-t border-slate-100 pt-6 text-center"><button type="button" onClick={() => switchView(isSignUp ? 'sign-in' : 'sign-up')} className="text-sm font-bold text-emerald-700">{isSignUp ? 'لديك حساب بالفعل؟ سجل الدخول الآن' : 'ليس لديك حساب؟ أنشئ حسابًا جديدًا'}</button></div>
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+function EmailField({ email, setEmail }: { email: string; setEmail: (value: string) => void }) {
+  return <div className="space-y-1.5"><label className="block text-xs font-medium text-slate-700">البريد الإلكتروني</label><div className="relative"><Mail className="pointer-events-none absolute right-3.5 top-3.5 h-4 w-4 text-slate-400" /><input type="email" required value={email} onChange={event => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-4 pr-10 text-left text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="name@example.com" dir="ltr" /></div></div>;
+}
+
+function PasswordField({ label, value, setValue }: { label: string; value: string; setValue: (value: string) => void }) {
+  return <div className="space-y-1.5"><label className="block text-xs font-medium text-slate-700">{label}</label><div className="relative"><Lock className="pointer-events-none absolute right-3.5 top-3.5 h-4 w-4 text-slate-400" /><input type="password" required minLength={6} value={value} onChange={event => setValue(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-4 pr-10 text-left text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••" dir="ltr" /></div></div>;
+}
+
+function TextField({ label, value, setValue, icon, placeholder }: { label: string; value: string; setValue: (value: string) => void; icon: React.ReactNode; placeholder: string }) {
+  return <div className="space-y-1.5"><label className="block text-xs font-medium text-slate-700">{label}</label><div className="relative"><span className="pointer-events-none absolute right-3.5 top-3.5 text-slate-400">{icon}</span><input type="text" required value={value} onChange={event => setValue(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder={placeholder} /></div></div>;
 }
