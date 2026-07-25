@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, BookOpen, Loader2, ShieldAlert } from 'lucide-react';
 import { getPlatformAdminAccess } from '../../lib/platformAdminApi';
 import KnowledgeAdminSection from './KnowledgeAdminSection';
+import KnowledgeTestCenter from './KnowledgeTestCenter';
 
 function cleanPath(): string {
   return window.location.pathname.replace(/\/+$/, '');
@@ -148,7 +149,10 @@ export default function KnowledgeAdminRoute() {
           </button>
         )}
 
-        <KnowledgeAdminSection setError={setError} setSuccess={setSuccess} />
+        <div className="space-y-4">
+          <KnowledgeTestCenter setError={setError} />
+          <KnowledgeAdminSection setError={setError} setSuccess={setSuccess} />
+        </div>
       </div>
     </div>
   );
