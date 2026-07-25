@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowRight, BookOpen, Loader2, ShieldAlert } from 'lucide-react';
 import { getPlatformAdminAccess } from '../../lib/platformAdminApi';
 import KnowledgeAdminSection from './KnowledgeAdminSection';
-import KnowledgeTestCenter from './KnowledgeTestCenter';
 
 function cleanPath(): string {
   return window.location.pathname.replace(/\/+$/, '');
@@ -31,6 +31,7 @@ export default function KnowledgeAdminRoute() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [accessState, setAccessState] = useState<'idle' | 'checking' | 'allowed' | 'denied'>('idle');
+  const [tabBar, setTabBar] = useState<Element | null>(null);
 
   useEffect(() => {
     const sync = () => setPath(cleanPath());
@@ -52,6 +53,21 @@ export default function KnowledgeAdminRoute() {
       window.history.replaceState = originalReplace;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isPlatformAdminPath(path) || isKnowledgePath(path)) {
+      setTabBar(null);
+      return;
+    }
+    const findBar = () => {
+      const bars = Array.from(document.querySelectorAll('.platform-admin-console .no-scrollbar'));
+      setTabBar(bars.find((element) => element.querySelector('button')) || null);
+    };
+    findBar();
+    const observer = new MutationObserver(findBar);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [path]);
 
   useEffect(() => {
     if (!isPlatformAdminPath(path)) {
@@ -107,17 +123,18 @@ export default function KnowledgeAdminRoute() {
   }
 
   if (!isKnowledgePath(path)) {
-    return (
+    return tabBar ? createPortal(
       <button
         type="button"
         onClick={openKnowledge}
-        className="fixed bottom-24 left-4 z-[70] flex min-h-12 items-center gap-2 rounded-2xl bg-emerald-600 px-4 text-xs font-bold text-white shadow-xl shadow-emerald-900/20 sm:bottom-6"
+        className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-white px-3 text-[11px] font-bold text-slate-500 shadow-sm"
         aria-label="فتح إدارة المعرفة"
       >
         <BookOpen className="h-4 w-4" />
         إدارة المعرفة
-      </button>
-    );
+      </button>,
+      tabBar
+    ) : null;
   }
 
   return (
@@ -149,10 +166,7 @@ export default function KnowledgeAdminRoute() {
           </button>
         )}
 
-        <div className="space-y-4">
-          <KnowledgeTestCenter setError={setError} />
-          <KnowledgeAdminSection setError={setError} setSuccess={setSuccess} />
-        </div>
+        <KnowledgeAdminSection setError={setError} setSuccess={setSuccess} />
       </div>
     </div>
   );
