@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive, BookOpen, CheckCircle2, FileText, FlaskConical, FolderOpen,
-  Loader2, Megaphone, Plus, RefreshCw, Search, Send, UploadCloud
+  Loader2, Megaphone, Plus, RefreshCw, RotateCw, Search, Send, UploadCloud
 } from 'lucide-react';
 import KnowledgeTestCenter from './KnowledgeTestCenter';
 import {
   createSimpleDigitalContent,
   getKnowledgeFiles,
   getKnowledgeOverview,
+  retryKnowledgeFileProcessing,
   setKnowledgeSourceStatus,
   uploadKnowledgeFile,
   type KnowledgeFileItem,
@@ -63,6 +64,7 @@ function formatBytes(value: number): string {
 }
 
 export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [tab, setTab] = useState<WorkspaceTab>('sources');
   const [addMode, setAddMode] = useState<AddMode>('digital');
   const [overview, setOverview] = useState<KnowledgeOverview | null>(null);
@@ -70,6 +72,7 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [retryingFileId, setRetryingFileId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<KnowledgeSourceType | ''>('');
   const [statusFilter, setStatusFilter] = useState<KnowledgeSourceStatus | ''>('');
@@ -97,8 +100,8 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
       ]);
       setOverview(nextOverview);
       setFiles(nextFiles);
-    } catch {
-      setError('تعذر تحميل إدارة المعرفة. تحقق من الاتصال وصلاحيات مدير المنصة.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر تحميل إدارة المعرفة.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,23 +117,22 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const result = await createSimpleDigitalContent({
-        platform,
-        postUrl,
-        postText,
-        title: postTitle
-      });
+      const result = await createSimpleDigitalContent({ platform, postUrl, postText, title: postTitle });
       setSuccess(`تم حفظ المحتوى ${result.source_code} كمسودة.`);
       setPostUrl('');
       setPostText('');
       setPostTitle('');
       setTab('sources');
       await load(true);
-    } catch {
-      setError('تعذر حفظ المحتوى الرقمي. راجع النص والرابط ثم أعد المحاولة.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر حفظ المحتوى الرقمي.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const chooseFile = () => {
+    fileInputRef.current?.click();
   };
 
   const uploadFile = async () => {
@@ -139,15 +141,34 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
     setError(null);
     try {
       const result = await uploadKnowledgeFile(selectedFile, fileTitle);
-      setSuccess(`تم رفع الملف وإنشاء المصدر ${result.source_code}. بدأ استخراج النص تلقائيًا.`);
+      if (result.extraction_started) {
+        setSuccess(`تم رفع الملف وإنشاء المصدر ${result.source_code}. بدأ استخراج النص.`);
+      } else {
+        setSuccess(`تم رفع الملف وإنشاء المصدر ${result.source_code}. تعذر بدء الاستخراج تلقائيًا ويمكن إعادة المحاولة من قسم الملفات.`);
+      }
       setSelectedFile(null);
       setFileTitle('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setTab('files');
       await load(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'تعذر رفع ملف المعرفة.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const retryFile = async (fileId: string) => {
+    setRetryingFileId(fileId);
+    setError(null);
+    try {
+      await retryKnowledgeFileProcessing(fileId);
+      setSuccess('تمت إعادة تشغيل استخراج الملف.');
+      await load(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر إعادة تشغيل استخراج الملف.');
+    } finally {
+      setRetryingFileId(null);
     }
   };
 
@@ -161,8 +182,8 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
       setStatusAction(null);
       setStatusReason('');
       await load(true);
-    } catch {
-      setError('تعذر تغيير حالة المصدر.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر تغيير حالة المصدر.');
     } finally {
       setSaving(false);
     }
@@ -206,9 +227,7 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
             <Metric value={overview?.counts.digital_content || 0} label="رقمي" />
             <Metric value={overview?.counts.documents || 0} label="ملفات" />
           </div>
-
           <button onClick={() => setTab('add')} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white"><Plus className="h-4 w-4" />إضافة معرفة جديدة</button>
-
           <div className="space-y-3">
             <div className="relative"><Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالعنوان أو كود المصدر..." className="w-full rounded-xl border-0 bg-white py-3 pl-3 pr-10 text-xs outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-slate-400" /></div>
             <div className="grid grid-cols-2 gap-2">
@@ -216,7 +235,6 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as KnowledgeSourceStatus | '')} className="admin-input"><option value="">كل الحالات</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             </div>
           </div>
-
           <div className="space-y-2">
             {items.map((source) => (
               <article key={source.id} className="rounded-2xl bg-white p-4 shadow-sm">
@@ -260,15 +278,21 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
             </div>
           ) : (
             <div className="space-y-4 rounded-2xl bg-white p-4 shadow-sm">
-              <div><h3 className="text-sm font-bold">رفع ملف أو صورة</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">يدعم PDF وDOC/DOCX وXLS/XLSX وPPT/PPTX وMarkdown وTXT وCSV وJSON والصور. الحد الأقصى 25 MB.</p></div>
-              <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+              <div><h3 className="text-sm font-bold">رفع ملف أو صورة</h3><p className="mt-1 text-[10px] leading-5 text-slate-500">يدعم PDF وWord وExcel وPowerPoint وMarkdown وTXT وCSV وJSON والصور. الحد الأقصى 25 MB.</p></div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.markdown,.txt,.csv,.html,.htm,.json,.png,.jpg,.jpeg,.webp"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              />
+              <button type="button" onClick={chooseFile} className="flex min-h-36 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
                 <UploadCloud className="h-8 w-8 text-slate-400" />
-                <span className="mt-3 text-xs font-bold text-slate-700">{selectedFile ? selectedFile.name : 'اختر ملفًا من الجوال أو الكمبيوتر'}</span>
+                <span className="mt-3 text-xs font-bold text-slate-700">{selectedFile ? selectedFile.name : 'اضغط لاختيار ملف من الجهاز'}</span>
                 {selectedFile && <span className="mt-1 text-[10px] text-slate-400">{formatBytes(selectedFile.size)}</span>}
-                <input type="file" className="sr-only" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.markdown,.txt,.csv,.html,.json,.png,.jpg,.jpeg,.webp" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
-              </label>
+              </button>
               <label className="block text-[11px] font-bold text-slate-700">عنوان اختياري<input value={fileTitle} onChange={(e) => setFileTitle(e.target.value)} className="admin-input mt-2" placeholder="يُستخدم اسم الملف تلقائيًا" /></label>
-              <button onClick={() => void uploadFile()} disabled={saving || !selectedFile} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white disabled:opacity-40">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}رفع وبدء الاستخراج</button>
+              <button onClick={() => void uploadFile()} disabled={saving || !selectedFile} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 text-xs font-bold text-white disabled:opacity-40">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}رفع الملف</button>
             </div>
           )}
         </div>
@@ -282,6 +306,11 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
               <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100"><FileText className="h-5 w-5 text-slate-500" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="truncate text-xs font-bold text-slate-900">{file.title}</h3><span className={`rounded-lg px-2 py-1 text-[9px] font-bold ${fileStatusClass(file.processing_status)}`}>{FILE_STATUS_LABELS[file.processing_status]}</span></div><p className="mt-1 truncate text-[10px] text-slate-500">{file.original_name} • {formatBytes(file.size_bytes)}</p><p dir="ltr" className="mt-1 text-right font-mono text-[9px] text-slate-400">{file.source_code}</p></div></div>
               {file.extraction_summary && <p className="mt-3 text-[10px] leading-5 text-slate-500">{file.extraction_summary}</p>}
               {file.processing_error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-[10px] text-rose-700">{file.processing_error}</p>}
+              {(file.processing_status === 'uploaded' || file.processing_status === 'failed') && (
+                <button onClick={() => void retryFile(file.id)} disabled={retryingFileId === file.id} className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-700 disabled:opacity-50">
+                  {retryingFileId === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}إعادة استخراج النص
+                </button>
+              )}
             </article>
           ))}
           {!files.length && <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center"><FolderOpen className="mx-auto h-7 w-7 text-slate-300" /><p className="mt-3 text-xs font-bold text-slate-700">لم تُرفع ملفات بعد</p></div>}
