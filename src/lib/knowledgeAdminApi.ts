@@ -120,40 +120,44 @@ export interface KnowledgeSourcePayload {
 }
 
 export interface KnowledgeSourceDetail {
-  source: KnowledgeSourceListItem & Record<string, unknown>;
+  source: KnowledgeSourceListItem;
   units: Array<KnowledgeUnitInput & { id: string; chunk_index: number; status: string }>;
   references: Array<KnowledgeReferenceInput & { id: string; normalized_url?: string | null }>;
-  digital_content: (DigitalContentInput & { id: string; source_id: string }) | null;
-  versions: Array<{
-    id: string;
-    version_number: number;
-    change_summary: string | null;
-    created_at: string;
-  }>;
+  digital_content: (DigitalContentInput & { id: string }) | null;
+  versions: Array<{ id: string; version_number: number; change_summary: string | null; created_at: string }>;
 }
 
-export interface KnowledgeSearchItem {
+export interface KnowledgeSearchResultItem {
   source_id: string;
-  unit_id: string;
   source_code: string;
   source_type: KnowledgeSourceType;
   title: string;
+  knowledge_scope: string;
+  authority_level: number;
+  unit_id: string;
   heading: string | null;
   content: string;
   summary: string | null;
-  authority_level: number;
   score: number;
-  primary_cta_type: string | null;
-  primary_cta_label: string | null;
-  primary_cta_url: string | null;
-  assistant_context: string | null;
+  primary_cta_url?: string | null;
+  assistant_context?: string | null;
 }
 
-export interface KnowledgeSearchResult {
-  items: KnowledgeSearchItem[];
-  query: string | null;
-  reference_url: string | null;
-  generated_at: string;
+export interface KnowledgeFileItem {
+  id: string;
+  source_id: string;
+  source_code: string;
+  title: string;
+  source_status: KnowledgeSourceStatus;
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  processing_status: 'uploaded' | 'processing' | 'ready_for_review' | 'failed' | 'approved' | 'published';
+  extraction_summary: string | null;
+  processing_error: string | null;
+  processed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 function normalizeOverview(value: unknown): KnowledgeOverview {
@@ -184,49 +188,14 @@ export async function getKnowledgeOverview(params: {
     p_source_type: params.sourceType || null,
     p_status: params.status || null
   });
-
   if (error) throw error;
   return normalizeOverview(data);
 }
 
-export async function getKnowledgeSourceDetail(sourceId: string): Promise<KnowledgeSourceDetail> {
-  const { data, error } = await supabase.rpc('platform_admin_get_knowledge_source', {
-    p_source_id: sourceId
-  });
-
+export async function getKnowledgeSource(sourceId: string): Promise<KnowledgeSourceDetail> {
+  const { data, error } = await supabase.rpc('platform_admin_get_knowledge_source', { p_source_id: sourceId });
   if (error) throw error;
   return data as KnowledgeSourceDetail;
-}
-
-export async function testKnowledgeSearch(params: {
-  query: string;
-  intent?: string;
-  scope?: string;
-  audience?: string;
-  channel?: string;
-  referenceUrl?: string;
-  sourceCode?: string;
-  limit?: number;
-}): Promise<KnowledgeSearchResult> {
-  const { data, error } = await supabase.rpc('platform_admin_test_knowledge_search', {
-    p_query: params.query.trim(),
-    p_intent: params.intent?.trim() || null,
-    p_scope: params.scope?.trim() || null,
-    p_audience: params.audience?.trim() || null,
-    p_channel: params.channel?.trim() || 'whatsapp',
-    p_reference_url: params.referenceUrl?.trim() || null,
-    p_source_code: params.sourceCode?.trim() || null,
-    p_limit: params.limit ?? 6
-  });
-
-  if (error) throw error;
-  const raw = (data || {}) as Partial<KnowledgeSearchResult>;
-  return {
-    items: Array.isArray(raw.items) ? raw.items : [],
-    query: raw.query || null,
-    reference_url: raw.reference_url || null,
-    generated_at: raw.generated_at || new Date().toISOString()
-  };
 }
 
 export async function upsertKnowledgeSource(
@@ -237,9 +206,53 @@ export async function upsertKnowledgeSource(
     p_payload: payload,
     p_reason: reason.trim()
   });
-
   if (error) throw error;
   return data;
+}
+
+export async function createSimpleDigitalContent(input: {
+  platform: string;
+  postUrl: string;
+  postText: string;
+  title?: string;
+}): Promise<{ ok: boolean; source_id: string; source_code: string; status: KnowledgeSourceStatus }> {
+  const text = input.postText.trim();
+  const title = input.title?.trim() || text.split(/\n+/)[0].slice(0, 100) || 'محتوى رقمي لسند';
+  return upsertKnowledgeSource({
+    source_type: 'digital_content',
+    title,
+    description: `محتوى رسمي منشور على ${input.platform}.`,
+    knowledge_scope: 'digital_marketing',
+    status: 'draft',
+    visibility: 'assistant_public',
+    authority_level: 4,
+    language: 'ar',
+    units: [{
+      unit_type: 'social_post',
+      heading: title,
+      content: text,
+      summary: text.slice(0, 280),
+      keywords: [],
+      intent_tags: ['digital_content'],
+      audience_tags: ['new_user', 'customer'],
+      channel_tags: ['whatsapp', input.platform]
+    }],
+    references: input.postUrl.trim() ? [{
+      platform: input.platform,
+      reference_type: 'platform_post',
+      external_url: input.postUrl.trim(),
+      label: 'رابط المنشور',
+      is_primary: true
+    }] : [],
+    digital_content: {
+      platform: input.platform,
+      content_type: 'post',
+      body_text: text,
+      assistant_context: 'هذا محتوى رسمي لسند. أجب عن أسئلة المستخدم بالاعتماد على نص المنشور، ولا تضف تفاصيل غير موجودة في مصادر أعلى سلطة.',
+      primary_cta_type: 'learn_more',
+      media: []
+    }
+  }, 'إضافة محتوى رقمي رسمي إلى إدارة المعرفة');
 }
 
 export async function setKnowledgeSourceStatus(
@@ -252,7 +265,81 @@ export async function setKnowledgeSourceStatus(
     p_status: status,
     p_reason: reason.trim()
   });
-
   if (error) throw error;
   return data;
+}
+
+export async function testKnowledgeSearch(params: {
+  query: string;
+  intent?: string;
+  scope?: string;
+  audience?: string;
+  channel?: string;
+  referenceUrl?: string;
+  sourceCode?: string;
+  limit?: number;
+}): Promise<{ items: KnowledgeSearchResultItem[]; query: string; generated_at: string }> {
+  const { data, error } = await supabase.rpc('platform_admin_test_knowledge_search', {
+    p_query: params.query.trim(),
+    p_intent: params.intent?.trim() || null,
+    p_scope: params.scope?.trim() || null,
+    p_audience: params.audience?.trim() || null,
+    p_channel: params.channel?.trim() || 'whatsapp',
+    p_reference_url: params.referenceUrl?.trim() || null,
+    p_source_code: params.sourceCode?.trim() || null,
+    p_limit: params.limit ?? 6
+  });
+  if (error) throw error;
+  return { ...(data || {}), items: Array.isArray(data?.items) ? data.items : [] };
+}
+
+export async function getKnowledgeFiles(limit = 100): Promise<KnowledgeFileItem[]> {
+  const { data, error } = await supabase.rpc('platform_admin_get_knowledge_files', { p_limit: limit });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+function safeFileName(name: string): string {
+  const ext = name.includes('.') ? `.${name.split('.').pop()!.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+  const base = name.replace(/\.[^.]+$/, '').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').slice(0, 80) || 'knowledge-file';
+  return `${base}${ext}`;
+}
+
+export async function uploadKnowledgeFile(file: File, title?: string): Promise<{
+  source_id: string;
+  source_code: string;
+  file_id: string;
+  processing_status: string;
+}> {
+  if (file.size <= 0 || file.size > 25 * 1024 * 1024) throw new Error('يجب ألا يتجاوز حجم الملف 25 ميجابايت.');
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error('يجب تسجيل الدخول لرفع ملفات المعرفة.');
+
+  const objectPath = `${userData.user.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
+  const { error: uploadError } = await supabase.storage
+    .from('sanad-knowledge-files')
+    .upload(objectPath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (uploadError) throw uploadError;
+
+  try {
+    const derivedTitle = title?.trim() || file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'وثيقة معرفة';
+    const { data, error } = await supabase.rpc('platform_admin_register_knowledge_file', {
+      p_title: derivedTitle,
+      p_original_name: file.name,
+      p_mime_type: file.type || 'application/octet-stream',
+      p_size_bytes: file.size,
+      p_object_path: objectPath,
+      p_reason: 'رفع ملف جديد إلى إدارة المعرفة'
+    });
+    if (error) throw error;
+
+    const invoke = await supabase.functions.invoke('sanad-v3-knowledge-ingest', {
+      body: { file_id: data.file_id }
+    });
+    if (invoke.error) console.warn('Knowledge extraction queued but did not start immediately:', invoke.error);
+    return data;
+  } catch (error) {
+    await supabase.storage.from('sanad-knowledge-files').remove([objectPath]).catch(() => null);
+    throw error;
+  }
 }
