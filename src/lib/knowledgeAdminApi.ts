@@ -119,6 +119,42 @@ export interface KnowledgeSourcePayload {
   digital_content?: DigitalContentInput;
 }
 
+export interface KnowledgeSourceDetail {
+  source: KnowledgeSourceListItem & Record<string, unknown>;
+  units: Array<KnowledgeUnitInput & { id: string; chunk_index: number; status: string }>;
+  references: Array<KnowledgeReferenceInput & { id: string; normalized_url?: string | null }>;
+  digital_content: (DigitalContentInput & { id: string; source_id: string }) | null;
+  versions: Array<{
+    id: string;
+    version_number: number;
+    change_summary: string | null;
+    created_at: string;
+  }>;
+}
+
+export interface KnowledgeSearchItem {
+  source_id: string;
+  source_code: string;
+  source_type: KnowledgeSourceType;
+  title: string;
+  heading: string | null;
+  content: string;
+  summary: string | null;
+  authority_level: number;
+  score: number;
+  primary_cta_type: string | null;
+  primary_cta_label: string | null;
+  primary_cta_url: string | null;
+  assistant_context: string | null;
+}
+
+export interface KnowledgeSearchResult {
+  items: KnowledgeSearchItem[];
+  query: string | null;
+  reference_url: string | null;
+  generated_at: string;
+}
+
 function normalizeOverview(value: unknown): KnowledgeOverview {
   const raw = (value || {}) as Partial<KnowledgeOverview>;
   return {
@@ -150,6 +186,46 @@ export async function getKnowledgeOverview(params: {
 
   if (error) throw error;
   return normalizeOverview(data);
+}
+
+export async function getKnowledgeSourceDetail(sourceId: string): Promise<KnowledgeSourceDetail> {
+  const { data, error } = await supabase.rpc('platform_admin_get_knowledge_source', {
+    p_source_id: sourceId
+  });
+
+  if (error) throw error;
+  return data as KnowledgeSourceDetail;
+}
+
+export async function testKnowledgeSearch(params: {
+  query: string;
+  intent?: string;
+  scope?: string;
+  audience?: string;
+  channel?: string;
+  referenceUrl?: string;
+  sourceCode?: string;
+  limit?: number;
+}): Promise<KnowledgeSearchResult> {
+  const { data, error } = await supabase.rpc('platform_admin_test_knowledge_search', {
+    p_query: params.query.trim(),
+    p_intent: params.intent?.trim() || null,
+    p_scope: params.scope?.trim() || null,
+    p_audience: params.audience?.trim() || null,
+    p_channel: params.channel?.trim() || 'whatsapp',
+    p_reference_url: params.referenceUrl?.trim() || null,
+    p_source_code: params.sourceCode?.trim() || null,
+    p_limit: params.limit ?? 6
+  });
+
+  if (error) throw error;
+  const raw = (data || {}) as Partial<KnowledgeSearchResult>;
+  return {
+    items: Array.isArray(raw.items) ? raw.items : [],
+    query: raw.query || null,
+    reference_url: raw.reference_url || null,
+    generated_at: raw.generated_at || new Date().toISOString()
+  };
 }
 
 export async function upsertKnowledgeSource(
