@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen, Loader2, ShieldAlert } from 'lucide-react';
+import { getPlatformAdminAccess } from '../../lib/platformAdminApi';
 import KnowledgeAdminSection from './KnowledgeAdminSection';
 
 function cleanPath(): string {
@@ -28,6 +29,7 @@ export default function KnowledgeAdminRoute() {
   const [path, setPath] = useState(cleanPath);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [accessState, setAccessState] = useState<'idle' | 'checking' | 'allowed' | 'denied'>('idle');
 
   useEffect(() => {
     const sync = () => setPath(cleanPath());
@@ -50,6 +52,25 @@ export default function KnowledgeAdminRoute() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isPlatformAdminPath(path)) {
+      setAccessState('idle');
+      return;
+    }
+
+    let active = true;
+    setAccessState('checking');
+    void getPlatformAdminAccess()
+      .then((result) => {
+        if (active) setAccessState(result.allowed ? 'allowed' : 'denied');
+      })
+      .catch(() => {
+        if (active) setAccessState('denied');
+      });
+
+    return () => { active = false; };
+  }, [path]);
+
   const openKnowledge = () => {
     window.history.pushState({}, '', knowledgeUrl());
     setPath(cleanPath());
@@ -63,6 +84,26 @@ export default function KnowledgeAdminRoute() {
   };
 
   if (!isPlatformAdminPath(path)) return null;
+  if (accessState === 'checking' || accessState === 'idle') {
+    return isKnowledgePath(path) ? (
+      <div className="fixed inset-0 z-[85] flex items-center justify-center bg-[#f7f8fa]">
+        <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+      </div>
+    ) : null;
+  }
+
+  if (accessState === 'denied') {
+    return isKnowledgePath(path) ? (
+      <div dir="rtl" className="fixed inset-0 z-[85] flex items-center justify-center bg-[#f7f8fa] p-5">
+        <div className="w-full max-w-sm rounded-[1.8rem] bg-white p-6 text-center shadow-xl">
+          <ShieldAlert className="mx-auto h-10 w-10 text-rose-400" />
+          <h2 className="mt-4 text-base font-bold text-slate-900">إدارة المعرفة محمية</h2>
+          <p className="mt-2 text-xs leading-6 text-slate-500">هذا الحساب لا يملك صلاحية مدير منصة سند.</p>
+          <button type="button" onClick={closeKnowledge} className="mt-5 min-h-11 w-full rounded-xl bg-slate-950 text-xs font-bold text-white">العودة</button>
+        </div>
+      </div>
+    ) : null;
+  }
 
   if (!isKnowledgePath(path)) {
     return (
