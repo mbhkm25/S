@@ -1,10 +1,16 @@
 import { useState } from 'react';
 import { FlaskConical, Loader2, Search, Sparkles } from 'lucide-react';
-import { testKnowledgeSearch, type KnowledgeSearchResult } from '../../lib/knowledgeAdminApi';
+import { testKnowledgeSearch, type KnowledgeSearchResultItem } from '../../lib/knowledgeAdminApi';
 
 interface Props {
   setError: (value: string | null) => void;
 }
+
+type KnowledgeSearchResult = {
+  items: KnowledgeSearchResultItem[];
+  query: string;
+  generated_at: string;
+};
 
 export default function KnowledgeTestCenter({ setError }: Props) {
   const [query, setQuery] = useState('أريد تثبيت تطبيق سند من فيسبوك');
