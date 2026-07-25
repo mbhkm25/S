@@ -1,7 +1,7 @@
 import './lib/runtimeCompatibility';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
+import OperationEntryGate from './features/operations/OperationEntryGate';
 import './index.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
@@ -20,7 +20,7 @@ const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <OperationEntryGate />
     <Suspense fallback={null}>
       <KnowledgeAdminRoute />
     </Suspense>
