@@ -52,6 +52,26 @@ async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
   return restJson<T>(`rpc/${name}`, { method: 'POST', body: JSON.stringify(body) });
 }
 
+async function authorize(req: Request): Promise<boolean> {
+  if (req.headers.get('x-sanad-internal-key') === SANAD_INTERNAL_API_KEY) return true;
+  const authorization = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+  const token = authorization.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return false;
+
+  const userResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if (!userResponse.ok) return false;
+  const user = await userResponse.json();
+  const userId = String(user?.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return false;
+
+  const profiles = await restJson<Array<{ global_role?: string; status?: string }>>(
+    `profiles?id=eq.${encodeURIComponent(userId)}&select=global_role,status&limit=1`
+  );
+  return profiles?.[0]?.global_role === 'platform_admin' && profiles?.[0]?.status !== 'disabled';
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const size = 32768;
@@ -204,9 +224,7 @@ async function processFile(fileId: string): Promise<JsonRecord> {
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405);
-  if (req.headers.get('x-sanad-internal-key') !== SANAD_INTERNAL_API_KEY) {
-    return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
-  }
+  if (!(await authorize(req))) return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
   let body: any;
   try { body = await req.json(); } catch { return jsonResponse({ ok: false, error: 'invalid_json' }, 400); }
   const fileId = String(body?.file_id || '');
