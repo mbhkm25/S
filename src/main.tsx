@@ -8,6 +8,7 @@ import './lib/publicBusinessProfileShare';
 import { Capacitor } from '@capacitor/core';
 
 const PwaUpdatePrompt = lazy(() => import('./features/pwa/PwaUpdatePrompt'));
+const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
 
 // PWA updates apply only to the browser-installed app. Capacitor releases are
 // updated through their native distribution channel.
@@ -19,6 +20,9 @@ const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
+    <Suspense fallback={null}>
+      <KnowledgeAdminRoute />
+    </Suspense>
     {enablePwaUpdates && (
       <Suspense fallback={null}>
         <PwaUpdatePrompt />
