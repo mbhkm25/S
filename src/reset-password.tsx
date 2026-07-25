@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -99,7 +100,7 @@ function ResetPasswordPage() {
     };
   }, []);
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
 
@@ -146,7 +147,7 @@ function ResetPasswordPage() {
 
         {recoveryState === 'invalid' && (
           <div className="space-y-4">
-            <StatusMessage tone="error" message={error || 'تعذر استخدام رابط الاستعادة.'} />
+            <StatusMessage message={error || 'تعذر استخدام رابط الاستعادة.'} />
             <a href={getAppUrl()} className="flex w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
               العودة وطلب رابط جديد
             </a>
@@ -163,7 +164,7 @@ function ResetPasswordPage() {
 
         {recoveryState === 'ready' && (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && <StatusMessage tone="error" message={error} />}
+            {error && <StatusMessage message={error} />}
 
             <PasswordInput label="كلمة المرور الجديدة" value={password} onChange={setPassword} autoComplete="new-password" />
             <PasswordInput label="تأكيد كلمة المرور الجديدة" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
@@ -190,7 +191,7 @@ function ResetPasswordPage() {
   );
 }
 
-function StatusMessage({ tone, message }: { tone: 'error'; message: string }) {
+function StatusMessage({ message }: { message: string }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
       <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -199,7 +200,7 @@ function StatusMessage({ tone, message }: { tone: 'error'; message: string }) {
   );
 }
 
-function PasswordRule({ met, children }: { met: boolean; children: React.ReactNode }) {
+function PasswordRule({ met, children }: { met: boolean; children: ReactNode }) {
   return (
     <div className={`flex items-center gap-2 ${met ? 'text-emerald-700' : 'text-slate-500'}`}>
       <span className={`h-2 w-2 rounded-full ${met ? 'bg-emerald-500' : 'bg-slate-300'}`} />
