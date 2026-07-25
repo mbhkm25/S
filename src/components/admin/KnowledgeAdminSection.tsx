@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Archive, BookOpen, CheckCircle2, ChevronDown, Database, FileText,
-  Globe2, Loader2, Megaphone, Plus, RefreshCw, Save, Search, Send,
+  Archive, BookOpen, CheckCircle2, Database, FileText,
+  Loader2, Megaphone, Plus, RefreshCw, Save, Search, Send,
   ShieldCheck, Sparkles, X
 } from 'lucide-react';
 import {
@@ -145,7 +145,6 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const items = useMemo(() => overview?.items || [], [overview]);
-
   const startEditor = (mode: EditorMode) => setEditor({ ...EMPTY_EDITOR, mode });
 
   const buildPayload = (state: EditorState): KnowledgeSourcePayload => {
@@ -341,6 +340,6 @@ export default function KnowledgeAdminSection({ setError, setSuccess }: Props) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-[11px] font-bold text-slate-700">{label}<div className="mt-2">{children}</div></label>;
 }
