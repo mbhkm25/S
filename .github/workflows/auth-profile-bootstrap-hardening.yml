@@ -44,6 +44,15 @@ jobs:
       - name: Apply deterministic auth repair
         shell: bash
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-auth-profile-hardening.mjs')
+          source = path.read_text()
+          start = source.index("replaceOnce(\n  'home profile gate'")
+          end = source.index("\n\nconst fallbackPattern", start)
+          path.write_text(source[:start] + source[end + 2:])
+          PY
+
           set +e
           node scripts/apply-auth-profile-hardening.mjs > auth-hardening-error.txt 2>&1
           status=$?
@@ -56,6 +65,29 @@ jobs:
             git push origin HEAD:agent/auth-profile-bootstrap-hardening
             exit "$status"
           fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/App.tsx')
+          source = path.read_text()
+          pattern = re.compile(
+              r"[ \t]*\{currentPage === 'home' && \(\s*"
+              r"<Home profile=\{profile\} onNavigate=\{\(p: any, t\?: string\) => navigateTo\(p, t, 'app'\)\} />\s*"
+              r"\)\}"
+          )
+          replacement = """             {currentPage === 'home' && (
+               profile ? (
+                 <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
+               ) : profileFallback
+             )}"""
+          source, count = pattern.subn(replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one home profile gate, replaced {count}')
+          path.write_text(source)
+          PY
+
           rm -f auth-hardening-error.txt
 
       - name: TypeScript gate
@@ -69,6 +101,7 @@ jobs:
 
       - name: Remove one-time repair automation
         run: |
+          rm -f auth-hardening-error.txt
           rm scripts/apply-auth-profile-hardening.mjs
           rm .github/workflows/auth-profile-bootstrap-hardening.yml
 
@@ -76,6 +109,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/components/ProfileLoadFailure.tsx scripts/apply-auth-profile-hardening.mjs .github/workflows/auth-profile-bootstrap-hardening.yml
+          git add -A
           git commit -m "Harden auth profile bootstrap [skip auth-hardening]"
           git push origin HEAD:agent/auth-profile-bootstrap-hardening
