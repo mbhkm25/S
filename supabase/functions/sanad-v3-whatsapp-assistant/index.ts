@@ -388,7 +388,9 @@ async function uploadMetaImage(image: { bytes: Uint8Array; mimeType: string }): 
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
   form.append('type', image.mimeType);
-  form.append('file', new Blob([image.bytes], { type: image.mimeType }), 'sanad-result.webp');
+  const uploadBytes = new Uint8Array(image.bytes.byteLength);
+  uploadBytes.set(image.bytes);
+  form.append('file', new Blob([uploadBytes.buffer], { type: image.mimeType }), 'sanad-result.webp');
   const result = await metaJson<any>(`/${META_WA_PHONE_NUMBER_ID}/media`, { method: 'POST', body: form });
   if (!result?.id) throw new Error('meta_image_id_missing');
   return result.id;
