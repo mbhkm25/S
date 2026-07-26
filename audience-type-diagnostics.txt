@@ -1,3 +1,1 @@
-src/components/admin/AdminAudienceCampaigns.tsx(39,211): error TS2322: Type '{ key: any; campaign: any; reload: () => Promise<void>; setError: (value: string) => void; setSuccess: (value: string) => void; }' is not assignable to type '{ campaign: AdminAudienceCampaign; reload: () => Promise<void>; setError: (v: string) => void; setSuccess: (v: string) => void; }'.
-  Property 'key' does not exist on type '{ campaign: AdminAudienceCampaign; reload: () => Promise<void>; setError: (v: string) => void; setSuccess: (v: string) => void; }'.
-exit_code=2
+exit_code=0
