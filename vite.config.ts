@@ -110,6 +110,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           app: path.resolve(__dirname, 'index.html'),
+          'auth-action': path.resolve(__dirname, 'auth-action.html'),
           'reset-password': path.resolve(__dirname, 'reset-password.html')
         },
         output: {

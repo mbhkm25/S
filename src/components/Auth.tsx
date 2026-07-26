@@ -27,6 +27,12 @@ function getAppRootUrl(): string {
   return root.endsWith('/') ? root : `${root}/`;
 }
 
+function getEmailActionUrl(action: 'signup' | 'email_change' | 'invite' | 'magiclink'): string {
+  const url = new URL('auth-action.html', getAppRootUrl());
+  url.searchParams.set('action', action);
+  return url.toString();
+}
+
 export default function Auth({ onAuthSuccess }: AuthProps) {
   const [view, setView] = useState<AuthView>('sign-in');
   const [email, setEmail] = useState(() => sessionStorage.getItem(PENDING_EMAIL_KEY) || '');
@@ -94,18 +100,20 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
   const ensureProfileExists = async (user: SupabaseUser) => {
     const { data: profile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (fetchError) logAuthDiagnostic('profile_fetch_fallback', fetchError);
+    if (fetchError) {
+      logAuthDiagnostic('profile_fetch_failed', fetchError);
+      throw fetchError;
+    }
     if (profile) return profile as Profile;
 
     const { data: newProfile, error: insertError } = await supabase.from('profiles').upsert({
       id: user.id,
       full_name: user.user_metadata?.full_name || fullName || 'مستخدم سند',
-      phone: user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : ''),
+      phone: user.user_metadata?.phone || (phone ? normalizeYemenPhone(phone) : null),
       governorate: user.user_metadata?.governorate || governorate || null,
       status: 'active',
-      profile_completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }).select().single();
+    }, { onConflict: 'id' }).select().single();
 
     if (insertError) throw insertError;
     return newProfile as Profile;
@@ -119,7 +127,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: pendingEmail,
-        options: { emailRedirectTo: getAppRootUrl() }
+        options: { emailRedirectTo: getEmailActionUrl('signup') }
       });
       if (error) throw error;
       sessionStorage.setItem(PENDING_EMAIL_KEY, pendingEmail);
@@ -141,7 +149,9 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
     }
     setLoading(true);
     try {
-      const redirectTo = new URL('reset-password.html', getAppRootUrl()).toString();
+      const recoveryUrl = new URL('reset-password.html', getAppRootUrl());
+      recoveryUrl.searchParams.set('action', 'recovery');
+      const redirectTo = recoveryUrl.toString();
       const { error } = await supabase.auth.resetPasswordForEmail(pendingEmail, { redirectTo });
       if (error) throw error;
       setSuccessMessage('إذا كان البريد مرتبطًا بحساب في سند، فستصلك رسالة لاستعادة كلمة المرور. راجع أيضًا الرسائل غير المرغوب فيها.');
@@ -175,7 +185,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           email: pendingEmail,
           password,
           options: {
-            emailRedirectTo: getAppRootUrl(),
+            emailRedirectTo: getEmailActionUrl('signup'),
             data: { full_name: fullName.trim(), phone: normalizeYemenPhone(phone), governorate }
           }
         });

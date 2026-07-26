@@ -11,6 +11,44 @@
     <meta name="theme-color" content="#111827" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <script>
+      (() => {
+        const current = new URL(window.location.href);
+        const parameters = new URLSearchParams(current.search);
+        const hash = current.hash.startsWith('#') ? current.hash.slice(1) : current.hash;
+        const hashParameters = new URLSearchParams(hash);
+        hashParameters.forEach((value, key) => {
+          if (!parameters.has(key)) parameters.set(key, value);
+        });
+
+        const action = parameters.get('action') || parameters.get('type') || '';
+        const hasEmailActionPayload = Boolean(
+          parameters.get('code')
+          || parameters.get('token_hash')
+          || parameters.get('access_token')
+          || parameters.get('refresh_token')
+          || parameters.get('error')
+          || parameters.get('error_code')
+          || parameters.get('error_description')
+        );
+
+        if (!hasEmailActionPayload) return;
+
+        const basePath = '%BASE_URL%'.endsWith('/') ? '%BASE_URL%' : '%BASE_URL%/';
+        const isRecovery = action === 'recovery';
+        const destination = new URL(
+          `${basePath}${isRecovery ? 'reset-password.html' : 'auth-action.html'}`,
+          window.location.origin,
+        );
+
+        current.searchParams.forEach((value, key) => destination.searchParams.append(key, value));
+        destination.hash = current.hash;
+
+        const alreadyOnDestination = current.pathname === destination.pathname;
+        if (!alreadyOnDestination) window.location.replace(destination.toString());
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

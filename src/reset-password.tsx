@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { clearPersistedSupabaseSession, supabase } from './lib/supabase';
 import './index.css';
 
 type RecoveryState = 'checking' | 'ready' | 'invalid' | 'success';
@@ -40,24 +40,70 @@ function ResetPasswordPage() {
   useEffect(() => {
     let mounted = true;
     let resolved = false;
+    let timeoutId: number | undefined;
+
+    const url = new URL(window.location.href);
+    const parameters = new URLSearchParams(url.search);
+    const hashParameters = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+    hashParameters.forEach((value, key) => {
+      if (!parameters.has(key)) parameters.set(key, value);
+    });
+
+    const hasRecoveryIntent = parameters.get('action') === 'recovery'
+      || parameters.get('type') === 'recovery';
+    const hasAuthPayload = Boolean(
+      parameters.get('code')
+      || parameters.get('access_token')
+      || parameters.get('refresh_token')
+      || parameters.get('error')
+      || parameters.get('error_code')
+    );
+
+    const endTemporarySession = async () => {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } finally {
+        clearPersistedSupabaseSession();
+      }
+    };
 
     const acceptRecoverySession = () => {
       if (!mounted || resolved) return;
       resolved = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
       clearRecoveryParameters();
       setError(null);
       setRecoveryState('ready');
     };
 
-    const rejectRecoveryLink = () => {
+    const rejectRecoveryLink = async (message?: string | null) => {
       if (!mounted || resolved) return;
       resolved = true;
-      setError('رابط تعيين كلمة المرور غير صالح أو انتهت صلاحيته. اطلب رسالة جديدة من شاشة تسجيل الدخول.');
+      if (timeoutId) window.clearTimeout(timeoutId);
+      await endTemporarySession();
+      if (!mounted) return;
+      clearRecoveryParameters();
+      setError(message || 'رابط تعيين كلمة المرور غير صالح أو انتهت صلاحيته. اطلب رسالة جديدة من شاشة تسجيل الدخول.');
       setRecoveryState('invalid');
     };
 
+    const errorDescription = parameters.get('error_description');
+    if (parameters.get('error') || parameters.get('error_code') || errorDescription) {
+      void rejectRecoveryLink(errorDescription);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    if (!hasRecoveryIntent || !hasAuthPayload) {
+      void rejectRecoveryLink('لا يمكن فتح صفحة تغيير كلمة المرور مباشرة. استخدم رابط الاستعادة المرسل إلى بريدك من سند.');
+      return () => {
+        mounted = false;
+      };
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!mounted) return;
+      if (!mounted || resolved) return;
       if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
         acceptRecoverySession();
       }
@@ -65,30 +111,34 @@ function ResetPasswordPage() {
 
     const initialize = async () => {
       try {
-        const url = new URL(window.location.href);
-        const authorizationCode = url.searchParams.get('code');
-
+        const authorizationCode = parameters.get('code');
         if (authorizationCode) {
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(authorizationCode);
-          if (!exchangeError && data.session) {
+          if (exchangeError) {
+            await rejectRecoveryLink(exchangeError.message);
+            return;
+          }
+          if (data.session) {
             acceptRecoverySession();
             return;
           }
         }
 
-        // Supports the implicit hash flow as well as a session that Supabase has
-        // already restored through detectSessionInUrl.
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (!sessionError && session) {
+        if (sessionError) {
+          await rejectRecoveryLink(sessionError.message);
+          return;
+        }
+        if (session) {
           acceptRecoverySession();
           return;
         }
 
-        // Give detectSessionInUrl a brief opportunity to process recovery tokens
-        // before classifying the link as invalid.
-        window.setTimeout(rejectRecoveryLink, 2500);
-      } catch {
-        rejectRecoveryLink();
+        timeoutId = window.setTimeout(() => {
+          void rejectRecoveryLink();
+        }, 8_000);
+      } catch (error) {
+        await rejectRecoveryLink(error instanceof Error ? error.message : null);
       }
     };
 
@@ -96,6 +146,7 @@ function ResetPasswordPage() {
 
     return () => {
       mounted = false;
+      if (timeoutId) window.clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
@@ -120,13 +171,14 @@ function ResetPasswordPage() {
 
     // Recovery creates a temporary authenticated session. End it after the
     // password change so the user explicitly signs in using the new password.
-    await supabase.auth.signOut({ scope: 'local' });
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } finally {
+      clearPersistedSupabaseSession();
+    }
+    clearRecoveryParameters();
     setLoading(false);
     setRecoveryState('success');
-
-    window.setTimeout(() => {
-      window.location.replace(getAppUrl());
-    }, 2200);
   };
 
   return (
@@ -158,7 +210,10 @@ function ResetPasswordPage() {
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center text-emerald-800">
             <CheckCircle2 className="mx-auto h-10 w-10" />
             <p className="mt-3 font-bold">تم تعيين كلمة المرور الجديدة بنجاح</p>
-            <p className="mt-1 text-sm leading-6">سيتم تحويلك إلى تسجيل الدخول لاستخدام كلمة المرور الجديدة.</p>
+            <p className="mt-1 text-sm leading-6">أغلق هذه الصفحة، ثم افتح تطبيق سند وسجّل الدخول باستخدام كلمة المرور الجديدة.</p>
+            <a href={getAppUrl()} className="mt-4 flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-800">
+              فتح صفحة تسجيل الدخول
+            </a>
           </div>
         )}
 
