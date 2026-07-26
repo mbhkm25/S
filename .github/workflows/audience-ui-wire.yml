@@ -1,0 +1,38 @@
+name: Audience UI one-time wiring
+on:
+  push:
+    branches:
+      - feature/admin-audience-campaigns
+permissions:
+  contents: write
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/admin-audience-campaigns
+      - name: Wire component
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/admin/WhatsAppAdminSection.tsx')
+          text = path.read_text()
+          import_line = "import WhatsAppAssistantAdmin from './WhatsAppAssistantAdmin';"
+          new_import = import_line + "\nimport AdminAudienceCampaigns from './AdminAudienceCampaigns';"
+          if "AdminAudienceCampaigns" not in text:
+              text = text.replace(import_line, new_import, 1)
+          marker = "    <WhatsAppAssistantAdmin setError={setError} setSuccess={setSuccess} />"
+          replacement = marker + "\n\n    <AdminAudienceCampaigns setError={setError} setSuccess={setSuccess} />"
+          if text.count('AdminAudienceCampaigns') == 1:
+              text = text.replace(marker, replacement, 1)
+          path.write_text(text)
+          PY
+      - name: Commit wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/admin/WhatsAppAdminSection.tsx
+          git commit -m "Integrate multi-channel audience campaigns into admin console"
+          git push origin HEAD:feature/admin-audience-campaigns
