@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, Play, RefreshCw, RotateCcw, Save, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Loader2, MessageCircle, Play, RefreshCw, RotateCcw, Save } from 'lucide-react';
 import {
   getTransactionalMessagingOverview, retryTransactionalMessage, runTransactionalMessageWorker,
   updateTransactionalMessageRule, type TransactionalMessageItem, type TransactionalMessageRule,
@@ -50,13 +50,14 @@ export default function TransactionalMessagingAdmin({ setError, setSuccess }: {
       <div className="flex gap-2"><button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white"><RefreshCw className={`h-4 w-4 ${loading?'animate-spin':''}`}/></button><button onClick={() => void runWorker()} disabled={working} className="flex min-h-10 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-[9px] font-bold text-white disabled:opacity-40"><Play className="h-3.5 w-3.5"/>تشغيل المعلّق</button></div>
     </div>
     <div className="rounded-xl bg-amber-50 p-3 text-[9px] leading-5 text-amber-900"><strong>ضابط مهم:</strong> لا تُفعّل أي قاعدة قبل اعتماد القالب في WhatsApp Manager. الرسائل خدمية ولا تعتمد على الموافقة التسويقية، لكنها لا تُرسل لجهة محظورة.</div>
-    {overview && <div className="grid grid-cols-4 gap-2">{[['معلّقة',overview.stats.pending],['قيد المعالجة',overview.stats.processing],['مرسلة',overview.stats.sent],['فشلت',overview.stats.failed]].map(([label,value])=><div key={label} className="rounded-xl bg-white p-3 text-center"><p className="text-sm font-bold">{nf.format(Number(value))}</p><p className="mt-1 text-[8px] text-slate-400">{label}</p></div>)}</div>}
+    {overview && <div className="grid grid-cols-4 gap-2">{[['معلّقة',overview.stats.pending],['قيد المعالجة',overview.stats.processing],['مرسلة',overview.stats.sent],['فشلت',overview.stats.failed]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-white p-3 text-center"><p className="text-sm font-bold">{nf.format(Number(value))}</p><p className="mt-1 text-[8px] text-slate-400">{label}</p></div>)}</div>}
     {loading && !overview ? <div className="flex min-h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : <div className="space-y-2">{overview?.rules.map(rule=><RuleCard key={rule.event_type} rule={rule} reload={load} setError={setError} setSuccess={setSuccess}/>)}</div>}
     {overview?.messages?.length ? <div className="space-y-2 pt-2"><h4 className="text-xs font-bold">آخر الرسائل</h4>{overview.messages.slice(0,30).map(item=><MessageRow key={item.id} item={item} reload={load} setError={setError} setSuccess={setSuccess}/>)}</div> : null}
   </section>;
 }
 
 function RuleCard({ rule, reload, setError, setSuccess }: {
+  key?: string;
   rule: TransactionalMessageRule;
   reload: () => Promise<void>;
   setError: (value: string | null) => void;
@@ -73,6 +74,7 @@ function RuleCard({ rule, reload, setError, setSuccess }: {
 }
 
 function MessageRow({ item, reload, setError, setSuccess }: {
+  key?: string;
   item: TransactionalMessageItem;
   reload: () => Promise<void>;
   setError: (value: string | null) => void;
