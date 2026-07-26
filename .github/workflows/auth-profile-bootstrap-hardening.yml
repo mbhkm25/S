@@ -1,0 +1,59 @@
+name: Auth profile bootstrap hardening
+
+on:
+  push:
+    branches:
+      - agent/auth-profile-bootstrap-hardening
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auth-profile-bootstrap-hardening
+  cancel-in-progress: false
+
+jobs:
+  patch-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip auth-hardening]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/auth-profile-bootstrap-hardening
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Apply deterministic auth repair
+        run: node scripts/apply-auth-profile-hardening.mjs
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Production web build
+        run: npm run build
+
+      - name: Android build
+        run: npm run build:android
+
+      - name: Remove one-time repair automation
+        run: |
+          rm scripts/apply-auth-profile-hardening.mjs
+          rm .github/workflows/auth-profile-bootstrap-hardening.yml
+
+      - name: Commit validated repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/ProfileLoadFailure.tsx scripts/apply-auth-profile-hardening.mjs .github/workflows/auth-profile-bootstrap-hardening.yml
+          git commit -m "Harden auth profile bootstrap [skip auth-hardening]"
+          git push origin HEAD:agent/auth-profile-bootstrap-hardening
