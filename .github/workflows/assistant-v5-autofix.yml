@@ -1,0 +1,37 @@
+name: Assistant v5 one-time compatibility repair
+
+on:
+  push:
+    branches:
+      - feature/assistant-v5-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/assistant-v5-foundation
+      - name: Repair BlobPart compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('supabase/functions/sanad-v3-whatsapp-assistant/index.ts')
+          text = path.read_text()
+          old = "form.append('file', new Blob([image.bytes], { type: image.mimeType }), 'sanad-result.webp');"
+          new = "const uploadBytes = new Uint8Array(image.bytes.byteLength);\n  uploadBytes.set(image.bytes);\n  form.append('file', new Blob([uploadBytes.buffer], { type: image.mimeType }), 'sanad-result.webp');"
+          if old not in text:
+              raise SystemExit('Expected BlobPart line was not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/sanad-v3-whatsapp-assistant/index.ts
+          git commit -m "Fix Assistant v5 BlobPart compatibility"
+          git push origin HEAD:feature/assistant-v5-foundation
