@@ -6,6 +6,7 @@ import {
   type AdminAudienceCampaign, type AdminAudienceCampaignOverview,
   type AdminAudienceMode, type AdminCampaignChannel, type AdminAudiencePreview
 } from '../../lib/adminCampaignApi';
+import TransactionalMessagingAdmin from './TransactionalMessagingAdmin';
 
 const nf = new Intl.NumberFormat('en-US');
 const df = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', hour12: true });
@@ -30,15 +31,18 @@ export default function AdminAudienceCampaigns({ setError, setSuccess }: {
   };
   useEffect(() => { void load(); }, []);
 
-  return <section className="space-y-3 rounded-[1.7rem] border border-slate-200 bg-slate-50 p-4">
-    <div className="flex items-start justify-between gap-3">
-      <div><div className="flex items-center gap-2"><BellRing className="h-4 w-4 text-violet-600"/><h3 className="text-sm font-bold">مركز الاتصالات والجمهور</h3></div><p className="mt-1 text-[10px] leading-5 text-slate-500">أنشئ إشعارًا موجّهًا داخل التطبيق وPush وواتساب، مع معاينة الجمهور والموافقة والتسجيل الإداري.</p></div>
-      <div className="flex gap-2"><button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white"><RefreshCw className={`h-4 w-4 ${loading?'animate-spin':''}`}/></button><button onClick={() => setOpen(true)} className="min-h-10 rounded-xl bg-violet-600 px-4 text-[10px] font-bold text-white">حملة جديدة</button></div>
-    </div>
-    <div className="rounded-xl bg-white p-3 text-[9px] leading-5 text-slate-600"><strong>مهم:</strong> اختيار Push ينشئ أيضًا إشعارًا داخل مركز الإشعارات؛ وواتساب لا يشمل إلا جهات الاتصال التي سجلت موافقتها التسويقية صراحة.</div>
-    {loading && !overview ? <div className="flex min-h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : <div className="space-y-2">{overview?.campaigns.map(c => <CampaignCard key={c.id} campaign={c} reload={load} setError={setError} setSuccess={setSuccess}/>) }{!overview?.campaigns.length && <div className="rounded-xl border border-dashed border-slate-200 bg-white p-5 text-center text-[10px] text-slate-500">لا توجد حملات متعددة القنوات بعد.</div>}</div>}
-    {open && overview && <Composer modes={overview.audience_modes} onClose={() => setOpen(false)} onCreated={async()=>{setOpen(false);setSuccess('تم حفظ مسودة الحملة. راجع الجمهور ثم أرسلها أو جدولها.');await load();}} setError={setError}/>} 
-  </section>;
+  return <div className="space-y-4">
+    <section className="space-y-3 rounded-[1.7rem] border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><div className="flex items-center gap-2"><BellRing className="h-4 w-4 text-violet-600"/><h3 className="text-sm font-bold">مركز الاتصالات والجمهور</h3></div><p className="mt-1 text-[10px] leading-5 text-slate-500">أنشئ إشعارًا موجّهًا داخل التطبيق وPush وواتساب، مع معاينة الجمهور والموافقة والتسجيل الإداري.</p></div>
+        <div className="flex gap-2"><button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white"><RefreshCw className={`h-4 w-4 ${loading?'animate-spin':''}`}/></button><button onClick={() => setOpen(true)} className="min-h-10 rounded-xl bg-violet-600 px-4 text-[10px] font-bold text-white">حملة جديدة</button></div>
+      </div>
+      <div className="rounded-xl bg-white p-3 text-[9px] leading-5 text-slate-600"><strong>مهم:</strong> اختيار Push ينشئ أيضًا إشعارًا داخل مركز الإشعارات؛ وواتساب لا يشمل إلا جهات الاتصال التي سجلت موافقتها التسويقية صراحة.</div>
+      {loading && !overview ? <div className="flex min-h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin"/></div> : <div className="space-y-2">{overview?.campaigns.map(c => <CampaignCard key={c.id} campaign={c} reload={load} setError={setError} setSuccess={setSuccess}/>) }{!overview?.campaigns.length && <div className="rounded-xl border border-dashed border-slate-200 bg-white p-5 text-center text-[10px] text-slate-500">لا توجد حملات متعددة القنوات بعد.</div>}</div>}
+      {open && overview && <Composer modes={overview.audience_modes} onClose={() => setOpen(false)} onCreated={async()=>{setOpen(false);setSuccess('تم حفظ مسودة الحملة. راجع الجمهور ثم أرسلها أو جدولها.');await load();}} setError={setError}/>} 
+    </section>
+    <TransactionalMessagingAdmin setError={setError} setSuccess={setSuccess} />
+  </div>;
 }
 
 function CampaignCard({campaign,reload,setError,setSuccess}:{key?: string;campaign:AdminAudienceCampaign;reload:()=>Promise<void>;setError:(v:string|null)=>void;setSuccess:(v:string|null)=>void}) {
