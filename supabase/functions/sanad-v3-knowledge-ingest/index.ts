@@ -12,6 +12,13 @@ const BUCKET = 'sanad-knowledge-files';
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_AI_BYTES = 18 * 1024 * 1024;
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sanad-internal-key',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400'
+};
+
 function mustEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`${name} is required`);
@@ -34,7 +41,11 @@ function serviceHeaders(extra: HeadersInit = {}): HeadersInit {
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/json; charset=utf-8',
+      'Connection': 'keep-alive'
+    }
   });
 }
 
@@ -54,6 +65,7 @@ async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
 
 async function authorize(req: Request): Promise<boolean> {
   if (req.headers.get('x-sanad-internal-key') === SANAD_INTERNAL_API_KEY) return true;
+
   const authorization = req.headers.get('authorization') || req.headers.get('Authorization') || '';
   const token = authorization.replace(/^Bearer\s+/i, '').trim();
   if (!token) return false;
@@ -62,6 +74,7 @@ async function authorize(req: Request): Promise<boolean> {
     headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${token}` }
   });
   if (!userResponse.ok) return false;
+
   const user = await userResponse.json();
   const userId = String(user?.id || '');
   if (!/^[0-9a-f-]{36}$/i.test(userId)) return false;
@@ -101,12 +114,13 @@ function stripHtml(value: string): string {
 function directTextExtraction(mimeType: string, bytes: Uint8Array): { text: string; summary: string } | null {
   const direct = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json', 'text/html']);
   if (!direct.has(mimeType)) return null;
+
   const decoded = decodeText(bytes);
   if (!decoded) return { text: '', summary: 'الملف النصي لا يحتوي نصًا قابلًا للاستخراج.' };
+
   if (mimeType === 'application/json') {
     try {
-      const pretty = JSON.stringify(JSON.parse(decoded), null, 2);
-      return { text: pretty, summary: 'بيانات JSON مستخرجة من الملف المرفوع.' };
+      return { text: JSON.stringify(JSON.parse(decoded), null, 2), summary: 'بيانات JSON مستخرجة من الملف المرفوع.' };
     } catch {
       return { text: decoded, summary: 'نص JSON غير منسق مستخرج من الملف المرفوع.' };
     }
@@ -119,6 +133,7 @@ function directTextExtraction(mimeType: string, bytes: Uint8Array): { text: stri
 
 async function geminiExtract(params: { bytes: Uint8Array; mimeType: string; fileName: string }): Promise<{ text: string; summary: string; metadata: JsonRecord }> {
   if (params.bytes.length > MAX_AI_BYTES) throw new Error('file_too_large_for_ai_extraction');
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
     {
@@ -129,9 +144,7 @@ async function geminiExtract(params: { bytes: Uint8Array; mimeType: string; file
           role: 'user',
           parts: [
             {
-              text: `استخرج المعرفة النصية من الملف المرفق بدقة. اسم الملف: ${params.fileName}.
-أعد النص كما هو قدر الإمكان مع الحفاظ على العناوين والقوائم والجداول بصيغة نصية مفهومة.
-لا تضف معلومات غير موجودة في الملف. أنشئ ملخصًا عربيًا موجزًا يصف موضوع الملف فقط.`
+              text: `استخرج المعرفة النصية من الملف المرفق بدقة. اسم الملف: ${params.fileName}.\nأعد النص كما هو قدر الإمكان مع الحفاظ على العناوين والقوائم والجداول بصيغة نصية مفهومة.\nلا تضف معلومات غير موجودة في الملف. أنشئ ملخصًا عربيًا موجزًا يصف موضوع الملف فقط.`
             },
             { inline_data: { mime_type: params.mimeType, data: bytesToBase64(params.bytes) } }
           ]
@@ -151,11 +164,14 @@ async function geminiExtract(params: { bytes: Uint8Array; mimeType: string; file
       })
     }
   );
+
   const raw = await response.text();
   if (!response.ok) throw new Error(`gemini_${response.status}:${trimText(raw, 1600)}`);
+
   const payload = JSON.parse(raw);
   const content = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!content) throw new Error('gemini_empty_extraction');
+
   const parsed = JSON.parse(content);
   return {
     text: trimText(parsed.extracted_text, 1000000),
@@ -176,6 +192,7 @@ async function processFile(fileId: string): Promise<JsonRecord> {
   const file = rows?.[0];
   if (!file?.id) throw new Error('knowledge_file_not_found');
   if (Number(file.size_bytes || 0) <= 0 || Number(file.size_bytes) > MAX_FILE_BYTES) throw new Error('invalid_file_size');
+
   if (['processing', 'ready_for_review', 'approved', 'published'].includes(String(file.processing_status))) {
     return { processed: false, reason: `already_${file.processing_status}`, file_id: file.id };
   }
@@ -189,9 +206,11 @@ async function processFile(fileId: string): Promise<JsonRecord> {
   try {
     const path = String(file.object_path || '');
     if (!path || path.includes('..') || path.startsWith('/')) throw new Error('invalid_object_path');
+
     const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
     const download = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${encodedPath}`, { headers: serviceHeaders() });
     if (!download.ok) throw new Error(`storage_download_${download.status}`);
+
     const bytes = new Uint8Array(await download.arrayBuffer());
     if (!bytes.length || bytes.length > MAX_FILE_BYTES) throw new Error('downloaded_file_size_invalid');
 
@@ -205,9 +224,15 @@ async function processFile(fileId: string): Promise<JsonRecord> {
       p_file_id: file.id,
       p_extracted_text: extracted.text,
       p_summary: extracted.summary,
-      p_metadata: { ...extracted.metadata, mime_type: mimeType, original_name: file.original_name, size_bytes: bytes.length },
+      p_metadata: {
+        ...extracted.metadata,
+        mime_type: mimeType,
+        original_name: file.original_name,
+        size_bytes: bytes.length
+      },
       p_error: null
     });
+
     return { processed: true, file_id: file.id, ...result };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -223,17 +248,31 @@ async function processFile(fileId: string): Promise<JsonRecord> {
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { status: 200, headers: CORS_HEADERS });
+  }
   if (req.method !== 'POST') return jsonResponse({ ok: false, error: 'method_not_allowed' }, 405);
   if (!(await authorize(req))) return jsonResponse({ ok: false, error: 'unauthorized' }, 401);
+
   let body: any;
-  try { body = await req.json(); } catch { return jsonResponse({ ok: false, error: 'invalid_json' }, 400); }
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'invalid_json' }, 400);
+  }
+
   const fileId = String(body?.file_id || '');
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return jsonResponse({ ok: false, error: 'invalid_file_id' }, 400);
+
   try {
     const result = await processFile(fileId);
     return jsonResponse({ ok: true, ...result });
   } catch (error) {
-    console.error(JSON.stringify({ function: 'sanad-v3-knowledge-ingest', file_id: fileId, error: trimText(error, 1800) }));
+    console.error(JSON.stringify({
+      function: 'sanad-v3-knowledge-ingest',
+      file_id: fileId,
+      error: trimText(error, 1800)
+    }));
     return jsonResponse({ ok: false, error: 'knowledge_ingestion_failed' }, 500);
   }
 });
