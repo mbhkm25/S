@@ -42,7 +42,21 @@ jobs:
         run: npm ci
 
       - name: Apply deterministic auth repair
-        run: node scripts/apply-auth-profile-hardening.mjs
+        shell: bash
+        run: |
+          set +e
+          node scripts/apply-auth-profile-hardening.mjs > auth-hardening-error.log 2>&1
+          status=$?
+          cat auth-hardening-error.log
+          if [ "$status" -ne 0 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add auth-hardening-error.log
+            git commit -m "Capture auth hardening patch failure [skip auth-hardening]"
+            git push origin HEAD:agent/auth-profile-bootstrap-hardening
+            exit "$status"
+          fi
+          rm -f auth-hardening-error.log
 
       - name: TypeScript gate
         run: npm run lint
