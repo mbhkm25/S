@@ -51,6 +51,21 @@ import {
 } from './lib/authSessionIntent';
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
+import ProfileLoadFailure from './components/ProfileLoadFailure';
+
+const PROFILE_LOAD_TIMEOUT_MS = 12_000;
+const SESSION_LOAD_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(operation: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(operation), timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  }) as Promise<T>;
+}
 
 export default function App() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -61,7 +76,11 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [showStatusBanner, setShowStatusBanner] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const requestGenerationRef = useRef(0);
+  const sessionRequestRef = useRef(0);
+  const profileRequestRef = useRef(0);
+  const activeProfileUserIdRef = useRef<string | null>(null);
+  const profileLoadingUserIdRef = useRef<string | null>(null);
+  const loadedProfileUserIdRef = useRef<string | null>(null);
   const processedPushNotificationIdsRef = useRef(new Set<string>());
   const [passkeyEnrollmentUser, setPasskeyEnrollmentUser] = useState<SupabaseUser | null>(null);
 
@@ -77,24 +96,61 @@ export default function App() {
   const [gatePendingAction, setGatePendingAction] = useState<(() => void) | null>(null);
 
   const refreshProfile = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: prof, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
+    const requestId = ++profileRequestRef.current;
+    setProfileStatus('loading');
+    setProfileError(null);
 
-        if (!error && prof) {
-          setProfile(prof as Profile);
-          return prof as Profile;
+    try {
+      const { data: { session }, error: sessionError } = await withTimeout(
+        supabase.auth.getSession(),
+        SESSION_LOAD_TIMEOUT_MS,
+        'profile session refresh'
+      );
+      if (sessionError) throw sessionError;
+      if (!session?.user) {
+        if (requestId === profileRequestRef.current) {
+          setProfile(null);
+          setProfileStatus('missing');
+          setProfileError('No active session');
         }
+        return null;
       }
+
+      const userId = session.user.id;
+      activeProfileUserIdRef.current = userId;
+      profileLoadingUserIdRef.current = userId;
+
+      const { data: prof, error } = await withTimeout(
+        supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        PROFILE_LOAD_TIMEOUT_MS,
+        'profile refresh'
+      );
+
+      const isCurrent = requestId === profileRequestRef.current && activeProfileUserIdRef.current === userId;
+      if (!isCurrent) return null;
+      if (error) throw error;
+      if (!prof) {
+        setProfile(null);
+        loadedProfileUserIdRef.current = null;
+        setProfileStatus('missing');
+        setProfileError('Profile record is missing');
+        return null;
+      }
+
+      loadedProfileUserIdRef.current = userId;
+      setProfile(prof as Profile);
+      setProfileStatus('ready');
+      return prof as Profile;
     } catch (err) {
       logAuthDiagnostic('profile_refresh_failed', err);
+      if (requestId === profileRequestRef.current) {
+        setProfileStatus('degraded');
+        setProfileError(err instanceof Error ? err.message : 'Unable to load profile');
+      }
+      return null;
+    } finally {
+      if (requestId === profileRequestRef.current) profileLoadingUserIdRef.current = null;
     }
-    return null;
   };
 
   const ensureProfileComplete = (action: () => void) => {
@@ -476,150 +532,183 @@ export default function App() {
 
   // Check auth session on startup and subscribe to auth changes
   useEffect(() => {
-    // Transition to session_pending immediately on mount
+    let disposed = false;
     setAuthState('session_pending');
 
     const slowConnectionTimer = setTimeout(() => {
-      setAuthState(prev => {
-        if (prev === 'session_pending') {
+      if (disposed) return;
+      setAuthState(previous => {
+        if (previous === 'session_pending') {
           setConnectivity('slow');
           setStatusMessage('جاري الاتصال بالخادم، يرجى الانتظار...');
           setShowStatusBanner(true);
         }
-        return prev;
+        return previous;
       });
     }, 1500);
 
+    const resetAuthenticatedUser = () => {
+      profileRequestRef.current += 1;
+      activeProfileUserIdRef.current = null;
+      profileLoadingUserIdRef.current = null;
+      loadedProfileUserIdRef.current = null;
+      setPasskeyEnrollmentUser(null);
+      setUser(null);
+      setProfile(null);
+      setProfileStatus('idle');
+      setProfileError(null);
+    };
+
     const loadProfileBackground = async (userId: string, metadata: SupabaseUser['user_metadata']) => {
-      const thisGen = requestGenerationRef.current;
+      if (disposed) return;
+      if (profileLoadingUserIdRef.current === userId) return;
+
+      const requestId = ++profileRequestRef.current;
+      activeProfileUserIdRef.current = userId;
+      profileLoadingUserIdRef.current = userId;
       setProfileStatus('loading');
       setProfileError(null);
 
-      if (import.meta.env.DEV) {
-        performance.mark('profile_load_start');
-      }
+      if (import.meta.env.DEV) performance.mark('profile_load_start');
 
       try {
-        const { data: prof, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
+        const { data: prof, error } = await withTimeout(
+          supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+          PROFILE_LOAD_TIMEOUT_MS,
+          'profile bootstrap'
+        );
 
-        // Check if user changed or session reset since request started (race condition guard)
-        if (thisGen !== requestGenerationRef.current) {
-          if (import.meta.env.DEV) {
-            console.warn('[SW/Auth] Aborted profile state application: generation mismatch.');
-          }
-          return;
-        }
+        const isCurrent = !disposed
+          && requestId === profileRequestRef.current
+          && activeProfileUserIdRef.current === userId;
+        if (!isCurrent) return;
+        if (error) throw error;
 
-        if (!error && prof) {
+        let resolvedProfile = prof as Profile | null;
+        if (resolvedProfile) {
           const missingSignupData: Partial<Profile> = {};
-          if (!prof.full_name && metadata?.full_name) missingSignupData.full_name = metadata.full_name;
-          if (!prof.phone && metadata?.phone) missingSignupData.phone = metadata.phone;
-          if (!prof.governorate && metadata?.governorate) missingSignupData.governorate = metadata.governorate;
+          if (!resolvedProfile.full_name && metadata?.full_name) missingSignupData.full_name = metadata.full_name;
+          if (!resolvedProfile.phone && metadata?.phone) missingSignupData.phone = metadata.phone;
+          if (!resolvedProfile.governorate && metadata?.governorate) missingSignupData.governorate = metadata.governorate;
 
-          let resolvedProfile = prof as Profile;
           if (Object.keys(missingSignupData).length > 0) {
-            const { data: reconciledProfile, error: reconcileError } = await supabase
-              .from('profiles')
-              .update({ ...missingSignupData, updated_at: new Date().toISOString() })
-              .eq('id', userId)
-              .select()
-              .single();
-            if (reconcileError) throw reconcileError;
-            resolvedProfile = reconciledProfile as Profile;
+            const { data: reconciledProfile, error: reconcileError } = await withTimeout(
+              supabase
+                .from('profiles')
+                .update({ ...missingSignupData, updated_at: new Date().toISOString() })
+                .eq('id', userId)
+                .select()
+                .single(),
+              PROFILE_LOAD_TIMEOUT_MS,
+              'profile reconciliation'
+            );
+            if (!reconcileError && reconciledProfile) {
+              resolvedProfile = reconciledProfile as Profile;
+            } else if (reconcileError) {
+              logAuthDiagnostic('profile_reconciliation_failed', reconcileError);
+            }
           }
-
-          setProfile(resolvedProfile);
-          setProfileStatus('ready');
         } else {
-          // Attempt upsert in background
-          const { data: newProf, error: insError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: userId,
-              full_name: metadata?.full_name || 'مستخدم سند',
-              phone: metadata?.phone || '',
-              governorate: metadata?.governorate || null,
-              status: 'active',
-              profile_completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (thisGen !== requestGenerationRef.current) return;
-
-          if (!insError && newProf) {
-            setProfile(newProf as Profile);
-            setProfileStatus('ready');
-          } else {
-            setProfileStatus('missing');
-            setProfileError('Failed to fetch profile');
-          }
+          const { data: newProfile, error: insertError } = await withTimeout(
+            supabase
+              .from('profiles')
+              .upsert({
+                id: userId,
+                full_name: metadata?.full_name || 'مستخدم سند',
+                phone: metadata?.phone || null,
+                governorate: metadata?.governorate || null,
+                status: 'active',
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'id' })
+              .select()
+              .single(),
+            PROFILE_LOAD_TIMEOUT_MS,
+            'profile creation'
+          );
+          if (insertError) throw insertError;
+          resolvedProfile = newProfile as Profile;
         }
+
+        const stillCurrent = !disposed
+          && requestId === profileRequestRef.current
+          && activeProfileUserIdRef.current === userId;
+        if (!stillCurrent || !resolvedProfile) return;
+
+        loadedProfileUserIdRef.current = userId;
+        setProfile(resolvedProfile);
+        setProfileStatus('ready');
       } catch (err) {
         logAuthDiagnostic('profile_bootstrap_failed', err);
-        if (thisGen === requestGenerationRef.current) {
+        const isCurrent = !disposed
+          && requestId === profileRequestRef.current
+          && activeProfileUserIdRef.current === userId;
+        if (isCurrent) {
+          loadedProfileUserIdRef.current = null;
           setProfileStatus('degraded');
-          setProfileError('Network error loading profile');
+          setProfileError(err instanceof Error ? err.message : 'Unable to load profile');
         }
       } finally {
-        if (thisGen === requestGenerationRef.current && import.meta.env.DEV) {
+        if (profileLoadingUserIdRef.current === userId) profileLoadingUserIdRef.current = null;
+        if (!disposed && import.meta.env.DEV) {
           performance.mark('profile_load_end');
           performance.measure('Profile Load Time', 'profile_load_start', 'profile_load_end');
         }
       }
     };
 
-    const verifySession = async () => {
-      requestGenerationRef.current += 1;
-      const thisGen = requestGenerationRef.current;
-
-      if (import.meta.env.DEV) {
-        performance.mark('session_restore_start');
+    const acceptSession = (sessionUser: SupabaseUser) => {
+      const userChanged = activeProfileUserIdRef.current !== sessionUser.id;
+      if (userChanged) {
+        profileRequestRef.current += 1;
+        loadedProfileUserIdRef.current = null;
+        profileLoadingUserIdRef.current = null;
+        setProfile(null);
+        setProfileStatus('idle');
       }
+
+      activeProfileUserIdRef.current = sessionUser.id;
+      setUser(sessionUser);
+      setAuthState('authenticated');
+
+      if (loadedProfileUserIdRef.current !== sessionUser.id
+          && profileLoadingUserIdRef.current !== sessionUser.id) {
+        void loadProfileBackground(sessionUser.id, sessionUser.user_metadata);
+      }
+    };
+
+    const verifySession = async () => {
+      const requestId = ++sessionRequestRef.current;
+      if (import.meta.env.DEV) performance.mark('session_restore_start');
 
       try {
         if (hasExplicitSignOutIntent()) {
           clearPersistedSupabaseSession();
           await supabase.auth.signOut({ scope: 'local' });
-
-          if (thisGen !== requestGenerationRef.current) return;
-
-          setUser(null);
-          setProfile(null);
-          setProfileStatus('idle');
+          if (disposed || requestId !== sessionRequestRef.current) return;
+          resetAuthenticatedUser();
           setAuthState('unauthenticated');
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (thisGen !== requestGenerationRef.current) {
-          return;
-        }
+        const { data: { session }, error } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_LOAD_TIMEOUT_MS,
+          'session restoration'
+        );
+        if (error) throw error;
+        if (disposed || requestId !== sessionRequestRef.current) return;
 
         clearTimeout(slowConnectionTimer);
         setShowStatusBanner(false);
 
         if (session?.user) {
-          setUser(session.user);
-          setAuthState('authenticated');
-          loadProfileBackground(session.user.id, session.user.user_metadata);
+          acceptSession(session.user);
         } else {
-          setUser(null);
-          setProfile(null);
-          setProfileStatus('idle');
+          resetAuthenticatedUser();
           setAuthState('unauthenticated');
         }
-      } catch (err: unknown) {
-        if (thisGen !== requestGenerationRef.current) {
-          return;
-        }
-
+      } catch (err) {
+        if (disposed || requestId !== sessionRequestRef.current) return;
         clearTimeout(slowConnectionTimer);
         logAuthDiagnostic('session_verification_failed', err);
 
@@ -632,23 +721,22 @@ export default function App() {
         }
       } finally {
         clearTimeout(slowConnectionTimer);
-        if (thisGen === requestGenerationRef.current && import.meta.env.DEV) {
+        if (!disposed && import.meta.env.DEV) {
           performance.mark('session_restore_end');
           performance.measure('Session Restoration Time', 'session_restore_start', 'session_restore_end');
         }
       }
     };
 
-    verifySession();
+    void verifySession();
 
-    // Listen to network status changes to auto-retry
     const handleOnline = () => {
       setConnectivity('online');
       setStatusMessage('تم استعادة الاتصال. جاري التحديث...');
-      verifySession();
-      setTimeout(() => {
-        setConnectivity(prev => prev === 'online' ? 'online' : prev);
-        setShowStatusBanner(false);
+      setShowStatusBanner(true);
+      void verifySession();
+      window.setTimeout(() => {
+        if (!disposed) setShowStatusBanner(false);
       }, 2000);
     };
 
@@ -661,9 +749,8 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      requestGenerationRef.current += 1;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (disposed) return;
 
       if (session?.user) {
         if (hasExplicitSignOutIntent()) {
@@ -671,42 +758,35 @@ export default function App() {
             clearManualAuthAttempt();
             clearExplicitSignOutIntent();
           } else {
-            setPasskeyEnrollmentUser(null);
-            setUser(null);
-            setProfile(null);
-            setProfileStatus('idle');
+            resetAuthenticatedUser();
             setAuthState('unauthenticated');
             return;
           }
         }
 
         setPasskeyEnrollmentUser(candidate => candidate?.id === session.user.id ? candidate : null);
-        setUser(prevUser => {
-          if (prevUser?.id === session.user.id) {
-            // User did not change, likely a TOKEN_REFRESHED event, skip profile reload
-            return prevUser;
-          }
-          loadProfileBackground(session.user.id, session.user.user_metadata);
-          return session.user;
-        });
-        setAuthState('authenticated');
+        acceptSession(session.user);
+
+        if (event === 'USER_UPDATED' && loadedProfileUserIdRef.current === session.user.id) {
+          void loadProfileBackground(session.user.id, session.user.user_metadata);
+        }
       } else {
-        // Safe clean up user data only, keep App Shell caches
-        setPasskeyEnrollmentUser(null);
-        setUser(null);
-        setProfile(null);
-        setProfileStatus('idle');
+        resetAuthenticatedUser();
         setAuthState('unauthenticated');
       }
     });
 
     return () => {
+      disposed = true;
+      sessionRequestRef.current += 1;
+      profileRequestRef.current += 1;
       clearTimeout(slowConnectionTimer);
       subscription.unsubscribe();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
 
   // IndexedDB helper for Capacitor share sheet integration
   const openShareDB = (): Promise<IDBDatabase> => {
@@ -880,8 +960,13 @@ export default function App() {
   const handleAuthSuccess = (sessionUser: SupabaseUser, userProfile: Profile) => {
     clearManualAuthAttempt();
     clearExplicitSignOutIntent();
+    activeProfileUserIdRef.current = sessionUser.id;
+    loadedProfileUserIdRef.current = sessionUser.id;
+    profileLoadingUserIdRef.current = null;
     setUser(sessionUser);
     setProfile(userProfile);
+    setProfileStatus('ready');
+    setProfileError(null);
     setAuthState('authenticated');
     setPasskeyEnrollmentUser(sessionUser);
     const notificationIntent = new URL(window.location.href).searchParams.get('notification');
@@ -895,7 +980,11 @@ export default function App() {
   const handleLogoutSuccess = async () => {
     clearManualAuthAttempt();
     markExplicitSignOutIntent();
-    requestGenerationRef.current += 1;
+    sessionRequestRef.current += 1;
+    profileRequestRef.current += 1;
+    activeProfileUserIdRef.current = null;
+    profileLoadingUserIdRef.current = null;
+    loadedProfileUserIdRef.current = null;
     setPasskeyEnrollmentUser(null);
     setUser(null);
     setProfile(null);
@@ -912,6 +1001,17 @@ export default function App() {
       clearPersistedSupabaseSession();
     }
   };
+
+  const profileFallback = profileStatus === 'degraded' || profileStatus === 'missing' ? (
+    <ProfileLoadFailure
+      message={profileError}
+      retrying={profileStatus === 'loading'}
+      onRetry={() => { void refreshProfile(); }}
+      onLogout={() => { void handleLogoutSuccess(); }}
+    />
+  ) : (
+    <ContentSkeleton />
+  );
 
   return (
     <NotificationProvider userId={user?.id || null} isAuthenticated={isAuthenticated}>
@@ -980,8 +1080,10 @@ export default function App() {
         ) : (
           <div className="animate-fade-in">
              {currentPage === 'home' && (
-              <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
-            )}
+     profile ? (
+       <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
+     ) : profileFallback
+   )}
 
             {currentPage === 'upload' && user && (
               profile ? (
@@ -992,9 +1094,7 @@ export default function App() {
                   onNavigate={(p: any) => navigateTo(p)}
                   ensureProfileComplete={ensureProfileComplete}
                 />
-              ) : (
-                <ContentSkeleton />
-              )
+              ) : profileFallback
             )}
 
             {currentPage === 'details' && activeToken && (
@@ -1033,9 +1133,7 @@ export default function App() {
                   refreshProfile={refreshProfile}
                   onNavigate={(page, token) => navigateTo(page, token)}
                 />
-              ) : (
-                <ContentSkeleton />
-              )
+              ) : profileFallback
             )}
 
             {currentPage === 'reports' && (
@@ -1049,9 +1147,7 @@ export default function App() {
                     />
                   </Suspense>
                 </ChunkErrorBoundary>
-              ) : (
-                <ContentSkeleton />
-              )
+              ) : profileFallback
             )}
 
             {currentPage === 'share-intake' && user && (
@@ -1063,9 +1159,7 @@ export default function App() {
                   onNavigate={(p: any) => navigateTo(p)}
                   ensureProfileComplete={ensureProfileComplete}
                 />
-              ) : (
-                <ContentSkeleton />
-              )
+              ) : profileFallback
             )}
 
             {currentPage === 'notifications' && (
