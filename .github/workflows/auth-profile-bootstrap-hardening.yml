@@ -1,0 +1,106 @@
+name: Auth profile bootstrap hardening
+
+on:
+  push:
+    branches:
+      - agent/auth-profile-bootstrap-hardening
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auth-profile-bootstrap-hardening
+  cancel-in-progress: true
+
+jobs:
+  patch-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip auth-hardening]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/auth-profile-bootstrap-hardening
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Apply deterministic auth repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-auth-profile-hardening.mjs')
+          source = path.read_text()
+          start = source.index("replaceOnce(\n  'home profile gate'")
+          end = source.index("\n\nconst fallbackPattern", start)
+          path.write_text(source[:start] + source[end + 2:])
+          PY
+
+          set +e
+          node scripts/apply-auth-profile-hardening.mjs > auth-hardening-error.txt 2>&1
+          status=$?
+          cat auth-hardening-error.txt
+          if [ "$status" -ne 0 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f auth-hardening-error.txt
+            git commit -m "Capture auth hardening patch failure [skip auth-hardening]"
+            git push origin HEAD:agent/auth-profile-bootstrap-hardening
+            exit "$status"
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/App.tsx')
+          source = path.read_text()
+          pattern = re.compile(
+              r"[ \t]*\{currentPage === 'home' && \(\s*"
+              r"<Home profile=\{profile\} onNavigate=\{\(p: any, t\?: string\) => navigateTo\(p, t, 'app'\)\} />\s*"
+              r"\)\}"
+          )
+          replacement = """             {currentPage === 'home' && (
+               profile ? (
+                 <Home profile={profile} onNavigate={(p: any, t?: string) => navigateTo(p, t, 'app')} />
+               ) : profileFallback
+             )}"""
+          source, count = pattern.subn(replacement, source, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one home profile gate, replaced {count}')
+          path.write_text(source)
+          PY
+
+          rm -f auth-hardening-error.txt
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Production web build
+        run: npm run build
+
+      - name: Android build
+        run: npm run build:android
+
+      - name: Remove one-time repair automation
+        run: |
+          rm -f auth-hardening-error.txt
+          rm scripts/apply-auth-profile-hardening.mjs
+          rm .github/workflows/auth-profile-bootstrap-hardening.yml
+
+      - name: Commit validated repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Harden auth profile bootstrap [skip auth-hardening]"
+          git push origin HEAD:agent/auth-profile-bootstrap-hardening
