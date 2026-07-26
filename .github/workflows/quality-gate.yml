@@ -94,8 +94,6 @@ jobs:
           import re
           bad = []
           for path in Path('supabase/migrations').glob('*.sql'):
-              # Preserve compatibility with historical migrations while requiring
-              # an ordered numeric prefix and a descriptive suffix.
               if not re.fullmatch(r'\d+_[A-Za-z0-9_-]+\.sql', path.name):
                   bad.append(path.name)
           if bad:
@@ -114,18 +112,29 @@ jobs:
       - name: Check every Edge Function
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           mapfile -t functions < <(find supabase/functions -mindepth 2 -maxdepth 2 -type f -name 'index.ts' | sort)
           if [ "${#functions[@]}" -eq 0 ]; then
             echo 'No Supabase Edge Functions found.' >&2
             exit 1
           fi
+
           printf 'Checking %s Edge Functions\n' "${#functions[@]}"
+          failed=0
           for entrypoint in "${functions[@]}"; do
-            echo "::group::deno check ${entrypoint}"
-            deno check --no-lock "${entrypoint}"
-            echo '::endgroup::'
+            log_file="$(mktemp)"
+            if deno check --no-lock "${entrypoint}" >"${log_file}" 2>&1; then
+              echo "PASS ${entrypoint}"
+            else
+              failed=1
+              echo "::error file=${entrypoint}::Deno check failed"
+              echo "===== DENO FAILURE: ${entrypoint} ====="
+              tail -n 100 "${log_file}"
+              echo "===== END FAILURE: ${entrypoint} ====="
+            fi
+            rm -f "${log_file}"
           done
+          exit "${failed}"
 
       - name: Ensure deployed-function sources are tracked
         shell: bash
