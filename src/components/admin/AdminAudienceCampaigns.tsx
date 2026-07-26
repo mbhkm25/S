@@ -41,7 +41,7 @@ export default function AdminAudienceCampaigns({ setError, setSuccess }: {
   </section>;
 }
 
-function CampaignCard({campaign,reload,setError,setSuccess}:{campaign:AdminAudienceCampaign;reload:()=>Promise<void>;setError:(v:string|null)=>void;setSuccess:(v:string|null)=>void}) {
+function CampaignCard({campaign,reload,setError,setSuccess}:{key?: string;campaign:AdminAudienceCampaign;reload:()=>Promise<void>;setError:(v:string|null)=>void;setSuccess:(v:string|null)=>void}) {
   const [reason,setReason]=useState(''); const [schedule,setSchedule]=useState(''); const [working,setWorking]=useState(false);
   const canQueue=campaign.status==='draft'; const canCancel=['draft','scheduled','queued'].includes(campaign.status);
   const run=async(kind:'send'|'schedule'|'cancel'|'whatsapp')=>{setWorking(true);try{
