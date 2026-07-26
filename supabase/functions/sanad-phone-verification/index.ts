@@ -1,5 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
 type JsonRecord = Record<string, unknown>;
 
 const SUPABASE_URL = mustGetEnv("SUPABASE_URL");
@@ -150,7 +148,7 @@ Deno.serve(async (request: Request) => {
         },
         body: "{}",
       });
-      const body = await status.json().catch(() => null);
+      const body: any = await status.json().catch(() => null);
       return respond({ ok: true, accepted: false, status: body?.status || "not_pending" });
     }
 
