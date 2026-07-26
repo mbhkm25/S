@@ -15,7 +15,8 @@ assert.match(indexHtml, /window\.location\.replace/, 'callback quarantine must r
 
 assert.match(authSource, /emailRedirectTo:\s*getEmailActionUrl\('signup'\)/, 'signup must target the dedicated action page');
 assert.match(authSource, /type:\s*'signup'[\s\S]*emailRedirectTo:\s*getEmailActionUrl\('signup'\)/, 'resend confirmation must use the same action page');
-assert.match(authSource, /resetPasswordForEmail\([\s\S]*reset-password\.html/, 'password recovery must target the dedicated recovery page');
+assert.match(authSource, /new URL\('reset-password\.html'/, 'password recovery must build the dedicated recovery URL');
+assert.match(authSource, /resetPasswordForEmail\(/, 'password recovery must send through Supabase Auth');
 
 assert.match(authActionHtml, /auth-action-root/, 'auth action HTML root must exist');
 assert.match(authActionSource, /endTemporaryBrowserSession/, 'email action page must end temporary browser sessions');
@@ -27,4 +28,4 @@ assert.match(resetPasswordSource, /updateUser\(\{ password \}\)/, 'recovery page
 assert.match(resetPasswordSource, /signOut\(\{ scope: 'local' \}\)/, 'recovery page must end its temporary session');
 assert.match(resetPasswordSource, /سجّل الدخول باستخدام كلمة المرور الجديدة/, 'recovery success must require explicit sign-in');
 
-console.log('Email action entrypoint contract passed: 16 checks.');
+console.log('Email action entrypoint contract passed: 17 checks.');
