@@ -115,8 +115,23 @@ function EmailActionPage() {
 
     const errorDescription = parameters.get('error_description');
     const errorCode = parameters.get('error_code') || parameters.get('error');
+    const hasAuthEvidence = Boolean(
+      parameters.get('code')
+      || parameters.get('access_token')
+      || parameters.get('refresh_token')
+      || parameters.get('token_hash')
+      || errorCode
+      || errorDescription
+    );
     if (errorCode || errorDescription) {
       void finishError(errorDescription);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    if (!hasAuthEvidence) {
+      void finishError('لا يمكن فتح صفحة التأكيد مباشرة. استخدم الرابط الموجود في رسالة سند المرسلة إلى بريدك.');
       return () => {
         mounted = false;
       };
