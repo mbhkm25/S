@@ -1,0 +1,68 @@
+name: Email action hardening
+
+on:
+  push:
+    branches:
+      - agent/auth-profile-bootstrap-hardening
+
+permissions:
+  contents: write
+
+concurrency:
+  group: email-action-hardening
+  cancel-in-progress: true
+
+jobs:
+  patch-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip email-hardening]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/auth-profile-bootstrap-hardening
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Apply deterministic email action repair
+        run: node scripts/apply-email-action-hardening.mjs
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Validate routes
+        run: npm run check:routes
+
+      - name: Production web build
+        run: npm run build
+
+      - name: Android build
+        run: npm run build:android
+
+      - name: Validate dedicated auth artifacts
+        run: |
+          test -f dist/auth-action.html
+          test -f dist/reset-password.html
+          grep -q "auth-action" dist/auth-action.html
+
+      - name: Remove one-time repair automation
+        run: |
+          rm scripts/apply-email-action-hardening.mjs
+          rm .github/workflows/email-action-hardening.yml
+
+      - name: Commit validated repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/Auth.tsx src/reset-password.tsx src/auth-action.tsx auth-action.html vite.config.ts scripts/apply-email-action-hardening.mjs .github/workflows/email-action-hardening.yml
+          git commit -m "Harden email action callbacks [skip email-hardening]"
+          git push origin HEAD:agent/auth-profile-bootstrap-hardening
