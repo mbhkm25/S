@@ -11,6 +11,7 @@ import {
   type AdminWhatsAppContactDetails, type AdminWhatsAppOverview
 } from '../../lib/platformAdminApi';
 import WhatsAppAssistantAdmin from './WhatsAppAssistantAdmin';
+import AdminAudienceCampaigns from './AdminAudienceCampaigns';
 
 const numberFormat = new Intl.NumberFormat('en-US');
 const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', hour12: true });
