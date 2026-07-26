@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BellRing, CalendarClock, CheckCircle2, Loader2, MessageCircle, RefreshCw, Send, Smartphone, Users, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { BellRing, CheckCircle2, Loader2, MessageCircle, RefreshCw, Smartphone, Users, XCircle } from 'lucide-react';
 import {
   cancelAudienceCampaign, createAudienceCampaign, getAudienceCampaigns, previewAudience,
   queueAudienceCampaign, runAudienceWhatsApp,
@@ -80,5 +80,5 @@ function Composer({modes,onClose,onCreated,setError}:{modes:Array<{id:AdminAudie
 }
 
 function Metric({label,value}:{label:string;value:number}){return <div className="rounded-xl bg-slate-50 p-2 text-center"><p className="text-xs font-bold">{nf.format(value)}</p><p className="mt-1 text-[8px] text-slate-400">{label}</p></div>}
-function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="block text-[10px] font-bold text-slate-600"><span className="mb-1.5 block">{label}</span>{children}</label>}
-function Channel({active,onClick,icon,label}:{active:boolean;onClick:()=>void;icon:React.ReactNode;label:string}){return <button type="button" onClick={onClick} className={`flex min-h-16 flex-col items-center justify-center gap-2 rounded-xl text-[9px] font-bold ${active?'bg-violet-600 text-white':'bg-white text-slate-500'}`}>{icon}{label}</button>}
+function Field({label,children}:{label:string;children:ReactNode}){return <label className="block text-[10px] font-bold text-slate-600"><span className="mb-1.5 block">{label}</span>{children}</label>}
+function Channel({active,onClick,icon,label}:{active:boolean;onClick:()=>void;icon:ReactNode;label:string}){return <button type="button" onClick={onClick} className={`flex min-h-16 flex-col items-center justify-center gap-2 rounded-xl text-[9px] font-bold ${active?'bg-violet-600 text-white':'bg-white text-slate-500'}`}>{icon}{label}</button>}
