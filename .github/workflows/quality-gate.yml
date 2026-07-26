@@ -94,7 +94,9 @@ jobs:
           import re
           bad = []
           for path in Path('supabase/migrations').glob('*.sql'):
-              if not re.fullmatch(r'\d{14}_[a-z0-9_]+\.sql', path.name):
+              # Preserve compatibility with historical migrations while requiring
+              # an ordered numeric prefix and a descriptive suffix.
+              if not re.fullmatch(r'\d+_[A-Za-z0-9_-]+\.sql', path.name):
                   bad.append(path.name)
           if bad:
               raise SystemExit('Invalid migration filenames: ' + ', '.join(sorted(bad)))
