@@ -1,0 +1,33 @@
+name: Audience UI one-time type repair
+on:
+  push:
+    branches:
+      - feature/admin-audience-campaigns
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/admin-audience-campaigns
+      - name: Repair TypeScript imports
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/admin/AdminAudienceCampaigns.tsx')
+          text = path.read_text()
+          text = text.replace("import { useEffect, useMemo, useState } from 'react';", "import { useEffect, useMemo, useState, type ReactNode } from 'react';", 1)
+          text = text.replace("import { BellRing, CalendarClock, CheckCircle2, Loader2, MessageCircle, RefreshCw, Send, Smartphone, Users, XCircle } from 'lucide-react';", "import { BellRing, CheckCircle2, Loader2, MessageCircle, RefreshCw, Smartphone, Users, XCircle } from 'lucide-react';", 1)
+          text = text.replace('React.ReactNode', 'ReactNode')
+          path.write_text(text)
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/admin/AdminAudienceCampaigns.tsx
+          git commit -m "Fix audience campaign UI TypeScript imports"
+          git push origin HEAD:feature/admin-audience-campaigns
