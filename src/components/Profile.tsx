@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { Power } from 'lucide-react';
+import { BookOpenCheck, ChevronLeft, Power } from 'lucide-react';
 import MyBusinessRelationshipsOverview from './business/MyBusinessRelationshipsOverview';
+import OperationsCenter from './OperationsCenter';
 import ProfileV2 from './ProfileV2';
 
 type Props = ComponentProps<typeof ProfileV2>;
 
-function currentView(): 'overview' | 'relationships' | 'other' {
+type ProfileView = 'overview' | 'relationships' | 'operations-center' | 'other';
+
+function currentView(): ProfileView {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path.endsWith('/profile/relationships')) return 'relationships';
+  if (path.endsWith('/profile/operations-center')) return 'operations-center';
   if (path.endsWith('/profile') || path === 'profile') return 'overview';
   return 'other';
 }
 
 export default function Profile(props: Props) {
-  const [view, setView] = useState(currentView);
+  const [view, setView] = useState<ProfileView>(currentView);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -39,18 +43,26 @@ export default function Profile(props: Props) {
     });
   }, [view]);
 
-  const openRelationships = () => {
+  const profilePath = (suffix = '') => {
     const base = import.meta.env.VITE_APP_BASE_PATH || '/';
     const cleanBase = base.endsWith('/') ? base : `${base}/`;
-    window.history.pushState({}, '', `${cleanBase}profile/relationships`);
+    return `${cleanBase}profile${suffix}`;
+  };
+
+  const openRelationships = () => {
+    window.history.pushState({}, '', profilePath('/relationships'));
     setView('relationships');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const openOperationsCenter = () => {
+    window.history.pushState({}, '', profilePath('/operations-center'));
+    setView('operations-center');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const backToProfile = () => {
-    const base = import.meta.env.VITE_APP_BASE_PATH || '/';
-    const cleanBase = base.endsWith('/') ? base : `${base}/`;
-    window.history.pushState({}, '', `${cleanBase}profile`);
+    window.history.pushState({}, '', profilePath());
     setView('overview');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -65,11 +77,31 @@ export default function Profile(props: Props) {
     return <MyBusinessRelationshipsOverview mode="page" onNavigate={props.onNavigate} onBack={backToProfile} />;
   }
 
+  if (view === 'operations-center') {
+    return <OperationsCenter onNavigate={props.onNavigate} onBack={backToProfile} />;
+  }
+
   return (
     <div className={view === 'overview' ? 'profile-overview-shell' : undefined}>
       <ProfileV2 {...props} />
       {view === 'overview' && (
         <div className="mt-5 space-y-4">
+          <button
+            type="button"
+            onClick={openOperationsCenter}
+            className="flex w-full items-center gap-3 rounded-[1.7rem] bg-slate-950 p-4 text-right text-white shadow-xl"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-emerald-300">
+              <BookOpenCheck className="h-6 w-6" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-bold text-emerald-300">التشغيل والمواد الجاهزة</span>
+              <span className="mt-1 block text-sm font-bold">كيف أشغّل سند في نشاطي؟</span>
+              <span className="mt-1 block text-[10px] leading-5 text-slate-300">خطوات التشغيل، ملصقات الطباعة، وأدلة استخدام الميزات.</span>
+            </span>
+            <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400" />
+          </button>
+
           <MyBusinessRelationshipsOverview mode="summary" onNavigate={props.onNavigate} onBack={openRelationships} />
           <button type="button" disabled={loggingOut} onClick={() => void logout()} className="flex min-h-14 w-full items-center justify-center gap-3 rounded-[1.4rem] bg-rose-50 text-sm font-bold text-rose-600 disabled:opacity-50">
             <Power className="h-5 w-5" />{loggingOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
