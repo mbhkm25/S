@@ -22,6 +22,7 @@ import {
   formatOperationTemporalLabel,
   resolveOperationTemporal
 } from '../lib/operationTemporal';
+import { formatOperationReceivedAt } from '../lib/operationReceiptTime';
 
 interface DetailsProps {
   token: string;
@@ -649,6 +650,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
 
   const operationTemporal = resolveOperationTemporal(operation);
   const operationTemporalLabel = formatOperationTemporalLabel(operation);
+  const operationReceivedAtLabel = formatOperationReceivedAt(operation);
   const verifiedTimeStr = operation.verified_at || operation.confirmed_at || operation.created_at;
 
   // The seven-minute comparison is valid only when the notice contains an
@@ -848,6 +850,17 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
             </span>
             {operationTemporal.date && !operationTemporal.timePresent && (
               <span className="mt-1 block text-[9px] font-medium text-slate-400">الوقت غير مذكور في الإشعار</span>
+            )}
+          </div>
+
+          {/* SANAD receipt timestamp */}
+          <div className="border-b border-slate-100 sm:border-b-0 sm:border-l sm:border-slate-150 pb-2 sm:pb-0 sm:pl-3.5 pt-1 sm:pt-0">
+            <span className="text-[9px] font-bold text-slate-400 block mb-0.5">وقت إرسال الإشعار إلى سند</span>
+            <span className="font-semibold text-slate-700 text-xs block font-arabic leading-tight">
+              {operationReceivedAtLabel || <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">غير متوفر</span>}
+            </span>
+            {operationReceivedAtLabel && (
+              <span className="mt-1 block text-[9px] font-medium text-slate-400">بتوقيت اليمن — Asia/Aden</span>
             )}
           </div>
 
