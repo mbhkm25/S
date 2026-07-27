@@ -6,22 +6,33 @@ Deliver one controlled change set covering transaction date/time correctness, se
 
 ## Current-state audit
 
-### Already implemented
+### Implemented in this branch
+
+- Added explicit operation temporal fields: `transaction_date`, `transaction_time`, `transaction_time_present`, `transaction_date_source`, and `transaction_timezone`.
+- Conservatively backfilled old operations without treating midnight as proof of a visible transaction time.
+- Installed a database synchronization trigger that never invents a time for date-only notices.
+- Removed customer-specific relationship management from the public business profile.
+- Preserved Account → My business relationships → Manage as the only customer relationship-management entry point.
+- Added a service-only operation-file authorization contract.
+- Updated `sanad-file-access` to authenticate the bearer token and verify legitimate user access before issuing a signed URL.
+- Deployed `sanad-file-access` v18 with `verify_jwt=true`.
+- Added a closed audit-event table and service-only audit writer for original-file access.
+
+### Verified existing behavior
 
 - Gemini prompt version 2 prefers a date explicitly labeled with `التاريخ` / `تاريخ` / `Date` when multiple dates are present.
 - Date-only notices include `transaction_time_present=false` and must not invent a time.
-- `sanad-file-access` exists in production, requires JWT at the Edge gateway, and generates a fresh five-minute signed URL for each open/download request.
-- `MyBusinessRelationshipsOverview` already exposes a dedicated `إدارة` action for every active customer relationship.
-- The relationship manager already supports in-app, WhatsApp service, and WhatsApp marketing preferences, disabling communications, and confirmed unlinking.
+- `sanad-file-access` generates a fresh five-minute signed URL for each open/download request.
+- `MyBusinessRelationshipsOverview` exposes a dedicated `إدارة` action for every active customer relationship.
+- The relationship manager supports in-app, WhatsApp service, and WhatsApp marketing preferences, disabling communications, and confirmed unlinking.
+- Relationship RPCs derive the customer identity from `auth.uid()` and scope read/write operations to that user's row.
+- Business-side relationship mutation requires `customers.manage` authorization.
 
-### Partial or unsafe
+### Remaining integration work
 
-- `operations.transaction_datetime` is still a `timestamptz`; date-only values can be rendered as an invented local time unless every consumer checks metadata.
-- Explicit transaction date/time fields were absent before this branch.
 - Existing operation RPCs and UI consumers still need auditing and migration to the new temporal contract.
-- `sanad-file-access` generates fresh URLs correctly, but authorization currently relies on JWT plus knowledge of `public_token`; it must verify that the authenticated user has legitimate operation access.
-- Original-file open/download callers must be checked for cached signed URLs and unified on one fresh-access helper.
-- The public business profile still exposed customer-specific relationship management before this branch.
+- Original-file frontend callers must be unified on one fresh-access helper and checked for stale URL caching.
+- Analyzer source should write explicit temporal columns directly in addition to the database safety trigger.
 
 ## Execution checklist
 
@@ -44,30 +55,37 @@ Deliver one controlled change set covering transaction date/time correctness, se
 ### B. Original document access
 
 - [x] Confirm production uses a five-minute signed URL generated on demand by `sanad-file-access`.
+- [x] Add authenticated operation-access authorization inside `sanad-file-access`.
+- [x] Restrict the authorization RPC to `service_role`.
+- [x] Verify an entitled user is allowed and an unrelated random user is denied.
+- [x] Deploy the hardened Edge Function as `sanad-file-access` v18.
+- [x] Add closed audit storage and a service-only audit writer.
 - [ ] Inspect every frontend caller for stale URL caching.
-- [ ] Add authenticated operation-access authorization inside `sanad-file-access`.
 - [ ] Use one frontend helper for `open` and `download` and request a new URL on every action.
 - [ ] Add loading, retry, and actionable error states.
 - [ ] Add image/PDF inline preview where supported without persisting a signed URL.
-- [ ] Test access immediately, after URL expiry, after token expiry, and for an unauthorized authenticated user.
+- [ ] Test access immediately, after URL expiry, after token expiry, and through a real unauthorized authenticated session.
 
 ### C. Customer–business relationship management
 
 - [x] Remove relationship management from the public business profile.
 - [x] Preserve the sole entry point under Account → My business relationships → Manage.
-- [ ] Verify RPC/RLS authorization for reading and mutating only the current user's relationship.
-- [ ] Verify each preference maps to the correct database field.
+- [x] Verify RPC authorization scopes customer read/write operations to `auth.uid()`.
+- [x] Verify each UI preference maps to the matching database field.
+- [x] Keep communication disablement separate from unlinking.
+- [x] Verify business-side mutations require `customers.manage`.
+- [x] Verify privacy copy against the current RPC payload and relationship scope.
 - [ ] Improve save-state feedback and dirty-state handling.
-- [ ] Keep communication disablement separate from unlinking.
-- [ ] Verify privacy copy against actual RLS/RPC exposure.
 - [ ] Complete mobile-first visual QA of the relationship page.
 
 ### D. Quality and release
 
+- [x] SQL migration and function-contract checks.
+- [x] Database authorization positive/negative test.
+- [x] Edge Function deployment verification (`ACTIVE`, v18, JWT enabled).
 - [ ] TypeScript check.
 - [ ] Production PWA build.
 - [ ] Android asset build where required.
-- [ ] SQL migration and function-contract checks.
-- [ ] Edge Function authorization smoke tests.
+- [ ] Edge Function live-session smoke tests.
 - [ ] Pull request review before merging to `main`.
 - [ ] Production deployment only from merged `main`.
