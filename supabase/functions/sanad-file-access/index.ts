@@ -31,6 +31,12 @@ function safeFilename(name: string | null | undefined, fallbackPath: string) {
   return parts[parts.length - 1] || "sanad-original-file";
 }
 
+function getBearerToken(req: Request) {
+  const authorization = req.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -58,6 +64,18 @@ serve(async (req) => {
       );
     }
 
+    const accessToken = getBearerToken(req);
+    if (!accessToken) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: "missing_authorization",
+          message: "يجب تسجيل الدخول للوصول إلى الملف الأصلي.",
+        },
+        401,
+      );
+    }
+
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: {
         persistSession: false,
@@ -65,8 +83,21 @@ serve(async (req) => {
       },
     });
 
-    const body = await req.json().catch(() => ({}));
+    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+    const user = authData?.user;
+    if (authError || !user) {
+      console.warn("file_access_auth_failed", authError);
+      return jsonResponse(
+        {
+          ok: false,
+          error: "invalid_authorization",
+          message: "انتهت جلسة الدخول أو أصبحت غير صالحة. سجّل الدخول مجددًا.",
+        },
+        401,
+      );
+    }
 
+    const body = await req.json().catch(() => ({}));
     const publicToken = String(body.public_token || "").trim();
     const purpose = String(body.purpose || "open").trim();
 
@@ -132,6 +163,41 @@ serve(async (req) => {
       );
     }
 
+    const { data: allowed, error: authorizationError } = await supabase.rpc(
+      "can_user_access_operation_file",
+      {
+        p_user_id: user.id,
+        p_operation_id: operation.id,
+      },
+    );
+
+    if (authorizationError) {
+      console.error("operation_file_authorization_failed", {
+        operation_id: operation.id,
+        user_id: user.id,
+        error: authorizationError,
+      });
+      return jsonResponse(
+        {
+          ok: false,
+          error: "authorization_check_failed",
+          message: "تعذر التحقق من صلاحية الوصول إلى الملف.",
+        },
+        500,
+      );
+    }
+
+    if (allowed !== true) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: "file_access_forbidden",
+          message: "ليس لديك صلاحية للوصول إلى الملف الأصلي لهذه العملية.",
+        },
+        403,
+      );
+    }
+
     if (operation.token_status !== "active") {
       return jsonResponse(
         {
@@ -184,13 +250,7 @@ serve(async (req) => {
 
     const filename = safeFilename(operation.file_original_name, path);
     const expiresIn = 300;
-
-    const signedOptions =
-      purpose === "download"
-        ? {
-            download: filename,
-          }
-        : undefined;
+    const signedOptions = purpose === "download" ? { download: filename } : undefined;
 
     const { data: signed, error: signedError } = await supabase.storage
       .from(bucket)
