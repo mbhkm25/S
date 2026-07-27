@@ -9,18 +9,12 @@ function replaceRequired(oldValue, newValue, label) {
   source = source.replace(oldValue, newValue);
 }
 
-replaceRequired(
-`function normalizeTransactionDatetime(value: unknown): string | null {
-  const text = cleanTextOrNull(toLatinDigits(value));
-  if (!text) return null;
-
-  // Postgres timestamptz accepts ISO-like strings.
-  // Avoid patch failure by only keeping date-like values.
-  if (/^\\d{4}-\\d{2}-\\d{2}/.test(text)) return text;
-
-  return null;
-}`,
-`function normalizeTransactionDatetime(value: unknown): string | null {
+const temporalStart = source.indexOf('function normalizeTransactionDatetime(');
+const bytesStart = source.indexOf('function bytesToBase64(', temporalStart);
+if (temporalStart < 0 || bytesStart <= temporalStart) {
+  throw new Error('Missing analyzer temporal function boundaries');
+}
+const temporalFunctions = `function normalizeTransactionDatetime(value: unknown): string | null {
   const text = cleanTextOrNull(toLatinDigits(value));
   if (!text) return null;
   if (/^\\d{4}-\\d{2}-\\d{2}/.test(text)) return text;
@@ -40,13 +34,8 @@ function normalizeTransactionDateSource(value: unknown): string {
 }
 
 function normalizeTemporalFields(extracted: any) {
-  const transactionDatetime = normalizeTransactionDatetime(
-    extracted?.transaction_datetime,
-  );
-  const explicitTimeFlag = normalizeBoolean(
-    extracted?.transaction_time_present,
-    false,
-  );
+  const transactionDatetime = normalizeTransactionDatetime(extracted?.transaction_datetime);
+  const explicitTimeFlag = normalizeBoolean(extracted?.transaction_time_present, false);
   const date = cleanTextOrNull(toLatinDigits(extracted?.transaction_date))
     ?? transactionDatetime?.match(/^(\\d{4}-\\d{2}-\\d{2})/)?.[1]
     ?? null;
@@ -56,21 +45,21 @@ function normalizeTemporalFields(extracted: any) {
   const requestedTime = cleanTextOrNull(toLatinDigits(extracted?.transaction_time));
   const time = explicitTimeFlag ? requestedTime ?? detectedTime : null;
   const timePresent = Boolean(explicitTimeFlag && time);
-  const source = normalizeTransactionDateSource(
-    extracted?.transaction_date_source,
-  );
 
   return {
     transaction_datetime: transactionDatetime,
     transaction_date: date,
     transaction_time: timePresent ? time : null,
     transaction_time_present: timePresent,
-    transaction_date_source: source,
+    transaction_date_source: normalizeTransactionDateSource(extracted?.transaction_date_source),
     transaction_timezone: timePresent ? "Asia/Aden" : null,
   };
-}`,
-  'temporal normalizer'
-);
+}
+
+`;
+if (!source.includes('function normalizeTemporalFields(')) {
+  source = source.slice(0, temporalStart) + temporalFunctions + source.slice(bytesStart);
+}
 
 replaceRequired(
 `function normalizeExtracted(extracted: any) {
@@ -97,20 +86,12 @@ replaceRequired(
       : null,
 
     confidence_score:`,
-`    transaction_datetime: isFinancialDocument
-      ? temporal.transaction_datetime
-      : null,
+`    transaction_datetime: isFinancialDocument ? temporal.transaction_datetime : null,
     transaction_date: isFinancialDocument ? temporal.transaction_date : null,
     transaction_time: isFinancialDocument ? temporal.transaction_time : null,
-    transaction_time_present: isFinancialDocument
-      ? temporal.transaction_time_present
-      : false,
-    transaction_date_source: isFinancialDocument
-      ? temporal.transaction_date_source
-      : "unknown",
-    transaction_timezone: isFinancialDocument
-      ? temporal.transaction_timezone
-      : null,
+    transaction_time_present: isFinancialDocument ? temporal.transaction_time_present : false,
+    transaction_date_source: isFinancialDocument ? temporal.transaction_date_source : "unknown",
+    transaction_timezone: isFinancialDocument ? temporal.transaction_timezone : null,
 
     confidence_score:`,
   'normalized temporal fields'
