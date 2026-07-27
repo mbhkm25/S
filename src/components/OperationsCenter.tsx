@@ -195,7 +195,11 @@ export default function OperationsCenter({ onBack, onNavigate }: OperationsCente
       <section className="space-y-3">
         <SectionTitle title="ابدأ التشغيل" subtitle="المسار العملي الكامل لتجهيز المتجر وتشغيل سند." />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {guides.map((guide) => <GuideCardView key={guide.title} card={guide} />)}
+          {guides.map((guide) => (
+            <div key={guide.title}>
+              <GuideCardView card={guide} />
+            </div>
+          ))}
         </div>
       </section>
 
