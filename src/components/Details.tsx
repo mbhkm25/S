@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle, MessageSquareText, Mic } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatYemeniDisplay } from '../lib/digits';
-import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
+import { toLatinDigits } from '../utils/numerals';
 import ProUpgradeModal from './ProUpgradeModal';
 import FinancialEntityLogo from './FinancialEntityLogo';
 import OperationNote from './OperationNote';
@@ -12,6 +12,16 @@ import {
   getLinkableBusinessesForUser, linkOperationToBusiness,
   LinkableBusinessItem
 } from '../lib/businessApi';
+import {
+  downloadOperationOriginalFile,
+  openOperationOriginalFile,
+  requestOperationFileAccess
+} from '../lib/operationFileAccess';
+import {
+  calculateOperationTimeDiscrepancy,
+  formatOperationTemporalLabel,
+  resolveOperationTemporal
+} from '../lib/operationTemporal';
 
 interface DetailsProps {
   token: string;
@@ -34,66 +44,6 @@ const getOperationFileMeta = (op: any) => {
   return { fileBucket, filePath, mimeType, originalName, size };
 };
 
-
-// Time discrepancy warning helper
-const calculateTimeDiscrepancy = (txTimeStr: string, verifiedTimeStr: string) => {
-  if (!txTimeStr) return { diffMinutes: 0, text: 'وقت العملية غير متوفر', isWarning: false, isFuture: false };
-
-  try {
-    const txDate = new Date(txTimeStr);
-    const verifiedDate = new Date(verifiedTimeStr);
-
-    if (isNaN(txDate.getTime()) || isNaN(verifiedDate.getTime())) {
-      return { diffMinutes: 0, text: 'تنسيق الوقت غير صالح', isWarning: false, isFuture: false };
-    }
-
-    const diffMs = txDate.getTime() - verifiedDate.getTime();
-    const absDiffMs = Math.abs(diffMs);
-    const diffMinutes = Math.floor(absDiffMs / (1000 * 60));
-
-    if (diffMinutes <= 7) {
-      return { diffMinutes, text: 'الوقت متوافق', isWarning: false, isFuture: false };
-    }
-
-    // Human readable duration formatter
-    const formatDuration = (minutes: number) => {
-      if (minutes < 60) {
-        return toLatinDigits(`${minutes} دقيقة`);
-      }
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      if (hours < 24) {
-        return remainingMinutes > 0
-          ? toLatinDigits(`${hours} ساعة و ${remainingMinutes} دقيقة`)
-          : toLatinDigits(`${hours} ساعة`);
-      }
-      const days = Math.floor(hours / 24);
-      const remainingHours = hours % 24;
-      return remainingHours > 0
-        ? toLatinDigits(`${days} يوم و ${remainingHours} ساعة`)
-        : toLatinDigits(`${days} يوم`);
-    };
-
-    const durationText = formatDuration(diffMinutes);
-    const isFuture = diffMs > 0; // Transaction date is in the future relative to verification date
-
-    let text = "";
-    if (isFuture) {
-      text = toLatinDigits(`وقت العملية المسجل بعد وقت التحقق بـ ${durationText}`);
-    } else {
-      text = toLatinDigits(`تمت العملية قبل التحقق بـ ${durationText}`);
-    }
-
-    return {
-      diffMinutes,
-      text,
-      isWarning: true,
-      isFuture
-    };
-  } catch (e) {
-    return { diffMinutes: 0, text: 'تعذر حساب الفرق الزمني', isWarning: false, isFuture: false };
-  }
-};
 
 // Static color map for Currency badges
 const currencyMap: Record<string, { label: string; style: string }> = {
@@ -230,20 +180,17 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
 
         setOperation(opData);
 
-        // Automatically fetch signed URL for inline document preview
+        // Preview URLs are ephemeral. Request one for this render only and never
+        // reuse it for the explicit open/download actions.
         const meta = getOperationFileMeta(opData);
         if (meta.filePath) {
-          fetchBackendSignedUrl(opData.public_token, 'open')
-            .then(url => {
-              if (mountedRef.current) {
-                setSignedUrl(url);
-              }
+          requestOperationFileAccess(opData.public_token, 'open')
+            .then(result => {
+              if (mountedRef.current) setSignedUrl(result.signedUrl);
             })
             .catch(err => {
-              console.warn('Failed to auto-fetch signed URL for inline document preview:', err);
-              if (mountedRef.current) {
-                setSignedUrlError(true);
-              }
+              console.warn('Failed to prepare inline document preview:', err);
+              if (mountedRef.current) setSignedUrlError(true);
             });
         }
 
@@ -291,10 +238,8 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     setSignedUrlError(false);
     setSignedUrl(null);
     try {
-      const url = await fetchBackendSignedUrl(operation.public_token, 'open');
-      if (mountedRef.current) {
-        setSignedUrl(url);
-      }
+      const result = await requestOperationFileAccess(operation.public_token, 'open');
+      if (mountedRef.current) setSignedUrl(result.signedUrl);
     } catch (err) {
       console.error('Failed to retry signed URL fetch:', err);
       if (mountedRef.current) {
@@ -396,92 +341,6 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     }
   };
 
-  const fetchBackendSignedUrl = async (
-    publicToken: string,
-    purpose: 'open' | 'download'
-  ): Promise<string> => {
-    const isDev = import.meta.env.DEV;
-
-    if (isDev) {
-      console.log('[file_access_function_start] initiating edge function call');
-    }
-
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke('sanad-file-access', {
-        method: 'POST',
-        body: {
-          public_token: publicToken,
-          purpose: purpose
-        }
-      });
-
-      if (!invokeError && data?.ok && data?.signed_url) {
-        return data.signed_url;
-      }
-
-      if (invokeError || (data && !data.ok)) {
-        const errorMsg = invokeError?.message || data?.message || data?.error || 'Unknown error';
-        console.warn('supabase.functions.invoke returned error, falling back to manual fetch:', errorMsg);
-      }
-    } catch (invokeCatch) {
-      console.warn('supabase.functions.invoke threw exception, falling back to manual fetch:', invokeCatch);
-    }
-
-    // Fallback: Manual fetch request
-    const metaEnv = (import.meta as any).env || {};
-    const supabaseUrl = metaEnv.VITE_SUPABASE_URL || 'https://api.sanadflow.com';
-    const isJWT = (key: any) => typeof key === 'string' && key.startsWith('eyJ');
-
-    let resolvedKey = '';
-    if (isJWT(metaEnv.VITE_SUPABASE_ANON_KEY)) {
-      resolvedKey = metaEnv.VITE_SUPABASE_ANON_KEY;
-    } else if (isJWT(metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY)) {
-      resolvedKey = metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
-    } else {
-      resolvedKey = metaEnv.VITE_SUPABASE_ANON_KEY || metaEnv.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    }
-
-    if (!resolvedKey || resolvedKey === 'dummy-publishable-key-placeholder') {
-      resolvedKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdjbGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag';
-    }
-
-    let authHeader = `Bearer ${resolvedKey}`;
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.access_token) {
-        authHeader = `Bearer ${sessionData.session.access_token}`;
-      }
-    } catch (e) {
-      // Ignore
-    }
-
-    const endpointUrl = `${supabaseUrl}/functions/v1/sanad-file-access`;
-
-    const response = await fetch(endpointUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': resolvedKey,
-        'Authorization': authHeader
-      },
-      body: JSON.stringify({
-        public_token: publicToken,
-        purpose: purpose
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`تعذر تجهيز رابط الملف الأصلي. (رمز الحالة: ${response.status})`);
-    }
-
-    const resData = await response.json();
-    if (!resData.ok || !resData.signed_url) {
-      throw new Error(resData.message || resData.error || 'تعذر تجهيز رابط الملف الأصلي.');
-    }
-
-    return resData.signed_url;
-  };
-
   const openOriginalFile = async () => {
     if (!operation || !operation.public_token) return;
     setFileError(null);
@@ -504,7 +363,8 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     }
 
     try {
-      const targetUrl = signedUrl || await fetchBackendSignedUrl(operation.public_token, 'open');
+      // Always mint a new link. The preview URL may already have expired.
+      const targetUrl = (await openOperationOriginalFile(operation.public_token)).signedUrl;
 
       if (isCapacitor) {
         window.open(targetUrl, '_system');
@@ -554,7 +414,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     const isCapacitor = !!(window as any).Capacitor;
 
     try {
-      const targetUrl = await fetchBackendSignedUrl(operation.public_token, 'download');
+      const targetUrl = (await downloadOperationOriginalFile(operation.public_token)).signedUrl;
 
       if (isCapacitor) {
         window.open(targetUrl, '_system');
@@ -787,13 +647,14 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     ? Math.round(confidenceScore <= 1 ? confidenceScore * 100 : confidenceScore)
     : null;
 
-  // Retrieve timezone fields
-  const txTimeStr = operation.transaction_datetime || data.transaction_datetime || null;
+  const operationTemporal = resolveOperationTemporal(operation);
+  const operationTemporalLabel = formatOperationTemporalLabel(operation);
   const verifiedTimeStr = operation.verified_at || operation.confirmed_at || operation.created_at;
 
-  // Compile alerts and discrepancy metrics
+  // The seven-minute comparison is valid only when the notice contains an
+  // explicit time. A date-only notice is deliberately marked not applicable.
   const alerts: { type: 'critical' | 'warning' | 'info'; text: string; subtext?: string }[] = [];
-  const timeInfo = calculateTimeDiscrepancy(txTimeStr || "", verifiedTimeStr || "");
+  const timeInfo = calculateOperationTimeDiscrepancy(operation, verifiedTimeStr);
 
   if (timeInfo.isWarning) {
     alerts.push({
@@ -848,10 +709,12 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
     });
   }
 
-  if (!txTimeStr) {
+  if (!operationTemporal.date) {
+    alerts.push({ type: 'info', text: 'تاريخ العملية غير مذكور في الإشعار.' });
+  } else if (!operationTemporal.timePresent) {
     alerts.push({
       type: 'info',
-      text: 'وقت وتاريخ العملية غير متوفر في الإشعار.'
+      text: 'الوقت غير مذكور في الإشعار؛ لذلك لم يُجرَ فحص فرق الوقت.'
     });
   }
 
@@ -979,10 +842,13 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
 
           {/* Time & Dates */}
           <div className="border-b border-slate-100 sm:border-b-0 sm:border-l sm:border-slate-150 pb-2 sm:pb-0 sm:pl-3.5 pt-1 sm:pt-0">
-            <span className="text-[9px] font-bold text-slate-400 block mb-0.5">وقت العملية</span>
+            <span className="text-[9px] font-bold text-slate-400 block mb-0.5">تاريخ ووقت العملية</span>
             <span className="font-semibold text-slate-700 text-xs block font-arabic leading-tight">
-              {txTimeStr ? `${formatYemenDate(txTimeStr)} - ${formatYemenTime(txTimeStr)}` : <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">غير متوفر</span>}
+              {operationTemporal.date ? operationTemporalLabel : <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">غير متوفر</span>}
             </span>
+            {operationTemporal.date && !operationTemporal.timePresent && (
+              <span className="mt-1 block text-[9px] font-medium text-slate-400">الوقت غير مذكور في الإشعار</span>
+            )}
           </div>
 
           {/* Reference Ref */}
