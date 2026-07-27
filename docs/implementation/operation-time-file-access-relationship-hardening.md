@@ -9,11 +9,13 @@ Deliver one controlled change set covering transaction date/time correctness, se
 ### Implemented in this branch
 
 - Added explicit operation temporal fields: `transaction_date`, `transaction_time`, `transaction_time_present`, `transaction_date_source`, and `transaction_timezone`.
+- Added `received_at` as the canonical timestamp when the notice reaches SANAD and fixed its presentation timezone to `Asia/Aden`.
+- Backfilled existing operations from `created_at` without rewriting the original event instant.
+- Extended `open_operation_access` to return both the extracted transaction timestamp contract and the distinct SANAD receipt timestamp.
 - Conservatively backfilled old operations without treating midnight as proof of a visible transaction time.
 - Installed a database synchronization trigger that never invents a time for date-only notices.
-- Extended `open_operation_access` to return the explicit temporal contract.
 - Added a shared frontend temporal resolver, formatter, and seven-minute comparison guard.
-- Updated operation details to display a date without an invented time and to mark the time comparison not applicable when the notice has no explicit time.
+- Updated operation details to display a date without an invented time and to show “وقت إرسال الإشعار إلى سند” separately in Yemen time.
 - Removed customer-specific relationship management from the public business profile.
 - Preserved Account → My business relationships → Manage as the only customer relationship-management entry point.
 - Added a service-only operation-file authorization contract.
@@ -27,6 +29,7 @@ Deliver one controlled change set covering transaction date/time correctness, se
 
 - Gemini prompt version 2 prefers a date explicitly labeled with `التاريخ` / `تاريخ` / `Date` when multiple dates are present.
 - Date-only notices include `transaction_time_present=false` and must not invent a time.
+- `received_at` is a `timestamptz`; PostgreSQL preserves the instant while the UI always formats it using `Asia/Aden`.
 - `sanad-file-access` generates a fresh five-minute signed URL for each open/download request.
 - `MyBusinessRelationshipsOverview` exposes a dedicated `إدارة` action for every active customer relationship.
 - The relationship manager supports in-app, WhatsApp service, and WhatsApp marketing preferences, disabling communications, and confirmed unlinking.
@@ -48,11 +51,14 @@ Deliver one controlled change set covering transaction date/time correctness, se
 - [x] Add `transaction_time_present` with consistency constraint.
 - [x] Add `transaction_date_source` with controlled values.
 - [x] Add `transaction_timezone` only for explicit times.
+- [x] Add canonical `received_at` and fixed `received_timezone = Asia/Aden`.
+- [x] Backfill existing receipt timestamps from `created_at`.
 - [x] Conservatively backfill existing operations.
 - [x] Install a canonical trigger that synchronizes new fields from normalized AI metadata and never invents a time.
-- [x] Extend the primary operation-access RPC to expose the explicit temporal fields.
-- [x] Add frontend temporal types and a shared date/time formatter.
+- [x] Extend the primary operation-access RPC to expose the explicit temporal fields and receipt timestamp.
+- [x] Add frontend temporal types and shared date/time formatters.
 - [x] Replace direct `transaction_datetime` rendering in the operation-details screen.
+- [x] Display SANAD receipt time separately in Yemen time.
 - [x] Mark the seven-minute time check `not_applicable` when no explicit time exists.
 - [ ] Update analyzer source to write the explicit columns directly in addition to the database safety trigger.
 - [ ] Audit cards, activity, business views, reports, and legacy operation-returning RPCs.
