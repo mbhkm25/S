@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle, MessageSquareText, Mic } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatYemeniDisplay } from '../lib/digits';
-import { toLatinDigits } from '../utils/numerals';
+import { toLatinDigits, formatYemenDate, formatYemenTime } from '../utils/numerals';
 import ProUpgradeModal from './ProUpgradeModal';
 import FinancialEntityLogo from './FinancialEntityLogo';
 import OperationNote from './OperationNote';

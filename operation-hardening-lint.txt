@@ -1,7 +1,0 @@
-
-> react-example@0.0.0 lint
-> tsc --noEmit
-
-src/components/Details.tsx(1231,47): error TS2304: Cannot find name 'formatYemenDate'.
-src/components/Details.tsx(1231,91): error TS2304: Cannot find name 'formatYemenTime'.
-exit_code=2
