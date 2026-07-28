@@ -18,6 +18,7 @@ command -v npm >/dev/null || fail "npm is required"
 command -v rsync >/dev/null || fail "rsync is required"
 command -v curl >/dev/null || fail "curl is required"
 command -v nginx >/dev/null || fail "nginx is required"
+command -v flock >/dev/null || fail "flock is required"
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail "Another production deployment is already running."
@@ -40,11 +41,12 @@ fi
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_DIR="$BACKUP_ROOT/${TIMESTAMP}-${CURRENT_SHA:0:12}"
 STAGING_DIR="$(mktemp -d /tmp/sanad-dist.XXXXXX)"
+HEALTH_BODY="$(mktemp /tmp/sanad-health.XXXXXX)"
 DEPLOY_STARTED=0
 
 rollback() {
   local exit_code=$?
-  rm -rf "$STAGING_DIR"
+  rm -rf "$STAGING_DIR" "$HEALTH_BODY"
   if [[ $exit_code -ne 0 && $DEPLOY_STARTED -eq 1 && -d "$BACKUP_DIR" ]]; then
     log "Deployment failed; restoring $BACKUP_DIR"
     rsync -a --delete "$BACKUP_DIR/" "$WEB_ROOT/" || true
@@ -65,7 +67,7 @@ log "Building production PWA"
 npm run build
 [[ -f dist/index.html ]] || fail "dist/index.html was not generated"
 
-log "Preparing immutable staging copy"
+log "Preparing staging copy"
 rsync -a --delete dist/ "$STAGING_DIR/"
 
 log "Backing up current production files to $BACKUP_DIR"
@@ -85,12 +87,12 @@ nginx -t
 systemctl reload nginx
 
 log "Running production health check"
-HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output /tmp/sanad-health.html --write-out '%{http_code}' "$HEALTH_URL")"
-[[ "$HTTP_CODE" =~ ^2|3 ]] || fail "Health check returned HTTP $HTTP_CODE"
-grep -qi '<!doctype html\|<html' /tmp/sanad-health.html || fail "Health response is not an HTML application"
+HTTP_CODE="$(curl --silent --show-error --location --max-time 30 --output "$HEALTH_BODY" --write-out '%{http_code}' "$HEALTH_URL")"
+[[ "$HTTP_CODE" =~ ^[23][0-9][0-9]$ ]] || fail "Health check returned HTTP $HTTP_CODE"
+grep -Eqi '<!doctype html|<html' "$HEALTH_BODY" || fail "Health response is not an HTML application"
 
 DEPLOY_STARTED=0
-rm -rf "$STAGING_DIR"
+rm -rf "$STAGING_DIR" "$HEALTH_BODY"
 
 log "Pruning old backups; keeping $KEEP_BACKUPS"
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
