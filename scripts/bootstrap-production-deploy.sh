@@ -42,7 +42,6 @@ chown root:root /usr/local/sbin/sanad-deploy-production
 chmod 755 /usr/local/sbin/sanad-deploy-production
 
 cat > "/etc/sudoers.d/$DEPLOY_USER-sanad-production" <<EOF
-Defaults:$DEPLOY_USER !requiretty
 $DEPLOY_USER ALL=(root) NOPASSWD: /usr/local/sbin/sanad-deploy-production *
 EOF
 chmod 440 "/etc/sudoers.d/$DEPLOY_USER-sanad-production"
