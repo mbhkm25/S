@@ -4,30 +4,29 @@ import {
   ClipboardList, CreditCard, FileClock, LayoutDashboard, LogOut, Menu,
   MessageCircle, Search, Settings2, ShieldCheck, Users, X
 } from 'lucide-react';
-import PlatformAdmin from '../../src/components/admin/PlatformAdmin';
+import PlatformAdmin, { type PlatformAdminTab } from '../../src/components/admin/PlatformAdmin';
 import KnowledgeAdminSection from '../../src/components/admin/KnowledgeAdminSection';
 import BusinessSlugAdministration from './BusinessSlugAdministration';
 import './admin-workspace.css';
 
-type AdminSection = 'overview' | 'users' | 'whatsapp' | 'operations' | 'businesses' | 'pro' | 'knowledge' | 'settings' | 'audit';
+type AdminSection = PlatformAdminTab | 'knowledge';
 
 type NavigationItem = {
   id: AdminSection;
   label: string;
   icon: typeof LayoutDashboard;
-  legacyTarget?: string;
 };
 
 const navigation: NavigationItem[] = [
-  { id: 'overview', label: 'النظرة العامة', icon: LayoutDashboard, legacyTarget: 'النظرة العامة' },
-  { id: 'users', label: 'المستخدمون', icon: Users, legacyTarget: 'المستخدمون' },
-  { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle, legacyTarget: 'مستخدمو واتساب' },
-  { id: 'operations', label: 'العمليات', icon: ClipboardList, legacyTarget: 'العمليات' },
-  { id: 'businesses', label: 'الأنشطة', icon: Building2, legacyTarget: 'الأنشطة' },
-  { id: 'pro', label: 'سند Pro', icon: CreditCard, legacyTarget: 'سند Pro' },
+  { id: 'overview', label: 'النظرة العامة', icon: LayoutDashboard },
+  { id: 'users', label: 'المستخدمون', icon: Users },
+  { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle },
+  { id: 'operations', label: 'العمليات', icon: ClipboardList },
+  { id: 'businesses', label: 'الأنشطة', icon: Building2 },
+  { id: 'pro', label: 'سند Pro', icon: CreditCard },
   { id: 'knowledge', label: 'إدارة المعرفة', icon: BookOpen },
-  { id: 'settings', label: 'الإعدادات', icon: Settings2, legacyTarget: 'الإعدادات' },
-  { id: 'audit', label: 'سجل الإدارة', icon: FileClock, legacyTarget: 'سجل الإدارة' }
+  { id: 'settings', label: 'الإعدادات', icon: Settings2 },
+  { id: 'audit', label: 'سجل الإدارة', icon: FileClock }
 ];
 
 const sectionIds = new Set<AdminSection>(navigation.map((item) => item.id));
@@ -60,23 +59,16 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
     return () => window.removeEventListener('hashchange', syncFromHash);
   }, []);
 
-  const selectSection = (item: NavigationItem) => {
+  const updateSection = (section: AdminSection) => {
     setWorkspaceError(null);
     setWorkspaceSuccess(null);
-    setActiveSection(item.id);
+    setActiveSection(section);
     setMobileOpen(false);
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/${item.id}`);
-
-    // توافق مؤقت مع PlatformAdmin القديم إلى أن تُفصل صفحاته الداخلية بالكامل.
-    if (item.legacyTarget) {
-      requestAnimationFrame(() => {
-        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.platform-admin-console button'));
-        buttons.find((button) => button.textContent?.trim() === item.legacyTarget)?.click();
-      });
-    }
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/${section}`);
   };
 
   const showKnowledge = activeSection === 'knowledge';
+  const platformTab: PlatformAdminTab = showKnowledge ? 'overview' : activeSection;
 
   return (
     <div className="sanad-admin-shell" dir="rtl">
@@ -91,7 +83,7 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = item.id === activeSection;
-            return <button key={item.id} className={active ? 'is-active' : ''} onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined}><Icon /><span>{item.label}</span></button>;
+            return <button key={item.id} className={active ? 'is-active' : ''} onClick={() => updateSection(item.id)} aria-current={active ? 'page' : undefined}><Icon /><span>{item.label}</span></button>;
           })}
         </nav>
 
@@ -137,7 +129,12 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
           ) : (
             <>
               {activeSection === 'businesses' && <BusinessSlugAdministration />}
-              <PlatformAdmin onNavigate={onNavigate} />
+              <PlatformAdmin
+                onNavigate={onNavigate}
+                activeTab={platformTab}
+                onTabChange={(tab) => updateSection(tab)}
+                embedded
+              />
             </>
           )}
         </section>
