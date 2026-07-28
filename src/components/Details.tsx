@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { FileText, ShieldAlert, CheckCircle2, Calendar, FileDown, ExternalLink, ShieldCheck, Loader2, KeyRound, Clock, UserCheck, RefreshCw, X, Store, Copy, Check, ZoomIn, ZoomOut, Maximize2, AlertCircle, MessageSquareText, Mic } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -23,6 +23,7 @@ import {
   resolveOperationTemporal
 } from '../lib/operationTemporal';
 import { formatOperationReceivedAt } from '../lib/operationReceiptTime';
+import { isOperationAnalysisPending, useOperationDetailsLiveSync } from '../lib/operationDetailsLiveSync';
 
 interface DetailsProps {
   token: string;
@@ -116,6 +117,7 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const mountedRef = useRef(true);
+  const liveRefreshInFlightRef = useRef(false);
 
   const isUploader = user && operation && (user.id === operation.submitted_by_user_id);
 
@@ -233,6 +235,34 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
       setLoading(false);
     }
   };
+
+  const refreshOperationSnapshot = useCallback(async () => {
+  if (!token || liveRefreshInFlightRef.current) return;
+  liveRefreshInFlightRef.current = true;
+  try {
+    const { data, error: rpcError } = await supabase.rpc('open_operation_access', {
+      p_public_token: token,
+      p_source: source || 'link'
+    });
+    if (rpcError || !data || data.allowed !== true || !data.operation) return;
+    if (mountedRef.current) {
+      setOperation(data.operation);
+      if (data.usage) setAccessUsage(data.usage);
+    }
+  } catch (refreshError) {
+    console.warn('SANAD live operation refresh failed:', refreshError);
+  } finally {
+    liveRefreshInFlightRef.current = false;
+  }
+}, [source, token]);
+
+const analysisPending = isOperationAnalysisPending(operation);
+const { state: liveSyncState, lastSyncedAt, refreshNow: refreshLiveOperation } = useOperationDetailsLiveSync({
+  operationId: operation?.id,
+  pending: analysisPending,
+  onRefresh: refreshOperationSnapshot,
+  pollIntervalMs: 6000
+});
 
   const retryFetchSignedUrl = async () => {
     if (!operation || !operation.public_token) return;
@@ -760,6 +790,23 @@ export default function NotificationDetails({ token, user, onNavigateToLogin, en
           }
         })()}
       </div>
+
+      {analysisPending && (
+        <div className="mx-1 flex items-start gap-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-900 shadow-sm" role="status" aria-live="polite">
+          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-indigo-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold">جاري تحليل الإشعار المالي</p>
+            <p className="mt-1 text-[10px] leading-5 text-indigo-700">ستظهر البيانات تلقائيًا فور اكتمال التحليل دون الحاجة إلى تحديث الصفحة.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[9px] text-indigo-600">
+              <span className="rounded-full bg-white/70 px-2 py-1 font-bold">{liveSyncState === 'live' ? 'تحديث مباشر مفعّل' : liveSyncState === 'connecting' ? 'جاري ربط التحديث المباشر' : 'مزامنة احتياطية مفعّلة'}</span>
+              {lastSyncedAt && <span>آخر مزامنة: {formatYemenTime(lastSyncedAt.toISOString())}</span>}
+            </div>
+          </div>
+          <button type="button" onClick={() => void refreshLiveOperation()} className="rounded-xl border border-indigo-200 bg-white p-2 text-indigo-700 transition active:scale-95" aria-label="تحديث حالة التحليل الآن">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Success banner if verified in this session */}
       {verifiedSuccessMessage && (
