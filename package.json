@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "preview:admin": "vite preview --config admin/vite.config.ts --port=4174",
     "check:routes": "tsx scripts/check-app-routes.ts && tsx scripts/check-email-action-entrypoints.ts",
+    "deploy:production": "gh workflow run deploy-production.yml --ref main",
     "clean": "rm -rf dist dist-admin server.js",
     "lint": "tsc --noEmit"
   },
