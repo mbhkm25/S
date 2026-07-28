@@ -1,0 +1,105 @@
+name: Deploy SANAD Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Optional full main commit SHA. Leave empty to deploy current main."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+environment:
+  name: production
+  url: https://app.sanadflow.com
+
+concurrency:
+  group: sanad-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve requested release
+        id: release
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          MAIN_SHA="$(git rev-parse origin/main)"
+          RELEASE_SHA="${REQUESTED_SHA:-$MAIN_SHA}"
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          if [[ "$RELEASE_SHA" != "$MAIN_SHA" ]]; then
+            echo "Deploying an earlier commit from main: $RELEASE_SHA"
+          fi
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript and route checks
+        run: |
+          npm run lint
+          npm run check:routes
+
+      - name: Production build
+        run: npm run build
+
+  deploy:
+    name: Deploy to app.sanadflow.com
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run guarded server deployment
+        shell: bash
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          PORT: ${{ secrets.PRODUCTION_PORT }}
+          USER: ${{ secrets.PRODUCTION_USER }}
+          RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          PORT="${PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
+
+      - name: Verify published release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/ >/dev/null && exit 0
+            sleep 5
+          done
+          exit 1
