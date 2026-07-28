@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, Bell, BookOpen, Building2, CheckCircle2, ChevronDown,
   ClipboardList, CreditCard, FileClock, LayoutDashboard, LogOut, Menu,
@@ -9,24 +9,33 @@ import KnowledgeAdminSection from '../../src/components/admin/KnowledgeAdminSect
 import BusinessSlugAdministration from './BusinessSlugAdministration';
 import './admin-workspace.css';
 
+type AdminSection = 'overview' | 'users' | 'whatsapp' | 'operations' | 'businesses' | 'pro' | 'knowledge' | 'settings' | 'audit';
+
 type NavigationItem = {
+  id: AdminSection;
   label: string;
   icon: typeof LayoutDashboard;
-  target?: string;
-  standalone?: 'knowledge';
+  legacyTarget?: string;
 };
 
 const navigation: NavigationItem[] = [
-  { label: 'النظرة العامة', icon: LayoutDashboard, target: 'النظرة العامة' },
-  { label: 'المستخدمون', icon: Users, target: 'المستخدمون' },
-  { label: 'مستخدمو واتساب', icon: MessageCircle, target: 'مستخدمو واتساب' },
-  { label: 'العمليات', icon: ClipboardList, target: 'العمليات' },
-  { label: 'الأنشطة', icon: Building2, target: 'الأنشطة' },
-  { label: 'سند Pro', icon: CreditCard, target: 'سند Pro' },
-  { label: 'إدارة المعرفة', icon: BookOpen, standalone: 'knowledge' },
-  { label: 'الإعدادات', icon: Settings2, target: 'الإعدادات' },
-  { label: 'سجل الإدارة', icon: FileClock, target: 'سجل الإدارة' }
+  { id: 'overview', label: 'النظرة العامة', icon: LayoutDashboard, legacyTarget: 'النظرة العامة' },
+  { id: 'users', label: 'المستخدمون', icon: Users, legacyTarget: 'المستخدمون' },
+  { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle, legacyTarget: 'مستخدمو واتساب' },
+  { id: 'operations', label: 'العمليات', icon: ClipboardList, legacyTarget: 'العمليات' },
+  { id: 'businesses', label: 'الأنشطة', icon: Building2, legacyTarget: 'الأنشطة' },
+  { id: 'pro', label: 'سند Pro', icon: CreditCard, legacyTarget: 'سند Pro' },
+  { id: 'knowledge', label: 'إدارة المعرفة', icon: BookOpen },
+  { id: 'settings', label: 'الإعدادات', icon: Settings2, legacyTarget: 'الإعدادات' },
+  { id: 'audit', label: 'سجل الإدارة', icon: FileClock, legacyTarget: 'سجل الإدارة' }
 ];
+
+const sectionIds = new Set<AdminSection>(navigation.map((item) => item.id));
+
+function getInitialSection(): AdminSection {
+  const hash = window.location.hash.replace(/^#\/?/, '') as AdminSection;
+  return sectionIds.has(hash) ? hash : 'overview';
+}
 
 interface Props {
   onNavigate: (page: string, token?: string) => void;
@@ -35,28 +44,39 @@ interface Props {
 }
 
 export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Props) {
-  const [activeLabel, setActiveLabel] = useState('النظرة العامة');
+  const [activeSection, setActiveSection] = useState<AdminSection>(getInitialSection);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceSuccess, setWorkspaceSuccess] = useState<string | null>(null);
-  const current = useMemo(() => navigation.find((item) => item.label === activeLabel) || navigation[0], [activeLabel]);
+  const current = useMemo(() => navigation.find((item) => item.id === activeSection) || navigation[0], [activeSection]);
+
+  useEffect(() => {
+    const syncFromHash = () => {
+      const next = window.location.hash.replace(/^#\/?/, '') as AdminSection;
+      if (sectionIds.has(next)) setActiveSection(next);
+    };
+    window.addEventListener('hashchange', syncFromHash);
+    return () => window.removeEventListener('hashchange', syncFromHash);
+  }, []);
 
   const selectSection = (item: NavigationItem) => {
     setWorkspaceError(null);
     setWorkspaceSuccess(null);
-
-    if (item.target) {
-      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.platform-admin-console button'));
-      const target = buttons.find((button) => button.textContent?.trim() === item.target);
-      target?.click();
-    }
-
-    setActiveLabel(item.label);
+    setActiveSection(item.id);
     setMobileOpen(false);
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/${item.id}`);
+
+    // توافق مؤقت مع PlatformAdmin القديم إلى أن تُفصل صفحاته الداخلية بالكامل.
+    if (item.legacyTarget) {
+      requestAnimationFrame(() => {
+        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.platform-admin-console button'));
+        buttons.find((button) => button.textContent?.trim() === item.legacyTarget)?.click();
+      });
+    }
   };
 
-  const showKnowledge = current.standalone === 'knowledge';
+  const showKnowledge = activeSection === 'knowledge';
 
   return (
     <div className="sanad-admin-shell" dir="rtl">
@@ -70,8 +90,8 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
         <nav className="sanad-admin-nav">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const active = item.label === activeLabel;
-            return <button key={item.label} className={active ? 'is-active' : ''} onClick={() => selectSection(item)}><Icon /><span>{item.label}</span></button>;
+            const active = item.id === activeSection;
+            return <button key={item.id} className={active ? 'is-active' : ''} onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined}><Icon /><span>{item.label}</span></button>;
           })}
         </nav>
 
@@ -116,7 +136,7 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
             <KnowledgeAdminSection setError={setWorkspaceError} setSuccess={setWorkspaceSuccess} />
           ) : (
             <>
-              {activeLabel === 'الأنشطة' && <BusinessSlugAdministration />}
+              {activeSection === 'businesses' && <BusinessSlugAdministration />}
               <PlatformAdmin onNavigate={onNavigate} />
             </>
           )}
