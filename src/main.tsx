@@ -1,4 +1,5 @@
 import './lib/runtimeCompatibility';
+import './lib/navigationScrollReset';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import OperationEntryGate from './features/operations/OperationEntryGate';
