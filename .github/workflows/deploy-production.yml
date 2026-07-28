@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-environment:
-  name: production
-  url: https://app.sanadflow.com
-
 concurrency:
   group: sanad-production-deploy
   cancel-in-progress: false
@@ -42,6 +38,7 @@ jobs:
           git fetch origin main
           MAIN_SHA="$(git rev-parse origin/main)"
           RELEASE_SHA="${REQUESTED_SHA:-$MAIN_SHA}"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git cat-file -e "${RELEASE_SHA}^{commit}"
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
           if [[ "$RELEASE_SHA" != "$MAIN_SHA" ]]; then
@@ -65,6 +62,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment:
+      name: production
+      url: https://app.sanadflow.com
     steps:
       - name: Configure SSH
         shell: bash
@@ -73,6 +73,8 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          [[ -n "$SSH_PRIVATE_KEY" ]]
+          [[ -n "$SSH_KNOWN_HOSTS" ]]
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
@@ -84,18 +86,18 @@ jobs:
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
           PORT: ${{ secrets.PRODUCTION_PORT }}
-          USER: ${{ secrets.PRODUCTION_USER }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
           RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
         run: |
           set -euo pipefail
+          [[ -n "$HOST" ]]
+          [[ -n "$DEPLOY_USER" ]]
           PORT="${PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
             "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
 
       - name: Verify published release
         shell: bash
-        env:
-          RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
