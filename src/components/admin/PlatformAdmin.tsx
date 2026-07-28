@@ -13,10 +13,13 @@ import {
 } from '../../lib/platformAdminApi';
 import WhatsAppAdminSection from './WhatsAppAdminSection';
 
-type Tab = 'overview' | 'users' | 'whatsapp' | 'operations' | 'businesses' | 'pro' | 'settings' | 'audit';
+export type PlatformAdminTab = 'overview' | 'users' | 'whatsapp' | 'operations' | 'businesses' | 'pro' | 'settings' | 'audit';
 
 interface Props {
   onNavigate: (page: string, token?: string) => void;
+  activeTab?: PlatformAdminTab;
+  onTabChange?: (tab: PlatformAdminTab) => void;
+  embedded?: boolean;
 }
 
 interface ConfirmAction {
@@ -28,7 +31,7 @@ interface ConfirmAction {
   run: (reason: string, note: string) => Promise<void>;
 }
 
-const tabs: Array<{ id: Tab; label: string; icon: typeof Activity }> = [
+const tabs: Array<{ id: PlatformAdminTab; label: string; icon: typeof Activity }> = [
   { id: 'overview', label: 'النظرة العامة', icon: Activity },
   { id: 'users', label: 'المستخدمون', icon: Users },
   { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle },
@@ -75,8 +78,14 @@ function Empty({ text }: { text: string }) {
   return <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-xs text-slate-500">{text}</div>;
 }
 
-export default function PlatformAdmin({ onNavigate }: Props) {
-  const [tab, setTab] = useState<Tab>('overview');
+export default function PlatformAdmin({ onNavigate, activeTab, onTabChange, embedded = false }: Props) {
+  const [internalTab, setInternalTab] = useState<PlatformAdminTab>('overview');
+  const tab = activeTab ?? internalTab;
+  const setTab = (next: PlatformAdminTab) => {
+    if (activeTab === undefined) setInternalTab(next);
+    onTabChange?.(next);
+    setSearch('');
+  };
   const [snapshot, setSnapshot] = useState<PlatformAdminSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -183,7 +192,7 @@ export default function PlatformAdmin({ onNavigate }: Props) {
 
   return (
     <div dir="rtl" className="platform-admin-console space-y-4 pb-10">
-      <section className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 text-white shadow-xl">
+      {!embedded && <section className="overflow-hidden rounded-[2rem] bg-slate-950 p-5 text-white shadow-xl">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-emerald-300"><ShieldCheck className="h-4 w-4" /><span className="text-[10px] font-bold">وصول مدير المنصة</span></div>
@@ -195,14 +204,14 @@ export default function PlatformAdmin({ onNavigate }: Props) {
             <button onClick={() => onNavigate('profile')} aria-label="رجوع" className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10"><ArrowLeft className="h-4 w-4" /></button>
           </div>
         </div>
-      </section>
+      </section>}
 
       {error && <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
       {success && <button onClick={() => setSuccess(null)} className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 p-3 text-right text-xs font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" />{success}</button>}
 
-      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { setTab(id); setSearch(''); }} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[11px] font-bold ${tab === id ? 'bg-slate-950 text-white' : 'bg-white text-slate-500 shadow-sm'}`}><Icon className="h-4 w-4" />{label}</button>)}
-      </div>
+      {!embedded && <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        {tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[11px] font-bold ${tab === id ? 'bg-slate-950 text-white' : 'bg-white text-slate-500 shadow-sm'}`}><Icon className="h-4 w-4" />{label}</button>)}
+      </div>}
 
       {tab === 'overview' && <Overview snapshot={snapshot} onTab={setTab} />}
       {tab === 'users' && <ListSection title="المستخدمون" search={search} setSearch={setSearch}>
@@ -227,15 +236,15 @@ export default function PlatformAdmin({ onNavigate }: Props) {
   );
 }
 
-function Overview({ snapshot, onTab }: { snapshot: PlatformAdminSnapshot; onTab: (tab: Tab) => void }) {
+function Overview({ snapshot, onTab }: { snapshot: PlatformAdminSnapshot; onTab: (tab: PlatformAdminTab) => void }) {
   const cards = [
-    ['المستخدمون', snapshot.stats.users, Users, 'users' as Tab],
-    ['كل العمليات', snapshot.stats.operations, ClipboardList, 'operations' as Tab],
-    ['عمليات اليوم', snapshot.stats.operations_today, Activity, 'operations' as Tab],
-    ['اشتراكات فعالة', snapshot.stats.active_subscriptions, BadgeCheck, 'pro' as Tab],
-    ['طلبات دفع', snapshot.stats.pending_payments, CreditCard, 'pro' as Tab],
-    ['أنشطة تنتظر', snapshot.stats.pending_businesses, Building2, 'businesses' as Tab],
-    ['اشتباه محتمل', snapshot.stats.possible_fraud, AlertTriangle, 'operations' as Tab]
+    ['المستخدمون', snapshot.stats.users, Users, 'users' as PlatformAdminTab],
+    ['كل العمليات', snapshot.stats.operations, ClipboardList, 'operations' as PlatformAdminTab],
+    ['عمليات اليوم', snapshot.stats.operations_today, Activity, 'operations' as PlatformAdminTab],
+    ['اشتراكات فعالة', snapshot.stats.active_subscriptions, BadgeCheck, 'pro' as PlatformAdminTab],
+    ['طلبات دفع', snapshot.stats.pending_payments, CreditCard, 'pro' as PlatformAdminTab],
+    ['أنشطة تنتظر', snapshot.stats.pending_businesses, Building2, 'businesses' as PlatformAdminTab],
+    ['اشتباه محتمل', snapshot.stats.possible_fraud, AlertTriangle, 'operations' as PlatformAdminTab]
   ] as const;
   return <section className="space-y-4"><div className="grid grid-cols-2 gap-2">{cards.map(([label, value, Icon, target]) => <button key={label} onClick={() => onTab(target)} className="rounded-2xl bg-white p-4 text-right shadow-sm"><Icon className="h-5 w-5 text-slate-400" /><p className="mt-4 text-2xl font-bold text-slate-950">{numberFormat.format(value)}</p><p className="mt-1 text-[10px] text-slate-500">{label}</p></button>)}</div><div className="rounded-2xl bg-emerald-50 p-4"><div className="flex gap-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xs font-bold text-emerald-900">قاعدة البيانات متصلة</h2><p className="mt-1 text-[10px] leading-5 text-emerald-700">آخر مزامنة: {formatDate(snapshot.generated_at)}</p></div></div></div></section>;
 }

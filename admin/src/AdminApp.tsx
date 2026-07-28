@@ -1,20 +1,24 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { ArrowLeft, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, LockKeyhole, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../src/lib/supabase';
+import { getPlatformAdminAccess } from '../../src/lib/platformAdminApi';
 import { getPublicAppUrl } from '../../src/lib/urlUtils';
 
 const AdminWorkspace = lazy(() => import('./AdminWorkspace'));
 
-function FullPageLoader() {
-  return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><Loader2 className="h-7 w-7 animate-spin" /></div>;
+type AccessState = 'idle' | 'checking' | 'allowed' | 'denied' | 'error';
+
+function FullPageLoader({ label = 'جارٍ تجهيز لوحة الإدارة…' }: { label?: string }) {
+  return <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 text-white"><Loader2 className="h-7 w-7 animate-spin" /><p className="text-xs text-slate-300">{label}</p></div>;
 }
 
 export default function AdminApp() {
   const reduceMotion = useReducedMotion();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessState, setAccessState] = useState<AccessState>('idle');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
@@ -32,6 +36,7 @@ export default function AdminApp() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (active) {
         setSession(nextSession);
+        setAccessState(nextSession ? 'checking' : 'idle');
         setLoading(false);
       }
     });
@@ -40,6 +45,26 @@ export default function AdminApp() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setAccessState('idle');
+      return;
+    }
+
+    let active = true;
+    setAccessState('checking');
+    void getPlatformAdminAccess()
+      .then((access) => {
+        if (!active) return;
+        setAccessState(access.allowed ? 'allowed' : 'denied');
+      })
+      .catch(() => {
+        if (active) setAccessState('error');
+      });
+
+    return () => { active = false; };
+  }, [session?.user.id]);
 
   const returnToApp = (page = 'profile') => {
     const suffix = page === 'profile' ? '/profile' : '/';
@@ -59,6 +84,12 @@ export default function AdminApp() {
     } finally {
       setSigningIn(false);
     }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setAccessState('idle');
   };
 
   if (loading) return <FullPageLoader />;
@@ -84,9 +115,21 @@ export default function AdminApp() {
     </motion.section>
   </main>;
 
+  if (accessState === 'checking' || accessState === 'idle') return <FullPageLoader label="جارٍ التحقق من صلاحية مدير المنصة…" />;
+
+  if (accessState === 'denied' || accessState === 'error') return <main className="flex min-h-screen items-center justify-center bg-slate-950 p-5 font-arabic" dir="rtl">
+    <section className="w-full max-w-md rounded-[2rem] bg-white p-7 text-center shadow-2xl">
+      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-rose-50 text-rose-700"><ShieldAlert className="h-8 w-8" /></span>
+      <h1 className="mt-5 text-lg font-bold text-slate-950">الوصول غير مصرح به</h1>
+      <p className="mt-2 text-xs leading-6 text-slate-500">{accessState === 'denied' ? 'الحساب مسجل، لكنه لا يملك صلاحية إدارة منصة سند.' : 'تعذر التحقق من صلاحية الإدارة الآن. أعد المحاولة بعد التأكد من الاتصال.'}</p>
+      <button type="button" onClick={() => void signOut()} className="mt-5 min-h-12 w-full rounded-2xl bg-slate-950 text-xs font-bold text-white">تسجيل الخروج</button>
+      <button type="button" onClick={()=>returnToApp('profile')} className="mt-2 min-h-11 w-full text-[10px] font-bold text-slate-500">العودة إلى تطبيق سند</button>
+    </section>
+  </main>;
+
   return <div className="min-h-screen bg-slate-50 font-arabic" dir="rtl">
     <Suspense fallback={<FullPageLoader />}>
-      <AdminWorkspace onNavigate={returnToApp} />
+      <AdminWorkspace onNavigate={returnToApp} onSignOut={signOut} adminEmail={session.user.email || null} />
     </Suspense>
   </div>;
 }
