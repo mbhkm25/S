@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react';
 import {
-  Activity, Bell, Building2, ChevronDown, ClipboardList, CreditCard,
-  FileClock, LayoutDashboard, LogOut, Menu, MessageCircle, Search,
-  Settings2, ShieldCheck, Users, X
+  Activity, AlertTriangle, Bell, BookOpen, Building2, CheckCircle2, ChevronDown,
+  ClipboardList, CreditCard, FileClock, LayoutDashboard, LogOut, Menu,
+  MessageCircle, Search, Settings2, ShieldCheck, Users, X
 } from 'lucide-react';
 import PlatformAdmin from '../../src/components/admin/PlatformAdmin';
+import KnowledgeAdminSection from '../../src/components/admin/KnowledgeAdminSection';
 import BusinessSlugAdministration from './BusinessSlugAdministration';
 import './admin-workspace.css';
 
 type NavigationItem = {
   label: string;
   icon: typeof LayoutDashboard;
-  target: string;
+  target?: string;
+  standalone?: 'knowledge';
 };
 
 const navigation: NavigationItem[] = [
@@ -21,6 +23,7 @@ const navigation: NavigationItem[] = [
   { label: 'العمليات', icon: ClipboardList, target: 'العمليات' },
   { label: 'الأنشطة', icon: Building2, target: 'الأنشطة' },
   { label: 'سند Pro', icon: CreditCard, target: 'سند Pro' },
+  { label: 'إدارة المعرفة', icon: BookOpen, standalone: 'knowledge' },
   { label: 'الإعدادات', icon: Settings2, target: 'الإعدادات' },
   { label: 'سجل الإدارة', icon: FileClock, target: 'سجل الإدارة' }
 ];
@@ -35,15 +38,25 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
   const [activeLabel, setActiveLabel] = useState('النظرة العامة');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceSuccess, setWorkspaceSuccess] = useState<string | null>(null);
   const current = useMemo(() => navigation.find((item) => item.label === activeLabel) || navigation[0], [activeLabel]);
 
   const selectSection = (item: NavigationItem) => {
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.platform-admin-console button'));
-    const target = buttons.find((button) => button.textContent?.trim() === item.target);
-    target?.click();
+    setWorkspaceError(null);
+    setWorkspaceSuccess(null);
+
+    if (item.target) {
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.platform-admin-console button'));
+      const target = buttons.find((button) => button.textContent?.trim() === item.target);
+      target?.click();
+    }
+
     setActiveLabel(item.label);
     setMobileOpen(false);
   };
+
+  const showKnowledge = current.standalone === 'knowledge';
 
   return (
     <div className="sanad-admin-shell" dir="rtl">
@@ -92,11 +105,21 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
 
         <section className="sanad-admin-content">
           <div className="sanad-admin-context-strip">
-            <div><Activity /><span>بيانات تشغيلية مباشرة من قاعدة بيانات سند</span></div>
+            <div><Activity /><span>{showKnowledge ? 'مصادر المعرفة الرسمية التي يعتمد عليها مساعد سند' : 'بيانات تشغيلية مباشرة من قاعدة بيانات سند'}</span></div>
             <span>التحديث الحالي عند فتح القسم أو طلب التحديث يدويًا</span>
           </div>
-          {activeLabel === 'الأنشطة' && <BusinessSlugAdministration />}
-          <PlatformAdmin onNavigate={onNavigate} />
+
+          {workspaceError && <button type="button" onClick={() => setWorkspaceError(null)} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-rose-50 p-3 text-right text-xs font-bold text-rose-700"><AlertTriangle className="h-4 w-4" />{workspaceError}</button>}
+          {workspaceSuccess && <button type="button" onClick={() => setWorkspaceSuccess(null)} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-emerald-50 p-3 text-right text-xs font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" />{workspaceSuccess}</button>}
+
+          {showKnowledge ? (
+            <KnowledgeAdminSection setError={setWorkspaceError} setSuccess={setWorkspaceSuccess} />
+          ) : (
+            <>
+              {activeLabel === 'الأنشطة' && <BusinessSlugAdministration />}
+              <PlatformAdmin onNavigate={onNavigate} />
+            </>
+          )}
         </section>
       </main>
     </div>
