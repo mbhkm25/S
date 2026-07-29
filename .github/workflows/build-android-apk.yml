@@ -1,0 +1,101 @@
+name: Build SANAD Android APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+      - 'vite.config.ts'
+      - '.github/workflows/build-android-apk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+      - 'vite.config.ts'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug-apk:
+    name: Build field-test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate application
+        run: |
+          npm run lint
+          npm run check:routes
+
+      - name: Build Android web assets
+        env:
+          VITE_APP_VERSION: '90'
+        run: npm run build:android
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleDebug
+
+      - name: Prepare verified artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v90-field-test.apk
+          sha256sum release/sanad-v90-field-test.apk | tee release/sanad-v90-field-test.apk.sha256
+          printf 'commit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > release/build-info.txt
+          test -s release/sanad-v90-field-test.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-v90-field-test-apk
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
