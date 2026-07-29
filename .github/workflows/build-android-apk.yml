@@ -20,6 +20,8 @@ jobs:
   android-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout
@@ -69,14 +71,12 @@ jobs:
           retention-days: 14
 
       - name: Prepare release signing key
-        if: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 != '' }}
-        env:
-          SANAD_ANDROID_KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
         run: |
-          echo "$SANAD_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-release.keystore"
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-release.keystore"
 
       - name: Build signed release APK
-        if: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
         working-directory: android
         env:
           SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-release.keystore
@@ -86,7 +86,7 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload signed release APK
-        if: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: sanad-v90-release-apk
