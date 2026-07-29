@@ -28,20 +28,28 @@ export function maskAccountNumber(accountNumber: string | null | undefined): str
 }
 
 /**
- * Verifies if the basic profile fields are complete.
- * Must check: full_name, phone (represented as 967XXXXXXXXX in DB, so its local part has 9 digits), and email.
+ * Basic profile completion is the completion of required signup data:
+ * full name, Yemeni phone supplied by the user, and governorate.
+ *
+ * Phone ownership verification is a separate security state. During that flow
+ * the submitted number lives in pending_phone, so it must still count as
+ * completed signup data and must not force the user to enter it again.
  */
-export function isBasicProfileComplete(profile: Profile | null | undefined, userEmail?: string | null): boolean {
+export function isBasicProfileComplete(profile: Profile | null | undefined, _userEmail?: string | null): boolean {
   if (!profile) return false;
-  if (!profile.full_name || !profile.full_name.trim()) return false;
-  if (!profile.phone) return false;
-  if (!profile.governorate || !profile.governorate.trim()) return false;
-  
-  const email = userEmail || (profile as any).email;
-  if (!email || !email.trim()) return false;
-  
-  const localPart = parseYemeniLocalPhone(profile.phone);
-  if (localPart.length !== 9) return false;
-  
-  return true;
+  if (!profile.full_name?.trim()) return false;
+  if (!profile.governorate?.trim()) return false;
+
+  const effectivePhone = profile.phone || profile.pending_phone;
+  if (!effectivePhone) return false;
+
+  return /^7\d{8}$/.test(parseYemeniLocalPhone(effectivePhone));
+}
+
+export function isPhoneOwnershipVerified(profile: Profile | null | undefined): boolean {
+  return Boolean(
+    profile?.phone
+    && profile.phone_verification_status === 'verified'
+    && profile.phone_verified_at
+  );
 }
