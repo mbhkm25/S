@@ -1,0 +1,30 @@
+name: Apply SANAD V91 source patch
+
+on:
+  push:
+    branches:
+      - feature/android-v91-camera-icon
+    paths:
+      - scripts/apply-v91-release.py
+      - .github/workflows/apply-v91-source-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/android-v91-camera-icon
+          fetch-depth: 0
+      - name: Apply deterministic V91 source changes
+        run: python scripts/apply-v91-release.py
+      - name: Commit generated source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: ship Android V91 camera and release settings"
+          git push origin HEAD:feature/android-v91-camera-icon
