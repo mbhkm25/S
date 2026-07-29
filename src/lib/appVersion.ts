@@ -1,1 +1,1 @@
-export const SANAD_APP_VERSION = '90';
+export const SANAD_APP_VERSION = '91';
