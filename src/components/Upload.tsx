@@ -20,6 +20,7 @@ import {
 import QRCode from 'qrcode';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 import { getPublicAppUrl } from '../lib/urlUtils';
+import { toLatinDigits } from '../lib/digits';
 import { preparePaymentFile, ProcessedPaymentFile } from '../lib/paymentImageProcessing';
 
 interface UploadProps {
@@ -369,7 +370,7 @@ export default function UploadNotification({
                   {file.type === ALLOWED_PDF_TYPE ? <FileText className="h-5 w-5" /> : <FileImage className="h-5 w-5" />}
                 </span>
                 <div className="min-w-0 flex-1 text-right">
-                  <strong className="block truncate text-xs text-slate-900" dir="auto">{file.name}</strong>
+                  <strong className="block truncate text-xs text-slate-900" dir="auto">{toLatinDigits(file.name)}</strong>
                   <span className="mt-1 block text-[10px] text-slate-400">الحجم الأصلي: {formatMegabytes(file.size)}</span>
                 </div>
                 <button

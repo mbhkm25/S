@@ -311,7 +311,7 @@ const { state: liveSyncState, lastSyncedAt, refreshNow: refreshLiveOperation } =
           throw verifyError;
         }
 
-        setVerifiedSuccessMessage('تم تسجيل تحققك من هذا الإشعار.');
+        setVerifiedSuccessMessage('تم تسجيل تحققك من هذه العملية.');
 
         if (operation) {
           callSanadAppFunction('sanad-v3-app-trigger-notify-verification', {
@@ -1065,16 +1065,16 @@ const { state: liveSyncState, lastSyncedAt, refreshNow: refreshLiveOperation } =
         </div>
       )}
 
-      {/* 5. Verification & Linking Box based on User Role */}
-      {isUploader ? (
+      {/* 5. Operation origin and explicit verification are separate concepts. */}
+      {isUploader && (
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl text-center space-y-4" id="uploader_info_box">
           <div className="max-w-md mx-auto space-y-1">
             <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 mb-1 border border-emerald-100">
               <CheckCircle2 className="w-5 h-5" />
             </div>
-            <h3 className="text-xs font-bold text-slate-900">هذه العملية منشأة بواسطتك في سند</h3>
+            <h3 className="text-xs font-bold text-slate-900">هذه العملية أضفتها إلى سند</h3>
             <p className="text-[10px] text-slate-500 leading-relaxed">
-              لقد قمت برفع مستند هذه العملية بنجاح. شارك رمز الاستجابة السريعة (QR) أو الرابط مع الطرف الآخر للمطابقة والتأكيد المتبادل.
+              تم تسجيلك كرافع للمستند. يبقى التحقق إجراءً مستقلًا لتأكيد أنك راجعت العملية وطابقت بياناتها.
             </p>
           </div>
 
@@ -1102,12 +1102,14 @@ const { state: liveSyncState, lastSyncedAt, refreshNow: refreshLiveOperation } =
             </div>
           </div>
         </div>
-      ) : isVerifiedByMe ? (
+      )}
+
+      {isVerifiedByMe ? (
         <div className="bg-emerald-50/50 border border-emerald-200 p-5 rounded-3xl text-center space-y-2" id="already_verified_box">
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
             <ShieldCheck className="w-5 h-5" />
           </div>
-          <h3 className="text-xs font-bold text-slate-900">لقد قمت بالتحقق من هذا الإشعار مسبقاً</h3>
+          <h3 className="text-xs font-bold text-slate-900">لقد قمت بالتحقق من هذه العملية مسبقًا</h3>
           <p className="text-[10px] text-slate-650 max-w-xs mx-auto leading-relaxed">
             تم تسجيل توقيعك الشخصي وتأكيد مطابقة البيانات بنجاح في قاعدة بيانات سند الموثقة.
           </p>
@@ -1115,7 +1117,7 @@ const { state: liveSyncState, lastSyncedAt, refreshNow: refreshLiveOperation } =
       ) : (
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl text-center space-y-3.5" id="verification_box">
           <div className="max-w-md mx-auto space-y-1">
-            <h3 className="text-xs font-bold text-slate-900">تأكيد ومطابقة الإشعار المالي الشخصي</h3>
+            <h3 className="text-xs font-bold text-slate-900">تأكيد ومطابقة عملية الدفع</h3>
             <p className="text-[10px] text-slate-500 leading-relaxed">
               بنقرك على الزر أدناه، تؤكد بصفتك مدققاً رسمياً ومسؤولاً أن المستند المالي الأصلي سليم ومطابق للمبلغ الفعلي للعملية المعروضة.
             </p>

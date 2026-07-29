@@ -40,8 +40,8 @@ type QuickAction = {
 
 const quickActions: QuickAction[] = [
   {
-    title: 'رفع إشعار',
-    description: 'أرسل إشعارًا ماليًا جديدًا',
+    title: 'إضافة عملية دفع',
+    description: 'صوّر أو أضف مستند دفع',
     page: 'upload',
     icon: UploadCloud,
     iconClassName: 'text-sky-700',

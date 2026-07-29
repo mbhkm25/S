@@ -41,6 +41,7 @@ import {
   parseNotificationClickMessage
 } from './features/push/pushNavigation';
 import { reportPushError } from './features/push/pushErrors';
+import { SANAD_APP_VERSION } from './lib/appVersion';
 import { syncExistingPushSubscription } from './features/push/pushSubscription';
 import {
   clearManualAuthAttempt,
@@ -1021,11 +1022,12 @@ export default function App() {
       {currentPage !== 'scan-qr' && (
         <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
           <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center">
-              <img
-                src={`${import.meta.env.BASE_URL}logo.png`}
-                alt="شعار سند"
-                className="h-10 w-auto object-contain"
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start">
+                <img
+                  src={`${import.meta.env.BASE_URL}logo.png`}
+                  alt="شعار سند"
+                  className="h-10 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                   const parent = e.currentTarget.parentElement;
@@ -1035,8 +1037,10 @@ export default function App() {
                     span.innerText = "سند للتحقق";
                     parent.appendChild(span);
                   }
-                }}
-              />
+                  }}
+                />
+                <span className="-mt-1 self-center font-mono text-[8px] font-bold tracking-wider text-slate-400" dir="ltr">V{SANAD_APP_VERSION}</span>
+              </div>
             </div>
 
             <div>
@@ -1322,7 +1326,7 @@ export default function App() {
                   : 'text-slate-400 hover:text-slate-600'
               }`}>
                 <Upload className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">رفع إشعار</span>
+                <span className="text-[9px] font-bold font-arabic mt-0.5">إضافة عملية</span>
               </div>
             </button>
 
