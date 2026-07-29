@@ -1,11 +1,14 @@
 export interface Profile {
   id: string;
   full_name: string;
-  phone: string;
+  phone: string | null;
+  pending_phone?: string | null;
   governorate?: string | null;
   avatar_path?: string | null;
-  profile_completed_at?: string;
-  status: 'active' | 'inactive';
+  profile_completed_at?: string | null;
+  phone_verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected' | 'conflict' | 'expired';
+  phone_verified_at?: string | null;
+  status: 'active' | 'pending' | 'disabled' | 'inactive';
   created_at?: string;
 }
 

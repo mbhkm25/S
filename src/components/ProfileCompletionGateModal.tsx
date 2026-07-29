@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle, Loader2, MapPin, Phone, ShieldAlert, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { User, AlertCircle, Loader2, CheckCircle, ShieldAlert, MapPin } from 'lucide-react';
-import { toLatinDigits, parseYemeniLocalPhone } from '../lib/digits';
-import { normalizeYemenPhone, isValidYemenLocalPhone } from '../lib/profileUtils';
+import { parseYemeniLocalPhone, toLatinDigits } from '../lib/digits';
+import { isValidYemenLocalPhone, normalizeYemenPhone } from '../lib/profileUtils';
 import { isYemenGovernorate, YEMEN_GOVERNORATES } from '../constants/yemenGovernorates';
 
 interface ProfileCompletionGateModalProps {
@@ -14,98 +14,82 @@ interface ProfileCompletionGateModalProps {
   refreshProfile: () => Promise<Profile | null>;
 }
 
-export default function ProfileCompletionGateModal({ isOpen, profile, onClose, onSuccess, refreshProfile }: ProfileCompletionGateModalProps) {
+export default function ProfileCompletionGateModal({
+  isOpen,
+  profile,
+  onClose,
+  onSuccess,
+  refreshProfile
+}: ProfileCompletionGateModalProps) {
+  const effectivePhone = profile?.phone || profile?.pending_phone || '';
   const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [localPhone, setLocalPhone] = useState(profile?.phone ? parseYemeniLocalPhone(profile.phone) : '');
+  const [localPhone, setLocalPhone] = useState(effectivePhone ? parseYemeniLocalPhone(effectivePhone) : '');
   const [governorate, setGovernorate] = useState(profile?.governorate || '');
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Sync state if profile is loaded late
-  React.useEffect(() => {
-    if (profile) {
-      if (!fullName) setFullName(profile.full_name || '');
-      if (!localPhone && profile.phone) setLocalPhone(parseYemeniLocalPhone(profile.phone));
-      if (!governorate && profile.governorate) setGovernorate(profile.governorate);
-    }
-  }, [profile]);
+  useEffect(() => {
+    if (!profile) return;
+    setFullName(profile.full_name || '');
+    setLocalPhone(profile.phone || profile.pending_phone ? parseYemeniLocalPhone(profile.phone || profile.pending_phone || '') : '');
+    setGovernorate(profile.governorate || '');
+  }, [profile?.id, profile?.full_name, profile?.phone, profile?.pending_phone, profile?.governorate]);
+
+  const missing = useMemo(() => ({
+    name: !profile?.full_name?.trim(),
+    phone: !effectivePhone || !/^7\d{8}$/.test(parseYemeniLocalPhone(effectivePhone)),
+    governorate: !profile?.governorate?.trim()
+  }), [effectivePhone, profile?.full_name, profile?.governorate]);
 
   if (!isOpen) return null;
 
-  const isNameMissing = !profile?.full_name || !profile.full_name.trim();
-  const isPhoneMissing = !profile?.phone || parseYemeniLocalPhone(profile.phone).length !== 9;
-  const isGovernorateMissing = !profile?.governorate || !profile.governorate.trim();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
 
-    const updatePayload: any = {};
+    const name = fullName.trim();
+    const cleanPhone = toLatinDigits(localPhone).replace(/\D/g, '');
 
-    if (isNameMissing) {
-      const name = fullName.trim();
-      if (!name) {
-        setError('الاسم الكامل مطلوب.');
-        return;
-      }
-      if (name.length < 3) {
-        setError('يجب أن يتكون الاسم الكامل من 3 أحرف على الأقل.');
-        return;
-      }
-      updatePayload.full_name = name;
-    }
-
-    if (isPhoneMissing) {
-      const cleanPhone = toLatinDigits(localPhone.trim());
-      if (!cleanPhone) {
-        setError('رقم الهاتف مطلوب.');
-        return;
-      }
-      if (!isValidYemenLocalPhone(cleanPhone)) {
-        setError('رقم الهاتف يجب أن يتكون من 9 أرقام يمنية صالحة (مثال: 777634971).');
-        return;
-      }
-      updatePayload.phone = normalizeYemenPhone(cleanPhone);
-    }
-
-    if (isGovernorateMissing) {
-      if (!isYemenGovernorate(governorate)) {
-        setError('يرجى اختيار المحافظة');
-        return;
-      }
-      updatePayload.governorate = governorate;
-    }
+    if (missing.name && name.length < 3) return setError('اكتب الاسم الكامل من 3 أحرف على الأقل.');
+    if (missing.phone && !isValidYemenLocalPhone(cleanPhone)) return setError('أدخل رقم جوال يمني صحيحًا من 9 أرقام.');
+    if (missing.governorate && !isYemenGovernorate(governorate)) return setError('اختر المحافظة.');
 
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('لم يتم العثور على جلسة مستخدم نشطة. يرجى تسجيل الدخول.');
+      if (!session?.user) throw new Error('لم يتم العثور على جلسة مستخدم نشطة.');
+
+      const profilePatch: Record<string, unknown> = {};
+      if (missing.name) profilePatch.full_name = name;
+      if (missing.governorate) profilePatch.governorate = governorate;
+
+      if (Object.keys(profilePatch).length > 0) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update(profilePatch)
+          .eq('id', session.user.id);
+        if (updateError) throw updateError;
       }
 
-      updatePayload.id = session.user.id;
-      updatePayload.profile_completed_at = new Date().toISOString();
-      updatePayload.updated_at = new Date().toISOString();
+      if (missing.phone) {
+        const { data, error: phoneError } = await supabase.rpc('request_my_phone_verification', {
+          p_phone: normalizeYemenPhone(cleanPhone)
+        });
+        if (phoneError) throw phoneError;
+        if (data?.ok === false) throw new Error(data?.reason || 'تعذر حفظ رقم الجوال.');
+      }
 
-      // Upsert directly to profiles table to bypass RPC governorate constraints
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .upsert(updatePayload);
-
-      if (updateError) throw updateError;
+      const refreshed = await refreshProfile();
+      if (!refreshed) throw new Error('تم الحفظ، لكن تعذر تحديث الملف الآن.');
 
       setSuccess(true);
-      await refreshProfile();
-      
-      setTimeout(() => {
+      window.setTimeout(() => {
         setSuccess(false);
         onSuccess();
-      }, 1000);
-    } catch (err: any) {
-      console.error('upsert error in gate:', err);
-      setError(err.message || 'فشل حفظ البيانات الشخصية، يرجى إعادة المحاولة.');
+      }, 700);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'فشل حفظ البيانات الأساسية.');
     } finally {
       setSaving(false);
     }
@@ -113,143 +97,44 @@ export default function ProfileCompletionGateModal({ isOpen, profile, onClose, o
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" id="profile_gate_modal">
-      <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        
-        {/* Backdrop overlay */}
-        <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
-          onClick={onClose} 
-        />
-
-        {/* Center alignment spacer */}
-        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-
-        {/* Modal panel container */}
-        <div 
-          className="inline-block w-full max-w-md transform overflow-hidden rounded-3xl bg-white p-6 text-right align-middle shadow-2xl transition-all sm:my-8 sm:align-middle"
-          dir="rtl"
-        >
-          {/* Header */}
-          <div className="text-center space-y-2 mb-4">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 text-amber-500 border border-amber-100">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-950 font-arabic">تحديث الملف والبيانات الأساسية</h3>
-            <p className="text-xs text-rose-600 font-arabic font-medium bg-rose-50/80 px-3 py-1.5 rounded-xl border border-rose-100/50 leading-relaxed">
-              لإتمام هذا الإجراء داخل سند، أكمل بياناتك الأساسية أولاً.
-            </p>
+      <div className="flex min-h-screen items-center justify-center px-4 py-8 text-center">
+        <button type="button" aria-label="إغلاق" className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+        <section className="relative w-full max-w-md rounded-3xl bg-white p-6 text-right shadow-2xl" dir="rtl">
+          <div className="mb-5 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber-100 bg-amber-50 text-amber-600">
+              <ShieldAlert className="h-6 w-6" />
+            </span>
+            <h3 className="mt-3 text-sm font-bold text-slate-950">إكمال البيانات الناقصة فقط</h3>
+            <p className="mt-2 text-xs leading-6 text-slate-500">لن يطلب سند أي بيانات سبق أن أدخلتها عند إنشاء الحساب. يظهر هنا فقط الحقل المفقود فعليًا.</p>
           </div>
 
           {success ? (
-            <div className="py-10 text-center space-y-2 animate-fade-in">
-              <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
-              <p className="text-xs font-bold text-emerald-800 font-arabic">تم تفعيل حسابك بنجاح!</p>
-              <p className="text-[10px] text-slate-400 font-arabic">جاري توجيهك لإتمام الإجراء المالي الموثق...</p>
+            <div className="py-10 text-center">
+              <CheckCircle className="mx-auto h-12 w-12 text-emerald-500" />
+              <p className="mt-3 text-xs font-bold text-emerald-800">تم حفظ البيانات ومتابعة الإجراء.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 text-xs rounded-xl flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
-                  <span className="leading-snug">{error}</span>
-                </div>
-              )}
+              {error && <div className="flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
 
-              {/* Input: Name */}
-              {isNameMissing && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">الاسم الكامل</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => {
-                        setFullName(e.target.value);
-                        setError(null);
-                      }}
-                      placeholder="اكتب اسمك الكامل"
-                      className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none transition-all"
-                      required
-                    />
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                      <User className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-              )}
+              {missing.name && <Field label="الاسم الكامل" icon={<User className="h-4 w-4" />}><input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full bg-transparent text-xs outline-none" placeholder="اكتب اسمك الكامل" /></Field>}
 
-              {/* Input: Phone Number */}
-              {isPhoneMissing && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">رقم الهاتف (اليمن)</label>
-                  <div className="relative flex rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden focus-within:bg-white focus-within:border-slate-400 transition-all">
-                    <input
-                      type="text"
-                      value={localPhone}
-                      onChange={(e) => {
-                        setLocalPhone(toLatinDigits(e.target.value).replace(/\D/g, '').substring(0, 9));
-                        setError(null);
-                      }}
-                      dir="ltr"
-                      placeholder="777634971"
-                      className="flex-1 text-left text-xs px-3.5 py-3 bg-transparent outline-none border-none font-mono text-slate-800"
-                      required
-                    />
-                    <span className="bg-slate-100 border-r border-slate-200 px-3 py-3 text-xs text-slate-500 font-mono flex items-center select-none" dir="ltr">
-                      +967
-                    </span>
-                  </div>
-                  <p className="text-[9px] text-slate-400 font-arabic mt-1">اكتب الـ 9 أرقام اليمنية مباشرة بدون مفتاح الدولة.</p>
-                </div>
-              )}
+              {missing.phone && <div className="space-y-1.5"><label className="block text-[11px] font-bold text-slate-600">رقم الجوال</label><div className="flex overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"><input dir="ltr" value={localPhone} onChange={(e) => setLocalPhone(toLatinDigits(e.target.value).replace(/\D/g, '').slice(0, 9))} className="min-w-0 flex-1 bg-transparent px-3 py-3 text-left font-mono text-xs outline-none" placeholder="777634971" /><span className="flex items-center gap-1 border-r border-slate-200 bg-slate-100 px-3 text-xs text-slate-500"><Phone className="h-4 w-4" />+967</span></div><p className="text-[9px] text-slate-400">سيُحفظ الرقم عبر مسار التحقق الرسمي، وليس كتعديل مباشر على الهوية.</p></div>}
 
-              {isGovernorateMissing && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-slate-500 block font-arabic">المحافظة</label>
-                  <div className="relative">
-                    <select
-                      required
-                      value={governorate}
-                      onChange={(e) => {
-                        setGovernorate(e.target.value);
-                        setError(null);
-                      }}
-                      className="w-full text-right text-xs px-3.5 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-slate-400 outline-none appearance-none"
-                    >
-                      <option value="">اختر المحافظة</option>
-                      {YEMEN_GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                </div>
-              )}
+              {missing.governorate && <Field label="المحافظة" icon={<MapPin className="h-4 w-4" />}><select value={governorate} onChange={(e) => setGovernorate(e.target.value)} className="w-full bg-transparent text-xs outline-none"><option value="">اختر المحافظة</option>{YEMEN_GOVERNORATES.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>}
 
-              {/* Action buttons */}
               <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3 px-4 rounded-2xl transition-all cursor-pointer text-xs font-arabic flex items-center justify-center gap-1"
-                >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  ) : (
-                    <span>تأكيد وحفظ</span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all cursor-pointer text-xs font-arabic"
-                >
-                  إلغاء
-                </button>
+                <button type="submit" disabled={saving} className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-600 text-xs font-bold text-white disabled:bg-slate-300">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ ومتابعة'}</button>
+                <button type="button" onClick={onClose} className="min-h-12 rounded-2xl bg-slate-100 px-5 text-xs font-bold text-slate-700">إلغاء</button>
               </div>
             </form>
           )}
-
-        </div>
+        </section>
       </div>
     </div>
   );
+}
+
+function Field({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return <label className="block space-y-1.5"><span className="block text-[11px] font-bold text-slate-600">{label}</span><span className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-400">{children}{icon}</span></label>;
 }
