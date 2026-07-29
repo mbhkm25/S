@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="sanad-app-version" content="88" />
     <title>سند | SANAD</title>
 
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%sanad-favicon.svg" />
@@ -11,6 +12,28 @@
     <meta name="theme-color" content="#111827" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <style>
+      /* Visible release marker: intentionally anchored beneath the SANAD logo. */
+      #global_header > div > div:first-child {
+        position: relative;
+        padding-bottom: 6px;
+      }
+
+      #global_header > div > div:first-child::after {
+        content: "V88";
+        position: absolute;
+        right: 2px;
+        bottom: -1px;
+        direction: ltr;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 8px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.02em;
+        color: #94a3b8;
+      }
+    </style>
 
     <script>
       (() => {
