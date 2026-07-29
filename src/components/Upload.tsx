@@ -1,10 +1,26 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { Upload, FileCode, CheckCircle2, QrCode, Clipboard, Loader2, RefreshCw, FileText, ArrowLeft, Check, Share2, ExternalLink, PlusCircle } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  CheckCircle2,
+  Clipboard,
+  ExternalLink,
+  FileImage,
+  FileText,
+  ImagePlus,
+  Loader2,
+  PlusCircle,
+  QrCode,
+  RefreshCw,
+  Share2,
+  UploadCloud,
+} from 'lucide-react';
 import QRCode from 'qrcode';
 import { callSanadAppFunction } from '../lib/sanadFunctions';
 import { getPublicAppUrl } from '../lib/urlUtils';
+import { preparePaymentFile, ProcessedPaymentFile } from '../lib/paymentImageProcessing';
 
 interface UploadProps {
   user: any;
@@ -14,13 +30,42 @@ interface UploadProps {
   ensureProfileComplete?: (action: () => void) => void;
 }
 
-export default function UploadNotification({ user, profile, onNavigateToDetails, onNavigate, ensureProfileComplete }: UploadProps) {
-  const [dragActive, setDragActive] = useState(false);
+type UploadStage = 'idle' | 'optimizing' | 'uploading' | 'creating' | 'starting-analysis';
+
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const ALLOWED_PDF_TYPE = 'application/pdf';
+
+const stageLabels: Record<UploadStage, string> = {
+  idle: '',
+  optimizing: 'جاري تحسين الصورة وتقليل حجمها…',
+  uploading: 'جاري رفع المستند بأمان…',
+  creating: 'جاري إنشاء العملية…',
+  'starting-analysis': 'جاري بدء تحليل البيانات…',
+};
+
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 2 : 3)} MB`;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+export default function UploadNotification({
+  user,
+  profile,
+  onNavigateToDetails,
+  onNavigate,
+  ensureProfileComplete,
+}: UploadProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  // Successful state data
+  const [openingDetails, setOpeningDetails] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [processedSummary, setProcessedSummary] = useState<ProcessedPaymentFile['metadata'] | null>(null);
   const [successData, setSuccessData] = useState<{
     id: string;
     publicToken: string;
@@ -28,163 +73,130 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
     localQrCodeDataUrl: string;
     analysisTriggerFailed?: boolean;
   } | null>(null);
-
   const [copied, setCopied] = useState(false);
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // File Drag-Drop triggers
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
-    }
-  };
+  const uploading = uploadStage !== 'idle';
 
   const validateAndSetFile = (selectedFile: File) => {
     setErrorMessage(null);
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      setErrorMessage('حجم الملف كبير جداً. الحد الأقصى المسموح به هو 10 ميجابايت.');
+    setProcessedSummary(null);
+
+    const isImage = selectedFile.type.startsWith('image/');
+    const isPdf = selectedFile.type === ALLOWED_PDF_TYPE || selectedFile.name.toLowerCase().endsWith('.pdf');
+
+    if (!isImage && !isPdf) {
+      setErrorMessage('اختر صورة واضحة أو ملف PDF لإشعار الدفع أو إيصال ماكينة الدفع.');
       return;
     }
+
+    const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_PDF_BYTES;
+    if (selectedFile.size > maxBytes) {
+      setErrorMessage(
+        isImage
+          ? 'حجم الصورة يتجاوز 15 ميجابايت. التقطها بدقة أقل أو اختر صورة أخرى.'
+          : 'حجم ملف PDF يتجاوز 10 ميجابايت.',
+      );
+      return;
+    }
+
     setFile(selectedFile);
   };
 
-  const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file || !user || !profile) return;
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) validateAndSetFile(selectedFile);
+    event.target.value = '';
+  };
+
+  const handleDrag = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type === 'dragenter' || event.type === 'dragover') setDragActive(true);
+    if (event.type === 'dragleave') setDragActive(false);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    const selectedFile = event.dataTransfer.files?.[0];
+    if (selectedFile) validateAndSetFile(selectedFile);
+  };
+
+  const handleUploadSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!file || !user || !profile || uploading) return;
 
     const performUpload = async () => {
-      setUploading(true);
       setErrorMessage(null);
-
-      const isDev = import.meta.env.DEV;
-
-      if (isDev) {
-        console.log('[upload_start] notice upload initiated');
-        console.log(`[file_selected] name: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
-      }
+      let storagePath: string | null = null;
 
       try {
-        if (isDev) {
-          console.log('[storage_upload_start] reading file into array buffer');
-        }
+        setUploadStage(file.type.startsWith('image/') ? 'optimizing' : 'uploading');
+        const prepared = await preparePaymentFile(file);
+        setProcessedSummary(prepared.metadata);
 
-        // Convert File to Blob inside memory to bypass Android WebView file reference sandbox restrictions
-        let fileBlob: Blob;
-        try {
-          const fileData = await file.arrayBuffer();
-          fileBlob = new Blob([fileData], { type: file.type });
-        } catch (readErr: any) {
-          console.error('Failed to read file locally:', readErr);
-          throw new Error('تعذر اختيار أو قراءة المستند المالي من جهازك.');
-        }
+        const uploadFile = prepared.file;
+        setUploadStage('uploading');
+        const safeFileName = uploadFile.name.replace(/[^a-zA-Z0-9.-]/g, '_') || 'payment-document';
+        storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
 
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${user.id}/${Date.now()}-${safeFileName}`;
-
-        if (isDev) {
-          console.log(`[storage_upload_start] uploading blob to path: ${storagePath}`);
-        }
-
-        // Upload the in-memory Blob with explicit contentType to Supabase Storage
-        const { data: storageData, error: storageError } = await supabase.storage
+        const { error: storageError } = await supabase.storage
           .from('operation-files')
-          .upload(storagePath, fileBlob, {
+          .upload(storagePath, uploadFile, {
             cacheControl: '3600',
             upsert: false,
-            contentType: file.type
+            contentType: uploadFile.type || 'application/octet-stream',
           });
 
         if (storageError) {
-          if (isDev) {
-            console.error('[storage_upload_failure]', storageError);
-          }
-          throw new Error('تعذر رفع الملف إلى مخزن التخزين السحابي. تحقق من الشبكة وحاول مرة أخرى.');
+          throw new Error('تعذر رفع المستند. تحقق من اتصال الإنترنت وحاول مرة أخرى.');
         }
 
-        if (isDev) {
-          console.log('[storage_upload_success] file uploaded to Supabase Storage', storageData);
-        }
-
+        setUploadStage('creating');
+        const phone = profile.phone || (profile as Profile & { pending_phone?: string | null }).pending_phone || null;
         const clientMetadata = {
           userAgent: navigator.userAgent,
           uploadedAt: new Date().toISOString(),
-          originalName: file.name,
-          size: file.size,
-          type: file.type,
-          app_upload: true
+          app_upload: true,
+          upload_experience: 'unified_payment_upload_v1',
+          ...prepared.metadata,
         };
-
-        if (isDev) {
-          console.log('[operation_insert_start] inserting operation row to DB');
-        }
 
         const { data: opData, error: dbError } = await supabase
           .from('operations')
           .insert({
-            source: 'pwa_upload', // Keeping PWA upload source code literal for DB enum compatibility
+            source: 'pwa_upload',
             upload_origin: 'pwa',
             submitted_by_user_id: user.id,
-            submitted_by_phone: profile.phone,
+            submitted_by_phone: phone,
             submitted_by_name: profile.full_name,
             file_bucket: 'operation-files',
             file_path: storagePath,
-            file_original_name: file.name,
-            file_mime_type: file.type,
-            file_size: file.size,
+            file_original_name: uploadFile.name,
+            file_mime_type: uploadFile.type || file.type,
+            file_size: uploadFile.size,
             original_file_status: 'stored',
             qr_status: 'created',
             status: 'stored',
             ai_status: 'pending',
-            client_upload_metadata: clientMetadata
+            client_upload_metadata: clientMetadata,
           })
           .select('id, public_token')
           .single();
 
-        if (dbError) {
-          if (isDev) {
-            console.error('[operation_insert_failure]', dbError);
-          }
-          throw new Error('تم رفع الملف بنجاح، ولكن تعذر إنشاء سجل العملية المالي في قاعدة البيانات.');
+        if (dbError || !opData) {
+          await supabase.storage.from('operation-files').remove([storagePath]).catch(() => undefined);
+          throw new Error('تم رفع الملف، لكن تعذر إنشاء العملية. لم يتم الاحتفاظ بالملف غير المرتبط.');
         }
 
-        if (!opData) {
-          throw new Error('لم يرجع خادم قاعدة البيانات معرف العملية.');
-        }
-
-        if (isDev) {
-          console.log('[operation_insert_success] operation database row created', opData);
-        }
-
-        // Build the verification URL from the canonical public application origin.
         const operationUrl = `${getPublicAppUrl()}/v/${opData.public_token}`;
-
         const qrDataUrl = await QRCode.toDataURL(operationUrl, {
-          width: 260,
+          width: 240,
           margin: 2,
-          color: {
-            dark: '#111111',
-            light: '#ffffff'
-          }
+          color: { dark: '#111111', light: '#ffffff' },
         });
 
         setSuccessData({
@@ -192,262 +204,302 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
           publicToken: opData.public_token,
           qrUrl: operationUrl,
           localQrCodeDataUrl: qrDataUrl,
-          analysisTriggerFailed: false
+          analysisTriggerFailed: false,
         });
 
-        if (isDev) {
-          console.log('[analysis_trigger_start] triggering remote analysis function');
+        setUploadStage('starting-analysis');
+        try {
+          await callSanadAppFunction('sanad-v3-app-trigger-analysis', {
+            operation_id: opData.id,
+            public_token: opData.public_token,
+            source: 'pwa_upload',
+          });
+        } catch (analysisError) {
+          console.warn('Payment operation analysis trigger failed:', analysisError);
+          setSuccessData((previous) => previous ? { ...previous, analysisTriggerFailed: true } : previous);
         }
-
-        // Fire-and-forget background analysis gateway call (non-blocking)
-        callSanadAppFunction('sanad-v3-app-trigger-analysis', {
-          operation_id: opData.id,
-          public_token: opData.public_token,
-          source: 'pwa_upload'
-        }).then(() => {
-          if (isDev) {
-            console.log('[analysis_trigger_success] intermediate analysis function triggered successfully');
-          }
-        }).catch((error) => {
-          if (isDev) {
-            console.warn('[analysis_trigger_failure] failed triggering intermediate analysis function:', error);
-          }
-          setSuccessData(prev => prev ? { ...prev, analysisTriggerFailed: true } : null);
-        });
-
-        if (isDev) {
-          console.log('[final_success] upload flow completed successfully');
-        }
-
-      } catch (err: any) {
-        if (isDev) {
-          console.error('[final_failure] error inside upload flow:', err);
-        }
-        setErrorMessage(err.message || 'تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.');
+      } catch (error) {
+        console.warn('Unified payment upload failed:', error);
+        setErrorMessage(error instanceof Error ? error.message : 'تعذر إنشاء العملية. حاول مرة أخرى.');
       } finally {
-        setUploading(false);
+        setUploadStage('idle');
       }
     };
 
-    if (ensureProfileComplete) {
-      ensureProfileComplete(performUpload);
-    } else {
-      performUpload();
+    if (ensureProfileComplete) ensureProfileComplete(performUpload);
+    else await performUpload();
+  };
+
+  const openDetailsWhenReady = async () => {
+    if (!successData || openingDetails) return;
+    setOpeningDetails(true);
+    setErrorMessage(null);
+
+    const delays = [0, 450, 900, 1800];
+    for (const delay of delays) {
+      if (delay) await sleep(delay);
+      try {
+        const { data, error } = await supabase.rpc('open_operation_access', {
+          p_public_token: successData.publicToken,
+          p_source: 'app',
+        });
+        if (!error && data?.allowed === true && data?.operation) {
+          onNavigateToDetails(successData.publicToken);
+          setOpeningDetails(false);
+          return;
+        }
+      } catch (error) {
+        console.warn('Operation readiness check failed:', error);
+      }
     }
+
+    setOpeningDetails(false);
+    setErrorMessage('تم إنشاء العملية، لكن صفحة التفاصيل لم تصبح جاهزة بعد. افتحها من سجل العمليات بعد لحظات.');
   };
 
   const copyQrUrlToClipboard = () => {
     if (!successData) return;
-    navigator.clipboard.writeText(successData.qrUrl);
+    void navigator.clipboard.writeText(successData.qrUrl);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    window.setTimeout(() => setCopied(false), 2500);
   };
 
   const shareQrUrl = async () => {
     if (!successData) return;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'تحقق من إشعار مالي - سند',
-          text: 'يرجى استخدام هذا الرابط للتحقق من تفاصيل وموثوقية الإشعار المالي عبر تطبيق سند.',
-          url: successData.qrUrl,
-        });
-      } catch (err) {
-        console.log('Error sharing via API:', err);
-      }
-    } else {
+    if (!navigator.share) {
       copyQrUrlToClipboard();
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: 'عملية دفع في سند',
+        text: 'رابط مراجعة عملية الدفع عبر سند.',
+        url: successData.qrUrl,
+      });
+    } catch (error) {
+      if ((error as DOMException)?.name !== 'AbortError') console.warn('Payment link sharing failed:', error);
     }
   };
 
   const resetUpload = () => {
     setFile(null);
     setSuccessData(null);
+    setProcessedSummary(null);
     setErrorMessage(null);
     setCopied(false);
+    setShowQr(false);
   };
 
   return (
-    <div className="space-y-5" id="upload_view">
-      
-      {/* Header */}
-      <div className="text-right">
-        <h2 className="text-base font-bold text-slate-950 font-arabic">رفع إشعار مالي</h2>
-        <p className="text-[11px] text-slate-500 font-arabic mt-1 leading-relaxed">
-          قم بتحميل مستند مالي أصلي (صورة أو PDF) لتوليد رمز التحقق الفوري ومطابقة البيانات آلياً.
+    <div className="space-y-5 font-arabic" id="upload_view" dir="rtl">
+      <header className="text-right">
+        <p className="text-[10px] font-bold text-emerald-700">سند المالي</p>
+        <h2 className="mt-1 text-lg font-bold text-slate-950">إضافة عملية دفع</h2>
+        <p className="mt-1 text-[11px] leading-5 text-slate-500">
+          صوّر أو أضف إشعار دفع أو إيصال ماكينة دفع، وسيُحفظ ضمن سجل عملياتك ويُحلل تلقائيًا.
         </p>
-      </div>
+      </header>
 
       {errorMessage && (
-        <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-2xl text-xs text-right font-arabic">
-          <span className="font-semibold block mb-0.5">تنبيه:</span>
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-right text-xs text-rose-800">
+          <strong className="mb-1 block">تعذر إكمال الإجراء</strong>
           <span>{errorMessage}</span>
         </div>
       )}
 
       {!successData ? (
-        /* Upload Form */
         <form onSubmit={handleUploadSubmit} className="space-y-4" id="upload_form">
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={uploading}
+              className="flex min-h-28 flex-col items-center justify-center rounded-[1.6rem] bg-slate-950 px-3 py-5 text-white shadow-[0_14px_35px_rgba(15,23,42,0.16)] disabled:opacity-50"
+            >
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
+                <Camera className="h-5 w-5" />
+              </span>
+              <strong className="text-xs">التقاط بالكاميرا</strong>
+              <span className="mt-1 text-[9px] text-white/60">إشعار أو إيصال ورقي</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex min-h-28 flex-col items-center justify-center rounded-[1.6rem] border border-slate-200 bg-white px-3 py-5 text-slate-900 shadow-sm disabled:opacity-50"
+            >
+              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100">
+                <ImagePlus className="h-5 w-5" />
+              </span>
+              <strong className="text-xs">اختيار مستند</strong>
+              <span className="mt-1 text-[9px] text-slate-400">صورة أو PDF</span>
+            </button>
+          </div>
+
           <div
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            id="drag_drop_zone"
-            className={`border-2 border-dashed rounded-3xl p-6 text-center cursor-pointer transition-all ${
-              dragActive
-                ? 'border-neutral-800 bg-slate-50/50 scale-[1.01]'
-                : 'border-slate-200 bg-white hover:bg-slate-50/50'
+            className={`rounded-[1.4rem] border border-dashed p-4 transition-all ${
+              dragActive ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-white'
             }`}
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*,application/pdf"
-              className="hidden"
-            />
-            
-            <div className="flex flex-col items-center">
-              <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 mb-3.5 border border-slate-100">
-                <Upload className="w-5 h-5 text-[#111111]" />
+            {file ? (
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                  {file.type === ALLOWED_PDF_TYPE ? <FileText className="h-5 w-5" /> : <FileImage className="h-5 w-5" />}
+                </span>
+                <div className="min-w-0 flex-1 text-right">
+                  <strong className="block truncate text-xs text-slate-900" dir="auto">{file.name}</strong>
+                  <span className="mt-1 block text-[10px] text-slate-400">الحجم الأصلي: {formatMegabytes(file.size)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  disabled={uploading}
+                  className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-600"
+                >
+                  تغيير
+                </button>
               </div>
-              
-              {file ? (
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-emerald-700 font-mono" dir="ltr">{file.name}</p>
-                  <p className="text-[10px] text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-slate-800 font-arabic">اسحب الملف وأفلته هنا أو انقر للاختيار</p>
-                  <p className="text-[10px] text-slate-400 font-arabic">يدعم الصور ومستندات PDF حتى 10 ميجابايت</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 py-2 text-[10px] text-slate-400">
+                <UploadCloud className="h-4 w-4" />
+                <span>يمكنك أيضًا سحب المستند وإفلاته هنا</span>
+              </div>
+            )}
           </div>
 
           {file && (
-            <button
-              type="submit"
-              disabled={uploading}
-              id="upload_submit_btn"
-              className="w-full bg-[#111111] hover:bg-black disabled:bg-slate-300 text-white font-bold py-3 px-4 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs font-arabic"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                  <span>جاري رفع وتوثيق المستند...</span>
-                </>
-              ) : (
-                <>
-                  <FileCode className="w-4 h-4 text-white" />
-                  <span>توليد وتوثيق الإشعار المالي</span>
-                </>
-              )}
-            </button>
+            <div className="rounded-2xl bg-sky-50 px-4 py-3 text-[10px] leading-5 text-sky-900">
+              تُحسّن الصور الكبيرة تلقائيًا إلى WebP قبل الرفع، مع الحفاظ على وضوح النصوص والأرقام. ملفات PDF تبقى كما هي.
+            </div>
           )}
+
+          <button
+            type="submit"
+            disabled={!file || uploading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111111] px-4 py-3.5 text-xs font-bold text-white shadow-sm transition-all disabled:bg-slate-300"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+            <span>{uploading ? stageLabels[uploadStage] : 'إنشاء عملية الدفع'}</span>
+          </button>
         </form>
       ) : (
-        /* Success screen - Elegant, minimal PWA Style */
-        <div className="bg-white rounded-3xl border border-slate-200/60 p-5 text-center space-y-4 animate-fade-in" id="success_qr_screen">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
+        <section className="space-y-4 rounded-[1.8rem] border border-slate-200/70 bg-white p-5 text-center shadow-sm" id="success_qr_screen">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-emerald-600">
+            <CheckCircle2 className="h-6 w-6" />
+          </span>
 
-          <div className="space-y-1">
-            <h2 className="text-sm font-bold text-slate-950 font-arabic">تم الرفع والتوثيق بنجاح</h2>
-            <p className="text-[10px] text-slate-500 leading-relaxed font-arabic px-3">
-              تم تشفير المستند المالي بأمان وتوليد رابط التحقق الموثق. شارك الرابط أو رمز الاستجابة.
+          <div>
+            <h2 className="text-base font-bold text-slate-950">تم إنشاء العملية بنجاح</h2>
+            <p className="mt-1 px-2 text-[10px] leading-5 text-slate-500">
+              حُفظ المستند وبدأ تحليل بياناته. افتح التفاصيل لمراجعة النتائج ثم سجل تحققك من العملية.
             </p>
           </div>
 
-          {successData.analysisTriggerFailed && (
-            <div className="p-2.5 bg-amber-50 border border-amber-100 rounded-xl text-[10px] text-amber-800 font-bold font-arabic">
-              تم رفع الإشعار بنجاح، لكن تعذر بدء التحليل تلقائياً. يمكنك المحاولة لاحقاً.
+          {processedSummary?.compressionApplied && (
+            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-right text-[10px] text-emerald-800">
+              <strong className="block">تم تحسين الصورة قبل الرفع</strong>
+              <span className="mt-1 block">
+                {formatMegabytes(processedSummary.originalSize)} ← {formatMegabytes(processedSummary.processedSize)} بصيغة WebP
+              </span>
             </div>
           )}
 
-          {/* QR Render block */}
-          <div className="flex flex-col items-center justify-center py-1">
-            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+          {successData.analysisTriggerFailed && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-[10px] font-bold text-amber-800">
+              تم إنشاء العملية، لكن تعذر بدء التحليل تلقائيًا. ستظل العملية محفوظة ويمكن إعادة المحاولة لاحقًا.
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={openDetailsWhenReady}
+            disabled={openingDetails}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3.5 text-xs font-bold text-white shadow-sm disabled:opacity-60"
+          >
+            {openingDetails ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            <span>{openingDetails ? 'جاري تجهيز التفاصيل…' : 'فتح تفاصيل العملية'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowQr((current) => !current)}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-bold text-slate-700"
+          >
+            <QrCode className="h-4 w-4" />
+            <span>{showQr ? 'إخفاء رابط وQR' : 'عرض رابط وQR للمشاركة'}</span>
+          </button>
+
+          {showQr && (
+            <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
               <img
                 src={successData.localQrCodeDataUrl}
-                alt="رمز الاستجابة السريعة"
-                className="w-40 h-40 object-contain"
+                alt="رمز العملية"
+                className="mx-auto h-36 w-36 rounded-xl bg-white p-2 object-contain"
               />
-            </div>
-          </div>
-
-          {/* Shareable field */}
-          <div className="space-y-1 text-right">
-            <span className="block text-[10px] font-bold text-slate-400 mr-1 font-arabic">رابط التحقق المباشر</span>
-            <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 pr-3">
-              <div className="flex-1 text-left font-mono text-[10px] text-slate-600 truncate break-all px-1.5 select-all" dir="ltr">
-                {successData.qrUrl}
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 pr-3">
+                <div className="min-w-0 flex-1 truncate px-1 text-left font-mono text-[9px] text-slate-500" dir="ltr">
+                  {successData.qrUrl}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyQrUrlToClipboard}
+                  className={`flex h-8 shrink-0 items-center gap-1 rounded-lg px-3 text-[10px] font-bold ${
+                    copied ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-950 text-white'
+                  }`}
+                >
+                  {copied ? <Check className="h-3 w-3" /> : <Clipboard className="h-3 w-3" />}
+                  <span>{copied ? 'تم النسخ' : 'نسخ'}</span>
+                </button>
               </div>
               <button
                 type="button"
-                onClick={copyQrUrlToClipboard}
-                className={`shrink-0 h-7.5 px-3 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all ${
-                  copied 
-                    ? 'bg-emerald-50 text-emerald-700' 
-                    : 'bg-[#111111] hover:bg-black text-white'
-                }`}
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-3 h-3" />
-                    <span>تم النسخ</span>
-                  </>
-                ) : (
-                  <>
-                    <Clipboard className="w-3 h-3" />
-                    <span>نسخ</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Navigation Controls */}
-          <div className="pt-4 border-t border-slate-100 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
                 onClick={shareQrUrl}
-                className="bg-[#111111] hover:bg-black text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-[11px] font-arabic"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-[10px] font-bold text-white"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>مشاركة الرابط</span>
-              </button>
-
-              <button
-                onClick={() => onNavigateToDetails(successData.publicToken)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-[11px] font-arabic"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>فتح التفاصيل</span>
+                <Share2 className="h-3.5 w-3.5" /> مشاركة الرابط
               </button>
             </div>
+          )}
 
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
             <button
+              type="button"
               onClick={() => onNavigate('my-operations')}
-              className="w-full bg-[#111111] hover:bg-black text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-xs font-arabic"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2.5 text-[10px] font-bold text-white"
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>الذهاب إلى سجل العمليات</span>
+              <FileText className="h-3.5 w-3.5" /> سجل العمليات
             </button>
-
             <button
+              type="button"
               onClick={resetUpload}
-              className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer text-xs font-arabic"
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[10px] font-bold text-slate-700"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>رفع إشعار آخر</span>
+              <RefreshCw className="h-3.5 w-3.5" /> إضافة عملية أخرى
             </button>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
