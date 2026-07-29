@@ -39,6 +39,5 @@ Path('docs/v91-camera-icon-plan.md').write_text(
     encoding='utf-8',
 )
 
-# Remove the one-time patch machinery from the resulting source commit.
 Path('scripts/apply-v91-release.py').unlink(missing_ok=True)
 Path('.github/workflows/apply-v91-source-patch.yml').unlink(missing_ok=True)
