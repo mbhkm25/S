@@ -64,21 +64,39 @@ function timePart(value: string | null): string | null {
   return match?.[1] || null;
 }
 
+/**
+ * Resolve the wall-clock date and time printed in the financial document.
+ *
+ * `transaction_datetime` is a timestamptz and PostgreSQL serializes it in UTC.
+ * It must never be sliced directly to obtain the displayed local time. Prefer
+ * the canonical local columns, then the explicit AI datetime kept in
+ * structured_data, and use the stored timestamptz only as a legacy date
+ * fallback.
+ */
 export function resolveOperationTemporal(operation: OperationTemporalFields | null | undefined): ResolvedOperationTemporal {
   const structured = operation?.structured_data || {};
-  const rawDateTime = asText(operation?.transaction_datetime)
-    || asText(structured.transaction_datetime);
+  const canonicalDate = asText(operation?.transaction_date);
+  const canonicalTime = asText(operation?.transaction_time);
+  const structuredDate = asText(structured.transaction_date);
+  const structuredTime = asText(structured.transaction_time);
+  const structuredDateTime = asText(structured.transaction_datetime);
+  const storedDateTime = asText(operation?.transaction_datetime);
+
   const explicitFlag = asBoolean(operation?.transaction_time_present)
     ?? asBoolean(structured.transaction_time_present)
     ?? false;
-  const date = asText(operation?.transaction_date)
-    || asText(structured.transaction_date)
-    || datePart(rawDateTime);
+
+  const date = canonicalDate
+    || structuredDate
+    || datePart(structuredDateTime)
+    || datePart(storedDateTime);
+
   const time = explicitFlag
-    ? asText(operation?.transaction_time)
-      || asText(structured.transaction_time)
-      || timePart(rawDateTime)
+    ? canonicalTime
+      || structuredTime
+      || timePart(structuredDateTime)
     : null;
+
   const timePresent = Boolean(explicitFlag && time);
   const source = asText(operation?.transaction_date_source)
     || asText(structured.transaction_date_source)
