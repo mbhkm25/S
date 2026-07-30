@@ -1,5 +1,6 @@
 begin;
 
+-- Safety invariant: only stale or expired phone-verification deliveries are recovered here.
 create or replace function public.recover_stale_phone_verification_deliveries()
 returns integer
 language plpgsql
