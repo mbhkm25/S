@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#071a17" />
+  <meta name="description" content="احفظ جهة اتصال سند، افتح واتساب، أو ثبّت تطبيق سند." />
+  <title>تواصل مع سند</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+    :root{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;color:#f7fbfa;background:#071a17}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#103a32 0,transparent 35%),linear-gradient(160deg,#071a17 0%,#0b241f 60%,#071a17 100%);display:grid;place-items:center;padding:24px}
+    main{width:min(100%,430px)}
+    .card{background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:28px 22px 22px;box-shadow:0 24px 70px rgba(0,0,0,.28);backdrop-filter:blur(18px)}
+    .logo{display:block;width:78px;height:78px;object-fit:contain;margin:0 auto 18px;border-radius:22px;background:#fff;padding:8px}
+    h1{font-size:28px;line-height:1.35;text-align:center;margin:0 0 10px}
+    .lead{color:#cce0da;text-align:center;line-height:1.9;margin:0 auto 24px;max-width:330px}
+    .actions{display:grid;gap:12px}
+    .btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:58px;padding:14px 16px;border-radius:17px;text-decoration:none;font-weight:700;font-size:16px;transition:transform .15s ease,filter .15s ease;border:1px solid transparent}
+    .btn:active{transform:scale(.985)}
+    .primary{background:#f3b63d;color:#172018}
+    .whatsapp{background:#21c063;color:#06140c}
+    .secondary{background:rgba(255,255,255,.07);color:#fff;border-color:rgba(255,255,255,.15)}
+    .hint{display:flex;align-items:flex-start;gap:9px;margin:20px 2px 0;color:#a9c3bc;font-size:13px;line-height:1.7}
+    .brand{margin:20px 0 0;text-align:center;color:#83a69c;font-size:13px}
+    .source{display:none}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" aria-labelledby="page-title">
+      <img class="logo" src="/icon-192.png" alt="شعار سند" />
+      <h1 id="page-title">تواصل مع سند</h1>
+      <p class="lead">احفظ جهة اتصال سند، ثم شارك إشعار الدفع عبر واتساب دون تسليم هاتفك للكاشير.</p>
+
+      <div class="actions">
+        <a class="btn primary" href="/sanad-contact.vcf" download data-event="save_contact">حفظ جهة اتصال سند</a>
+        <a class="btn whatsapp" id="whatsapp-link" href="https://wa.me/967783331387?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%20%D8%B3%D9%86%D8%AF%D8%8C%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A5%D8%B1%D8%B3%D8%A7%D9%84%20%D8%A5%D8%B4%D8%B9%D8%A7%D8%B1%20%D8%AF%D9%81%D8%B9." target="_blank" rel="noopener" data-event="open_whatsapp">فتح محادثة واتساب</a>
+        <a class="btn secondary" href="/install" data-event="install_app">تثبيت تطبيق سند</a>
+      </div>
+
+      <div class="hint">يمكنك الاحتفاظ بهذا الرابط أو مشاركته. سيبقى رمز QR نفسه صالحًا حتى عند تحديث رقم التواصل أو الخدمات لاحقًا.</div>
+      <p class="brand">سند ينظم ما يحدث بعد الدفع الإلكتروني.</p>
+      <span class="source" id="source-label" aria-hidden="true"></span>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const source = params.get('source') || 'direct';
+      const business = params.get('business') || '';
+      const campaign = params.get('campaign') || '';
+
+      function track(eventName) {
+        const payload = {
+          event: 'sanad_contact_' + eventName,
+          source: source,
+          business: business,
+          campaign: campaign,
+          page_path: window.location.pathname
+        };
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push(payload);
+        try {
+          const key = 'sanad_contact_events';
+          const previous = JSON.parse(localStorage.getItem(key) || '[]');
+          previous.push(Object.assign({ at: new Date().toISOString() }, payload));
+          localStorage.setItem(key, JSON.stringify(previous.slice(-30)));
+        } catch (_) {}
+      }
+
+      track('view');
+      document.querySelectorAll('[data-event]').forEach(function (element) {
+        element.addEventListener('click', function () {
+          track(element.getAttribute('data-event'));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
