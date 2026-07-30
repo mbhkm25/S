@@ -26,7 +26,7 @@ jobs:
           deno-version: v2.x
 
       - name: Type-check report renderer
-        run: deno check supabase/functions/sanad-v3-process-report-v2/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/sanad-v3-process-report-v2/index.ts
 
       - name: Enforce canonical-logo rendering contract
         shell: bash
