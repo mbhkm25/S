@@ -270,15 +270,7 @@ jobs:
             "release/sanad-v${SANAD_ANDROID_VERSION}.apk" \
             "$DEPLOY_USER@$HOST:$REMOTE_TMP/"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
-            "set -euo pipefail; \
-             sudo install -d -m 755 /var/www/app.sanadflow.com/shared/downloads; \
-             sudo install -m 644 '$REMOTE_TMP/sanad-latest.apk' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.apk; \
-             sudo install -m 644 '$REMOTE_TMP/sanad-latest.apk.sha256' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.apk.sha256; \
-             sudo install -m 644 '$REMOTE_TMP/sanad-latest.json' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.json; \
-             sudo install -m 644 '$REMOTE_TMP/sanad-v${SANAD_ANDROID_VERSION}.apk' '/var/www/app.sanadflow.com/shared/downloads/sanad-v${SANAD_ANDROID_VERSION}.apk'; \
-             sudo rm -rf /var/www/app.sanadflow.com/html/downloads; \
-             sudo ln -s ../shared/downloads /var/www/app.sanadflow.com/html/downloads; \
-             rm -rf '$REMOTE_TMP'"
+            "sudo /usr/local/sbin/sanad-publish-android-apk '$REMOTE_TMP' '$SANAD_ANDROID_VERSION'"
 
       - name: Verify public APK download
         shell: bash
