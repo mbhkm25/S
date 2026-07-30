@@ -31,6 +31,31 @@ function resolveVendorChunk(id: string): string | undefined {
   return 'vendor';
 }
 
+function contactRoutePlugin() {
+  const rewriteContactRoute = (
+    req: { url?: string },
+    _res: unknown,
+    next: () => void
+  ) => {
+    if (req.url === '/contact' || req.url?.startsWith('/contact?')) {
+      req.url = `/contact/index.html${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+    } else if (req.url === '/contact/') {
+      req.url = '/contact/index.html';
+    }
+    next();
+  };
+
+  return {
+    name: 'sanad-contact-route',
+    configureServer(server: { middlewares: { use: (handler: typeof rewriteContactRoute) => void } }) {
+      server.middlewares.use(rewriteContactRoute);
+    },
+    configurePreviewServer(server: { middlewares: { use: (handler: typeof rewriteContactRoute) => void } }) {
+      server.middlewares.use(rewriteContactRoute);
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const base = env.VITE_APP_BASE_PATH || '/';
@@ -44,6 +69,7 @@ export default defineConfig(({ mode }) => {
       __SANAD_BUILD_TIME__: JSON.stringify(buildTime)
     },
     plugins: [
+      contactRoutePlugin(),
       react(),
       tailwindcss(),
       {
