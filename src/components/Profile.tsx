@@ -85,10 +85,9 @@ export default function Profile(props: Props) {
   return (
     <div className={view === 'overview' ? 'profile-overview-shell' : undefined}>
       <ProfileV2 {...props} />
+      <PhoneVerificationStatusCard profile={props.profile} refreshProfile={props.refreshProfile} />
       {view === 'overview' && (
         <div className="mt-5 space-y-4">
-          <PhoneVerificationStatusCard profile={props.profile} refreshProfile={props.refreshProfile} />
-
           <button
             type="button"
             onClick={openOperationsCenter}
