@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react';
 import { BookOpenCheck, ChevronLeft, Power } from 'lucide-react';
 import MyBusinessRelationshipsOverview from './business/MyBusinessRelationshipsOverview';
 import OperationsCenter from './OperationsCenter';
+import PhoneVerificationStatusCard from './PhoneVerificationStatusCard';
 import ProfileV2 from './ProfileV2';
 
 type Props = ComponentProps<typeof ProfileV2>;
@@ -84,6 +85,7 @@ export default function Profile(props: Props) {
   return (
     <div className={view === 'overview' ? 'profile-overview-shell' : undefined}>
       <ProfileV2 {...props} />
+      <PhoneVerificationStatusCard profile={props.profile} refreshProfile={props.refreshProfile} />
       {view === 'overview' && (
         <div className="mt-5 space-y-4">
           <button
