@@ -8,6 +8,7 @@ on:
       - 'android/**'
       - 'src/**'
       - 'scripts/prepare-v91-build.py'
+      - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -21,6 +22,7 @@ on:
       - 'android/**'
       - 'src/**'
       - 'scripts/prepare-v91-build.py'
+      - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -59,6 +61,9 @@ jobs:
           java-version: '21'
           cache: gradle
 
+      - name: Set up icon generator
+        run: python -m pip install --disable-pip-version-check Pillow
+
       - name: Install dependencies
         run: npm ci
 
@@ -67,9 +72,9 @@ jobs:
           npm run lint
           npm run check:routes
 
-      - name: Build Android web assets
+      - name: Build Android web assets and canonical icons
         env:
-          VITE_APP_VERSION: '91'
+          VITE_APP_VERSION: '92'
         run: npm run build:android
 
       - name: Sync Capacitor Android project
@@ -86,17 +91,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v91-field-test.apk
-          sha256sum release/sanad-v91-field-test.apk | tee release/sanad-v91-field-test.apk.sha256
-          printf 'version=91\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v92-field-test.apk
+          sha256sum release/sanad-v92-field-test.apk | tee release/sanad-v92-field-test.apk.sha256
+          printf 'version=92\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
             "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             > release/build-info.txt
-          test -s release/sanad-v91-field-test.apk
+          test -s release/sanad-v92-field-test.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-v91-field-test-apk
+          name: sanad-v92-field-test-apk
           path: release/
           if-no-files-found: error
           retention-days: 14
