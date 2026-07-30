@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             services/push-worker/package-lock.json
+      - name: Set up Android icon generator
+        run: python -m pip install --disable-pip-version-check Pillow
       - name: Install application dependencies
         run: npm ci
       - name: Type-check application
