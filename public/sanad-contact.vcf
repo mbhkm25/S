@@ -1,9 +1,10 @@
 BEGIN:VCARD
 VERSION:3.0
-N:SANAD;سند;;;
+N:سند;SANAD;;;
 FN:سند | SANAD
-ORG:SANAD
+ORG:سند
+TITLE:تنظيم إشعارات الدفع الإلكتروني
 TEL;TYPE=CELL,VOICE,WHATSAPP:+967783331387
 URL:https://sanadflow.com
-NOTE:شارك إشعار الدفع مع سند لتنظيمه وتوثيقه بعد الدفع الإلكتروني.
+NOTE:احفظ سند مرة واحدة، ثم شارك إليه إشعار الدفع بعد كل عملية دفع إلكتروني بدل تسليم هاتفك للكاشير.
 END:VCARD
