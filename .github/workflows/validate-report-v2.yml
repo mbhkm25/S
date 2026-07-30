@@ -1,0 +1,64 @@
+name: Validate report V2
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/sanad-v3-process-report-v2/**'
+      - 'supabase/functions/_shared/financialEntityReportAssets.ts'
+      - 'supabase/migrations/*report_payload_v2*.sql'
+      - '.github/workflows/validate-report-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-report-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check report renderer
+        run: deno check supabase/functions/sanad-v3-process-report-v2/index.ts
+
+      - name: Enforce canonical-logo rendering contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='supabase/functions/sanad-v3-process-report-v2/index.ts'
+          ASSETS='supabase/functions/_shared/financialEntityReportAssets.ts'
+          grep -q 'object-fit:contain' "$SOURCE"
+          grep -q 'filter:none' "$SOURCE"
+          grep -q 'transform:none' "$SOURCE"
+          grep -q 'never crops' "$ASSETS"
+          grep -q 'alamqi-mobile.webp' "$ASSETS"
+          grep -q 'alkuraimi-hasib.webp' "$ASSETS"
+          grep -q 'bindawol-exchange.webp' "$ASSETS"
+
+      - name: Enforce secure report payload contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          MIGRATION='supabase/migrations/20260730195000_add_report_payload_v2.sql'
+          grep -q "'file_available'" "$MIGRATION"
+          grep -q "'file_mime_type'" "$MIGRATION"
+          grep -q "'file_original_name'" "$MIGRATION"
+          ! grep -q "'file_path'," "$MIGRATION"
+          ! grep -q "'file_bucket'," "$MIGRATION"
+          ! grep -qi "signed_url" "$MIGRATION"
+
+      - name: Enforce interactive-link contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE='supabase/functions/sanad-v3-process-report-v2/index.ts'
+          grep -q '/v/' "$SOURCE"
+          grep -q 'openFile=1&src=report_pdf' "$SOURCE"
+          grep -q 'report_template_version: "operations-v2"' "$SOURCE"
