@@ -94,18 +94,20 @@ jobs:
           [[ -n "$DEPLOY_USER" ]]
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
-            "set -euo pipefail; \
-             sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'; \
-             sudo install -d -m 755 /var/www/app.sanadflow.com/shared/downloads; \
-             sudo rm -rf /var/www/app.sanadflow.com/html/downloads; \
-             sudo ln -s ../shared/downloads /var/www/app.sanadflow.com/html/downloads"
+            "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
 
       - name: Verify published release
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
-            curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/ >/dev/null && exit 0
+            APP_OK=0
+            APK_OK=0
+            curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/ >/dev/null && APP_OK=1
+            curl --fail --silent --show-error --location --head --max-time 30 https://app.sanadflow.com/downloads/sanad-latest.apk >/dev/null && APK_OK=1
+            if [[ "$APP_OK" -eq 1 && "$APK_OK" -eq 1 ]]; then
+              exit 0
+            fi
             sleep 5
           done
           exit 1
