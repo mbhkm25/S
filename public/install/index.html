@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111827">
-  <meta name="robots" content="index,follow">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
   <title>تثبيت تطبيق سند</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/icon-192.png">
@@ -12,322 +12,59 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #111827;
-      background: #f5f5f1;
-      --ink: #111827;
-      --muted: #667085;
-      --line: #e5e7eb;
-      --surface: rgba(255,255,255,.97);
-      --soft: #f3f4f6;
-      --green: #087a55;
-      --green-soft: #eafaf3;
-      --blue: #273a8a;
-      --blue-soft: #edf0ff;
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at 50% -10%, #fff 0, rgba(255,255,255,.72) 34%, transparent 58%),
-        linear-gradient(180deg, #f8f8f5 0%, #efefe9 100%);
-    }
-    button, a { -webkit-tap-highlight-color: transparent; }
-    main { width: min(100%, 680px); margin: 0 auto; padding: 22px 16px 44px; }
-    .brand { display: flex; justify-content: center; margin: 4px 0 18px; }
-    .brand img { width: min(190px, 46vw); height: auto; object-fit: contain; }
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 28px;
-      box-shadow: 0 18px 55px rgba(17,24,39,.07);
-    }
-    .hero { padding: 28px 22px 24px; text-align: center; }
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      margin-bottom: 14px;
-      padding: 7px 11px;
-      border-radius: 999px;
-      background: var(--green-soft);
-      color: var(--green);
-      font-size: 13px;
-      font-weight: 700;
-    }
-    h1 { margin: 0; font-size: clamp(29px, 8vw, 44px); line-height: 1.28; }
-    .lead { margin: 12px auto 0; max-width: 540px; color: var(--muted); line-height: 1.9; }
-    .choices { display: grid; gap: 12px; margin-top: 22px; text-align: right; }
-    .choice {
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: #fff;
-    }
-    .choice.recommended { border-color: #a7e8cd; box-shadow: inset 0 0 0 1px #d7f6e8; }
-    .choice-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-    .choice h2 { margin: 0; font-size: 19px; }
-    .choice p { margin: 7px 0 0; color: var(--muted); font-size: 14px; line-height: 1.75; }
-    .badge {
-      flex: 0 0 auto;
-      padding: 5px 9px;
-      border-radius: 999px;
-      background: var(--green-soft);
-      color: var(--green);
-      font-size: 11px;
-      font-weight: 700;
-    }
-    .meta { min-height: 20px; margin-top: 9px; color: #475467; font-size: 12px; direction: ltr; text-align: right; }
-    .actions { display: grid; gap: 9px; margin-top: 13px; }
-    .btn {
-      width: 100%;
-      min-height: 50px;
-      display: inline-flex;
-      justify-content: center;
-      align-items: center;
-      gap: 8px;
-      padding: 13px 16px;
-      border: 0;
-      border-radius: 15px;
-      font: inherit;
-      font-weight: 700;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .btn:active { transform: scale(.987); }
-    .btn-primary { background: var(--ink); color: #fff; }
-    .btn-secondary { background: var(--blue-soft); color: var(--blue); }
-    .btn-light { background: var(--soft); color: #344054; }
-    .btn[disabled], .btn[aria-disabled="true"] { opacity: .58; cursor: not-allowed; }
-    .status {
-      margin-top: 14px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      background: #f9fafb;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.75;
-      text-align: right;
-    }
-    .status.success { background: var(--green-soft); color: var(--green); }
-    .status.warning { background: #fff7ed; color: #9a3412; }
-    .guide { margin-top: 14px; padding: 20px; }
-    .guide[hidden] { display: none; }
-    .guide h2 { margin: 0 0 8px; font-size: 20px; }
-    .guide p { margin: 0; color: var(--muted); line-height: 1.8; }
-    .steps { display: grid; gap: 10px; margin-top: 14px; }
-    .step { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 12px; border-radius: 14px; background: var(--soft); }
-    .step-number { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: #fff; border: 1px solid var(--line); font-weight: 700; }
-    .step strong { display: block; margin-bottom: 3px; }
-    .step span { color: var(--muted); font-size: 13px; line-height: 1.7; }
-    footer { margin-top: 20px; color: #98a2b3; font-size: 12px; text-align: center; }
-    [hidden] { display: none !important; }
-    @media (min-width: 640px) {
-      main { padding-top: 32px; }
-      .hero { padding: 34px; }
-      .choices { grid-template-columns: 1fr 1fr; }
-    }
+    :root{font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;color:#111827;background:#f4f4ef;--ink:#111827;--muted:#667085;--line:#e5e7eb;--green:#087a55;--green-soft:#eafaf3;--blue:#273a8a;--blue-soft:#edf0ff}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -10%,#fff 0,rgba(255,255,255,.72) 34%,transparent 58%),linear-gradient(180deg,#f8f8f5,#efefe9)}
+    main{width:min(100%,680px);margin:auto;padding:22px 16px 44px}.brand{display:flex;justify-content:center;margin:4px 0 18px}.brand img{width:min(190px,46vw);height:auto;object-fit:contain}
+    .panel{background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:28px;box-shadow:0 18px 55px rgba(17,24,39,.07)}.hero{padding:28px 22px 24px;text-align:center}
+    .eyebrow{display:inline-flex;margin-bottom:14px;padding:7px 11px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:700}h1{margin:0;font-size:clamp(29px,8vw,44px);line-height:1.28}.lead{margin:12px auto 0;max-width:540px;color:var(--muted);line-height:1.9}
+    .choices{display:grid;gap:12px;margin-top:22px;text-align:right}.choice{padding:16px;border:1px solid var(--line);border-radius:20px;background:#fff}.choice.recommended{border-color:#a7e8cd;box-shadow:inset 0 0 0 1px #d7f6e8}.choice-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.choice h2{margin:0;font-size:19px}.choice p{margin:7px 0 0;color:var(--muted);font-size:14px;line-height:1.75}.badge{padding:5px 9px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:11px;font-weight:700}.meta{min-height:20px;margin-top:9px;color:#475467;font-size:12px;direction:ltr;text-align:right}
+    .actions{display:grid;gap:9px;margin-top:13px}.btn{width:100%;min-height:50px;display:inline-flex;justify-content:center;align-items:center;gap:8px;padding:13px 16px;border:0;border-radius:15px;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}.btn:active{transform:scale(.987)}.btn-primary{background:var(--ink);color:#fff}.btn-secondary{background:var(--blue-soft);color:var(--blue)}.btn-light{background:#f3f4f6;color:#344054}.btn-outline{background:#fff;color:var(--green);border:1px solid #b7ead5}
+    .status{margin-top:14px;padding:12px 14px;border-radius:14px;background:#f9fafb;color:var(--muted);font-size:13px;line-height:1.75;text-align:right}.status.success{background:var(--green-soft);color:var(--green)}.status.warning{background:#fff7ed;color:#9a3412}.guide{margin-top:14px;padding:20px}.guide[hidden]{display:none}.guide h2{margin:0 0 8px;font-size:20px}.guide p{margin:0;color:var(--muted);line-height:1.8}.steps{display:grid;gap:10px;margin-top:14px}.step{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:12px;border-radius:14px;background:#f3f4f6}.step-number{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#fff;border:1px solid var(--line);font-weight:700}.step strong{display:block;margin-bottom:3px}.step span{color:var(--muted);font-size:13px;line-height:1.7}footer{margin-top:20px;color:#98a2b3;font-size:12px;text-align:center}[hidden]{display:none!important}
+    @media(min-width:640px){main{padding-top:32px}.hero{padding:34px}.choices{grid-template-columns:1fr 1fr}}
   </style>
 </head>
 <body>
-  <main>
-    <div class="brand">
-      <img src="/install-assets/sanad_logo.webp" alt="شعار سند" width="190" height="96">
-    </div>
-
-    <section class="panel hero">
-      <div class="eyebrow">نسخة Android مباشرة ونسخة ويب</div>
-      <h1>ثبّت تطبيق سند</h1>
-      <p class="lead">اختر الطريقة الأنسب لجهازك. نسخة Android هي الخيار الموصى به للكاشيرات لضمان عمل الكاميرا والمشاركة وفتح الروابط بصورة مستقرة.</p>
-
-      <div class="choices">
-        <article id="apkChoice" class="choice recommended">
-          <div class="choice-head">
-            <div>
-              <h2>تطبيق سند لأندرويد</h2>
-              <p>ملف APK مباشر للتثبيت على هواتف Android.</p>
-            </div>
-            <span class="badge">موصى به</span>
-          </div>
-          <div id="apkMeta" class="meta">جارٍ التحقق من أحدث نسخة…</div>
-          <div class="actions">
-            <a id="apkDownloadButton" class="btn btn-primary" href="/downloads/sanad-latest.apk" download="sanad-latest.apk" aria-disabled="true">تنزيل تطبيق سند APK</a>
-          </div>
-        </article>
-
-        <article class="choice">
-          <div class="choice-head">
-            <div>
-              <h2>نسخة الويب PWA</h2>
-              <p>تثبيت سند من المتصفح على الشاشة الرئيسية.</p>
-            </div>
-          </div>
-          <div class="actions">
-            <button id="pwaInstallButton" class="btn btn-secondary" type="button">جارٍ تجهيز التثبيت…</button>
-            <a class="btn btn-light" href="/">فتح سند في المتصفح</a>
-          </div>
-        </article>
-      </div>
-
-      <div id="status" class="status" role="status" aria-live="polite">يتم الآن تحديد أفضل طريقة للتثبيت على جهازك.</div>
-    </section>
-
-    <section id="guide" class="panel guide" hidden>
-      <h2 id="guideTitle">طريقة التثبيت</h2>
-      <p id="guideIntro"></p>
-      <div id="guideSteps" class="steps"></div>
-    </section>
-
-    <footer>app.sanadflow.com — تطبيق سند</footer>
-  </main>
-
-  <script>
-    const ua = navigator.userAgent || "";
-    const isAndroid = /Android/i.test(ua);
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    const isSamsung = /SamsungBrowser/i.test(ua);
-    const isInAppBrowser = /WhatsApp|FBAN|FBAV|Instagram/i.test(ua);
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-
-    const apkChoice = document.getElementById("apkChoice");
-    const apkMeta = document.getElementById("apkMeta");
-    const apkDownloadButton = document.getElementById("apkDownloadButton");
-    const pwaInstallButton = document.getElementById("pwaInstallButton");
-    const status = document.getElementById("status");
-    const guide = document.getElementById("guide");
-    const guideTitle = document.getElementById("guideTitle");
-    const guideIntro = document.getElementById("guideIntro");
-    const guideSteps = document.getElementById("guideSteps");
-    let deferredPrompt = null;
-
-    function latin(value) {
-      return String(value ?? "").replace(/[٠-٩]/g, digit => "٠١٢٣٤٥٦٧٨٩".indexOf(digit)).replace(/[۰-۹]/g, digit => "۰۱۲۳۴۵۶۷۸۹".indexOf(digit));
-    }
-
-    function formatBytes(bytes) {
-      const number = Number(bytes);
-      if (!Number.isFinite(number) || number <= 0) return "";
-      return `${(number / 1024 / 1024).toFixed(1)} MB`;
-    }
-
-    function setStatus(message, type = "") {
-      status.textContent = message;
-      status.className = `status ${type}`.trim();
-    }
-
-    function showGuide(title, intro, items) {
-      guide.hidden = false;
-      guideTitle.textContent = title;
-      guideIntro.textContent = intro;
-      guideSteps.innerHTML = items.map((item, index) => `
-        <div class="step">
-          <div class="step-number">${index + 1}</div>
-          <div><strong>${item.title}</strong><span>${item.text}</span></div>
+<main>
+  <div class="brand"><img src="/install-assets/sanad_logo.webp" alt="شعار سند" width="190" height="96"></div>
+  <section class="panel hero">
+    <div class="eyebrow">نسخة Android مباشرة ونسخة ويب</div>
+    <h1>ثبّت تطبيق سند</h1>
+    <p class="lead">نسخة Android هي الخيار الموصى به للكاشيرات لضمان عمل الكاميرا والمشاركة وفتح الروابط بصورة مستقرة.</p>
+    <div class="choices">
+      <article id="apkChoice" class="choice recommended">
+        <div class="choice-head"><div><h2>تطبيق سند لأندرويد</h2><p>ملف APK مباشر للتثبيت على هواتف Android.</p></div><span class="badge">موصى به</span></div>
+        <div id="apkMeta" class="meta">جارٍ قراءة معلومات أحدث نسخة…</div>
+        <div class="actions">
+          <a id="apkDownloadButton" class="btn btn-primary" href="/downloads/sanad-latest.apk" download="sanad-latest.apk">تنزيل تطبيق سند APK</a>
+          <button id="retryApkButton" class="btn btn-outline" type="button" hidden>إعادة فحص معلومات النسخة</button>
         </div>
-      `).join("");
-    }
-
-    async function loadApkRelease() {
-      if (isIOS) {
-        apkChoice.hidden = true;
-        return;
-      }
-      try {
-        const response = await fetch(`/downloads/sanad-latest.json?t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) throw new Error("release_unavailable");
-        const release = await response.json();
-        const version = latin(release.version || release.version_code || "");
-        const size = formatBytes(release.size_bytes);
-        apkMeta.textContent = [`V${version}`, size].filter(Boolean).join(" • ");
-        apkDownloadButton.href = release.download_url || "/downloads/sanad-latest.apk";
-        apkDownloadButton.setAttribute("download", release.filename || "sanad-latest.apk");
-        apkDownloadButton.removeAttribute("aria-disabled");
-      } catch (error) {
-        apkMeta.textContent = "نسخة Android غير متاحة للتحميل الآن.";
-        apkDownloadButton.setAttribute("aria-disabled", "true");
-        apkDownloadButton.addEventListener("click", event => event.preventDefault(), { once: true });
-      }
-    }
-
-    apkDownloadButton.addEventListener("click", event => {
-      if (apkDownloadButton.getAttribute("aria-disabled") === "true") {
-        event.preventDefault();
-        return;
-      }
-      setStatus("بدأ تنزيل تطبيق سند. بعد اكتمال التنزيل افتح الملف ووافق على التثبيت.", "success");
-      showGuide("تثبيت ملف APK", "قد يطلب Android السماح بالتثبيت من هذا المصدر لأول مرة.", [
-        { title: "افتح الملف بعد التنزيل", text: "اضغط على ملف sanad-latest.apk من إشعار التنزيل أو تطبيق الملفات." },
-        { title: "اسمح بالتثبيت عند الطلب", text: "فعّل السماح لهذا المتصفح بتثبيت التطبيقات، ثم عد إلى شاشة التثبيت." },
-        { title: "اضغط تثبيت", text: "بعد اكتمال التثبيت افتح سند وسجّل الدخول إلى حسابك." }
-      ]);
-    });
-
-    if (isStandalone) {
-      pwaInstallButton.hidden = true;
-      setStatus("نسخة الويب مثبتة على جهازك. يمكنك أيضًا تنزيل نسخة Android الموصى بها.", "success");
-    } else if (isIOS) {
-      pwaInstallButton.textContent = "طريقة تثبيت سند على iPhone";
-      pwaInstallButton.disabled = false;
-    } else if (isInAppBrowser) {
-      pwaInstallButton.textContent = "فتح الصفحة في المتصفح للتثبيت";
-      pwaInstallButton.disabled = false;
-      setStatus("يمكن تنزيل APK مباشرة، أما تثبيت نسخة الويب فيتطلب فتح الصفحة في Chrome أو Safari.", "warning");
-    } else {
-      pwaInstallButton.disabled = true;
-      window.setTimeout(() => {
-        if (!deferredPrompt) {
-          pwaInstallButton.disabled = false;
-          pwaInstallButton.textContent = isSamsung ? "طريقة التثبيت على سامسونج" : "طريقة تثبيت نسخة الويب";
-        }
-      }, 1600);
-    }
-
-    window.addEventListener("beforeinstallprompt", event => {
-      event.preventDefault();
-      deferredPrompt = event;
-      pwaInstallButton.disabled = false;
-      pwaInstallButton.textContent = "تثبيت نسخة الويب PWA";
-    });
-
-    window.addEventListener("appinstalled", () => {
-      deferredPrompt = null;
-      pwaInstallButton.hidden = true;
-      setStatus("تم تثبيت نسخة الويب بنجاح.", "success");
-    });
-
-    pwaInstallButton.addEventListener("click", async () => {
-      if (deferredPrompt) {
-        pwaInstallButton.disabled = true;
-        await deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        pwaInstallButton.disabled = false;
-        return;
-      }
-      if (isIOS) {
-        showGuide("تثبيت سند على iPhone", "نفّذ الخطوات من Safari:", [
-          { title: "افتح الصفحة في Safari", text: "لا تستخدم المتصفح الداخلي في واتساب أو فيسبوك." },
-          { title: "اضغط زر المشاركة", text: "اختر مشاركة من شريط Safari." },
-          { title: "اختر إضافة إلى الشاشة الرئيسية", text: "ثم اضغط إضافة لتثبيت سند." }
-        ]);
-      } else {
-        showGuide("تثبيت نسخة الويب", "افتح قائمة المتصفح واتبع الخطوات التالية:", [
-          { title: "افتح قائمة المتصفح", text: "اضغط زر ⋮ في Chrome أو القائمة في Samsung Internet." },
-          { title: "اختر تثبيت التطبيق", text: "قد يظهر باسم إضافة إلى الشاشة الرئيسية." },
-          { title: "أكد التثبيت", text: "سيظهر سند ضمن تطبيقات الجهاز." }
-        ]);
-      }
-      guide.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined));
-    }
-
-    loadApkRelease();
-  </script>
+      </article>
+      <article class="choice">
+        <div class="choice-head"><div><h2>نسخة الويب PWA</h2><p>تثبيت سند من المتصفح على الشاشة الرئيسية.</p></div></div>
+        <div class="actions"><button id="pwaInstallButton" class="btn btn-secondary" type="button">جارٍ تجهيز التثبيت…</button><a class="btn btn-light" href="/">فتح سند في المتصفح</a></div>
+      </article>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite">يتم الآن تحديد أفضل طريقة للتثبيت على جهازك.</div>
+  </section>
+  <section id="guide" class="panel guide" hidden><h2 id="guideTitle">طريقة التثبيت</h2><p id="guideIntro"></p><div id="guideSteps" class="steps"></div></section>
+  <footer>app.sanadflow.com — تطبيق سند</footer>
+</main>
+<script>
+  const ua=navigator.userAgent||"";const isAndroid=/Android/i.test(ua);const isIOS=/iPhone|iPad|iPod/i.test(ua);const isSamsung=/SamsungBrowser/i.test(ua);const isInAppBrowser=/WhatsApp|FBAN|FBAV|Instagram/i.test(ua);const isStandalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+  const apkChoice=document.getElementById("apkChoice"),apkMeta=document.getElementById("apkMeta"),apkDownloadButton=document.getElementById("apkDownloadButton"),retryApkButton=document.getElementById("retryApkButton"),pwaInstallButton=document.getElementById("pwaInstallButton"),status=document.getElementById("status"),guide=document.getElementById("guide"),guideTitle=document.getElementById("guideTitle"),guideIntro=document.getElementById("guideIntro"),guideSteps=document.getElementById("guideSteps");let deferredPrompt=null;
+  const latin=value=>String(value??"").replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+  const formatBytes=bytes=>{const n=Number(bytes);return Number.isFinite(n)&&n>0?`${(n/1024/1024).toFixed(1)} MB`:""};
+  function setStatus(message,type=""){status.textContent=message;status.className=`status ${type}`.trim()}
+  function showGuide(title,intro,items){guide.hidden=false;guideTitle.textContent=title;guideIntro.textContent=intro;guideSteps.innerHTML=items.map((item,index)=>`<div class="step"><div class="step-number">${index+1}</div><div><strong>${item.title}</strong><span>${item.text}</span></div></div>`).join("")}
+  async function apkExists(){try{const r=await fetch(`/downloads/sanad-latest.apk?probe=${Date.now()}`,{method:"HEAD",cache:"no-store",credentials:"same-origin"});return r.ok}catch{return false}}
+  async function loadApkRelease(){if(isIOS){apkChoice.hidden=true;return}retryApkButton.hidden=true;apkMeta.textContent="جارٍ قراءة معلومات أحدث نسخة…";try{const response=await fetch(`/downloads/sanad-latest.json?t=${Date.now()}`,{cache:"no-store",credentials:"same-origin",headers:{"Cache-Control":"no-cache"}});if(!response.ok)throw new Error("metadata");const release=await response.json();const version=latin(release.version||release.version_code||"");const size=formatBytes(release.size_bytes);apkMeta.textContent=[version?`V${version}`:"",size].filter(Boolean).join(" • ")||"نسخة Android جاهزة للتحميل";apkDownloadButton.href=release.download_url||"/downloads/sanad-latest.apk";apkDownloadButton.download=release.filename||"sanad-latest.apk"}catch{const available=await apkExists();apkMeta.textContent=available?"نسخة Android جاهزة للتحميل. تعذر فقط قراءة رقم الإصدار.":"تعذر التحقق من معلومات النسخة، لكن رابط التنزيل المباشر ما يزال متاحًا.";retryApkButton.hidden=false}}
+  retryApkButton.addEventListener("click",loadApkRelease);
+  apkDownloadButton.addEventListener("click",()=>{setStatus("بدأ تنزيل تطبيق سند. بعد اكتمال التنزيل افتح الملف ووافق على التثبيت.","success");showGuide("تثبيت ملف APK","قد يطلب Android السماح بالتثبيت من هذا المصدر لأول مرة.",[{title:"افتح الملف بعد التنزيل",text:"اضغط على ملف sanad-latest.apk من إشعار التنزيل أو تطبيق الملفات."},{title:"اسمح بالتثبيت عند الطلب",text:"فعّل السماح لهذا المتصفح بتثبيت التطبيقات، ثم عد إلى شاشة التثبيت."},{title:"اضغط تثبيت",text:"بعد اكتمال التثبيت افتح سند وسجّل الدخول إلى حسابك."}])});
+  if(isStandalone){pwaInstallButton.hidden=true;setStatus("نسخة الويب مثبتة على جهازك. يمكنك أيضًا تنزيل نسخة Android الموصى بها.","success")}else if(isIOS){pwaInstallButton.textContent="طريقة تثبيت سند على iPhone";pwaInstallButton.disabled=false}else if(isInAppBrowser){pwaInstallButton.textContent="فتح الصفحة في المتصفح للتثبيت";pwaInstallButton.disabled=false;setStatus("يمكن تنزيل APK مباشرة، أما تثبيت نسخة الويب فيتطلب فتح الصفحة في Chrome أو Safari.","warning")}else{pwaInstallButton.disabled=true;setTimeout(()=>{if(!deferredPrompt){pwaInstallButton.disabled=false;pwaInstallButton.textContent=isSamsung?"طريقة التثبيت على سامسونج":"طريقة تثبيت نسخة الويب"}},1600)}
+  addEventListener("beforeinstallprompt",event=>{event.preventDefault();deferredPrompt=event;pwaInstallButton.disabled=false;pwaInstallButton.textContent="تثبيت نسخة الويب PWA"});
+  addEventListener("appinstalled",()=>{deferredPrompt=null;pwaInstallButton.hidden=true;setStatus("تم تثبيت نسخة الويب بنجاح.","success")});
+  pwaInstallButton.addEventListener("click",async()=>{if(deferredPrompt){pwaInstallButton.disabled=true;await deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;pwaInstallButton.disabled=false;return}if(isIOS){showGuide("تثبيت سند على iPhone","نفّذ الخطوات من Safari:",[{title:"افتح الصفحة في Safari",text:"لا تستخدم المتصفح الداخلي في واتساب أو فيسبوك."},{title:"اضغط زر المشاركة",text:"اختر مشاركة من شريط Safari."},{title:"اختر إضافة إلى الشاشة الرئيسية",text:"ثم اضغط إضافة لتثبيت سند."}])}else{showGuide("تثبيت نسخة الويب","افتح قائمة المتصفح واتبع الخطوات التالية:",[{title:"افتح قائمة المتصفح",text:"اضغط زر ⋮ في Chrome أو القائمة في Samsung Internet."},{title:"اختر تثبيت التطبيق",text:"قد يظهر باسم إضافة إلى الشاشة الرئيسية."},{title:"أكد التثبيت",text:"سيظهر سند ضمن تطبيقات الجهاز."}])}guide.scrollIntoView({behavior:"smooth",block:"start"})});
+  loadApkRelease();
+</script>
 </body>
 </html>
