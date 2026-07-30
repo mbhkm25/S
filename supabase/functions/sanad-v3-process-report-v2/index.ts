@@ -196,7 +196,8 @@ async function renderPdf(html: string) {
 }
 async function uploadToWhatsapp(pdf: Uint8Array, filename: string) {
   const form = new FormData();
-  form.append("messaging_product", "whatsapp"); form.append("type", "application/pdf"); form.append("file", new Blob([pdf], { type: "application/pdf" }), filename);
+  const pdfBuffer = pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer;
+  form.append("messaging_product", "whatsapp"); form.append("type", "application/pdf"); form.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
   const response = await fetch(`https://graph.facebook.com/v20.0/${env("META_WA_PHONE_NUMBER_ID")}/media`, {
     method: "POST", headers: { Authorization: `Bearer ${env("META_WA_ACCESS_TOKEN")}` }, body: form
   });
@@ -220,11 +221,11 @@ async function sendDocument(to: string, mediaId: string, filename: string, capti
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return respond({ ok: false, error: "method_not_allowed" }, 405);
-  let sb: ReturnType<typeof createClient> | null = null;
+  let sb: any = null;
   let report: ReportRequest | null = null;
   try {
     requireInternalSecret(req);
-    sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
+    sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } }) as any;
     const body = await req.json().catch(() => ({}));
     const requestedId = typeof body?.report_request_id === "string" ? body.report_request_id : null;
     await sb.rpc("requeue_stale_report_requests");
