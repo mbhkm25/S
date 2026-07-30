@@ -36,8 +36,11 @@ concurrency:
   group: sanad-android-apk-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SANAD_ANDROID_VERSION: '94'
+
 jobs:
-  build-debug-apk:
+  build-field-test-apk:
     name: Build field-test APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -72,7 +75,7 @@ jobs:
 
       - name: Build Android web assets and canonical icons
         env:
-          VITE_APP_VERSION: '93'
+          VITE_APP_VERSION: ${{ env.SANAD_ANDROID_VERSION }}
         run: npm run build:android
 
       - name: Sync Capacitor Android project
@@ -84,23 +87,207 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean assembleDebug
 
-      - name: Prepare verified artifact
+      - name: Prepare field-test artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v93-field-test.apk
-          sha256sum release/sanad-v93-field-test.apk | tee release/sanad-v93-field-test.apk.sha256
-          printf 'version=93\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
-            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          cp android/app/build/outputs/apk/debug/app-debug.apk "release/sanad-v${SANAD_ANDROID_VERSION}-field-test.apk"
+          sha256sum "release/sanad-v${SANAD_ANDROID_VERSION}-field-test.apk" \
+            | tee "release/sanad-v${SANAD_ANDROID_VERSION}-field-test.apk.sha256"
+          printf 'version=%s\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
+            "$SANAD_ANDROID_VERSION" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             > release/build-info.txt
-          test -s release/sanad-v93-field-test.apk
+          test -s "release/sanad-v${SANAD_ANDROID_VERSION}-field-test.apk"
 
-      - name: Upload APK artifact
+      - name: Upload field-test APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-v93-field-test-apk
+          name: sanad-v${{ env.SANAD_ANDROID_VERSION }}-field-test-apk
           path: release/
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+  publish-signed-apk:
+    name: Publish signed APK
+    if: github.event_name != 'pull_request' && vars.SANAD_ANDROID_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: production
+      url: https://app.sanadflow.com/install/
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up icon generator
+        run: python -m pip install --disable-pip-version-check Pillow
+
+      - name: Validate release secrets
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -euo pipefail
+          [[ -n "$KEYSTORE_BASE64" ]]
+          [[ -n "$KEYSTORE_PASSWORD" ]]
+          [[ -n "$KEY_ALIAS" ]]
+          [[ -n "$KEY_PASSWORD" ]]
+          [[ -n "$SSH_PRIVATE_KEY" ]]
+          [[ -n "$SSH_KNOWN_HOSTS" ]]
+          [[ -n "$HOST" ]]
+          [[ -n "$DEPLOY_USER" ]]
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$RUNNER_TEMP/sanad-signing"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
+          chmod 600 "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
+          test -s "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate application
+        run: |
+          npm run lint
+          npm run check:routes
+
+      - name: Build Android web assets and canonical icons
+        env:
+          VITE_APP_VERSION: ${{ env.SANAD_ANDROID_VERSION }}
+        run: npm run build:android
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-signing/sanad-release.jks
+          SANAD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          SANAD_ANDROID_KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          SANAD_ANDROID_KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease
+          test -s app/build/outputs/apk/release/app-release.apk
+
+      - name: Prepare stable release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          APK_VERSIONED="sanad-v${SANAD_ANDROID_VERSION}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "release/$APK_VERSIONED"
+          cp "release/$APK_VERSIONED" release/sanad-latest.apk
+          SHA256="$(sha256sum release/sanad-latest.apk | awk '{print $1}')"
+          SIZE_BYTES="$(stat -c '%s' release/sanad-latest.apk)"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf '%s  %s\n' "$SHA256" sanad-latest.apk > release/sanad-latest.apk.sha256
+          cat > release/sanad-latest.json <<JSON
+          {
+            "platform": "android",
+            "version": "${SANAD_ANDROID_VERSION}",
+            "version_name": "0.${SANAD_ANDROID_VERSION}.0",
+            "version_code": ${SANAD_ANDROID_VERSION},
+            "filename": "sanad-latest.apk",
+            "versioned_filename": "${APK_VERSIONED}",
+            "download_url": "/downloads/sanad-latest.apk",
+            "sha256": "${SHA256}",
+            "size_bytes": ${SIZE_BYTES},
+            "commit": "${GITHUB_SHA}",
+            "built_at": "${BUILT_AT}"
+          }
+          JSON
+          test -s release/sanad-latest.json
+
+      - name: Upload signed release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-v${{ env.SANAD_ANDROID_VERSION }}-signed-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Publish APK to stable production path
+        shell: bash
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          PORT: ${{ secrets.PRODUCTION_PORT }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -euo pipefail
+          PORT="${PORT:-22}"
+          REMOTE_TMP="/tmp/sanad-android-${GITHUB_RUN_ID}"
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            "rm -rf '$REMOTE_TMP' && mkdir -p '$REMOTE_TMP'"
+          scp -P "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            release/sanad-latest.apk \
+            release/sanad-latest.apk.sha256 \
+            release/sanad-latest.json \
+            "release/sanad-v${SANAD_ANDROID_VERSION}.apk" \
+            "$DEPLOY_USER@$HOST:$REMOTE_TMP/"
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            "set -euo pipefail; \
+             sudo install -d -m 755 /var/www/app.sanadflow.com/shared/downloads; \
+             sudo install -m 644 '$REMOTE_TMP/sanad-latest.apk' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.apk; \
+             sudo install -m 644 '$REMOTE_TMP/sanad-latest.apk.sha256' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.apk.sha256; \
+             sudo install -m 644 '$REMOTE_TMP/sanad-latest.json' /var/www/app.sanadflow.com/shared/downloads/sanad-latest.json; \
+             sudo install -m 644 '$REMOTE_TMP/sanad-v${SANAD_ANDROID_VERSION}.apk' '/var/www/app.sanadflow.com/shared/downloads/sanad-v${SANAD_ANDROID_VERSION}.apk'; \
+             sudo rm -rf /var/www/app.sanadflow.com/html/downloads; \
+             sudo ln -s ../shared/downloads /var/www/app.sanadflow.com/html/downloads; \
+             rm -rf '$REMOTE_TMP'"
+
+      - name: Verify public APK download
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 60 \
+            --output /tmp/sanad-latest.apk \
+            https://app.sanadflow.com/downloads/sanad-latest.apk
+          test -s /tmp/sanad-latest.apk
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://app.sanadflow.com/downloads/sanad-latest.json \
+            | grep -q '"version"'
