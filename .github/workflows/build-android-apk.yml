@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SANAD_ANDROID_VERSION: '95'
+  SANAD_ANDROID_VERSION: '96'
 
 jobs:
   build-field-test-apk:
