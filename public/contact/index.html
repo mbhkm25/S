@@ -17,17 +17,17 @@
     .eyebrow{text-align:center;color:#f3c564;font-size:13px;font-weight:700;margin:0 0 7px}
     h1{font-size:28px;line-height:1.4;text-align:center;margin:0 0 12px}
     .lead{color:#cce0da;text-align:center;line-height:1.9;margin:0 auto 23px;max-width:350px;font-size:15px}
-    .btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:62px;padding:15px 18px;border-radius:18px;text-decoration:none;font-weight:700;font-size:17px;background:#f3b63d;color:#172018;box-shadow:0 12px 28px rgba(243,182,61,.2);transition:transform .15s ease,filter .15s ease}
+    .btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:62px;padding:15px 18px;border:0;border-radius:18px;text-decoration:none;font-family:inherit;font-weight:700;font-size:17px;background:#f3b63d;color:#172018;box-shadow:0 12px 28px rgba(243,182,61,.2);transition:transform .15s ease,filter .15s ease;cursor:pointer;width:100%}
     .btn:active{transform:scale(.985)}
     .btn:hover{filter:brightness(1.04)}
     .after-click{text-align:center;color:#a9c3bc;font-size:12px;line-height:1.8;margin:11px 0 0}
+    .device-note{text-align:center;color:#7fa79c;font-size:11px;line-height:1.7;margin:5px 0 0}
     .divider{height:1px;background:rgba(255,255,255,.1);margin:22px 0 18px}
     .steps-title{font-size:14px;margin:0 0 13px;color:#edf7f4}
     .steps{display:grid;gap:12px;margin:0;padding:0;list-style:none}
     .step{display:flex;gap:11px;align-items:flex-start;color:#bdd1cb;font-size:13px;line-height:1.75}
     .number{width:25px;height:25px;flex:0 0 25px;border-radius:50%;display:grid;place-items:center;background:rgba(243,182,61,.14);color:#f3c564;font-weight:700;font-size:12px;margin-top:1px}
     .brand{margin:21px 0 0;text-align:center;color:#83a69c;font-size:13px}
-    .source{display:none}
   </style>
 </head>
 <body>
@@ -38,8 +38,9 @@
       <h1 id="page-title">احفظ سند في جهات اتصالك</h1>
       <p class="lead">بعد كل دفع إلكتروني، شارك إشعار الدفع إلى محادثة سند مباشرة بدل تسليم هاتفك للكاشير.</p>
 
-      <a class="btn" href="/sanad-contact.vcf" type="text/vcard" data-event="save_contact">إضافة سند إلى جهات الاتصال</a>
-      <p class="after-click">ستظهر بطاقة سند جاهزة. اضغط «إضافة» أو «حفظ» في الشاشة التالية.</p>
+      <button class="btn" id="save-contact" type="button">إضافة سند إلى جهات الاتصال</button>
+      <p class="after-click" id="after-click">ستظهر بطاقة سند جاهزة. اضغط «إضافة» أو «حفظ» في الشاشة التالية.</p>
+      <p class="device-note" id="device-note"></p>
 
       <div class="divider"></div>
       <p class="steps-title">بعد حفظ سند:</p>
@@ -50,7 +51,6 @@
       </ol>
 
       <p class="brand">سند ينظم ما يحدث بعد الدفع الإلكتروني.</p>
-      <span class="source" id="source-label" aria-hidden="true"></span>
     </section>
   </main>
 
@@ -60,13 +60,18 @@
       const source = params.get('source') || 'direct';
       const business = params.get('business') || '';
       const campaign = params.get('campaign') || '';
+      const button = document.getElementById('save-contact');
+      const deviceNote = document.getElementById('device-note');
+      const fallbackUrl = new URL('/sanad-contact.vcf', window.location.origin).href;
+      const isAndroid = /Android/i.test(navigator.userAgent);
 
-      function track(eventName) {
+      function track(eventName, mode) {
         const payload = {
           event: 'sanad_contact_' + eventName,
           source: source,
           business: business,
           campaign: campaign,
+          mode: mode || '',
           page_path: window.location.pathname
         };
         window.dataLayer = window.dataLayer || [];
@@ -79,9 +84,35 @@
         } catch (_) {}
       }
 
-      track('view');
-      document.querySelector('[data-event]').addEventListener('click', function (event) {
-        track(event.currentTarget.getAttribute('data-event'));
+      function androidIntentUrl() {
+        const fields = [
+          'intent:#Intent',
+          'action=android.intent.action.INSERT',
+          'type=vnd.android.cursor.dir/contact',
+          'S.name=' + encodeURIComponent('سند | SANAD'),
+          'S.phone=' + encodeURIComponent('+967783331387'),
+          'S.company=' + encodeURIComponent('سند'),
+          'S.notes=' + encodeURIComponent('احفظ سند مرة واحدة، ثم شارك إليه إشعار الدفع بعد كل عملية دفع إلكتروني.'),
+          'S.browser_fallback_url=' + encodeURIComponent(fallbackUrl),
+          'end'
+        ];
+        return fields.join(';');
+      }
+
+      track('view', isAndroid ? 'android_intent' : 'vcard');
+      deviceNote.textContent = isAndroid
+        ? 'سيحاول جهازك فتح تطبيق جهات الاتصال مباشرة.'
+        : 'قد يفتح جهازك بطاقة جهة الاتصال أو ملف vCard حسب نظام الهاتف.';
+
+      button.addEventListener('click', function () {
+        if (isAndroid) {
+          track('save_contact', 'android_intent');
+          window.location.href = androidIntentUrl();
+          return;
+        }
+
+        track('save_contact', 'vcard');
+        window.location.href = fallbackUrl;
       });
     })();
   </script>
