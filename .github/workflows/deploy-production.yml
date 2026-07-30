@@ -94,7 +94,11 @@ jobs:
           [[ -n "$DEPLOY_USER" ]]
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
-            "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
+            "set -euo pipefail; \
+             sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'; \
+             sudo install -d -m 755 /var/www/app.sanadflow.com/shared/downloads; \
+             sudo rm -rf /var/www/app.sanadflow.com/html/downloads; \
+             sudo ln -s ../shared/downloads /var/www/app.sanadflow.com/html/downloads"
 
       - name: Verify published release
         shell: bash
