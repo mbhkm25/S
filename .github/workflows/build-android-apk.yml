@@ -7,7 +7,6 @@ on:
     paths:
       - 'android/**'
       - 'src/**'
-      - 'scripts/prepare-v91-build.py'
       - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
@@ -21,7 +20,6 @@ on:
     paths:
       - 'android/**'
       - 'src/**'
-      - 'scripts/prepare-v91-build.py'
       - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
@@ -74,7 +72,7 @@ jobs:
 
       - name: Build Android web assets and canonical icons
         env:
-          VITE_APP_VERSION: '92'
+          VITE_APP_VERSION: '93'
         run: npm run build:android
 
       - name: Sync Capacitor Android project
@@ -91,17 +89,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v92-field-test.apk
-          sha256sum release/sanad-v92-field-test.apk | tee release/sanad-v92-field-test.apk.sha256
-          printf 'version=92\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/sanad-v93-field-test.apk
+          sha256sum release/sanad-v93-field-test.apk | tee release/sanad-v93-field-test.apk.sha256
+          printf 'version=93\ncommit=%s\nworkflow_run=%s\nbuilt_at=%s\n' \
             "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             > release/build-info.txt
-          test -s release/sanad-v92-field-test.apk
+          test -s release/sanad-v93-field-test.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-v92-field-test-apk
+          name: sanad-v93-field-test-apk
           path: release/
           if-no-files-found: error
           retention-days: 14
