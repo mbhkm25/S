@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Flashlight, Image as ImageIcon, Loader2, RotateCcw, X } from 'lucide-react';
+import { Camera, Flashlight, Image as ImageIcon, Loader2, RotateCcw, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { toLatinDigits } from '../lib/digits';
 
@@ -22,15 +22,15 @@ function extractToken(value: string): string | null {
 function getCameraErrorMessage(error: any): string {
   const name = error?.name || '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return 'لم يتم السماح لسند باستخدام الكاميرا. فعّل إذن الكاميرا من إعدادات التطبيق ثم أعد المحاولة.';
+    return 'لم يتم السماح لسند باستخدام الكاميرا. فعّل الإذن أو التقط صورة QR بكاميرا الهاتف.';
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return 'لم يتم العثور على كاميرا متاحة على هذا الجهاز.';
+    return 'لم يتم العثور على كاميرا متاحة. يمكنك التقاط صورة QR بكاميرا الهاتف أو اختيار صورة محفوظة.';
   }
   if (name === 'NotReadableError' || name === 'TrackStartError') {
-    return 'الكاميرا مستخدمة في تطبيق آخر. أغلق التطبيق الآخر ثم أعد المحاولة.';
+    return 'الكاميرا مستخدمة في تطبيق آخر. أغلق التطبيق الآخر أو استخدم كاميرا الهاتف لالتقاط صورة QR.';
   }
-  return 'تعذر تشغيل الكاميرا الآن. يمكنك إعادة المحاولة أو اختيار صورة QR من الجهاز.';
+  return 'تعذر تشغيل الماسح الحي. استخدم كاميرا الهاتف لالتقاط صورة QR أو اختر صورة محفوظة.';
 }
 
 export default function DirectQrScanner({ onNavigateToDetails, onCancel }: DirectQrScannerProps) {
@@ -41,6 +41,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
   const detectedRef = useRef(false);
   const mountedRef = useRef(true);
   const decodingRef = useRef(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [mode, setMode] = useState<ScannerMode>('native');
@@ -113,7 +114,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
           const codes = await detector.detect(video);
           if (codes?.[0]?.rawValue) await finish(codes[0].rawValue);
         } catch {
-          // Keep scanning; a transient decoder failure is not a camera failure.
+          // A transient decoder failure must not stop the camera preview.
         } finally {
           decodingRef.current = false;
         }
@@ -145,11 +146,11 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30, max: 30 }
-        }
+          frameRate: { ideal: 30, max: 30 },
+        },
       },
       decodedText => void finish(decodedText),
-      () => {}
+      () => {},
     );
 
     if (mountedRef.current) setStatus('scanning');
@@ -167,7 +168,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus('error');
-      setError('هذا الجهاز لا يتيح تشغيل الكاميرا داخل سند. يمكنك اختيار صورة QR من الجهاز.');
+      setError('هذا الجهاز لا يتيح الماسح الحي داخل سند. التقط صورة QR بكاميرا الهاتف أو اختر صورة محفوظة.');
       return;
     }
 
@@ -177,9 +178,9 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30, max: 30 }
+          frameRate: { ideal: 30, max: 30 },
         },
-        audio: false
+        audio: false,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -248,7 +249,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
     } catch {
       if (!mountedRef.current) return;
       setStatus('error');
-      setError('لم يتم العثور على رمز QR صالح في الصورة. جرّب صورة أوضح أو أعد تشغيل الكاميرا.');
+      setError('لم يتم العثور على رمز QR صالح في الصورة. التقط الرمز كاملًا بوضوح أو اختر صورة أخرى.');
     }
   };
 
@@ -341,19 +342,27 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
         {status === 'error' && (
           <div className="w-full max-w-sm rounded-3xl bg-black/80 p-4 backdrop-blur-md">
             <p className="text-xs leading-6 text-rose-100">{error}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void start()}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-3 py-3 text-xs font-bold text-black"
+            >
+              <RotateCcw className="h-4 w-4" />
+              إعادة تشغيل الماسح الحي
+            </button>
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => void start()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-3 py-3 text-xs font-bold text-black"
+                onClick={() => cameraInputRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 py-3 text-xs font-bold text-white"
               >
-                <RotateCcw className="h-4 w-4" />
-                إعادة المحاولة
+                <Camera className="h-4 w-4" />
+                التقاط صورة QR
               </button>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 py-3 text-xs font-bold text-white"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-xs font-bold text-white"
               >
                 <ImageIcon className="h-4 w-4" />
                 اختيار صورة
@@ -363,16 +372,34 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
         )}
 
         {status !== 'error' && (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-[11px] font-bold backdrop-blur-md"
-          >
-            <ImageIcon className="h-4 w-4" />
-            اختيار صورة QR
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-600/90 px-4 py-2 text-[11px] font-bold backdrop-blur-md"
+            >
+              <Camera className="h-4 w-4" />
+              تصوير QR
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-[11px] font-bold backdrop-blur-md"
+            >
+              <ImageIcon className="h-4 w-4" />
+              صورة محفوظة
+            </button>
+          </div>
         )}
 
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={scanImage}
+        />
         <input
           ref={fileInputRef}
           type="file"
