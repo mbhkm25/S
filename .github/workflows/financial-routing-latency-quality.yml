@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           ! grep -Fq 'api.qrserver.com' supabase/functions/sanad-v3-whatsapp-intake/index.ts
-          grep -Fq 'X-Hub-Signature-256' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fiq 'x-hub-signature-256' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fq 'verifyMetaSignature' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fq 'Promise.allSettled([analysisPromise, qrPromise])' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fq 'internal:qrcode@1.5.4' supabase/functions/sanad-v3-whatsapp-intake/index.ts
