@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, ChevronLeft, CircleAlert, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { BriefcaseBusiness, ChevronLeft, CircleAlert, LockKeyhole, RefreshCw, ShieldCheck, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toLatinDigits } from '../../lib/digits';
 
@@ -54,7 +54,7 @@ function roleLabel(workspace: BusinessWorkspaceContext): string {
 function workspaceUrl(businessId: string): string {
   const params = new URLSearchParams({
     business_id: businessId,
-    return_to: '/profile'
+    return_to: '/profile#business-workspaces'
   });
   return `/payment-inbox.html?${params.toString()}`;
 }
@@ -72,10 +72,9 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_my_business_payment_inbox_contexts');
+      const { data, error: rpcError } = await supabase.rpc('get_my_business_workspaces');
       if (rpcError) throw rpcError;
-      const contexts = Array.isArray(data?.items) ? data.items : [];
-      setItems(contexts.filter((item: BusinessWorkspaceContext) => item?.permissions?.view === true));
+      setItems(Array.isArray(data?.items) ? data.items : []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل مساحات العمل.');
     } finally {
@@ -86,6 +85,12 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!loading && window.location.hash === '#business-workspaces') {
+      window.setTimeout(() => document.getElementById('business-workspaces')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    }
+  }, [loading]);
 
   const totals = useMemo(() => items.reduce((summary, item) => ({
     new: summary.new + Number(item.counts?.new || 0),
@@ -121,7 +126,7 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
   if (!items.length) return null;
 
   return (
-    <section className="overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.07)]" dir="rtl" aria-labelledby={`business-workspaces-${mode}`}>
+    <section id="business-workspaces" className="scroll-mt-24 overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.07)]" dir="rtl" aria-labelledby={`business-workspaces-${mode}`}>
       <header className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-l from-emerald-50 via-white to-sky-50 px-4 py-4">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-emerald-300 shadow-lg">
           <BriefcaseBusiness className="h-5 w-5" />
@@ -129,7 +134,7 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
         <div className="min-w-0 flex-1">
           <p className="text-[9px] font-bold text-emerald-700">التشغيل اليومي للفريق</p>
           <h2 id={`business-workspaces-${mode}`} className="mt-0.5 text-sm font-bold text-slate-950">مساحات العمل</h2>
-          <p className="mt-1 text-[9px] leading-5 text-slate-500">ادخل إلى وارد المدفوعات للنشاط الذي تملكه أو تعمل ضمن فريقه.</p>
+          <p className="mt-1 text-[9px] leading-5 text-slate-500">كل نشاط تملكه أو ترتبط به كعضو فريق يظهر هنا، مع صلاحياتك الفعلية.</p>
         </div>
         <div className="shrink-0 text-left">
           <strong className="block text-base text-slate-950">{countLabel(totals.new)}</strong>
@@ -139,28 +144,43 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
 
       <div className="grid gap-2 p-3">
         {items.map((workspace) => {
+          const canView = workspace.permissions?.view === true;
           const newCount = Number(workspace.counts?.new || 0);
           const mineCount = Number(workspace.counts?.mine || 0);
-          return (
+          const content = (
+            <>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ${canView ? 'text-slate-700' : 'text-slate-400'}`}>
+                {canView ? (workspace.is_owner ? <ShieldCheck className="h-5 w-5" /> : <Users className="h-5 w-5" />) : <LockKeyhole className="h-5 w-5" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm text-slate-950">{workspace.business_name}</strong>
+                <span className="mt-1 block text-[9px] font-bold text-slate-500">{roleLabel(workspace)}</span>
+                {canView ? (
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-[8px] font-bold text-emerald-800">جديدة: {countLabel(newCount)}</span>
+                    <span className="rounded-full bg-sky-100 px-2 py-1 text-[8px] font-bold text-sky-800">لدي: {countLabel(mineCount)}</span>
+                    {workspace.permissions.claim && <span className="rounded-full bg-white px-2 py-1 text-[8px] font-bold text-slate-600">يمكنك الاستلام</span>}
+                  </span>
+                ) : (
+                  <span className="mt-2 block text-[9px] leading-5 text-amber-700">عضويتك نشطة، لكن صلاحية وارد المدفوعات لم يمنحها مالك النشاط بعد.</span>
+                )}
+              </span>
+              {canView && <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-1" />}
+            </>
+          );
+
+          return canView ? (
             <a
               key={workspace.business_id}
               href={workspaceUrl(workspace.business_id)}
               className="group flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50/80 p-3.5 text-right transition active:scale-[0.99] active:bg-slate-100"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
-                {workspace.is_owner ? <ShieldCheck className="h-5 w-5" /> : <Users className="h-5 w-5" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <strong className="block truncate text-sm text-slate-950">{workspace.business_name}</strong>
-                <span className="mt-1 block text-[9px] font-bold text-slate-500">{roleLabel(workspace)}</span>
-                <span className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-[8px] font-bold text-emerald-800">جديدة: {countLabel(newCount)}</span>
-                  <span className="rounded-full bg-sky-100 px-2 py-1 text-[8px] font-bold text-sky-800">لدي: {countLabel(mineCount)}</span>
-                  {workspace.permissions.claim && <span className="rounded-full bg-white px-2 py-1 text-[8px] font-bold text-slate-600">يمكنك الاستلام</span>}
-                </span>
-              </span>
-              <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-1" />
+              {content}
             </a>
+          ) : (
+            <article key={workspace.business_id} className="flex items-center gap-3 rounded-[1.35rem] border border-amber-100 bg-amber-50/70 p-3.5 text-right">
+              {content}
+            </article>
           );
         })}
       </div>
