@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+
+:root {
+  font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif;
+  font-synthesis: none;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: "IBM Plex Sans Arabic", "Noto Sans Arabic", system-ui, sans-serif !important;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+input[type="number"],
+input[inputmode="numeric"],
+input[inputmode="decimal"],
+.latin-numerals,
+[data-latin-numerals="true"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: lining-nums tabular-nums;
+}
