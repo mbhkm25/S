@@ -1,0 +1,86 @@
+.tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.shadow-preview-banner {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #bae6fd;
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: #0c4a6e;
+  background: linear-gradient(135deg, #f0f9ff, #ecfeff);
+  box-shadow: 0 10px 24px rgba(14, 116, 144, 0.08);
+}
+
+.shadow-preview-banner strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.shadow-preview-banner span {
+  color: #475569;
+  font-size: 9px;
+  line-height: 1.8;
+}
+
+.payment-card.shadow-preview-card {
+  border-color: #bae6fd;
+  background: linear-gradient(180deg, #ffffff, #f8fdff);
+}
+
+.preview-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.preview-gates span {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #1e3a5f;
+  background: #eff6ff;
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.preview-gates span.more {
+  direction: ltr;
+  color: #475569;
+  background: #f8fafc;
+}
+
+.payment-card.shadow-preview-card .card-actions {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.preview-operation-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #075985;
+  background: #e0f2fe;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .tabs {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .tabs button {
+    min-height: 40px;
+    padding-inline: 2px;
+    font-size: 7.5px;
+  }
+}

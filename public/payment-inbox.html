@@ -6,7 +6,11 @@
   <meta name="theme-color" content="#07111f" />
   <meta name="robots" content="noindex,nofollow,noarchive" />
   <title>وارد المدفوعات | سند</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/sanad-ui-standards.css" />
   <link rel="stylesheet" href="/payment-inbox.css" />
+  <link rel="stylesheet" href="/payment-inbox-shadow-preview.css" />
 </head>
 <body>
   <div class="shell">
@@ -38,6 +42,7 @@
       <button type="button" data-status="claimed">لدي</button>
       <button type="button" data-status="review_required">تحتاج مراجعة</button>
       <button type="button" data-status="completed">مكتملة</button>
+      <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
     </nav>
 
     <main id="queueSection" class="queue-list">
@@ -54,6 +59,8 @@
   </div>
 
   <script src="/sanad-supabase-runtime.js"></script>
+  <script src="/sanad-display-standards.js" defer></script>
+  <script src="/payment-inbox-shadow-preview.js" defer></script>
   <script src="/payment-inbox.js" defer></script>
 </body>
 </html>
