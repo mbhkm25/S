@@ -1,0 +1,61 @@
+name: Payment inbox operational UI quality
+
+on:
+  pull_request:
+    paths:
+      - "public/payment-inbox.html"
+      - "public/payment-inbox-operational-ui.css"
+      - "public/payment-inbox-operational-ui.js"
+      - ".github/workflows/payment-inbox-operational-ui-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        run: node --check public/payment-inbox-operational-ui.js
+
+      - name: Validate operational assets and ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/payment-inbox-operational-ui.css
+          test -s public/payment-inbox-operational-ui.js
+          grep -Fq '/payment-inbox-operational-ui.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-operational-ui.js' public/payment-inbox.html
+          css_line=$(grep -n '/payment-inbox-operational-ui.css' public/payment-inbox.html | cut -d: -f1)
+          base_css_line=$(grep -n '/payment-inbox.css' public/payment-inbox.html | cut -d: -f1)
+          js_line=$(grep -n '/payment-inbox-operational-ui.js' public/payment-inbox.html | cut -d: -f1)
+          base_js_line=$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)
+          test "$css_line" -gt "$base_css_line"
+          test "$js_line" -gt "$base_js_line"
+
+      - name: Enforce compact operational design
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'grid-template-columns:repeat(2' public/payment-inbox-operational-ui.css
+          grep -Fq '.tabs button.active{grid-column:1/-1' public/payment-inbox-operational-ui.css
+          grep -Fq '.tertiary-action{display:none' public/payment-inbox-operational-ui.css
+          grep -Fq 'font-size:25px' public/payment-inbox-operational-ui.css
+          grep -Fq 'openDetails' public/payment-inbox-operational-ui.js
+          grep -Fq 'data-proxy-action' public/payment-inbox-operational-ui.js
+          grep -Fq 'ENTITY_DEFINITIONS' public/payment-inbox-operational-ui.js
+          grep -Fq '/assets/financial-entities/alamqi-mobile.webp' public/payment-inbox-operational-ui.js
+          grep -Fq '/assets/financial-entities/alkuraimi-hasib.webp' public/payment-inbox-operational-ui.js
+          grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
+
+      - name: Preserve operational actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "event.target.closest('a,button,textarea,input,select,summary')" public/payment-inbox-operational-ui.js
+          grep -Fq 'action?.click()' public/payment-inbox-operational-ui.js
+          grep -Fq 'payment-inbox-shadow-preview.js' public/payment-inbox.html
+          grep -Fq 'payment-inbox-workflow-state.js' public/payment-inbox.html
