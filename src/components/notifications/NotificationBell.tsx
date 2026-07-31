@@ -1,26 +1,77 @@
-import { Bell } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, BriefcaseBusiness } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { toLatinDigits } from '../../lib/digits';
 import { useNotifications } from '../../features/notifications/useNotifications';
+import type { BusinessWorkspaceContext } from '../business/BusinessWorkspacesAccess';
 
 interface NotificationBellProps {
   onNavigate: () => void;
 }
 
+function workspaceUrl(contexts: BusinessWorkspaceContext[]): string {
+  if (contexts.length === 1) {
+    const params = new URLSearchParams({
+      business_id: contexts[0].business_id,
+      return_to: '/profile'
+    });
+    return `/payment-inbox.html?${params.toString()}`;
+  }
+  return '/profile#business-workspaces';
+}
+
 export default function NotificationBell({ onNavigate }: NotificationBellProps) {
   const { unreadCount } = useNotifications();
+  const [workspaces, setWorkspaces] = useState<BusinessWorkspaceContext[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.rpc('get_my_business_payment_inbox_contexts');
+      if (!active || error) return;
+      const contexts = Array.isArray(data?.items) ? data.items : [];
+      setWorkspaces(contexts.filter((item: BusinessWorkspaceContext) => item?.permissions?.view === true));
+    };
+    void load();
+    return () => { active = false; };
+  }, []);
+
+  const newPayments = useMemo(
+    () => workspaces.reduce((total, item) => total + Number(item.counts?.new || 0), 0),
+    [workspaces]
+  );
 
   return (
-    <button
-      onClick={onNavigate}
-      className="relative p-2 rounded-xl hover:bg-slate-100/70 text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center min-w-[44px] min-h-[44px] cursor-pointer"
-      aria-label="فتح الإشعارات"
-      title="الإشعارات"
-    >
-      <Bell className="w-5.5 h-5.5" />
-      {unreadCount > 0 && (
-        <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none select-none animate-scale-in">
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
+    <div className="flex items-center gap-1">
+      {workspaces.length > 0 && (
+        <a
+          href={workspaceUrl(workspaces)}
+          className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-slate-600 transition-all hover:bg-emerald-50 hover:text-emerald-800"
+          aria-label={workspaces.length === 1 ? `فتح مساحة عمل ${workspaces[0].business_name}` : 'فتح مساحات العمل'}
+          title="مساحات العمل"
+        >
+          <BriefcaseBusiness className="h-5.5 w-5.5" />
+          {newPayments > 0 && (
+            <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] select-none items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-black leading-none text-white animate-scale-in">
+              {newPayments > 99 ? '99+' : toLatinDigits(String(newPayments))}
+            </span>
+          )}
+        </a>
       )}
-    </button>
+
+      <button
+        onClick={onNavigate}
+        className="relative flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-xl p-2 text-slate-600 transition-all hover:bg-slate-100/70 hover:text-slate-900"
+        aria-label="فتح الإشعارات"
+        title="الإشعارات"
+      >
+        <Bell className="h-5.5 w-5.5" />
+        {unreadCount > 0 && (
+          <span className="absolute right-1 top-1 flex h-[18px] min-w-[18px] select-none items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black leading-none text-white animate-scale-in">
+            {unreadCount > 99 ? '99+' : toLatinDigits(String(unreadCount))}
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
