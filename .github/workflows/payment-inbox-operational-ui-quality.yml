@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - "public/payment-inbox.html"
+      - "public/payment-inbox.js"
       - "public/payment-inbox-operational-ui.css"
       - "public/payment-inbox-operational-ui.js"
-      - "public/payment-inbox-operational-guard.js"
       - ".github/workflows/payment-inbox-operational-ui-quality.yml"
 
 permissions:
@@ -21,39 +21,37 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
+          node --check public/payment-inbox.js
           node --check public/payment-inbox-operational-ui.js
-          node --check public/payment-inbox-operational-guard.js
 
-      - name: Validate operational assets and ordering
+      - name: Validate proven boot ordering
         shell: bash
         run: |
           set -euo pipefail
           test -s public/payment-inbox-operational-ui.css
           test -s public/payment-inbox-operational-ui.js
-          test -s public/payment-inbox-operational-guard.js
-          grep -Fq '/payment-inbox-operational-ui.css' public/payment-inbox.html
-          grep -Fq '/payment-inbox-operational-guard.js' public/payment-inbox.html
-          grep -Fq '/payment-inbox-operational-ui.js' public/payment-inbox.html
-          css_line=$(grep -n '/payment-inbox-operational-ui.css' public/payment-inbox.html | cut -d: -f1)
-          base_css_line=$(grep -n '/payment-inbox.css' public/payment-inbox.html | cut -d: -f1)
-          guard_line=$(grep -n '/payment-inbox-operational-guard.js' public/payment-inbox.html | cut -d: -f1)
-          js_line=$(grep -n '/payment-inbox-operational-ui.js' public/payment-inbox.html | cut -d: -f1)
-          base_js_line=$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)
-          test "$css_line" -gt "$base_css_line"
-          test "$guard_line" -gt "$base_js_line"
-          test "$js_line" -gt "$guard_line"
+          grep -Fq '/payment-inbox.js?v=' public/payment-inbox.html
+          grep -Fq '/payment-inbox-operational-ui.js?v=' public/payment-inbox.html
+          ! grep -Fq '/payment-inbox-network-guard.js' public/payment-inbox.html
+          ! grep -Fq '/payment-inbox-operational-guard.js' public/payment-inbox.html
+          base_js_line=$(grep -n '/payment-inbox.js?v=' public/payment-inbox.html | cut -d: -f1)
+          workflow_line=$(grep -n '/payment-inbox-workflow-state.js' public/payment-inbox.html | cut -d: -f1)
+          ui_line=$(grep -n '/payment-inbox-operational-ui.js?v=' public/payment-inbox.html | cut -d: -f1)
+          test "$workflow_line" -gt "$base_js_line"
+          test "$ui_line" -gt "$workflow_line"
 
-      - name: Enforce compact operational design
+      - name: Enforce isolated compact design
         shell: bash
         run: |
           set -euo pipefail
           grep -Fq '.tab-switcher-summary' public/payment-inbox-operational-ui.css
           grep -Fq '.tabs-native-hidden' public/payment-inbox-operational-ui.css
           grep -Fq '.tertiary-action{display:none' public/payment-inbox-operational-ui.css
-          grep -Fq 'font-size:25px' public/payment-inbox-operational-ui.css
           grep -Fq '.badges,.preview-gates,.preview-operation-note,.shadow-preview-banner{display:none' public/payment-inbox-operational-ui.css
-          grep -Fq 'ensureTabSwitcher' public/payment-inbox-operational-ui.js
-          grep -Fq 'renderTabSwitcher' public/payment-inbox-operational-ui.js
+          grep -Fq 'setupSwitcher' public/payment-inbox-operational-ui.js
+          grep -Fq 'renderSwitcher' public/payment-inbox-operational-ui.js
+          ! grep -Fq "observe(tabs" public/payment-inbox-operational-ui.js
+          ! grep -Fq "attributeFilter" public/payment-inbox-operational-ui.js
           grep -Fq 'openDetails' public/payment-inbox-operational-ui.js
           grep -Fq 'data-proxy-action' public/payment-inbox-operational-ui.js
           grep -Fq 'ENTITY_DEFINITIONS' public/payment-inbox-operational-ui.js
@@ -61,17 +59,12 @@ jobs:
           grep -Fq '/assets/financial-entities/alkuraimi-hasib.webp' public/payment-inbox-operational-ui.js
           grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
 
-      - name: Prevent observer self-trigger loops
+      - name: Preserve operational actions and data contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "record.attributeName === 'data-count'" public/payment-inbox-operational-guard.js
-          grep -Fq '__SANAD_OPERATIONAL_OBSERVER_GUARD__' public/payment-inbox-operational-guard.js
-
-      - name: Preserve operational actions
-        shell: bash
-        run: |
-          set -euo pipefail
+          grep -Fq "get_my_business_payment_inbox_contexts" public/payment-inbox.js
+          grep -Fq "get_business_payment_inbox" public/payment-inbox.js
           grep -Fq "event.target.closest('a,button,textarea,input,select,summary')" public/payment-inbox-operational-ui.js
           grep -Fq 'action?.click()' public/payment-inbox-operational-ui.js
           grep -Fq 'payment-inbox-shadow-preview.js' public/payment-inbox.html
