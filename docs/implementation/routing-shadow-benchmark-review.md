@@ -154,6 +154,9 @@ A dedicated GitHub Actions workflow runs JavaScript syntax checks, asset checks,
 - `20260731110911_routing_shadow_benchmark_review_foundation.sql`
 - `20260731111326_routing_benchmark_review_search_and_release.sql`
 - `20260731112104_harden_routing_benchmark_review_semantics.sql`
+- `20260731113046_routing_benchmark_cover_remaining_foreign_keys.sql`
+
+The Supabase performance advisor was run after DDL. The two new uncovered foreign keys reported for corrected entity and superseding review references were indexed in the final migration.
 
 ## Next release step
 
