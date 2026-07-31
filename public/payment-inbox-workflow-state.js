@@ -19,6 +19,7 @@
   let requestGeneration = 0;
   let observer = null;
   let refreshTimer = null;
+  let currentSession = null;
 
   function decodeBase64Url(value) {
     const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
@@ -62,6 +63,24 @@
     return null;
   }
 
+  async function ensureSession(force = false) {
+    if (!currentSession) currentSession = readSession();
+    if (!currentSession?.access_token) return null;
+    const expiresAt = Number(currentSession.expires_at || 0) * 1000;
+    const needsRefresh = force || (expiresAt > 0 && expiresAt < Date.now() + 90_000);
+    if (!needsRefresh || !currentSession.refresh_token) return currentSession;
+
+    const response = await fetch(`${config.apiUrl}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: currentSession.refresh_token })
+    });
+    if (!response.ok) return currentSession;
+    const refreshed = await response.json();
+    if (refreshed?.access_token) currentSession = refreshed;
+    return currentSession;
+  }
+
   function esc(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -79,13 +98,9 @@
     return SOURCE_LABELS[source] || 'مسار تشغيلي';
   }
 
-  async function loadCompletedItems() {
-    if (!activeCompletedTab()) return;
-    const businessId = document.getElementById('businessSelect')?.value;
-    const session = readSession();
-    if (!businessId || !session?.access_token) return;
-
-    const generation = ++requestGeneration;
+  async function fetchCompletedItems(businessId, forceSessionRefresh = false) {
+    const session = await ensureSession(forceSessionRefresh);
+    if (!session?.access_token) return null;
     const response = await fetch(`${config.apiUrl}/rest/v1/rpc/get_business_payment_inbox`, {
       method: 'POST',
       headers: {
@@ -100,8 +115,19 @@
         p_before_id: null
       })
     });
-    if (!response.ok || generation !== requestGeneration) return;
-    const payload = await response.json();
+    if (response.status === 401 && !forceSessionRefresh) return fetchCompletedItems(businessId, true);
+    if (!response.ok) return null;
+    return response.json();
+  }
+
+  async function loadCompletedItems() {
+    if (!activeCompletedTab()) return;
+    const businessId = document.getElementById('businessSelect')?.value;
+    if (!businessId) return;
+
+    const generation = ++requestGeneration;
+    const payload = await fetchCompletedItems(businessId);
+    if (!payload || generation !== requestGeneration) return;
     const items = Array.isArray(payload?.items) ? payload.items : [];
 
     items.forEach(item => {
