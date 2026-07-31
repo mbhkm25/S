@@ -1,4 +1,5 @@
 import { LayoutTemplate } from 'lucide-react';
+import BusinessFinancialAccountsCenter from './BusinessFinancialAccountsCenter';
 import BusinessManageV3 from './BusinessManageV3';
 
 interface Props {
@@ -26,6 +27,7 @@ export default function BusinessManage(props: Props) {
           <span className="text-lg text-slate-300">‹</span>
         </button>
       </section>
+      <BusinessFinancialAccountsCenter />
       <BusinessManageV3 {...props} />
     </div>
   );
