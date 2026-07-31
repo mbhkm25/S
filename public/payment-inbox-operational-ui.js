@@ -21,6 +21,19 @@
     shadow_preview: ['تجريبية', 'مطابقات غير تشغيلية']
   };
 
+  const ACCOUNT_LABELS = {
+    'kuraimi-hasib': 'نقطة حاسب',
+    alamqi: 'حساب المستلم',
+    albasiri: 'حساب المستلم',
+    bcash: 'حساب المستلم',
+    'kuraimi-saudi': 'حساب المستلم',
+    'kuraimi-yemeni': 'حساب المستلم',
+    'bindawol-exchange': 'حساب المستلم',
+    'bindawol-pay': 'حساب المستلم',
+    alqutaibi: 'حساب المستلم',
+    other: 'الحساب أو النقطة'
+  };
+
   let queueFrame = 0;
 
   const normalize = value => String(value || '')
@@ -134,8 +147,14 @@
     switcher.innerHTML = `
       <button type="button" class="tab-switcher-summary" aria-expanded="false" aria-controls="paymentInboxTabSwitcherMenu">
         <span class="tab-switcher-count">0</span>
-        <span class="tab-switcher-copy"><strong class="tab-switcher-title">جديدة</strong><span class="tab-switcher-hint">عمليات متاحة للاستلام</span></span>
-        <span class="tab-switcher-chevron" aria-hidden="true">⌄</span>
+        <span class="tab-switcher-copy">
+          <strong class="tab-switcher-title">جديدة</strong>
+          <span class="tab-switcher-hint">عمليات متاحة للاستلام</span>
+          <span class="tab-switcher-instruction">اضغط لتغيير القسم</span>
+        </span>
+        <span class="tab-switcher-chevron" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false"><path d="m7 9 5 5 5-5"/></svg>
+        </span>
       </button>
       <div class="tab-switcher-menu hidden" id="paymentInboxTabSwitcherMenu"></div>
     `;
@@ -193,10 +212,33 @@
     if (logo.innerHTML !== html) logo.innerHTML = html;
   }
 
-  function compactActions(card) {
+  function refineFacts(card, entity) {
+    const facts = [...card.querySelectorAll('.fact')];
+    const receiver = facts[0];
+    const account = facts[1];
+
+    receiver?.classList.add('fact-receiver');
+    account?.classList.add('fact-account');
+
+    const accountLabel = account?.querySelector('span');
+    const nextLabel = ACCOUNT_LABELS[entity.key] || ACCOUNT_LABELS.other;
+    if (accountLabel && accountLabel.textContent !== nextLabel) accountLabel.textContent = nextLabel;
+  }
+
+  function refineActions(card) {
     const group = card.querySelector('.action-group');
     if (!group) return;
-    [...group.children].forEach((button, index) => button.classList.toggle('tertiary-action', index > 1));
+
+    [...group.children].forEach((button, index) => {
+      button.classList.toggle('tertiary-action', index > 1);
+      if (button.textContent.trim() !== 'فتح الإشعار' || button.querySelector('.open-notice-icon')) return;
+
+      const icon = document.createElement('span');
+      icon.className = 'open-notice-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M14 5h5v5M19 5l-7 7M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>';
+      button.append(icon);
+    });
   }
 
   function decorateCard(card) {
@@ -206,7 +248,8 @@
     card.style.setProperty('--entity-soft', entity.soft);
     card.dataset.entityKey = entity.key;
     addLogo(card, entity, label);
-    compactActions(card);
+    refineFacts(card, entity);
+    refineActions(card);
     card.setAttribute('tabindex', '0');
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', `فتح تفاصيل عملية ${label}`);
@@ -246,7 +289,8 @@
       const tone = action.classList.contains('primary') ? 'primary' : action.classList.contains('danger') ? 'danger' : 'secondary';
       return `<button type="button" class="${tone}" data-proxy-action="${index}">${esc(label)}</button>`;
     }).join('');
-    const extraFacts = Object.entries(facts).filter(([label]) => !['المستلم', 'الحساب/النقطة'].includes(label));
+    const accountLabel = ACCOUNT_LABELS[entity.key] || ACCOUNT_LABELS.other;
+    const extraFacts = Object.entries(facts).filter(([label]) => !['المستلم', 'الحساب/النقطة', accountLabel].includes(label));
     const previewReasons = [...card.querySelectorAll('.preview-gates span')]
       .map(node => node.getAttribute('title') || node.textContent.trim())
       .filter(Boolean);
@@ -264,7 +308,7 @@
       </div>
       <div class="detail-facts">
         ${detailFact('المستلم', facts['المستلم'])}
-        ${detailFact('الحساب أو النقطة', facts['الحساب/النقطة'])}
+        ${detailFact(accountLabel, facts[accountLabel] || facts['الحساب/النقطة'])}
         ${extraFacts.map(([label, value]) => detailFact(label, value)).join('')}
       </div>
       ${actionMarkup ? `<div class="detail-actions">${actionMarkup}</div>` : ''}
