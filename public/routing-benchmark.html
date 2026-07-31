@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#020617" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>Benchmark التوجيه المالي | سند</title>
+  <link rel="stylesheet" href="/routing-benchmark.css" />
+</head>
+<body>
+  <div id="app" class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">وصول مدير المنصة · داخلي فقط</p>
+        <h1>Benchmark التوجيه المالي</h1>
+        <p class="hero-copy">مراجعة بشرية لعقد التحليل ونتائج المطابقة الظلية. لا تنشئ هذه الصفحة أي توجيه حقيقي أو رابط نشاط.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
+        <a class="icon-button" href="/platform-admin" aria-label="العودة إلى لوحة الإدارة">←</a>
+      </div>
+    </header>
+
+    <div id="notice" class="notice hidden" role="status"></div>
+
+    <section id="gateSection" class="gate-card loading-block">
+      <div class="loader"></div>
+    </section>
+
+    <section id="statsSection" class="stats-grid"></section>
+
+    <section class="panel filters-panel">
+      <div class="section-heading">
+        <div>
+          <h2>طابور المراجعة</h2>
+          <p>رتّب الحالات حسب الأولوية، ثم افتح الإشعار الفعلي قبل تسجيل الحكم.</p>
+        </div>
+        <span id="queueCount" class="count-chip">—</span>
+      </div>
+      <div class="filters-grid">
+        <label>حالة الحالة
+          <select id="statusFilter">
+            <option value="">الكل</option>
+            <option value="pending">بانتظار المراجعة</option>
+            <option value="in_review">قيد المراجعة</option>
+            <option value="reviewed">تمت مراجعتها</option>
+            <option value="excluded">مستبعدة</option>
+          </select>
+        </label>
+        <label>مجموعة البيانات
+          <select id="cohortFilter">
+            <option value="">الكل</option>
+            <option value="contract_v2_live">عقد v2 الفعلي</option>
+            <option value="legacy_baseline">خط الأساس القديم</option>
+          </select>
+        </label>
+        <label>الجهة المالية
+          <select id="entityFilter"><option value="">كل الجهات</option></select>
+        </label>
+        <label>القالب
+          <select id="templateFilter">
+            <option value="">كل القوالب</option>
+            <option value="single_receipt">إيصال مفرد</option>
+            <option value="transaction_list">قائمة عمليات</option>
+            <option value="account_history">سجل حساب</option>
+            <option value="wallet_receipt">إيصال محفظة</option>
+            <option value="transfer_receipt">إيصال تحويل</option>
+            <option value="statement">كشف</option>
+            <option value="unknown">غير معروف</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <main id="queueSection" class="queue-list">
+      <div class="panel loading-block"><div class="loader"></div></div>
+    </main>
+
+    <section class="panel breakdown-panel">
+      <div class="section-heading">
+        <div><h2>الدقة حسب الجهة والقالب</h2><p>لا تُحتسب الدقة إلا من الأحكام البشرية المسجلة.</p></div>
+      </div>
+      <div id="breakdownSection" class="table-wrap"></div>
+    </section>
+  </div>
+
+  <div id="caseModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+      <header class="modal-header">
+        <div><p class="eyebrow">حالة Benchmark</p><h2 id="caseTitle">مراجعة الحالة</h2></div>
+        <button id="closeModalButton" class="icon-button light" type="button" aria-label="إغلاق">×</button>
+      </header>
+      <div id="caseBody" class="modal-body"><div class="loading-block"><div class="loader"></div></div></div>
+    </section>
+  </div>
+
+  <script src="/routing-benchmark.js" defer></script>
+</body>
+</html>

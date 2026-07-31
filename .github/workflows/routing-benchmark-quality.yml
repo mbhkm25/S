@@ -1,0 +1,41 @@
+name: Routing benchmark quality
+
+on:
+  pull_request:
+    paths:
+      - "public/routing-benchmark.html"
+      - "public/routing-benchmark.css"
+      - "public/routing-benchmark.js"
+      - "supabase/migrations/*benchmark*"
+      - "supabase/tests/*benchmark*"
+      - ".github/workflows/routing-benchmark-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check standalone JavaScript syntax
+        run: node --check public/routing-benchmark.js
+
+      - name: Check required page assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/routing-benchmark.html
+          test -s public/routing-benchmark.css
+          test -s public/routing-benchmark.js
+          grep -Fq '/routing-benchmark.css' public/routing-benchmark.html
+          grep -Fq '/routing-benchmark.js' public/routing-benchmark.html
+
+      - name: Enforce shadow-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eiq "activate[_ -]?routing|enable[_ -]?routing|create_business_operation_link" public/routing-benchmark.js
+          grep -Fq "activation_allowed', false" supabase/migrations/*benchmark*.sql
