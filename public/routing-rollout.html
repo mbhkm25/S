@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#020617" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>التفعيل التدريجي للتوجيه | سند</title>
+  <link rel="stylesheet" href="/routing-rollout.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">مدير المنصة · تحكم تشغيلي حساس</p>
+        <h1>التفعيل التدريجي للتوجيه</h1>
+        <p>تهيئة Canary وقائمة السماح ومفتاح الإيقاف الطارئ. لا يمكن لواجهة الإدارة تجاوز بوابة الدقة أو توثيق الحساب المالي.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
+        <a class="icon-button" href="/routing-benchmark.html" aria-label="Benchmark">B</a>
+        <a class="icon-button" href="/platform-admin" aria-label="لوحة الإدارة">←</a>
+      </div>
+    </header>
+
+    <div id="notice" class="notice hidden" role="status"></div>
+
+    <section id="gateSection" class="gate-card loading"><div class="spinner"></div></section>
+    <section id="statsSection" class="stats-grid"></section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div><h2>سياسة التشغيل</h2><p>الحفظ لا يعني التفعيل. قاعدة البيانات تعيد فحص كل شرط عند كل تشغيل.</p></div>
+        <span id="policyVersion" class="chip">—</span>
+      </div>
+      <form id="policyForm" class="form-grid">
+        <label>الوضع
+          <select id="rolloutMode">
+            <option value="shadow">ظل فقط</option>
+            <option value="canary">Canary محدود</option>
+            <option value="live">تشغيل حي</option>
+          </select>
+        </label>
+        <label>الحد الأدنى للدرجة
+          <input id="minimumScore" type="number" min="0" max="100" step="0.1" />
+        </label>
+        <label>السقف اليومي العام
+          <input id="globalCap" type="number" min="1" max="10000" />
+        </label>
+        <label>سقف النشاط اليومي
+          <input id="businessCap" type="number" min="1" max="1000" />
+        </label>
+
+        <fieldset>
+          <legend>حالات الظل المسموحة</legend>
+          <label class="check"><input type="checkbox" name="shadowStatus" value="high_confidence_match" /> مرتفعة الثقة</label>
+          <label class="check"><input type="checkbox" name="shadowStatus" value="probable_match" /> مطابقة محتملة</label>
+        </fieldset>
+        <fieldset>
+          <legend>استراتيجيات المطابقة</legend>
+          <label class="check"><input type="checkbox" name="strategy" value="receiver_account" /> حساب المستلم</label>
+          <label class="check"><input type="checkbox" name="strategy" value="document_account" /> حساب رأس المستند</label>
+          <label class="check"><input type="checkbox" name="strategy" value="credited_account" /> الحساب الدائن</label>
+          <label class="check"><input type="checkbox" name="strategy" value="merchant_point" /> نقطة حاسب/التاجر</label>
+          <label class="check"><input type="checkbox" name="strategy" value="exact_financial_identifier" /> معرّف مالي مطابق تمامًا</label>
+        </fieldset>
+
+        <label class="toggle-row"><span><strong>اشتراط توثيق الحساب</strong><small>لا تمر العملية إلى حساب غير موثّق.</small></span><input id="requireVerified" type="checkbox" /></label>
+        <label class="toggle-row"><span><strong>الإيقاف الطارئ</strong><small>يمنع جميع عمليات التوجيه فورًا.</small></span><input id="emergencyStop" type="checkbox" /></label>
+        <label class="toggle-row danger-toggle"><span><strong>تشغيل السياسة</strong><small>لن يقبلها الخادم إلا بعد اجتياز جميع البوابات.</small></span><input id="policyEnabled" type="checkbox" /></label>
+
+        <label class="wide">سبب التعديل
+          <textarea id="policyReason" required minlength="10" placeholder="سبب إداري واضح لا يقل عن 10 أحرف"></textarea>
+        </label>
+        <div class="wide actions">
+          <button id="savePolicyButton" class="primary" type="submit">حفظ السياسة</button>
+          <button id="emergencyButton" class="danger" type="button">إيقاف طارئ فوري</button>
+          <button id="benchmarkBlockButton" class="secondary" type="button">رفع حظر Benchmark</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div><h2>قائمة السماح</h2><p>كل هدف يجب أن يحدد حسابًا ماليًا بعينه. الهدف المعطل يمكن تجهيزه قبل اكتمال القياس.</p></div>
+        <span id="targetsCount" class="chip">0</span>
+      </div>
+      <div class="target-builder">
+        <div class="search-row">
+          <input id="accountSearch" placeholder="ابحث بالنشاط أو صاحب الحساب أو الرقم" />
+          <button id="searchAccountsButton" type="button" class="secondary">بحث</button>
+        </div>
+        <div id="accountResults" class="account-results"></div>
+        <div id="selectedAccount" class="selected-account hidden"></div>
+        <div class="form-grid compact">
+          <label>وضع الهدف<select id="targetMode"><option value="canary">Canary</option><option value="live">حي</option></select></label>
+          <label>السقف اليومي<input id="targetCap" type="number" min="1" max="1000" value="3" /></label>
+          <label>الاستراتيجية<select id="targetStrategy"><option value="receiver_account">حساب المستلم</option><option value="document_account">حساب رأس المستند</option><option value="credited_account">الحساب الدائن</option><option value="merchant_point">نقطة حاسب</option><option value="exact_financial_identifier">معرّف مطابق تمامًا</option></select></label>
+          <label class="toggle-row"><span><strong>هدف مفعّل</strong><small>يتطلب حسابًا موثّقًا ومفعّل التوجيه.</small></span><input id="targetEnabled" type="checkbox" /></label>
+          <label class="wide">ملاحظات<input id="targetNotes" maxlength="1000" placeholder="نطاق التجربة أو سبب اختيار الحساب" /></label>
+          <label class="wide">سبب الإجراء<textarea id="targetReason" minlength="10" placeholder="سبب إداري واضح"></textarea></label>
+          <button id="saveTargetButton" type="button" class="primary wide">حفظ الهدف</button>
+        </div>
+      </div>
+      <div id="targetsSection" class="target-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading"><div><h2>آخر قرارات البوابة</h2><p>الرفض نتيجة سلامة متوقعة، وليس خطأً، ما دامت الحواجز غير مكتملة.</p></div></div>
+      <div id="decisionsSection" class="table-wrap"></div>
+    </section>
+  </div>
+
+  <script src="/routing-rollout.js" defer></script>
+</body>
+</html>

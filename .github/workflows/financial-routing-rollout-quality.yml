@@ -1,0 +1,55 @@
+name: Financial routing rollout quality
+
+on:
+  pull_request:
+    paths:
+      - "public/routing-rollout.html"
+      - "public/routing-rollout.css"
+      - "public/routing-rollout.js"
+      - "supabase/migrations/*financial_routing_rollout*"
+      - "supabase/tests/financial_routing_rollout.sql"
+      - ".github/workflows/financial-routing-rollout-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check rollout JavaScript syntax
+        run: node --check public/routing-rollout.js
+
+      - name: Check required assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/routing-rollout.html
+          test -s public/routing-rollout.css
+          test -s public/routing-rollout.js
+          grep -Fq '/routing-rollout.css' public/routing-rollout.html
+          grep -Fq '/routing-rollout.js' public/routing-rollout.html
+
+      - name: Enforce disabled-by-default policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'enabled boolean not null default false' supabase/migrations/*financial_routing_rollout_foundation.sql
+          grep -Fq 'emergency_stop boolean not null default true' supabase/migrations/*financial_routing_rollout_foundation.sql
+          grep -Fq "rollout_mode text not null default 'shadow'" supabase/migrations/*financial_routing_rollout_foundation.sql
+          grep -Fq 'benchmark_gate_not_passed' supabase/migrations/*financial_routing_rollout_foundation.sql
+          grep -Fq 'financial_account_not_verified' supabase/migrations/*financial_routing_rollout_foundation.sql
+          grep -Fq 'candidate_count_not_one' supabase/migrations/*financial_routing_rollout_foundation.sql
+
+      - name: Enforce guarded activation contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "raise exception 'benchmark_gate_not_passed'" supabase/migrations/*financial_routing_rollout_admin_contracts.sql
+          grep -Fq "raise exception 'enabled_target_requires_verified_routing_account'" supabase/migrations/*financial_routing_rollout_admin_contracts.sql
+          grep -Fq 'platform_admin_emergency_stop_financial_routing' supabase/migrations/*financial_routing_rollout_admin_contracts.sql
+          grep -Fq 'auto_financial_account_match' supabase/migrations/*financial_routing_rollout_foundation.sql
+          ! grep -Eiq 'service_role.*grant execute.*authenticated|grant all on public.financial_routing_rollout' supabase/migrations/*financial_routing_rollout*.sql
