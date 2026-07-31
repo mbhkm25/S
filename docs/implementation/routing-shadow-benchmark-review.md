@@ -153,7 +153,7 @@ A dedicated GitHub Actions workflow runs JavaScript syntax checks, asset checks,
 
 - `20260731110911_routing_shadow_benchmark_review_foundation.sql`
 - `20260731111326_routing_benchmark_review_search_and_release.sql`
-- `20260731111832_harden_routing_benchmark_review_semantics.sql`
+- `20260731112104_harden_routing_benchmark_review_semantics.sql`
 
 ## Next release step
 
