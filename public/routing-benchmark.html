@@ -7,14 +7,15 @@
   <meta name="robots" content="noindex,nofollow,noarchive" />
   <title>Benchmark التوجيه المالي | سند</title>
   <link rel="stylesheet" href="/routing-benchmark.css" />
+  <link rel="stylesheet" href="/routing-benchmark-v2.css" />
 </head>
 <body>
   <div id="app" class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">وصول مدير المنصة · داخلي فقط</p>
+        <p class="eyebrow">مراجعة بشرية مستقلة · داخلي فقط</p>
         <h1>Benchmark التوجيه المالي</h1>
-        <p class="hero-copy">مراجعة بشرية لعقد التحليل ونتائج المطابقة الظلية. لا تنشئ هذه الصفحة أي توجيه حقيقي أو رابط نشاط.</p>
+        <p class="hero-copy">حكمان مستقلان لكل إشعار، ثم محكّم مستقل عند التعارض. لا تنشئ هذه الصفحة أي توجيه حقيقي أو رابط نشاط.</p>
       </div>
       <div class="hero-actions">
         <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
@@ -28,13 +29,37 @@
       <div class="loader"></div>
     </section>
 
+    <section id="reviewerCapacitySection" class="panel loading-block">
+      <div class="loader"></div>
+    </section>
+
+    <section id="reviewerAdminSection" class="panel hidden">
+      <div class="section-heading">
+        <div>
+          <h2>إدارة مراجعي Benchmark</h2>
+          <p>امنح صلاحية القياس فقط، من دون منح صلاحية مدير المنصة.</p>
+        </div>
+        <span class="count-chip">ADMIN</span>
+      </div>
+      <div class="reviewer-toolbar">
+        <label>البحث عن مستخدم
+          <input id="reviewerSearch" type="search" placeholder="الاسم أو رقم الجوال أو البريد" autocomplete="off" />
+        </label>
+        <button id="searchReviewersButton" class="secondary-button" type="button">بحث</button>
+      </div>
+      <label class="admin-reason-label">سبب التعيين أو التعديل
+        <input id="reviewerAdminReason" type="text" minlength="5" placeholder="سبب واضح يُسجل في سجل الإدارة" />
+      </label>
+      <div id="reviewerCandidates" class="reviewer-list"></div>
+    </section>
+
     <section id="statsSection" class="stats-grid"></section>
 
     <section class="panel filters-panel">
       <div class="section-heading">
         <div>
           <h2>طابور المراجعة</h2>
-          <p>رتّب الحالات حسب الأولوية، ثم افتح الإشعار الفعلي قبل تسجيل الحكم.</p>
+          <p>الحكم الثاني أعمى، ولا تظهر الأحكام السابقة إلا للمحكّم عند التعارض.</p>
         </div>
         <span id="queueCount" class="count-chip">—</span>
       </div>
@@ -42,10 +67,19 @@
         <label>حالة الحالة
           <select id="statusFilter">
             <option value="">الكل</option>
-            <option value="pending">بانتظار المراجعة</option>
+            <option value="pending">بانتظار الإجراء</option>
             <option value="in_review">قيد المراجعة</option>
-            <option value="reviewed">تمت مراجعتها</option>
+            <option value="reviewed">حقيقة نهائية</option>
             <option value="excluded">مستبعدة</option>
+          </select>
+        </label>
+        <label>مرحلة المراجعة
+          <select id="stageFilter">
+            <option value="">كل المراحل</option>
+            <option value="awaiting_primary">الحكم الأول</option>
+            <option value="awaiting_secondary">الحكم الثاني المستقل</option>
+            <option value="awaiting_adjudication">حسم التعارض</option>
+            <option value="finalized">حقيقة نهائية</option>
           </select>
         </label>
         <label>مجموعة البيانات
@@ -79,7 +113,7 @@
 
     <section class="panel breakdown-panel">
       <div class="section-heading">
-        <div><h2>الدقة حسب الجهة والقالب</h2><p>لا تُحتسب الدقة إلا من الأحكام البشرية المسجلة.</p></div>
+        <div><h2>الدقة حسب الجهة والقالب</h2><p>لا تُحتسب إلا الحقائق النهائية المتفق عليها أو المحسومة.</p></div>
       </div>
       <div id="breakdownSection" class="table-wrap"></div>
     </section>
@@ -89,13 +123,13 @@
     <div class="modal-backdrop" data-close-modal></div>
     <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="caseTitle">
       <header class="modal-header">
-        <div><p class="eyebrow">حالة Benchmark</p><h2 id="caseTitle">مراجعة الحالة</h2></div>
+        <div><p id="caseStageEyebrow" class="eyebrow">حالة Benchmark</p><h2 id="caseTitle">مراجعة الحالة</h2></div>
         <button id="closeModalButton" class="icon-button light" type="button" aria-label="إغلاق">×</button>
       </header>
       <div id="caseBody" class="modal-body"><div class="loading-block"><div class="loader"></div></div></div>
     </section>
   </div>
 
-  <script src="/routing-benchmark.js" defer></script>
+  <script src="/routing-benchmark-v2.js" defer></script>
 </body>
 </html>
