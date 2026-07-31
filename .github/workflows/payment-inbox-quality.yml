@@ -10,6 +10,8 @@ on:
       - "public/payment-inbox-shadow-preview.js"
       - "public/sanad-ui-standards.css"
       - "public/sanad-display-standards.js"
+      - "public/routing-benchmark.html"
+      - "public/routing-rollout.html"
       - "src/components/business/BusinessManage.tsx"
       - "supabase/migrations/*payment_inbox*"
       - "supabase/tests/*payment_inbox*"
@@ -59,7 +61,16 @@ jobs:
           grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
           grep -Fq 'font-variant-numeric: lining-nums tabular-nums' public/sanad-ui-standards.css
           grep -Fq 'toLatinDigits' public/sanad-display-standards.js
-          grep -Eq '\[٠-٩\].*\[۰-۹\]|\[۰-۹\].*\[٠-٩\]' public/sanad-display-standards.js
+          grep -Fq '/[٠-٩]/g' public/sanad-display-standards.js
+          grep -Fq '/[۰-۹]/g' public/sanad-display-standards.js
+          for page in public/payment-inbox.html public/routing-benchmark.html public/routing-rollout.html; do
+            grep -Fq '/sanad-ui-standards.css' "$page"
+            grep -Fq '/sanad-display-standards.js' "$page"
+          done
+          test "$(grep -n '/sanad-ui-standards.css' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox.css' public/payment-inbox.html | cut -d: -f1)"
+          test "$(grep -n '/sanad-display-standards.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)"
+          test "$(grep -n '/sanad-display-standards.js' public/routing-benchmark.html | cut -d: -f1)" -lt "$(grep -n '/routing-benchmark-v2.js' public/routing-benchmark.html | cut -d: -f1)"
+          test "$(grep -n '/sanad-display-standards.js' public/routing-rollout.html | cut -d: -f1)" -lt "$(grep -n '/routing-rollout.js' public/routing-rollout.html | cut -d: -f1)"
 
       - name: Enforce atomic inbox contracts
         shell: bash
