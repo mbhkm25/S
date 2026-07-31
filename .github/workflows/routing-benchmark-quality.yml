@@ -6,8 +6,8 @@ on:
       - "public/routing-benchmark.html"
       - "public/routing-benchmark.css"
       - "public/routing-benchmark.js"
-      - "supabase/migrations/*routing_benchmark*"
-      - "supabase/tests/*routing_benchmark*"
+      - "supabase/migrations/*benchmark*"
+      - "supabase/tests/*benchmark*"
       - ".github/workflows/routing-benchmark-quality.yml"
 
 permissions:
@@ -38,4 +38,4 @@ jobs:
         run: |
           set -euo pipefail
           ! grep -Eiq "activate[_ -]?routing|enable[_ -]?routing|create_business_operation_link" public/routing-benchmark.js
-          grep -Fq "activation_allowed', false" supabase/migrations/*routing_benchmark*.sql
+          grep -Fq "activation_allowed', false" supabase/migrations/*benchmark*.sql
