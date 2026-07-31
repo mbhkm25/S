@@ -2,6 +2,7 @@
   'use strict';
 
   const API_URL = window.SANAD_PUBLIC_API_CONFIG?.apiUrl || 'https://api.sanadflow.com';
+  const API_ORIGIN = new URL(API_URL).origin;
   const PREVIEW_STATUS = 'shadow_preview';
   const PREVIEW_RPC = 'get_business_payment_shadow_preview';
   const originalFetch = window.fetch.bind(window);
@@ -16,7 +17,8 @@
     lastPreviewCount = Number.isFinite(Number(count)) ? Number(count) : 0;
     const tab = document.querySelector(`[data-status="${PREVIEW_STATUS}"]`);
     if (!tab) return;
-    tab.textContent = lastPreviewCount > 0 ? `تجريبية · ${lastPreviewCount}` : 'تجريبية';
+    const nextLabel = lastPreviewCount > 0 ? `تجريبية · ${lastPreviewCount}` : 'تجريبية';
+    if (tab.textContent !== nextLabel) tab.textContent = nextLabel;
   }
 
   function parseJsonBody(init) {
@@ -29,7 +31,7 @@
     if (!rawUrl) return false;
     try {
       const url = new URL(rawUrl, window.location.href);
-      return url.origin === API_URL && url.pathname.endsWith('/rest/v1/rpc/get_business_payment_inbox');
+      return url.origin === API_ORIGIN && url.pathname.endsWith('/rest/v1/rpc/get_business_payment_inbox');
     } catch {
       return false;
     }
@@ -67,6 +69,12 @@
     });
   }
 
+  function clearPreviewDecorations(root) {
+    root.querySelector('.shadow-preview-banner')?.remove();
+    root.querySelectorAll('.payment-card.shadow-preview-card').forEach(card => card.classList.remove('shadow-preview-card'));
+    root.querySelectorAll('.preview-operation-note').forEach(node => node.remove());
+  }
+
   function decoratePreviewQueue() {
     if (decorating) return;
     decorating = true;
@@ -74,33 +82,34 @@
       const root = document.getElementById('queueSection');
       if (!root) return;
 
-      root.querySelectorAll('.shadow-preview-banner').forEach(node => node.remove());
-      root.querySelectorAll('.payment-card').forEach(card => card.classList.remove('shadow-preview-card'));
-      root.querySelectorAll('.preview-operation-note').forEach(node => node.remove());
-
-      if (!isPreviewTabActive()) return;
+      if (!isPreviewTabActive()) {
+        clearPreviewDecorations(root);
+        return;
+      }
 
       replaceBadgeText(root, PREVIEW_STATUS, 'تجريبية');
       replaceBadgeText(root, 'shadow', 'ظل');
 
       const cards = [...root.querySelectorAll('.payment-card')];
       if (!cards.length) {
+        root.querySelector('.shadow-preview-banner')?.remove();
         const empty = root.querySelector('.empty');
-        if (empty) {
-          empty.innerHTML = 'لا توجد مطابقات تجريبية لهذا النشاط الآن.<br>تظهر هنا عمليات الظل المطابقة دون أن تدخل التشغيل.';
-        }
+        const previewCopy = 'لا توجد مطابقات تجريبية لهذا النشاط الآن.<br>تظهر هنا عمليات الظل المطابقة دون أن تدخل التشغيل.';
+        if (empty && empty.innerHTML !== previewCopy) empty.innerHTML = previewCopy;
         return;
       }
 
-      const banner = document.createElement('section');
-      banner.className = 'shadow-preview-banner';
-      banner.innerHTML = '<strong>مطابقات تجريبية فقط</strong><span>هذه العمليات طابقت حساب النشاط في وضع الظل، لكنها لم تدخل وارد التشغيل ولا يمكن استلامها أو إكمالها.</span>';
-      root.prepend(banner);
+      if (!root.querySelector('.shadow-preview-banner')) {
+        const banner = document.createElement('section');
+        banner.className = 'shadow-preview-banner';
+        banner.innerHTML = '<strong>مطابقات تجريبية فقط</strong><span>هذه العمليات طابقت حساب النشاط في وضع الظل، لكنها لم تدخل وارد التشغيل ولا يمكن استلامها أو إكمالها.</span>';
+        root.prepend(banner);
+      }
 
       cards.forEach(card => {
-        card.classList.add('shadow-preview-card');
+        if (!card.classList.contains('shadow-preview-card')) card.classList.add('shadow-preview-card');
         const actions = card.querySelector('.card-actions');
-        if (!actions) return;
+        if (!actions || actions.querySelector('.preview-operation-note')) return;
         const note = document.createElement('span');
         note.className = 'preview-operation-note';
         note.textContent = 'غير تشغيلية · بانتظار اجتياز بوابة التوجيه';
