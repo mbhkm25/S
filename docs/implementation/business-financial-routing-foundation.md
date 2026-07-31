@@ -129,7 +129,9 @@ The old UI contract stored accounts under:
 
 That JSON is now a public-safe compatibility cache, not the source of truth.
 
-The canonical tables are written first. The cache is regenerated after successful writes and archives. Existing clients can continue calling:
+The canonical tables are written first. The cache is regenerated after successful writes and archives. `update_business_profile` preserves the canonical cache even when a client submits a full `profile_sections` object, so general profile editing cannot restore stale account data or bypass the normalized write path.
+
+Existing clients can continue calling:
 
 - `upsert_business_financial_account`
 - `delete_business_financial_account`
@@ -171,17 +173,19 @@ No test account remains in production.
 
 ## Validation completed
 
-A transaction-based production contract test was executed and rolled back:
+Transaction-based production contract tests were executed and rolled back:
 
 1. the old RPC updated the migrated account without changing its canonical identity;
 2. the v2 RPC created a temporary `kuraimi_haseb` account;
 3. a `merchant_point` identifier normalized correctly;
 4. routing flags and holder-name normalization were verified;
-5. the transaction was rolled back completely.
+5. a forged `financial_accounts` value sent through `update_business_profile` was ignored while a normal profile section still updated;
+6. both transactions were rolled back completely.
 
 Reusable assertions are stored in:
 
-`supabase/tests/business_financial_routing_foundation.sql`
+- `supabase/tests/business_financial_routing_foundation.sql`
+- `supabase/tests/business_financial_cache_protection.sql`
 
 ## Applied migrations
 
@@ -189,6 +193,7 @@ Reusable assertions are stored in:
 - `20260731095648_business_financial_routing_legacy_migration.sql`
 - `20260731095834_business_financial_routing_write_contracts.sql`
 - `20260731100440_business_financial_routing_fk_indexes.sql`
+- `20260731101405_protect_financial_accounts_compatibility_cache.sql`
 
 These filenames match the live Supabase migration history.
 
