@@ -1,6 +1,14 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, Flashlight, Image as ImageIcon, Loader2, RotateCcw, X } from 'lucide-react';
+import {
+  Camera,
+  Flashlight,
+  Image as ImageIcon,
+  Loader2,
+  RotateCcw,
+  SwitchCamera,
+  X
+} from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { toLatinDigits } from '../lib/digits';
 
@@ -14,6 +22,9 @@ type ScannerStatus = 'starting' | 'scanning' | 'error';
 
 const TOKEN_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
 const FALLBACK_ELEMENT_ID = 'sanad-direct-qr-fallback';
+const CAMERA_IDEAL_WIDTH = 4096;
+const CAMERA_IDEAL_HEIGHT = 2160;
+const CAMERA_IDEAL_FRAME_RATE = 60;
 
 function extractToken(value: string): string | null {
   return toLatinDigits(value || '').match(TOKEN_REGEX)?.[0] || null;
@@ -30,7 +41,22 @@ function getCameraErrorMessage(error: any): string {
   if (name === 'NotReadableError' || name === 'TrackStartError') {
     return 'الكاميرا مستخدمة في تطبيق آخر. أغلق التطبيق الآخر أو استخدم كاميرا الهاتف لالتقاط صورة QR.';
   }
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return 'تعذر تشغيل إعداد الكاميرا المختار. أعد المحاولة أو بدّل الكاميرا.';
+  }
   return 'تعذر تشغيل الماسح الحي. استخدم كاميرا الهاتف لالتقاط صورة QR أو اختر صورة محفوظة.';
+}
+
+function highQualityVideoConstraints(deviceId?: string): MediaTrackConstraints {
+  return {
+    ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' } }),
+    // These are preferences, not hard limits. The browser may select any higher-quality mode the device exposes.
+    width: { ideal: CAMERA_IDEAL_WIDTH },
+    height: { ideal: CAMERA_IDEAL_HEIGHT },
+    frameRate: { ideal: CAMERA_IDEAL_FRAME_RATE },
+    ...(deviceId ? { facingMode: { ideal: 'environment' } } : {}),
+    resizeMode: 'none'
+  } as MediaTrackConstraints;
 }
 
 export default function DirectQrScanner({ onNavigateToDetails, onCancel }: DirectQrScannerProps) {
@@ -43,12 +69,15 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
   const decodingRef = useRef(false);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraDevicesRef = useRef<MediaDeviceInfo[]>([]);
+  const activeDeviceIdRef = useRef<string | null>(null);
 
   const [mode, setMode] = useState<ScannerMode>('native');
   const [status, setStatus] = useState<ScannerStatus>('starting');
   const [error, setError] = useState<string | null>(null);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [canSwitchCamera, setCanSwitchCamera] = useState(false);
 
   const stop = async () => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -82,19 +111,65 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
     onNavigateToDetails(token);
   };
 
-  const applyCameraQuality = async (track: MediaStreamTrack) => {
+  const applyCameraCapabilities = async (track: MediaStreamTrack) => {
+    const capabilities: any = track.getCapabilities?.() || {};
+
     try {
-      const caps: any = track.getCapabilities?.() || {};
-      const advanced: any = {};
-      if (caps.focusMode?.includes('continuous')) advanced.focusMode = 'continuous';
-      if (caps.exposureMode?.includes('continuous')) advanced.exposureMode = 'continuous';
-      if (caps.whiteBalanceMode?.includes('continuous')) advanced.whiteBalanceMode = 'continuous';
-      if (Object.keys(advanced).length > 0) {
-        await track.applyConstraints({ advanced: [advanced] } as any);
+      // Ask for the highest mode reported by the selected camera. No artificial max is imposed.
+      const quality: any = {};
+      if (capabilities.width?.max) quality.width = { ideal: capabilities.width.max };
+      if (capabilities.height?.max) quality.height = { ideal: capabilities.height.max };
+      if (capabilities.frameRate?.max) quality.frameRate = { ideal: capabilities.frameRate.max };
+      if (Array.isArray(capabilities.resizeMode) && capabilities.resizeMode.includes('none')) {
+        quality.resizeMode = 'none';
       }
-      setHasTorch(Boolean(caps.torch));
+      if (Object.keys(quality).length > 0) await track.applyConstraints(quality);
     } catch {
-      setHasTorch(false);
+      // Keep the already opened stream if a device cannot combine all advertised maximums.
+    }
+
+    try {
+      const continuous: any = {};
+      if (capabilities.focusMode?.includes('continuous')) continuous.focusMode = 'continuous';
+      if (capabilities.exposureMode?.includes('continuous')) continuous.exposureMode = 'continuous';
+      if (capabilities.whiteBalanceMode?.includes('continuous')) continuous.whiteBalanceMode = 'continuous';
+      if (Object.keys(continuous).length > 0) {
+        await track.applyConstraints({ advanced: [continuous] } as any);
+      }
+    } catch {
+      // Continuous camera controls are enhancements and must never block scanning.
+    }
+
+    try {
+      track.contentHint = 'detail';
+    } catch {
+      // contentHint is optional.
+    }
+
+    setHasTorch(Boolean(capabilities.torch));
+
+    if (import.meta.env.DEV) {
+      const settings = track.getSettings?.() || {};
+      console.info('[SANAD QR] active camera settings', {
+        width: settings.width,
+        height: settings.height,
+        frameRate: settings.frameRate,
+        facingMode: settings.facingMode,
+        deviceId: settings.deviceId
+      });
+    }
+  };
+
+  const refreshCameraDevices = async (track?: MediaStreamTrack) => {
+    try {
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput');
+      cameraDevicesRef.current = devices;
+      const settings = track?.getSettings?.() || {};
+      activeDeviceIdRef.current = settings.deviceId || activeDeviceIdRef.current;
+      setCanSwitchCamera(devices.length > 1);
+    } catch {
+      cameraDevicesRef.current = [];
+      setCanSwitchCamera(false);
     }
   };
 
@@ -107,7 +182,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
       if (!mountedRef.current || detectedRef.current || !streamRef.current) return;
       const video = videoRef.current;
 
-      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && time - lastScanAt >= 120 && !decodingRef.current) {
+      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && time - lastScanAt >= 100 && !decodingRef.current) {
         lastScanAt = time;
         decodingRef.current = true;
         try {
@@ -126,7 +201,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  const startHtml5Fallback = async () => {
+  const startHtml5Fallback = async (deviceId?: string) => {
     setMode('html5');
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
@@ -134,29 +209,24 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
     html5Ref.current = scanner;
 
     await scanner.start(
-      { facingMode: 'environment' },
+      deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' },
       {
-        fps: 12,
+        fps: 20,
         qrbox: (width, height) => {
-          const size = Math.max(220, Math.floor(Math.min(width, height) * 0.68));
+          const size = Math.max(240, Math.floor(Math.min(width, height) * 0.76));
           return { width: size, height: size };
         },
         disableFlip: true,
-        videoConstraints: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30, max: 30 },
-        },
+        videoConstraints: highQualityVideoConstraints(deviceId)
       },
       decodedText => void finish(decodedText),
-      () => {},
+      () => {}
     );
 
     if (mountedRef.current) setStatus('scanning');
   };
 
-  const start = async () => {
+  const start = async (deviceId?: string) => {
     detectedRef.current = false;
     decodingRef.current = false;
     setMode('native');
@@ -173,27 +243,25 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
     }
 
     try {
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30, max: 30 },
-        },
-        audio: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: highQualityVideoConstraints(deviceId),
+        audio: false
+      });
       streamRef.current = stream;
 
       const track = stream.getVideoTracks()[0];
-      if (track) await applyCameraQuality(track);
+      if (track) {
+        activeDeviceIdRef.current = track.getSettings?.().deviceId || deviceId || null;
+        await applyCameraCapabilities(track);
+        await refreshCameraDevices(track);
+      }
 
       const video = videoRef.current;
       if (!video) throw new Error('video_unavailable');
 
       video.srcObject = stream;
       video.setAttribute('playsinline', 'true');
+      video.disablePictureInPicture = true;
       await video.play();
 
       if (!mountedRef.current) return;
@@ -205,17 +273,25 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
         stream.getTracks().forEach(item => item.stop());
         streamRef.current = null;
         video.srcObject = null;
-        await startHtml5Fallback();
+        await startHtml5Fallback(activeDeviceIdRef.current || deviceId);
       }
     } catch (cameraError: any) {
       try {
-        await startHtml5Fallback();
+        await startHtml5Fallback(deviceId);
       } catch {
         if (!mountedRef.current) return;
         setStatus('error');
         setError(getCameraErrorMessage(cameraError));
       }
     }
+  };
+
+  const switchCamera = async () => {
+    const devices = cameraDevicesRef.current;
+    if (devices.length < 2) return;
+    const currentIndex = devices.findIndex(device => device.deviceId === activeDeviceIdRef.current);
+    const next = devices[(currentIndex + 1 + devices.length) % devices.length];
+    if (next?.deviceId) await start(next.deviceId);
   };
 
   const toggleTorch = async () => {
@@ -289,63 +365,76 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
         />
       )}
 
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0,transparent_28%,rgba(0,0,0,0.08)_29%,rgba(0,0,0,0.74)_70%)]" />
-
-      <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
+      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={() => {
             void stop();
             onCancel();
           }}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 backdrop-blur-md active:scale-95"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 shadow-lg backdrop-blur-md transition active:scale-95"
           aria-label="إغلاق الماسح"
         >
           <X className="h-6 w-6" />
         </button>
 
-        <strong className="rounded-full bg-black/55 px-4 py-2 text-xs backdrop-blur-md">مسح QR</strong>
+        <strong className="rounded-full border border-white/10 bg-black/45 px-4 py-2 text-sm font-bold shadow-lg backdrop-blur-md">مسح QR</strong>
 
-        {hasTorch && mode === 'native' ? (
-          <button
-            type="button"
-            onClick={toggleTorch}
-            className={`flex h-12 w-12 items-center justify-center rounded-full backdrop-blur-md active:scale-95 ${torchOn ? 'bg-amber-400 text-black' : 'bg-black/55'}`}
-            aria-label={torchOn ? 'إيقاف الإضاءة' : 'تشغيل الإضاءة'}
-          >
-            <Flashlight className="h-5 w-5" />
-          </button>
-        ) : (
-          <span className="h-12 w-12" aria-hidden="true" />
-        )}
+        <div className="flex h-12 items-center gap-2">
+          {canSwitchCamera && mode === 'native' && (
+            <button
+              type="button"
+              onClick={() => void switchCamera()}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-black/45 shadow-lg backdrop-blur-md transition active:scale-95"
+              aria-label="تبديل الكاميرا"
+            >
+              <SwitchCamera className="h-5 w-5" />
+            </button>
+          )}
+          {hasTorch && mode === 'native' ? (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg backdrop-blur-md transition active:scale-95 ${torchOn ? 'bg-amber-400 text-black' : 'bg-black/45'}`}
+              aria-label={torchOn ? 'إيقاف الإضاءة' : 'تشغيل الإضاءة'}
+            >
+              <Flashlight className="h-5 w-5" />
+            </button>
+          ) : !canSwitchCamera ? (
+            <span className="h-12 w-12" aria-hidden="true" />
+          ) : null}
+        </div>
       </header>
 
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[min(74vw,340px)] w-[min(74vw,340px)] -translate-x-1/2 -translate-y-1/2 rounded-[2rem] border-2 border-emerald-400 shadow-[0_0_0_1px_rgba(255,255,255,0.25),0_0_42px_rgba(16,185,129,0.28)]">
-        <span className="absolute -left-0.5 -top-0.5 h-12 w-12 rounded-tl-[2rem] border-l-4 border-t-4 border-white" />
-        <span className="absolute -right-0.5 -top-0.5 h-12 w-12 rounded-tr-[2rem] border-r-4 border-t-4 border-white" />
-        <span className="absolute -bottom-0.5 -left-0.5 h-12 w-12 rounded-bl-[2rem] border-b-4 border-l-4 border-white" />
-        <span className="absolute -bottom-0.5 -right-0.5 h-12 w-12 rounded-br-[2rem] border-b-4 border-r-4 border-white" />
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[min(78vw,380px)] w-[min(78vw,380px)] -translate-x-1/2 -translate-y-1/2 rounded-[1.8rem] border border-emerald-300/90 bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.32),0_0_0_1px_rgba(255,255,255,0.22),0_0_36px_rgba(16,185,129,0.22)]"
+        aria-hidden="true"
+      >
+        <span className="absolute -left-0.5 -top-0.5 h-11 w-11 rounded-tl-[1.8rem] border-l-[3px] border-t-[3px] border-white" />
+        <span className="absolute -right-0.5 -top-0.5 h-11 w-11 rounded-tr-[1.8rem] border-r-[3px] border-t-[3px] border-white" />
+        <span className="absolute -bottom-0.5 -left-0.5 h-11 w-11 rounded-bl-[1.8rem] border-b-[3px] border-l-[3px] border-white" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-11 w-11 rounded-br-[1.8rem] border-b-[3px] border-r-[3px] border-white" />
       </div>
 
-      <footer className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center">
+      <footer className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center">
         {status === 'starting' && (
-          <div className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-xs backdrop-blur-md">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-4 py-2 text-sm backdrop-blur-md">
             <Loader2 className="h-4 w-4 animate-spin" />
-            جاري تجهيز الكاميرا…
+            جاري تجهيز الكاميرا بأفضل جودة…
           </div>
         )}
 
         {status === 'scanning' && (
-          <p className="rounded-full bg-black/60 px-4 py-2 text-xs backdrop-blur-md">ضع رمز QR كاملًا داخل الإطار</p>
+          <p className="rounded-full border border-white/10 bg-black/50 px-4 py-2 text-sm font-medium backdrop-blur-md">ضع رمز QR كاملًا داخل الإطار</p>
         )}
 
         {status === 'error' && (
-          <div className="w-full max-w-sm rounded-3xl bg-black/80 p-4 backdrop-blur-md">
-            <p className="text-xs leading-6 text-rose-100">{error}</p>
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black/80 p-4 shadow-2xl backdrop-blur-md">
+            <p className="text-sm leading-7 text-rose-100">{error}</p>
             <button
               type="button"
-              onClick={() => void start()}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-3 py-3 text-xs font-bold text-black"
+              onClick={() => void start(activeDeviceIdRef.current || undefined)}
+              className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white px-3 py-3 text-sm font-bold text-black"
             >
               <RotateCcw className="h-4 w-4" />
               إعادة تشغيل الماسح الحي
@@ -354,7 +443,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 py-3 text-xs font-bold text-white"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 py-3 text-sm font-bold text-white"
               >
                 <Camera className="h-4 w-4" />
                 التقاط صورة QR
@@ -362,7 +451,7 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-xs font-bold text-white"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 px-3 py-3 text-sm font-bold text-white"
               >
                 <ImageIcon className="h-4 w-4" />
                 اختيار صورة
@@ -376,17 +465,17 @@ export default function DirectQrScanner({ onNavigateToDetails, onCancel }: Direc
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-600/90 px-4 py-2 text-[11px] font-bold backdrop-blur-md"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full bg-emerald-600/95 px-5 py-3 text-sm font-bold shadow-lg backdrop-blur-md transition active:scale-95"
             >
-              <Camera className="h-4 w-4" />
+              <Camera className="h-5 w-5" />
               تصوير QR
             </button>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-black/55 px-4 py-2 text-[11px] font-bold backdrop-blur-md"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/10 bg-black/45 px-5 py-3 text-sm font-bold shadow-lg backdrop-blur-md transition active:scale-95"
             >
-              <ImageIcon className="h-4 w-4" />
+              <ImageIcon className="h-5 w-5" />
               صورة محفوظة
             </button>
           </div>
