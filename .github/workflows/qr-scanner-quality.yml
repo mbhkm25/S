@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate high-quality camera negotiation
+      - name: Validate high-quality rear camera negotiation
         shell: bash
         run: |
           set -euo pipefail
@@ -38,17 +38,30 @@ jobs:
           grep -Fq "capabilities.frameRate?.max" src/components/DirectQrScanner.tsx
           grep -Fq "track.contentHint = 'detail'" src/components/DirectQrScanner.tsx
           grep -Fq "focusMode?.includes('continuous')" src/components/DirectQrScanner.tsx
-          grep -Fq "SwitchCamera" src/components/DirectQrScanner.tsx
+          grep -Fq "facingMode: exactRear ? { exact: 'environment' }" src/components/DirectQrScanner.tsx
+          grep -Fq "selectRearCameraCandidates" src/components/DirectQrScanner.tsx
+          grep -Fq "Front camera rejected" src/components/DirectQrScanner.tsx
           grep -Fq "resizeMode?: ConstrainDOMString" src/types/media-track-extensions.d.ts
           if grep -Fq "frameRate: { ideal: 30, max: 30 }" src/components/DirectQrScanner.tsx; then
             echo 'A hard 30fps camera cap must not be reintroduced.' >&2
             exit 1
           fi
+          if grep -Fq "SwitchCamera" src/components/DirectQrScanner.tsx; then
+            echo 'The QR scanner must remain locked to the rear camera.' >&2
+            exit 1
+          fi
+          if grep -Fq "switchCamera" src/components/DirectQrScanner.tsx; then
+            echo 'Manual camera cycling must not be reintroduced.' >&2
+            exit 1
+          fi
 
-      - name: Validate clear scan window
+      - name: Validate first-frame readiness and clear scan window
         shell: bash
         run: |
           set -euo pipefail
+          grep -Fq "waitForVideoFrame" src/components/DirectQrScanner.tsx
+          grep -Fq "previewReady" src/components/DirectQrScanner.tsx
+          grep -Fq "opacity-0" src/components/DirectQrScanner.tsx
           grep -Fq "shadow-[0_0_0_9999px_rgba(0,0,0,0.32)" src/components/DirectQrScanner.tsx
           grep -Fq "bg-transparent" src/components/DirectQrScanner.tsx
           if grep -Fq "radial-gradient(ellipse" src/components/DirectQrScanner.tsx; then
