@@ -6,7 +6,7 @@
   const PROJECT_REF = 'hudbzlgclghlhazlduas';
   const AUTH_KEY = `sb-${PROJECT_REF}-auth-token`;
   const ACTIVE_BUSINESS_KEY = 'sanad.activeManagedBusinessId';
-  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc1MX0.7qf_M7V4njqiOcEeJp6smL68pndBxRLfXa9SgL8mVwo';
+  const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag';
 
   const STATUS_LABELS = {
     new: 'جديدة', claimed: 'مستلمة', completed: 'مكتملة', released: 'متاحة مجددًا',
