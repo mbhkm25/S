@@ -10,10 +10,11 @@ interface NotificationBellProps {
 }
 
 function workspaceUrl(contexts: BusinessWorkspaceContext[]): string {
-  if (contexts.length === 1) {
+  const accessible = contexts.filter(item => item.permissions?.view === true);
+  if (contexts.length === 1 && accessible.length === 1) {
     const params = new URLSearchParams({
       business_id: contexts[0].business_id,
-      return_to: '/profile'
+      return_to: '/profile#business-workspaces'
     });
     return `/payment-inbox.html?${params.toString()}`;
   }
@@ -27,17 +28,16 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const { data, error } = await supabase.rpc('get_my_business_payment_inbox_contexts');
+      const { data, error } = await supabase.rpc('get_my_business_workspaces');
       if (!active || error) return;
-      const contexts = Array.isArray(data?.items) ? data.items : [];
-      setWorkspaces(contexts.filter((item: BusinessWorkspaceContext) => item?.permissions?.view === true));
+      setWorkspaces(Array.isArray(data?.items) ? data.items : []);
     };
     void load();
     return () => { active = false; };
   }, []);
 
   const newPayments = useMemo(
-    () => workspaces.reduce((total, item) => total + Number(item.counts?.new || 0), 0),
+    () => workspaces.reduce((total, item) => total + Number(item.permissions?.view ? item.counts?.new || 0 : 0), 0),
     [workspaces]
   );
 
