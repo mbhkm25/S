@@ -6,6 +6,7 @@ on:
       - "public/payment-inbox.html"
       - "public/payment-inbox-operational-ui.css"
       - "public/payment-inbox-operational-ui.js"
+      - "public/payment-inbox-operational-guard.js"
       - ".github/workflows/payment-inbox-operational-ui-quality.yml"
 
 permissions:
@@ -19,7 +20,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check JavaScript syntax
-        run: node --check public/payment-inbox-operational-ui.js
+        run: |
+          node --check public/payment-inbox-operational-ui.js
+          node --check public/payment-inbox-operational-guard.js
 
       - name: Validate operational assets and ordering
         shell: bash
@@ -27,29 +30,43 @@ jobs:
           set -euo pipefail
           test -s public/payment-inbox-operational-ui.css
           test -s public/payment-inbox-operational-ui.js
+          test -s public/payment-inbox-operational-guard.js
           grep -Fq '/payment-inbox-operational-ui.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-operational-guard.js' public/payment-inbox.html
           grep -Fq '/payment-inbox-operational-ui.js' public/payment-inbox.html
           css_line=$(grep -n '/payment-inbox-operational-ui.css' public/payment-inbox.html | cut -d: -f1)
           base_css_line=$(grep -n '/payment-inbox.css' public/payment-inbox.html | cut -d: -f1)
+          guard_line=$(grep -n '/payment-inbox-operational-guard.js' public/payment-inbox.html | cut -d: -f1)
           js_line=$(grep -n '/payment-inbox-operational-ui.js' public/payment-inbox.html | cut -d: -f1)
           base_js_line=$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)
           test "$css_line" -gt "$base_css_line"
-          test "$js_line" -gt "$base_js_line"
+          test "$guard_line" -gt "$base_js_line"
+          test "$js_line" -gt "$guard_line"
 
       - name: Enforce compact operational design
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'grid-template-columns:repeat(2' public/payment-inbox-operational-ui.css
-          grep -Fq '.tabs button.active{grid-column:1/-1' public/payment-inbox-operational-ui.css
+          grep -Fq '.tab-switcher-summary' public/payment-inbox-operational-ui.css
+          grep -Fq '.tabs-native-hidden' public/payment-inbox-operational-ui.css
           grep -Fq '.tertiary-action{display:none' public/payment-inbox-operational-ui.css
           grep -Fq 'font-size:25px' public/payment-inbox-operational-ui.css
+          grep -Fq '.badges,.preview-gates,.preview-operation-note,.shadow-preview-banner{display:none' public/payment-inbox-operational-ui.css
+          grep -Fq 'ensureTabSwitcher' public/payment-inbox-operational-ui.js
+          grep -Fq 'renderTabSwitcher' public/payment-inbox-operational-ui.js
           grep -Fq 'openDetails' public/payment-inbox-operational-ui.js
           grep -Fq 'data-proxy-action' public/payment-inbox-operational-ui.js
           grep -Fq 'ENTITY_DEFINITIONS' public/payment-inbox-operational-ui.js
           grep -Fq '/assets/financial-entities/alamqi-mobile.webp' public/payment-inbox-operational-ui.js
           grep -Fq '/assets/financial-entities/alkuraimi-hasib.webp' public/payment-inbox-operational-ui.js
           grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
+
+      - name: Prevent observer self-trigger loops
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "record.attributeName === 'data-count'" public/payment-inbox-operational-guard.js
+          grep -Fq '__SANAD_OPERATIONAL_OBSERVER_GUARD__' public/payment-inbox-operational-guard.js
 
       - name: Preserve operational actions
         shell: bash
