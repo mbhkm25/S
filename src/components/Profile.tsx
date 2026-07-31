@@ -6,6 +6,8 @@ import PhoneVerificationStatusCard from './PhoneVerificationStatusCard';
 import ProfileOverviewV3 from './ProfileOverviewV3';
 import ProfileV2 from './ProfileV2';
 
+// BusinessWorkspacesAccess is rendered inside ProfileOverviewV3 to keep the overview compact.
+
 type Props = ComponentProps<typeof ProfileV2>;
 
 type ProfileView = 'overview' | 'relationships' | 'operations-center' | 'other';
