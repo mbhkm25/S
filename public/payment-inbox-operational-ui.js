@@ -21,6 +21,9 @@
     shadow_preview: ['تجريبية','مطابقات غير تشغيلية']
   };
 
+  let decoratingCards = false;
+  let tabFrame = 0;
+
   const normalize = value => String(value || '').trim().toLowerCase()
     .replace(/[إأآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ');
 
@@ -50,22 +53,58 @@
     if (status === 'claimed') return counts['لدي'] || '0';
     if (status === 'review_required') return counts['تحتاج مراجعة'] || '0';
     if (status === 'completed') return counts['مكتملة اليوم'] || '0';
-    const raw = button.textContent || '';
-    const match = raw.match(/(\d+)/);
-    return match?.[1] || button.dataset.count || '0';
+    const source = button.dataset.count || button.textContent || '';
+    const match = source.match(/(\d+)/);
+    return match?.[1] || '0';
   }
 
   function decorateTabs() {
+    cancelAnimationFrame(tabFrame);
+    tabFrame = requestAnimationFrame(() => {
+      const tabs = document.querySelector('.tabs');
+      if (!tabs || tabs.dataset.operationalTabsReady === 'true') {
+        updateTabCounts();
+        updateActiveTabLayout();
+        return;
+      }
+      tabs.dataset.operationalTabsReady = 'true';
+      const counts = statCounts();
+      [...tabs.querySelectorAll(':scope > [data-status]')].forEach((button, index) => {
+        const status = button.dataset.status;
+        const [title, hint] = TAB_META[status] || [button.textContent.trim(),''];
+        const count = tabCount(status, button, counts);
+        button.dataset.count = count;
+        button.dataset.originalOrder = String(index + 1);
+        button.replaceChildren();
+        const titleNode = document.createElement('span');
+        titleNode.className = 'tab-title';
+        titleNode.textContent = title;
+        const countNode = document.createElement('span');
+        countNode.className = 'tab-count';
+        countNode.textContent = count;
+        const hintNode = document.createElement('span');
+        hintNode.className = 'tab-hint';
+        hintNode.textContent = hint;
+        button.append(titleNode, countNode, hintNode);
+        button.addEventListener('click', () => requestAnimationFrame(updateActiveTabLayout));
+      });
+      updateActiveTabLayout();
+    });
+  }
+
+  function updateTabCounts() {
     const counts = statCounts();
-    const buttons = [...document.querySelectorAll('.tabs [data-status]')];
-    buttons.forEach((button, index) => {
-      const status = button.dataset.status;
-      const [title, hint] = TAB_META[status] || [button.textContent.trim(),''];
-      const count = tabCount(status, button, counts);
+    document.querySelectorAll('.tabs > [data-status]').forEach(button => {
+      const count = tabCount(button.dataset.status, button, counts);
       button.dataset.count = count;
-      const next = `<span class="tab-title">${esc(title)}</span><span class="tab-count">${esc(count)}</span><span class="tab-hint">${esc(hint)}</span>`;
-      if (button.innerHTML !== next) button.innerHTML = next;
-      button.style.order = button.classList.contains('active') ? '0' : String(index + 1);
+      const node = button.querySelector('.tab-count');
+      if (node && node.textContent !== count) node.textContent = count;
+    });
+  }
+
+  function updateActiveTabLayout() {
+    document.querySelectorAll('.tabs > [data-status]').forEach(button => {
+      button.style.order = button.classList.contains('active') ? '0' : (button.dataset.originalOrder || '1');
     });
   }
 
@@ -100,8 +139,7 @@
   function compactActions(card) {
     const group = card.querySelector('.action-group');
     if (!group) return;
-    const buttons = [...group.children];
-    buttons.forEach((button, index) => button.classList.toggle('tertiary-action', index > 1));
+    [...group.children].forEach((button, index) => button.classList.toggle('tertiary-action', index > 1));
   }
 
   function decorateCard(card) {
@@ -190,9 +228,16 @@
     return true;
   }
 
-  function decorate() {
-    decorateTabs();
-    document.querySelectorAll('#queueSection .payment-card').forEach(decorateCard);
+  function decorateCards() {
+    if (decoratingCards) return;
+    decoratingCards = true;
+    requestAnimationFrame(() => {
+      try {
+        document.querySelectorAll('#queueSection .payment-card').forEach(decorateCard);
+      } finally {
+        decoratingCards = false;
+      }
+    });
   }
 
   function boot() {
@@ -200,6 +245,7 @@
     const tabs = document.querySelector('.tabs');
     const stats = document.getElementById('statsSection');
     if (!root || !tabs) return;
+
     document.getElementById('closeModal')?.addEventListener('click', event => {
       if (closeDetails()) event.stopImmediatePropagation();
     }, true);
@@ -209,11 +255,20 @@
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape') closeDetails();
     }, true);
-    const observer = new MutationObserver(() => requestAnimationFrame(decorate));
-    observer.observe(root,{childList:true,subtree:true});
-    observer.observe(tabs,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
-    if (stats) observer.observe(stats,{childList:true,subtree:true,characterData:true});
-    decorate();
+
+    const queueObserver = new MutationObserver(decorateCards);
+    queueObserver.observe(root,{childList:true,subtree:true});
+
+    if (stats) {
+      const statsObserver = new MutationObserver(() => {
+        updateTabCounts();
+        updateActiveTabLayout();
+      });
+      statsObserver.observe(stats,{childList:true,subtree:true,characterData:true});
+    }
+
+    decorateTabs();
+    decorateCards();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',boot,{once:true});
