@@ -6,8 +6,21 @@
   const PREVIEW_STATUS = 'shadow_preview';
   const PREVIEW_RPC = 'get_business_payment_shadow_preview';
   const originalFetch = window.fetch.bind(window);
+  const previewItems = new Map();
   let lastPreviewCount = 0;
   let decorating = false;
+
+  const GATE_LABELS = Object.freeze({
+    policy_disabled: 'السياسة معطلة',
+    emergency_stop: 'الإيقاف الطارئ مفعّل',
+    rollout_mode_shadow: 'الوضع الحالي ظل فقط',
+    benchmark_gate_not_passed: 'Benchmark غير مكتمل',
+    match_score_below_policy: 'الدرجة أقل من الحد',
+    match_strategy_not_allowed: 'الاستراتيجية غير مسموحة',
+    financial_account_not_verified: 'الحساب المالي غير موثّق',
+    benchmark_segment_sample_insufficient: 'عينة الجهة والقالب غير كافية',
+    no_enabled_rollout_target: 'لا يوجد هدف Canary مفعّل'
+  });
 
   function isPreviewTabActive() {
     return document.querySelector(`[data-status="${PREVIEW_STATUS}"]`)?.classList.contains('active') === true;
@@ -19,6 +32,14 @@
     if (!tab) return;
     const nextLabel = lastPreviewCount > 0 ? `تجريبية · ${lastPreviewCount}` : 'تجريبية';
     if (tab.textContent !== nextLabel) tab.textContent = nextLabel;
+  }
+
+  function rememberPreviewItems(items) {
+    previewItems.clear();
+    for (const item of Array.isArray(items) ? items : []) {
+      if (item?.id) previewItems.set(String(item.id), item);
+    }
+    updatePreviewTabCount(previewItems.size);
   }
 
   function parseJsonBody(init) {
@@ -55,9 +76,9 @@
 
     try {
       const payload = await previewResponse.clone().json();
-      updatePreviewTabCount(Array.isArray(payload?.items) ? payload.items.length : 0);
+      rememberPreviewItems(payload?.items);
     } catch {
-      updatePreviewTabCount(0);
+      rememberPreviewItems([]);
     }
 
     return previewResponse;
@@ -72,7 +93,36 @@
   function clearPreviewDecorations(root) {
     root.querySelector('.shadow-preview-banner')?.remove();
     root.querySelectorAll('.payment-card.shadow-preview-card').forEach(card => card.classList.remove('shadow-preview-card'));
-    root.querySelectorAll('.preview-operation-note').forEach(node => node.remove());
+    root.querySelectorAll('.preview-operation-note, .preview-gates').forEach(node => node.remove());
+  }
+
+  function renderGateReasons(card, item) {
+    if (!item || card.querySelector('.preview-gates')) return;
+    const reasons = Array.isArray(item.gate_reasons) ? item.gate_reasons : [];
+    const visible = reasons.slice(0, 4);
+    if (!visible.length) return;
+
+    const root = document.createElement('div');
+    root.className = 'preview-gates';
+    root.setAttribute('aria-label', 'أسباب عدم دخول العملية إلى التشغيل');
+
+    visible.forEach(reason => {
+      const chip = document.createElement('span');
+      chip.textContent = GATE_LABELS[reason] || reason;
+      root.append(chip);
+    });
+
+    if (reasons.length > visible.length) {
+      const more = document.createElement('span');
+      more.className = 'more';
+      more.textContent = `+${reasons.length - visible.length}`;
+      more.title = reasons.slice(visible.length).map(reason => GATE_LABELS[reason] || reason).join('، ');
+      root.append(more);
+    }
+
+    const facts = card.querySelector('.facts');
+    if (facts) facts.insertAdjacentElement('afterend', root);
+    else card.append(root);
   }
 
   function decoratePreviewQueue() {
@@ -108,6 +158,10 @@
 
       cards.forEach(card => {
         if (!card.classList.contains('shadow-preview-card')) card.classList.add('shadow-preview-card');
+        card.dataset.operational = 'false';
+        const item = previewItems.get(String(card.dataset.itemId || ''));
+        renderGateReasons(card, item);
+
         const actions = card.querySelector('.card-actions');
         if (!actions || actions.querySelector('.preview-operation-note')) return;
         const note = document.createElement('span');
