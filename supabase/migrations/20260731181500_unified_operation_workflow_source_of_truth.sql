@@ -23,6 +23,18 @@ as $$
 declare
   v_source text := coalesce(nullif(new.metadata ->> 'source', ''), 'payment_inbox');
 begin
+  update public.business_payment_inbox
+  set last_action_source = v_source,
+      claimed_source = case
+        when new.event_type in ('claimed','reassigned','claim_renewed') then coalesce(claimed_source,v_source)
+        else claimed_source
+      end,
+      completed_source = case
+        when new.event_type = 'completed' then coalesce(completed_source,v_source)
+        else completed_source
+      end
+  where id = new.inbox_id;
+
   insert into public.operation_events(
     operation_id,
     event_type,
@@ -73,9 +85,11 @@ declare
   v_operation public.operations%rowtype;
   v_inbox public.business_payment_inbox%rowtype;
   v_link public.business_operation_links%rowtype;
+  v_business_id uuid := p_business_id;
   v_note text := nullif(trim(coalesce(p_note, '')), '');
   v_source text := lower(trim(coalesce(p_source, 'operation_details')));
   v_from text;
+  v_previous_claimant uuid;
   v_idempotent boolean := false;
   v_existing_verification boolean := false;
 begin
@@ -119,6 +133,40 @@ begin
     raise exception 'operation_token_mismatch' using errcode = '42501';
   end if;
 
+  -- Lock and validate the operational projection before recording a verifier.
+  if p_inbox_id is not null then
+    select * into v_inbox from public.business_payment_inbox where id = p_inbox_id for update;
+    if not found then raise exception 'payment_inbox_item_not_found'; end if;
+    if v_business_id is not null and v_business_id <> v_inbox.business_id then
+      raise exception 'payment_inbox_business_mismatch';
+    end if;
+    v_business_id := v_inbox.business_id;
+  elsif v_business_id is not null then
+    select * into v_inbox
+    from public.business_payment_inbox
+    where business_id = v_business_id and operation_id = v_operation.id
+    for update;
+  end if;
+
+  if v_business_id is not null then
+    if not private.has_business_payment_permission(v_business_id, 'complete', v_uid) then
+      raise exception 'payment_inbox_complete_required' using errcode = '42501';
+    end if;
+    if v_inbox.id is not null and v_inbox.status = 'completed' then
+      if v_inbox.completed_by_user_id is distinct from v_uid then
+        raise exception 'operation_already_completed_by_another_user' using errcode = '42501';
+      end if;
+      v_idempotent := true;
+    elsif v_inbox.id is not null and v_inbox.status in ('rejected','cancelled','review_required') then
+      raise exception 'payment_inbox_item_not_completable';
+    elsif v_inbox.id is not null
+          and v_inbox.status = 'claimed'
+          and v_inbox.claimed_by_user_id <> v_uid
+          and not private.has_business_payment_permission(v_business_id,'reassign',v_uid) then
+      raise exception 'payment_claim_owned_by_another_user' using errcode = '42501';
+    end if;
+  end if;
+
   select exists(
     select 1 from public.operation_user_links l
     where l.operation_id = v_operation.id
@@ -132,7 +180,7 @@ begin
     v_phone,
     'verifier',
     v_source,
-    jsonb_build_object('note', v_note, 'business_id', p_business_id)
+    jsonb_build_object('note', v_note, 'business_id', v_business_id)
   );
 
   update public.operations o
@@ -151,12 +199,12 @@ begin
       'verification_recorded',
       v_uid,
       v_phone,
-      jsonb_build_object('note',v_note,'business_id',p_business_id),
+      jsonb_build_object('note',v_note,'business_id',v_business_id),
       v_source
     );
   end if;
 
-  if p_business_id is null and p_inbox_id is null then
+  if v_business_id is null then
     return jsonb_build_object(
       'ok', true,
       'operation_id', v_operation.id,
@@ -170,29 +218,11 @@ begin
     );
   end if;
 
-  if p_inbox_id is not null then
-    select * into v_inbox from public.business_payment_inbox where id = p_inbox_id for update;
-    if not found then raise exception 'payment_inbox_item_not_found'; end if;
-    if p_business_id is not null and p_business_id <> v_inbox.business_id then
-      raise exception 'payment_inbox_business_mismatch';
-    end if;
-    p_business_id := v_inbox.business_id;
-  else
-    select * into v_inbox
-    from public.business_payment_inbox
-    where business_id = p_business_id and operation_id = v_operation.id
-    for update;
-  end if;
-
-  if not private.has_business_payment_permission(p_business_id, 'complete', v_uid) then
-    raise exception 'payment_inbox_complete_required' using errcode = '42501';
-  end if;
-
   insert into public.business_operation_links(
     business_id, operation_id, linked_by_user_id, verified_by_user_id,
     link_type, status, metadata
   ) values (
-    p_business_id, v_operation.id, v_uid, v_uid,
+    v_business_id, v_operation.id, v_uid, v_uid,
     case when v_source = 'payment_inbox' then 'payment_inbox_completion' else 'manual_after_verification' end,
     'linked',
     jsonb_build_object('source',v_source,'unified_workflow',true)
@@ -212,7 +242,7 @@ begin
       routing_snapshot, completed_by_user_id, completed_at, completion_note,
       completed_source, last_action_source
     ) values (
-      p_business_id, v_operation.id, 'manual', 'completed', 0,
+      v_business_id, v_operation.id, 'manual', 'completed', 0,
       jsonb_build_object('source',v_source,'manual_projection',true),
       v_uid, now(), left(v_note,1000), v_source, v_source
     ) returning * into v_inbox;
@@ -225,16 +255,9 @@ begin
       v_inbox.id,'completed',v_uid,'claimed','completed',v_note,
       jsonb_build_object('source',v_source,'implicit_claim',true)
     );
-  elsif v_inbox.status = 'completed' then
-    v_idempotent := true;
-  elsif v_inbox.status in ('rejected','cancelled','review_required') then
-    raise exception 'payment_inbox_item_not_completable';
-  elsif v_inbox.status = 'claimed'
-        and v_inbox.claimed_by_user_id <> v_uid
-        and not private.has_business_payment_permission(p_business_id,'reassign',v_uid) then
-    raise exception 'payment_claim_owned_by_another_user' using errcode = '42501';
-  else
+  elsif not v_idempotent then
     v_from := v_inbox.status;
+    v_previous_claimant := v_inbox.claimed_by_user_id;
 
     if v_inbox.status in ('new','released') then
       update public.business_payment_inbox
@@ -262,7 +285,7 @@ begin
       v_inbox.id,'completed',v_uid,v_from,'completed',v_note,
       jsonb_build_object(
         'source',v_source,
-        'overrode_other_claim', v_from='claimed' and v_inbox.claimed_by_user_id is distinct from v_uid
+        'overrode_other_claim', v_previous_claimant is not null and v_previous_claimant <> v_uid
       )
     );
   end if;
@@ -273,7 +296,7 @@ begin
     'operation_status', v_operation.status,
     'verified_by_user_id', v_uid,
     'verified_at', v_operation.verified_at,
-    'business_id', p_business_id,
+    'business_id', v_business_id,
     'business_link', to_jsonb(v_link),
     'inbox', to_jsonb(v_inbox),
     'idempotent', v_idempotent,
@@ -286,15 +309,56 @@ revoke all on function public.complete_operation_workflow(uuid,uuid,uuid,uuid,te
 revoke all on function public.complete_operation_workflow(uuid,uuid,uuid,uuid,text,text) from anon;
 grant execute on function public.complete_operation_workflow(uuid,uuid,uuid,uuid,text,text) to authenticated;
 
+create or replace function public.verify_operation_v2(
+  p_token uuid,
+  p_business_id uuid default null,
+  p_note text default null,
+  p_source text default 'qr_details'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path=''
+as $$
+begin
+  return public.complete_operation_workflow(null,p_token,p_business_id,null,p_note,p_source);
+end;
+$$;
+revoke all on function public.verify_operation_v2(uuid,uuid,text,text) from public;
+revoke all on function public.verify_operation_v2(uuid,uuid,text,text) from anon;
+grant execute on function public.verify_operation_v2(uuid,uuid,text,text) to authenticated;
+
+-- Legacy client contract. When exactly one operational inbox is accessible to the
+-- current user, a QR verification completes that same inbox record atomically.
 create or replace function public.verify_operation(p_token uuid, p_note text default null)
 returns table(operation_id uuid,status text,relation_type text,verified_by_user_id uuid,verified_at timestamptz)
 language plpgsql
 security definer
 set search_path=''
 as $$
-declare v_result jsonb;
+declare
+  v_result jsonb;
+  v_operation_id uuid;
+  v_business_id uuid;
+  v_business_count integer;
 begin
-  v_result := public.complete_operation_workflow(null,p_token,null,null,p_note,'qr_details');
+  select o.id into v_operation_id
+  from public.operations o
+  where o.public_token=p_token and o.token_status='active'
+    and (o.token_expires_at is null or o.token_expires_at>now());
+  if not found then raise exception 'operation_not_found_or_token_expired'; end if;
+
+  select min(i.business_id),count(distinct i.business_id)
+  into v_business_id,v_business_count
+  from public.business_payment_inbox i
+  where i.operation_id=v_operation_id
+    and private.has_business_payment_permission(i.business_id,'complete',auth.uid());
+
+  if v_business_count <> 1 then v_business_id := null; end if;
+
+  v_result := public.complete_operation_workflow(
+    v_operation_id,p_token,v_business_id,null,p_note,'qr_details'
+  );
   operation_id := (v_result->>'operation_id')::uuid;
   status := v_result->>'operation_status';
   relation_type := 'verifier';
@@ -412,5 +476,7 @@ grant execute on function public.get_operation_workflow_state(uuid) to authentic
 
 comment on function public.complete_operation_workflow(uuid,uuid,uuid,uuid,text,text) is
   'Atomic source-of-truth command that records verification, business link and payment inbox completion for one operation from any entry point.';
+comment on function public.verify_operation_v2(uuid,uuid,text,text) is
+  'Explicit verification command for new clients, with business context and entry-point source.';
 comment on function public.get_operation_workflow_state(uuid) is
   'Returns the current unified operation and accessible business-payment workflow states for a token.';
