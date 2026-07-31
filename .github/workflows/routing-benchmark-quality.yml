@@ -5,7 +5,8 @@ on:
     paths:
       - "public/routing-benchmark.html"
       - "public/routing-benchmark.css"
-      - "public/routing-benchmark.js"
+      - "public/routing-benchmark-v2.css"
+      - "public/routing-benchmark-v2.js"
       - "supabase/migrations/*benchmark*"
       - "supabase/tests/*benchmark*"
       - ".github/workflows/routing-benchmark-quality.yml"
@@ -21,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check standalone JavaScript syntax
-        run: node --check public/routing-benchmark.js
+        run: node --check public/routing-benchmark-v2.js
 
       - name: Check required page assets
         shell: bash
@@ -29,13 +30,24 @@ jobs:
           set -euo pipefail
           test -s public/routing-benchmark.html
           test -s public/routing-benchmark.css
-          test -s public/routing-benchmark.js
+          test -s public/routing-benchmark-v2.css
+          test -s public/routing-benchmark-v2.js
           grep -Fq '/routing-benchmark.css' public/routing-benchmark.html
-          grep -Fq '/routing-benchmark.js' public/routing-benchmark.html
+          grep -Fq '/routing-benchmark-v2.css' public/routing-benchmark.html
+          grep -Fq '/routing-benchmark-v2.js' public/routing-benchmark.html
+
+      - name: Enforce dual-review invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "independent_secondary_reviewer_required" supabase/migrations/*dual_review*.sql
+          grep -Fq "independent_adjudicator_required" supabase/migrations/*dual_review*.sql
+          grep -Fq "activation_allowed',false" supabase/migrations/*dual_review*.sql
+          grep -Fq "blind_secondary_review" public/routing-benchmark-v2.js
 
       - name: Enforce shadow-only boundary
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -Eiq "activate[_ -]?routing|enable[_ -]?routing|create_business_operation_link" public/routing-benchmark.js
-          grep -Fq "activation_allowed', false" supabase/migrations/*benchmark*.sql
+          ! grep -Eiq "activate[_ -]?routing|enable[_ -]?routing|create_business_operation_link" public/routing-benchmark-v2.js
+          ! grep -Eiq "insert[[:space:]]+into[[:space:]]+public\.business_operation_links|link_operation_to_business" supabase/migrations/*dual_review*.sql
