@@ -29,6 +29,32 @@
   background: linear-gradient(180deg, #ffffff, #f8fdff);
 }
 
+.preview-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.preview-gates span {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #1e3a5f;
+  background: #eff6ff;
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.preview-gates span.more {
+  direction: ltr;
+  color: #475569;
+  background: #f8fafc;
+}
+
 .payment-card.shadow-preview-card .card-actions {
   align-items: flex-start;
   flex-direction: column;
