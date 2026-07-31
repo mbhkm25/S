@@ -9,37 +9,58 @@
 // - META_WA_PHONE_NUMBER_ID
 // - SANAD_INTERNAL_API_KEY
 //
-// Recommended security secret:
-// - META_APP_SECRET (enables X-Hub-Signature-256 verification)
-//
-// Optional flags:
-// - REQUIRE_META_SIGNATURE = false (set true after META_APP_SECRET is configured)
-// - PUBLIC_APP_BASE_URL = https://app.sanadflow.com
-// - SUPABASE_STORAGE_BUCKET = operation-files
-// - SANAD_ANALYZE_FUNCTION_URL
-// - SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL
-// - SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL
-// - SEND_UNSUPPORTED_REPLY = true
-// - SEND_QR_REPLY = true
-// - TRIGGER_ANALYSIS = true
-// - TRIGGER_ONBOARDING = true
-// - TRIGGER_ASSISTANT = true
+// Recommended:
+// - META_APP_SECRET
+// - REQUIRE_META_SIGNATURE=true after the secret is configured and verified.
 
 // @ts-types="npm:@types/qrcode@1.5.5"
 import QRCode from "npm:qrcode@1.5.4";
 
 type JsonRecord = Record<string, unknown>;
+type Pipeline =
+  | "whatsapp_intake"
+  | "analysis"
+  | "fast_routing"
+  | "routing"
+  | "payment_inbox";
+type SpanStatus = "success" | "error" | "skipped";
+type SignatureMode = "verified" | "invalid" | "missing" | "not_configured";
 
 type SignatureResult = {
   ok: boolean;
-  mode: "verified" | "invalid" | "missing" | "not_configured";
+  mode: SignatureMode;
 };
+
+type NormalizedMessage = {
+  hasMessage: true;
+  rawWebhook: unknown;
+  value: JsonRecord;
+  senderPhone: string | null;
+  senderWaId: string;
+  senderName: string | null;
+  messageId: string;
+  timestamp: string;
+  messageType: string;
+  mediaId: string;
+  mimeType: string;
+  fileName: string;
+  caption: string;
+  text: string;
+};
+
+type NormalizedStatus = {
+  hasMessage: false;
+  rawWebhook: unknown;
+  value: JsonRecord;
+  isStatusEvent: boolean;
+  statuses: unknown[];
+};
+
+type NormalizedWebhook = NormalizedMessage | NormalizedStatus;
 
 declare const EdgeRuntime:
   | undefined
-  | {
-      waitUntil: (promise: Promise<unknown>) => void;
-    };
+  | { waitUntil: (promise: Promise<unknown>) => void };
 
 const SUPABASE_URL = mustGetEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = mustGetEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -51,43 +72,41 @@ const SANAD_INTERNAL_API_KEY = mustGetEnv("SANAD_INTERNAL_API_KEY");
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") || "";
 const REQUIRE_META_SIGNATURE =
   (Deno.env.get("REQUIRE_META_SIGNATURE") || "false") === "true";
-
 const PUBLIC_APP_BASE_URL =
   Deno.env.get("PUBLIC_APP_BASE_URL") || "https://app.sanadflow.com";
 const PUBLIC_APP_ORIGIN = new URL(PUBLIC_APP_BASE_URL).origin;
-const SUPABASE_STORAGE_BUCKET =
+const STORAGE_BUCKET =
   Deno.env.get("SUPABASE_STORAGE_BUCKET") || "operation-files";
-
-const SANAD_ANALYZE_FUNCTION_URL =
+const ANALYZE_URL =
   Deno.env.get("SANAD_ANALYZE_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
-const SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL =
+const ONBOARDING_URL =
   Deno.env.get("SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-onboarding`;
-const SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL =
+const ASSISTANT_URL =
   Deno.env.get("SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-assistant`;
 
 const SEND_UNSUPPORTED_REPLY =
   (Deno.env.get("SEND_UNSUPPORTED_REPLY") || "true") !== "false";
-const SEND_QR_REPLY = (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
-const TRIGGER_ANALYSIS = (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
+const SEND_QR_REPLY =
+  (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
+const TRIGGER_ANALYSIS =
+  (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
 const TRIGGER_ONBOARDING =
   (Deno.env.get("TRIGGER_ONBOARDING") || "true") !== "false";
 const TRIGGER_ASSISTANT =
   (Deno.env.get("TRIGGER_ASSISTANT") || "true") !== "false";
 
-const META_GRAPH_VERSION = "v20.0";
-const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+const GRAPH_VERSION = "v20.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const FUNCTION_NAME = "sanad-v3-whatsapp-intake";
-
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "application/pdf",
 ]);
-
 const RESPONSE_HEADERS = {
   "Access-Control-Allow-Origin": PUBLIC_APP_ORIGIN,
   "Access-Control-Allow-Headers":
@@ -115,24 +134,30 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-function truncateText(value: unknown, max = 1500): string {
+function truncate(value: unknown, max = 1500): string {
   const text = String(value ?? "");
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-function safeString(value: unknown): string | null {
+function cleanText(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
   return text || null;
 }
 
 function cleanPhone(value: unknown): string | null {
-  const phone = String(value ?? "").replace(/[^\d]/g, "");
-  return phone || null;
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits || null;
 }
 
-function extensionFromMime(mimeType: string | null | undefined): string {
-  const mime = String(mimeType || "").toLowerCase();
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function extensionFromMime(mimeType: string): string {
+  const mime = mimeType.toLowerCase();
   if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
   if (mime.includes("png")) return "png";
   if (mime.includes("webp")) return "webp";
@@ -145,28 +170,18 @@ function extensionFromMime(mimeType: string | null | undefined): string {
   return "bin";
 }
 
-function detectAttachmentType(mimeType: string, messageType: string): string {
-  const mime = String(mimeType || "").toLowerCase();
-  if (mime.startsWith("image/")) return "image";
-  if (mime.includes("pdf")) return "pdf";
-  if (messageType === "document") return "document";
-  return "file";
+function attachmentType(mimeType: string, messageType: string): string {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.includes("pdf")) return "pdf";
+  return messageType === "document" ? "document" : "file";
 }
 
-function isSupportedMedia(messageType: string, mimeType: string, mediaId: string | null) {
-  return Boolean(
-    mediaId &&
-      ["image", "document"].includes(messageType) &&
-      ALLOWED_MIME_TYPES.has(mimeType),
-  );
-}
-
-function sanitizePathPart(value: unknown, fallback: string): string {
-  const text = String(value ?? "")
+function sanitizePathPart(value: string, fallback: string): string {
+  const cleaned = value
     .trim()
     .replace(/[^\w.\-]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return text || fallback;
+  return cleaned || fallback;
 }
 
 function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
@@ -180,19 +195,19 @@ function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
 async function supabaseJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
-    headers: { ...supabaseHeaders(init.headers || {}) },
+    headers: supabaseHeaders(init.headers || {}),
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`supabase_request_failed ${response.status}: ${truncateText(text)}`);
+    throw new Error(`supabase_request_failed ${response.status}: ${truncate(text)}`);
   }
   return text ? JSON.parse(text) as T : null as T;
 }
 
-async function metaJson<T>(pathOrUrl: string, init: RequestInit = {}): Promise<T> {
+async function graphJson<T>(pathOrUrl: string, init: RequestInit = {}): Promise<T> {
   const url = pathOrUrl.startsWith("http")
     ? pathOrUrl
-    : `${META_GRAPH_BASE}${pathOrUrl}`;
+    : `${GRAPH_BASE}${pathOrUrl}`;
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -202,42 +217,24 @@ async function metaJson<T>(pathOrUrl: string, init: RequestInit = {}): Promise<T
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`meta_request_failed ${response.status}: ${truncateText(text)}`);
+    throw new Error(`meta_request_failed ${response.status}: ${truncate(text)}`);
   }
   return text ? JSON.parse(text) as T : null as T;
-}
-
-async function metaFetchBinary(url: string): Promise<{
-  bytes: Uint8Array;
-  contentType: string | null;
-}> {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`meta_media_download_failed ${response.status}: ${truncateText(text)}`);
-  }
-  return {
-    bytes: new Uint8Array(await response.arrayBuffer()),
-    contentType: response.headers.get("content-type"),
-  };
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
   const leftBytes = new TextEncoder().encode(left);
   const rightBytes = new TextEncoder().encode(right);
   const max = Math.max(leftBytes.length, rightBytes.length);
-  let diff = leftBytes.length ^ rightBytes.length;
+  let difference = leftBytes.length ^ rightBytes.length;
   for (let index = 0; index < max; index += 1) {
-    diff |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
   }
-  return diff === 0;
+  return difference === 0;
 }
 
-function bytesToHex(bytes: ArrayBuffer): string {
-  return [...new Uint8Array(bytes)]
+function bytesToHex(buffer: ArrayBuffer): string {
+  return [...new Uint8Array(buffer)]
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
 }
@@ -259,62 +256,60 @@ async function verifyMetaSignature(
     false,
     ["sign"],
   );
-  const digest = await crypto.subtle.sign("HMAC", key, rawBody);
+  const digest = await crypto.subtle.sign("HMAC", key, toArrayBuffer(rawBody));
   const expected = `sha256=${bytesToHex(digest)}`;
   return constantTimeEqual(expected, signatureHeader.trim())
     ? { ok: true, mode: "verified" }
     : { ok: false, mode: "invalid" };
 }
 
-function normalizeWhatsAppPayload(body: any) {
-  const value = body?.entry?.[0]?.changes?.[0]?.value || {};
-  const message = value?.messages?.[0] || null;
-  const contact = value?.contacts?.[0] || {};
-  const status = value?.statuses?.[0] || null;
+function normalizeWebhook(body: unknown): NormalizedWebhook {
+  const root = body as Record<string, any>;
+  const value = (root?.entry?.[0]?.changes?.[0]?.value || {}) as JsonRecord;
+  const message = (value as any)?.messages?.[0] || null;
+  const contact = (value as any)?.contacts?.[0] || {};
+  const statuses = Array.isArray((value as any)?.statuses)
+    ? (value as any).statuses as unknown[]
+    : [];
   if (!message) {
     return {
       hasMessage: false,
-      isStatusEvent: Boolean(status),
       rawWebhook: body,
       value,
-      status,
+      isStatusEvent: statuses.length > 0,
+      statuses,
     };
   }
-  const messageType = message.type || "unknown";
+  const messageType = cleanText(message.type) || "unknown";
   const media = message.image || message.document || message.audio || null;
-  const from = message.from || contact.wa_id || "";
-  const mediaMime = safeString(media?.mime_type) || "";
-  let fileName = safeString(media?.filename) || "";
-  if (!fileName && media?.id) {
-    fileName = `whatsapp-${message.id}.${extensionFromMime(mediaMime)}`;
-  }
+  const senderWaId = cleanText(contact.wa_id || message.from) || "";
+  const mimeType = cleanText(media?.mime_type) || "application/octet-stream";
+  const messageId = cleanText(message.id) || "";
   return {
     hasMessage: true,
     rawWebhook: body,
     value,
-    message,
-    contact,
-    from,
-    senderPhone: cleanPhone(from),
-    senderWaId: contact.wa_id || from,
-    senderName: safeString(contact?.profile?.name),
-    messageId: safeString(message.id) || "",
-    timestamp: safeString(message.timestamp) || "",
+    senderPhone: cleanPhone(message.from || senderWaId),
+    senderWaId,
+    senderName: cleanText(contact?.profile?.name),
+    messageId,
+    timestamp: cleanText(message.timestamp) || "",
     messageType,
-    mediaId: safeString(media?.id) || "",
-    mimeType: mediaMime || "application/octet-stream",
-    fileName,
-    caption: safeString(media?.caption) || "",
-    text: safeString(message?.text?.body) || "",
+    mediaId: cleanText(media?.id) || "",
+    mimeType,
+    fileName: cleanText(media?.filename) ||
+      (media?.id ? `whatsapp-${messageId}.${extensionFromMime(mimeType)}` : ""),
+    caption: cleanText(media?.caption) || "",
+    text: cleanText(message?.text?.body) || "",
   };
 }
 
 async function recordSpan(params: {
   operationId: string;
   runId: string;
-  pipeline: "whatsapp_intake" | "analysis" | "fast_routing" | "routing" | "payment_inbox";
+  pipeline: Pipeline;
   stage: string;
-  status: "success" | "error" | "skipped";
+  status: SpanStatus;
   startedAtMs: number;
   metadata?: JsonRecord;
 }): Promise<void> {
@@ -332,7 +327,7 @@ async function recordSpan(params: {
         p_function_name: FUNCTION_NAME,
         p_started_at: new Date(params.startedAtMs).toISOString(),
         p_completed_at: new Date(completedAtMs).toISOString(),
-        p_duration_ms: Math.max(0, completedAtMs - params.startedAtMs),
+        p_duration_ms: completedAtMs - params.startedAtMs,
         p_metadata: params.metadata || {},
       }),
     });
@@ -341,28 +336,29 @@ async function recordSpan(params: {
       function: FUNCTION_NAME,
       event: "pipeline_span_write_failed",
       stage: params.stage,
-      error: truncateText(error instanceof Error ? error.message : String(error), 500),
+      error: truncate(error instanceof Error ? error.message : error, 500),
     }));
   }
 }
 
-async function processDeliveryStatuses(statuses: any[]): Promise<void> {
-  if (!Array.isArray(statuses) || statuses.length === 0) return;
-  for (const statusEvent of statuses) {
-    const messageId = safeString(statusEvent?.id);
-    const deliveryStatus = safeString(statusEvent?.status)?.toLowerCase();
-    if (!messageId || !deliveryStatus || !["sent", "delivered", "read", "failed"].includes(deliveryStatus)) continue;
-    const timestampSeconds = Number(statusEvent?.timestamp);
-    const eventAt = Number.isFinite(timestampSeconds) && timestampSeconds > 0
-      ? new Date(timestampSeconds * 1000).toISOString()
+async function processDeliveryStatuses(statuses: unknown[]): Promise<void> {
+  for (const rawStatus of statuses) {
+    const status = rawStatus as Record<string, any>;
+    const messageId = cleanText(status.id);
+    const deliveryStatus = cleanText(status.status)?.toLowerCase();
+    if (!messageId || !deliveryStatus ||
+      !["sent", "delivered", "read", "failed"].includes(deliveryStatus)) {
+      continue;
+    }
+    const timestamp = Number(status.timestamp);
+    const eventAt = Number.isFinite(timestamp) && timestamp > 0
+      ? new Date(timestamp * 1000).toISOString()
       : new Date().toISOString();
-    const firstError = Array.isArray(statusEvent?.errors) ? statusEvent.errors[0] || null : null;
+    const firstError = Array.isArray(status.errors) ? status.errors[0] : null;
     const errorCode = firstError?.code == null ? null : String(firstError.code);
-    const errorMessage =
-      safeString(firstError?.title) ||
-      safeString(firstError?.message) ||
-      safeString(firstError?.error_data?.details) ||
-      null;
+    const errorMessage = cleanText(firstError?.title) ||
+      cleanText(firstError?.message) ||
+      cleanText(firstError?.error_data?.details);
     for (const rpcName of [
       "apply_report_whatsapp_delivery_status",
       "apply_whatsapp_campaign_delivery_status",
@@ -382,46 +378,36 @@ async function processDeliveryStatuses(statuses: any[]): Promise<void> {
       } catch (error) {
         console.error(JSON.stringify({
           function: FUNCTION_NAME,
-          event: "whatsapp_delivery_status_failed",
+          event: "delivery_status_rpc_failed",
           rpc: rpcName,
           message_id: messageId,
-          error: truncateText(error instanceof Error ? error.message : String(error)),
+          error: truncate(error instanceof Error ? error.message : error),
         }));
       }
     }
   }
 }
 
-async function findExistingOperationByMessageId(messageId: string): Promise<any | null> {
-  if (!messageId) return null;
-  try {
-    const rows = await supabaseJson<any[]>(
-      `/rest/v1/operations?select=id,public_token,status,ai_status,submitted_by_phone,created_at&storage_metadata->>meta_message_id=eq.${encodeURIComponent(messageId)}&limit=1`,
-      { method: "GET", headers: { Accept: "application/json" } },
-    );
-    return Array.isArray(rows) ? rows[0] ?? null : null;
-  } catch {
-    return null;
-  }
-}
-
-async function registerWhatsAppInbound(normalized: any, supported: boolean): Promise<void> {
+async function registerInbound(
+  message: NormalizedMessage,
+  supported: boolean,
+): Promise<void> {
   try {
     await supabaseJson("/rest/v1/rpc/register_whatsapp_inbound", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        p_phone: normalized.senderPhone,
-        p_wa_id: normalized.senderWaId || normalized.senderPhone,
-        p_display_name: normalized.senderName || null,
-        p_message_id: normalized.messageId || null,
-        p_message_type: normalized.messageType || null,
+        p_phone: message.senderPhone,
+        p_wa_id: message.senderWaId || message.senderPhone,
+        p_display_name: message.senderName,
+        p_message_id: message.messageId || null,
+        p_message_type: message.messageType,
         p_supported: supported,
         p_metadata: {
           function: FUNCTION_NAME,
-          media_id: normalized.mediaId || null,
-          mime_type: normalized.mimeType || null,
-          whatsapp_timestamp: normalized.timestamp || null,
+          media_id: message.mediaId || null,
+          mime_type: message.mimeType,
+          whatsapp_timestamp: message.timestamp || null,
         },
       }),
     });
@@ -429,44 +415,47 @@ async function registerWhatsAppInbound(normalized: any, supported: boolean): Pro
     console.error(JSON.stringify({
       function: FUNCTION_NAME,
       event: "whatsapp_contact_registration_failed",
-      message_id: normalized.messageId || null,
-      error: truncateText(error instanceof Error ? error.message : String(error)),
+      message_id: message.messageId || null,
+      error: truncate(error instanceof Error ? error.message : error),
     }));
   }
 }
 
-function whatsappTimestamp(value: unknown): string | null {
+function whatsappTimestamp(value: string): string | null {
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds > 0
     ? new Date(seconds * 1000).toISOString()
     : null;
 }
 
-async function enqueueAndTriggerAssistant(normalized: any): Promise<void> {
+async function triggerAssistant(message: NormalizedMessage): Promise<void> {
   if (!TRIGGER_ASSISTANT) {
-    await sendUnsupportedMessage(normalized.senderPhone);
+    await sendUnsupported(message.senderPhone || "");
     return;
   }
-  const queued = await supabaseJson<any>("/rest/v1/rpc/enqueue_sanad_assistant_message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      p_phone: normalized.senderPhone,
-      p_message_id: normalized.messageId,
-      p_message_type: normalized.messageType,
-      p_body_text: normalized.text || null,
-      p_media_id: normalized.mediaId || null,
-      p_media_mime_type: normalized.mimeType || null,
-      p_meta_timestamp: whatsappTimestamp(normalized.timestamp),
-      p_metadata: {
-        source: FUNCTION_NAME,
-        sender_name: normalized.senderName || null,
-        sender_wa_id: normalized.senderWaId || null,
-      },
-    }),
-  });
+  const queued = await supabaseJson<Record<string, any>>(
+    "/rest/v1/rpc/enqueue_sanad_assistant_message",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_phone: message.senderPhone,
+        p_message_id: message.messageId,
+        p_message_type: message.messageType,
+        p_body_text: message.text || null,
+        p_media_id: message.mediaId || null,
+        p_media_mime_type: message.mimeType,
+        p_meta_timestamp: whatsappTimestamp(message.timestamp),
+        p_metadata: {
+          source: FUNCTION_NAME,
+          sender_name: message.senderName,
+          sender_wa_id: message.senderWaId,
+        },
+      }),
+    },
+  );
   if (!queued?.message_id || queued.status !== "queued" || queued.duplicate) return;
-  const response = await fetch(SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL, {
+  const response = await fetch(ASSISTANT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -475,41 +464,82 @@ async function enqueueAndTriggerAssistant(normalized: any): Promise<void> {
     body: JSON.stringify({ message_id: queued.message_id, source: FUNCTION_NAME }),
   });
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`assistant_trigger_rejected ${response.status}: ${truncateText(text)}`);
+    throw new Error(
+      `assistant_trigger_rejected ${response.status}: ${truncate(await response.text())}`,
+    );
   }
 }
 
-async function uploadToStorage(
-  bucket: string,
+async function findExisting(messageId: string): Promise<Record<string, any> | null> {
+  if (!messageId) return null;
+  try {
+    const rows = await supabaseJson<Record<string, any>[]>(
+      `/rest/v1/operations?select=id,public_token,status,ai_status&storage_metadata->>meta_message_id=eq.${encodeURIComponent(messageId)}&limit=1`,
+      { method: "GET", headers: { Accept: "application/json" } },
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMediaInfo(mediaId: string): Promise<Record<string, any>> {
+  return await graphJson<Record<string, any>>(`/${mediaId}`, { method: "GET" });
+}
+
+async function downloadMedia(url: string): Promise<{
+  bytes: Uint8Array;
+  contentType: string | null;
+}> {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `meta_media_download_failed ${response.status}: ${truncate(await response.text())}`,
+    );
+  }
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    contentType: response.headers.get("content-type"),
+  };
+}
+
+async function uploadStorage(
   path: string,
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<void> {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, "/");
-  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${encodedPath}`, {
-    method: "POST",
-    headers: supabaseHeaders({ "Content-Type": mimeType, "x-upsert": "false" }),
-    body: bytes,
-  });
-  const text = await response.text();
+  const response = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${encodedPath}`,
+    {
+      method: "POST",
+      headers: supabaseHeaders({
+        "Content-Type": mimeType,
+        "x-upsert": "false",
+      }),
+      body: toArrayBuffer(bytes),
+    },
+  );
   if (!response.ok) {
-    throw new Error(`storage_upload_failed ${response.status}: ${truncateText(text)}`);
+    throw new Error(
+      `storage_upload_failed ${response.status}: ${truncate(await response.text())}`,
+    );
   }
 }
 
-async function insertOperation(payload: JsonRecord): Promise<any> {
-  const rows = await supabaseJson<any[]>("/rest/v1/operations", {
+async function insertOperation(payload: JsonRecord): Promise<Record<string, any>> {
+  const rows = await supabaseJson<Record<string, any>[]>("/rest/v1/operations", {
     method: "POST",
     headers: { "Content-Type": "application/json", Prefer: "return=representation" },
     body: JSON.stringify(payload),
   });
-  const operation = Array.isArray(rows) ? rows[0] : rows;
-  if (!operation?.id) throw new Error("missing_inserted_operation_id");
-  return operation;
+  if (!rows[0]?.id) throw new Error("missing_inserted_operation_id");
+  return rows[0];
 }
 
-async function insertOperationEvent(
+async function insertEvent(
   operationId: string,
   eventType: string,
   metadata: JsonRecord,
@@ -522,14 +552,11 @@ async function insertOperationEvent(
   });
 }
 
-async function linkSenderAsUploader(
+async function linkUploader(
   operationId: string,
-  senderPhone: string | null,
-  senderName: string | null,
-  messageId: string | null,
-  senderWaId: string | null,
+  message: NormalizedMessage,
 ): Promise<void> {
-  if (!senderPhone) return;
+  if (!message.senderPhone) return;
   try {
     await supabaseJson("/rest/v1/operation_user_links", {
       method: "POST",
@@ -537,24 +564,24 @@ async function linkSenderAsUploader(
       body: JSON.stringify({
         operation_id: operationId,
         user_id: null,
-        phone: senderPhone,
+        phone: message.senderPhone,
         relation_type: "uploader",
         source: "whatsapp",
         metadata: {
-          sender_name: senderName,
-          whatsapp_message_id: messageId,
-          whatsapp_wa_id: senderWaId,
+          sender_name: message.senderName,
+          whatsapp_message_id: message.messageId,
+          whatsapp_wa_id: message.senderWaId,
         },
       }),
     });
   } catch {
-    // The operation itself remains valid if the convenience link fails.
+    // Convenience link failure must not invalidate the operation.
   }
 }
 
-async function sendUnsupportedMessage(to: string): Promise<void> {
-  if (!SEND_UNSUPPORTED_REPLY) return;
-  await metaJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+async function sendUnsupported(to: string): Promise<void> {
+  if (!SEND_UNSUPPORTED_REPLY || !to) return;
+  await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -565,15 +592,13 @@ async function sendUnsupportedMessage(to: string): Promise<void> {
       text: {
         preview_url: false,
         body:
-          "مرحبًا بك في سند.\n\n" +
-          "لرفع إشعار مالي، أرسل صورة الإشعار أو ملف PDF فقط.\n\n" +
-          "بعد الرفع سنرسل لك رابطًا ورمز QR للتحقق من العملية.",
+          "مرحبًا بك في سند.\n\nأرسل صورة الإشعار المالي أو ملف PDF، وسنرسل لك رابط ورمز QR للتحقق من العملية.",
       },
     }),
   });
 }
 
-async function generateQrImage(verificationUrl: string): Promise<Uint8Array> {
+async function generateQr(verificationUrl: string): Promise<Uint8Array> {
   const buffer = await QRCode.toBuffer(verificationUrl, {
     type: "png",
     width: 800,
@@ -583,31 +608,34 @@ async function generateQrImage(verificationUrl: string): Promise<Uint8Array> {
   return new Uint8Array(buffer);
 }
 
-async function uploadQrToWhatsApp(qrBytes: Uint8Array): Promise<string> {
+async function uploadQrToMeta(qr: Uint8Array): Promise<string> {
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
   form.append("type", "image/png");
-  form.append("file", new Blob([qrBytes], { type: "image/png" }), "sanad-qr.png");
-  const response = await fetch(`${META_GRAPH_BASE}/${META_WA_PHONE_NUMBER_ID}/media`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
-    body: form,
-  });
+  form.append(
+    "file",
+    new Blob([toArrayBuffer(qr)], { type: "image/png" }),
+    "sanad-qr.png",
+  );
+  const response = await fetch(
+    `${GRAPH_BASE}/${META_WA_PHONE_NUMBER_ID}/media`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
+      body: form,
+    },
+  );
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`meta_qr_upload_failed ${response.status}: ${truncateText(text)}`);
+    throw new Error(`meta_qr_upload_failed ${response.status}: ${truncate(text)}`);
   }
-  const mediaId = JSON.parse(text)?.id;
-  if (!mediaId) throw new Error(`meta_qr_upload_missing_media_id: ${truncateText(text)}`);
+  const mediaId = cleanText(JSON.parse(text)?.id);
+  if (!mediaId) throw new Error("meta_qr_upload_missing_media_id");
   return mediaId;
 }
 
-async function sendQrReplyToSender(
-  to: string,
-  qrMediaId: string,
-  caption: string,
-): Promise<any> {
-  return await metaJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+async function sendQr(to: string, mediaId: string, verificationUrl: string) {
+  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -615,14 +643,35 @@ async function sendQrReplyToSender(
       recipient_type: "individual",
       to,
       type: "image",
-      image: { id: qrMediaId, caption },
+      image: {
+        id: mediaId,
+        caption:
+          `تم رفع الإشعار المالي إلى سند ✅\n\nيمكنك عرض رمز التحقق أو مشاركة الرابط:\n${verificationUrl}\n\nسيتم تحليل الإشعار ذكيًا خلال لحظات.`,
+      },
     }),
   });
 }
 
-async function triggerAnalysis(operationId: string, publicToken: string): Promise<any> {
+async function triggerOnboarding(): Promise<void> {
+  if (!TRIGGER_ONBOARDING) return;
+  const response = await fetch(ONBOARDING_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+    },
+    body: JSON.stringify({ limit: 1, source: FUNCTION_NAME }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `onboarding_trigger_rejected ${response.status}: ${truncate(await response.text())}`,
+    );
+  }
+}
+
+async function triggerAnalysis(operationId: string, publicToken: string) {
   if (!TRIGGER_ANALYSIS) return { skipped: true };
-  const response = await fetch(SANAD_ANALYZE_FUNCTION_URL, {
+  const response = await fetch(ANALYZE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -636,104 +685,19 @@ async function triggerAnalysis(operationId: string, publicToken: string): Promis
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`analysis_trigger_rejected ${response.status}: ${truncateText(text)}`);
+    throw new Error(`analysis_trigger_rejected ${response.status}: ${truncate(text)}`);
   }
   try {
     return text ? JSON.parse(text) : { ok: true };
   } catch {
-    return { ok: true, response: truncateText(text, 500) };
+    return { ok: true };
   }
-}
-
-async function triggerWhatsAppOnboarding(): Promise<void> {
-  if (!TRIGGER_ONBOARDING) return;
-  const response = await fetch(SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
-    },
-    body: JSON.stringify({ limit: 1, source: FUNCTION_NAME }),
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`whatsapp_onboarding_trigger_rejected ${response.status}: ${truncateText(text)}`);
-  }
-}
-
-function buildCaption(verificationUrl: string): string {
-  return (
-    "تم رفع الإشعار المالي إلى سند ✅\n\n" +
-    "يمكنك عرض رمز التحقق أو مشاركة الرابط مع أي شخص تريد أن يتحقق من العملية.\n\n" +
-    `رابط التحقق:\n${verificationUrl}\n\n` +
-    "سيتم تحليل الإشعار ذكيًا خلال لحظات."
-  );
-}
-
-function buildOperationPayload(params: {
-  normalized: any;
-  mediaInfo: any;
-  storagePath: string;
-  mimeType: string;
-  fileName: string;
-  fileSize: number | null;
-  fileSha256: string | null;
-  publicToken: string;
-  signatureMode: SignatureResult["mode"];
-  pipelineRunId: string;
-}) {
-  const { normalized, mediaInfo, storagePath, mimeType, fileName, fileSize, fileSha256, publicToken, signatureMode, pipelineRunId } = params;
-  return {
-    public_token: publicToken,
-    token_status: "active",
-    source: "whatsapp",
-    upload_origin: "whatsapp",
-    submitted_by_user_id: null,
-    submitted_by_phone: normalized.senderPhone,
-    submitted_by_name: normalized.senderName,
-    file_bucket: SUPABASE_STORAGE_BUCKET,
-    file_path: storagePath,
-    file_original_name: fileName,
-    file_mime_type: mimeType,
-    file_size: fileSize,
-    file_sha256: fileSha256,
-    storage_metadata: {
-      meta_media_id: normalized.mediaId || null,
-      meta_message_id: normalized.messageId || null,
-      whatsapp_from: normalized.senderPhone || null,
-      whatsapp_sender_name: normalized.senderName || null,
-      whatsapp_timestamp: normalized.timestamp || null,
-      whatsapp_message_type: normalized.messageType || null,
-      whatsapp_caption: normalized.caption || null,
-      meta_media_url_id: mediaInfo?.id || null,
-      meta_media_sha256: mediaInfo?.sha256 || null,
-      meta_media_file_size: mediaInfo?.file_size || null,
-      meta_signature_mode: signatureMode,
-      intake_pipeline_run_id: pipelineRunId,
-    },
-    original_file_status: "stored",
-    qr_status: "created",
-    status: "stored",
-    ai_status: "pending",
-    raw_webhook_json: normalized.rawWebhook || null,
-    client_upload_metadata: {
-      source: "whatsapp",
-      message_id: normalized.messageId || null,
-      sender_phone: normalized.senderPhone || null,
-      sender_name: normalized.senderName || null,
-      caption: normalized.caption || null,
-      pipeline_run_id: pipelineRunId,
-    },
-  };
 }
 
 async function runQrFlow(params: {
   operationId: string;
   runId: string;
-  senderPhone: string;
-  senderName: string | null;
-  messageId: string;
-  mediaId: string;
+  message: NormalizedMessage;
   publicToken: string;
   verificationUrl: string;
 }): Promise<void> {
@@ -751,31 +715,26 @@ async function runQrFlow(params: {
     return;
   }
   try {
-    const qrBytes = await generateQrImage(params.verificationUrl);
-    const qrMediaId = await uploadQrToWhatsApp(qrBytes);
-    const response = await sendQrReplyToSender(
-      params.senderPhone,
-      qrMediaId,
-      buildCaption(params.verificationUrl),
+    const qr = await generateQr(params.verificationUrl);
+    const mediaId = await uploadQrToMeta(qr);
+    const sendResponse = await sendQr(
+      params.message.senderPhone || "",
+      mediaId,
+      params.verificationUrl,
     );
-    await insertOperationEvent(params.operationId, "qr_created", {
+    await insertEvent(params.operationId, "qr_created", {
       action: "qr_sent_to_sender",
       generator: "internal:qrcode@1.5.4",
-      sent_to: params.senderPhone,
-      sender_name: params.senderName,
-      public_token: params.publicToken,
       verification_url: params.verificationUrl,
-      whatsapp_incoming_message_id: params.messageId || null,
-      whatsapp_uploaded_media_id: params.mediaId || null,
-      whatsapp_send_response: response,
+      whatsapp_send_response: sendResponse,
     });
     try {
-      await triggerWhatsAppOnboarding();
+      await triggerOnboarding();
     } catch (error) {
       console.error(JSON.stringify({
         function: FUNCTION_NAME,
         event: "whatsapp_onboarding_trigger_failed",
-        error: truncateText(error instanceof Error ? error.message : String(error)),
+        error: truncate(error instanceof Error ? error.message : error),
       }));
     }
     await recordSpan({
@@ -788,12 +747,11 @@ async function runQrFlow(params: {
       metadata: { generator: "internal:qrcode@1.5.4" },
     });
   } catch (error) {
-    const message = truncateText(error instanceof Error ? error.message : String(error));
-    await insertOperationEvent(params.operationId, "qr_created", {
+    const message = truncate(error instanceof Error ? error.message : error);
+    await insertEvent(params.operationId, "qr_created", {
       action: "qr_send_failed",
       generator: "internal:qrcode@1.5.4",
       error: message,
-      public_token: params.publicToken,
       verification_url: params.verificationUrl,
     });
     await recordSpan({
@@ -808,99 +766,131 @@ async function runQrFlow(params: {
   }
 }
 
-async function processWebhookInBackground(
-  body: any,
+function operationPayload(params: {
+  message: NormalizedMessage;
+  mediaInfo: Record<string, any>;
+  storagePath: string;
+  mimeType: string;
+  fileName: string;
+  fileSize: number | null;
+  fileSha256: string | null;
+  publicToken: string;
+  signatureMode: SignatureMode;
+  runId: string;
+}): JsonRecord {
+  return {
+    public_token: params.publicToken,
+    token_status: "active",
+    source: "whatsapp",
+    upload_origin: "whatsapp",
+    submitted_by_user_id: null,
+    submitted_by_phone: params.message.senderPhone,
+    submitted_by_name: params.message.senderName,
+    file_bucket: STORAGE_BUCKET,
+    file_path: params.storagePath,
+    file_original_name: params.fileName,
+    file_mime_type: params.mimeType,
+    file_size: params.fileSize,
+    file_sha256: params.fileSha256,
+    storage_metadata: {
+      meta_media_id: params.message.mediaId,
+      meta_message_id: params.message.messageId,
+      whatsapp_from: params.message.senderPhone,
+      whatsapp_sender_name: params.message.senderName,
+      whatsapp_timestamp: params.message.timestamp,
+      whatsapp_message_type: params.message.messageType,
+      whatsapp_caption: params.message.caption || null,
+      meta_media_url_id: params.mediaInfo.id || null,
+      meta_media_sha256: params.mediaInfo.sha256 || null,
+      meta_media_file_size: params.mediaInfo.file_size || null,
+      meta_signature_mode: params.signatureMode,
+      intake_pipeline_run_id: params.runId,
+    },
+    original_file_status: "stored",
+    qr_status: "created",
+    status: "stored",
+    ai_status: "pending",
+    raw_webhook_json: params.message.rawWebhook,
+    client_upload_metadata: {
+      source: "whatsapp",
+      message_id: params.message.messageId,
+      sender_phone: params.message.senderPhone,
+      sender_name: params.message.senderName,
+      caption: params.message.caption || null,
+      pipeline_run_id: params.runId,
+    },
+  };
+}
+
+async function processMessage(
+  message: NormalizedMessage,
   webhookStartedAtMs: number,
   signature: SignatureResult,
 ): Promise<void> {
-  const normalized = normalizeWhatsAppPayload(body);
-  if (!normalized.hasMessage) {
-    const statuses = Array.isArray(normalized?.value?.statuses)
-      ? normalized.value.statuses
-      : normalized?.status
-        ? [normalized.status]
-        : [];
-    if (normalized.isStatusEvent && statuses.length > 0) {
-      await processDeliveryStatuses(statuses);
-    }
-    return;
-  }
+  if (!message.senderPhone) return;
 
-  const senderPhone = normalized.senderPhone;
-  const senderName = normalized.senderName;
-  const messageId = normalized.messageId;
-  const mediaId = normalized.mediaId;
-  const messageType = normalized.messageType;
-  const initialMimeType = normalized.mimeType;
-  if (!senderPhone) return;
-
-  const supportedMedia = isSupportedMedia(messageType, initialMimeType, mediaId);
-  const supportedAssistantMessage =
-    messageType === "text" || (messageType === "audio" && Boolean(mediaId));
-  await registerWhatsAppInbound(
-    normalized,
-    supportedMedia || supportedAssistantMessage,
+  const supportedMedia = Boolean(
+    message.mediaId &&
+      ["image", "document"].includes(message.messageType) &&
+      ALLOWED_MIME_TYPES.has(message.mimeType),
   );
-  if (supportedAssistantMessage) {
-    await enqueueAndTriggerAssistant(normalized);
+  const supportedAssistant =
+    message.messageType === "text" ||
+    (message.messageType === "audio" && Boolean(message.mediaId));
+  await registerInbound(message, supportedMedia || supportedAssistant);
+
+  if (supportedAssistant) {
+    await triggerAssistant(message);
     return;
   }
   if (!supportedMedia) {
-    await sendUnsupportedMessage(senderPhone);
+    await sendUnsupported(message.senderPhone);
     return;
   }
-  const existing = await findExistingOperationByMessageId(messageId);
-  if (existing?.id) return;
+  if (await findExisting(message.messageId)) return;
 
   const runId = crypto.randomUUID();
   const mediaStartedAtMs = Date.now();
-  const mediaInfo = await metaJson<any>(`/${mediaId}`, { method: "GET" });
-  const mediaUrl = safeString(mediaInfo?.url);
+  const mediaInfo = await fetchMediaInfo(message.mediaId);
+  const mediaUrl = cleanText(mediaInfo.url);
   if (!mediaUrl) throw new Error("missing_meta_media_url");
-  const mimeType =
-    safeString(mediaInfo?.mime_type) || safeString(initialMimeType) || "application/octet-stream";
+  const downloaded = await downloadMedia(mediaUrl);
+  const mimeType = cleanText(mediaInfo.mime_type) ||
+    cleanText(downloaded.contentType) || message.mimeType;
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-    await sendUnsupportedMessage(senderPhone);
+    await sendUnsupported(message.senderPhone);
     return;
   }
-  const downloaded = await metaFetchBinary(mediaUrl);
-  const finalMimeType =
-    safeString(mediaInfo?.mime_type) || safeString(downloaded.contentType) || mimeType;
-  const extension = extensionFromMime(finalMimeType);
-  const originalFileName =
-    safeString(normalized.fileName) || `whatsapp-${Date.now()}.${extension}`;
-  const safeMessageId = sanitizePathPart(messageId, crypto.randomUUID());
+
+  const extension = extensionFromMime(mimeType);
+  const fileName = cleanText(message.fileName) ||
+    `whatsapp-${Date.now()}.${extension}`;
   const storagePath = [
     "whatsapp",
-    senderPhone,
-    `${Date.now()}-${safeMessageId}.${extension}`,
+    message.senderPhone,
+    `${Date.now()}-${sanitizePathPart(message.messageId, crypto.randomUUID())}.${extension}`,
   ].join("/");
   const publicToken = crypto.randomUUID();
   const verificationUrl = `${PUBLIC_APP_BASE_URL}/v/${publicToken}`;
-  const fileSize = Number(mediaInfo?.file_size) > 0
+  const fileSize = Number(mediaInfo.file_size) > 0
     ? Number(mediaInfo.file_size)
     : downloaded.bytes.byteLength || null;
-  const fileSha256 = safeString(mediaInfo?.sha256);
+  const fileSha256 = cleanText(mediaInfo.sha256);
 
   const storageStartedAtMs = Date.now();
-  await uploadToStorage(
-    SUPABASE_STORAGE_BUCKET,
-    storagePath,
-    downloaded.bytes,
-    finalMimeType,
-  );
-  const operationCreateStartedAtMs = Date.now();
-  const operation = await insertOperation(buildOperationPayload({
-    normalized,
+  await uploadStorage(storagePath, downloaded.bytes, mimeType);
+  const createStartedAtMs = Date.now();
+  const operation = await insertOperation(operationPayload({
+    message,
     mediaInfo,
     storagePath,
-    mimeType: finalMimeType,
-    fileName: originalFileName,
+    mimeType,
+    fileName,
     fileSize,
     fileSha256,
     publicToken,
     signatureMode: signature.mode,
-    pipelineRunId: runId,
+    runId,
   }));
 
   await Promise.allSettled([
@@ -911,7 +901,7 @@ async function processWebhookInBackground(
       stage: "media_lookup_download",
       status: "success",
       startedAtMs: mediaStartedAtMs,
-      metadata: { byte_length: downloaded.bytes.byteLength, mime_type: finalMimeType },
+      metadata: { bytes: downloaded.bytes.byteLength, mime_type: mimeType },
     }),
     recordSpan({
       operationId: operation.id,
@@ -920,7 +910,7 @@ async function processWebhookInBackground(
       stage: "storage_upload",
       status: "success",
       startedAtMs: storageStartedAtMs,
-      metadata: { bucket: SUPABASE_STORAGE_BUCKET },
+      metadata: { bucket: STORAGE_BUCKET },
     }),
     recordSpan({
       operationId: operation.id,
@@ -928,30 +918,24 @@ async function processWebhookInBackground(
       pipeline: "whatsapp_intake",
       stage: "operation_create",
       status: "success",
-      startedAtMs: operationCreateStartedAtMs,
+      startedAtMs: createStartedAtMs,
       metadata: { signature_mode: signature.mode },
     }),
   ]);
 
   const setupStartedAtMs = Date.now();
   await Promise.allSettled([
-    linkSenderAsUploader(
-      operation.id,
-      senderPhone,
-      senderName,
-      messageId,
-      normalized.senderWaId,
-    ),
-    insertOperationEvent(operation.id, "file_uploaded", {
+    linkUploader(operation.id, message),
+    insertEvent(operation.id, "file_uploaded", {
       source: "whatsapp",
       upload_origin: "whatsapp",
-      message_id: messageId || null,
-      media_id: mediaId || null,
-      file_bucket: SUPABASE_STORAGE_BUCKET,
+      message_id: message.messageId,
+      media_id: message.mediaId,
+      file_bucket: STORAGE_BUCKET,
       file_path: storagePath,
-      file_mime_type: finalMimeType,
-      file_original_name: originalFileName,
-      attachment_type: detectAttachmentType(finalMimeType, messageType),
+      file_mime_type: mimeType,
+      file_original_name: fileName,
+      attachment_type: attachmentType(mimeType, message.messageType),
       pipeline_run_id: runId,
       signature_mode: signature.mode,
     }),
@@ -979,7 +963,7 @@ async function processWebhookInBackground(
         metadata: { analyzer_status: result?.ai_status || null },
       });
     } catch (error) {
-      const message = truncateText(error instanceof Error ? error.message : String(error));
+      const errorText = truncate(error instanceof Error ? error.message : error);
       await recordSpan({
         operationId: operation.id,
         runId,
@@ -987,7 +971,7 @@ async function processWebhookInBackground(
         stage: "analysis_execution",
         status: "error",
         startedAtMs: analysisStartedAtMs,
-        metadata: { error: message },
+        metadata: { error: errorText },
       });
       throw error;
     }
@@ -996,10 +980,7 @@ async function processWebhookInBackground(
   const qrPromise = runQrFlow({
     operationId: operation.id,
     runId,
-    senderPhone,
-    senderName,
-    messageId,
-    mediaId,
+    message,
     publicToken,
     verificationUrl,
   });
@@ -1021,25 +1002,38 @@ async function processWebhookInBackground(
   });
 }
 
-function verifyMetaChallenge(url: URL): Response {
-  const mode = url.searchParams.get("hub.mode");
-  const token = url.searchParams.get("hub.verify_token");
-  const challenge = url.searchParams.get("hub.challenge");
-  if (mode === "subscribe" && token === META_VERIFY_TOKEN && challenge) {
-    return textResponse(challenge, 200);
+async function processWebhook(
+  body: unknown,
+  webhookStartedAtMs: number,
+  signature: SignatureResult,
+): Promise<void> {
+  const normalized = normalizeWebhook(body);
+  if (!normalized.hasMessage) {
+    if (normalized.isStatusEvent) {
+      await processDeliveryStatuses(normalized.statuses);
+    }
+    return;
   }
-  return textResponse("Forbidden", 403);
+  await processMessage(normalized, webhookStartedAtMs, signature);
+}
+
+function verifyChallenge(url: URL): Response {
+  const valid =
+    url.searchParams.get("hub.mode") === "subscribe" &&
+    url.searchParams.get("hub.verify_token") === META_VERIFY_TOKEN &&
+    Boolean(url.searchParams.get("hub.challenge"));
+  return valid
+    ? textResponse(url.searchParams.get("hub.challenge") || "", 200)
+    : textResponse("Forbidden", 403);
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: RESPONSE_HEADERS });
   }
-  if (req.method === "GET") {
-    return verifyMetaChallenge(new URL(req.url));
-  }
+  if (req.method === "GET") return verifyChallenge(new URL(req.url));
   if (req.method !== "POST") {
-    return jsonResponse({ ok: false, error: "method_not_allowed", function: FUNCTION_NAME }, 405);
+    return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
   }
 
   const webhookStartedAtMs = Date.now();
@@ -1049,13 +1043,15 @@ Deno.serve(async (req: Request) => {
     req.headers.get("x-hub-signature-256"),
   );
   if (!signature.ok) {
-    const status = signature.mode === "not_configured" ? 503 : 403;
     console.error(JSON.stringify({
       function: FUNCTION_NAME,
       event: "meta_signature_rejected",
-      signature_mode: signature.mode,
+      mode: signature.mode,
     }));
-    return jsonResponse({ ok: false, error: "invalid_meta_signature", mode: signature.mode }, status);
+    return jsonResponse(
+      { ok: false, error: "invalid_meta_signature", mode: signature.mode },
+      403,
+    );
   }
   if (signature.mode === "not_configured") {
     console.warn(JSON.stringify({
@@ -1065,24 +1061,19 @@ Deno.serve(async (req: Request) => {
     }));
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = JSON.parse(new TextDecoder().decode(rawBody));
   } catch {
     return textResponse("EVENT_RECEIVED", 200);
   }
 
-  const task = processWebhookInBackground(
-    body,
-    webhookStartedAtMs,
-    signature,
-  ).catch((error) => {
+  const task = processWebhook(body, webhookStartedAtMs, signature).catch((error) => {
     console.error(JSON.stringify({
       function: FUNCTION_NAME,
-      error: error instanceof Error ? error.message : String(error),
+      error: truncate(error instanceof Error ? error.message : error),
     }));
   });
-
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
     EdgeRuntime.waitUntil(task);
   }
