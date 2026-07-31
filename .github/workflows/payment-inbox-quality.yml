@@ -1,0 +1,47 @@
+name: Payment inbox quality
+
+on:
+  pull_request:
+    paths:
+      - "public/payment-inbox.html"
+      - "public/payment-inbox.css"
+      - "public/payment-inbox.js"
+      - "src/components/business/BusinessManage.tsx"
+      - "supabase/migrations/*payment_inbox*"
+      - "supabase/tests/*payment_inbox*"
+      - ".github/workflows/payment-inbox-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        run: node --check public/payment-inbox.js
+
+      - name: Check required assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/payment-inbox.html
+          test -s public/payment-inbox.css
+          test -s public/payment-inbox.js
+          grep -Fq '/payment-inbox.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox.js' public/payment-inbox.html
+          grep -Fq '/payment-inbox.html' src/components/business/BusinessManage.tsx
+
+      - name: Enforce atomic inbox contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'claim_business_payment' supabase/migrations/*payment_inbox*.sql
+          grep -Fq 'heartbeat_business_payment_claim' supabase/migrations/*payment_inbox*.sql
+          grep -Fq 'complete_business_payment' supabase/migrations/*payment_inbox*.sql
+          grep -Fq 'business_payment_inbox_events' supabase/migrations/*payment_inbox*.sql
+          grep -Fq 'replica identity full' supabase/migrations/*payment_inbox*.sql
+          ! grep -Eiq 'insert[^;]+business_operation_links' public/payment-inbox.js
