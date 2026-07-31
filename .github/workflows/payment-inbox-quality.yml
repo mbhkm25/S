@@ -6,6 +6,10 @@ on:
       - "public/payment-inbox.html"
       - "public/payment-inbox.css"
       - "public/payment-inbox.js"
+      - "public/payment-inbox-shadow-preview.css"
+      - "public/payment-inbox-shadow-preview.js"
+      - "public/sanad-ui-standards.css"
+      - "public/sanad-display-standards.js"
       - "src/components/business/BusinessManage.tsx"
       - "supabase/migrations/*payment_inbox*"
       - "supabase/tests/*payment_inbox*"
@@ -22,7 +26,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check JavaScript syntax
-        run: node --check public/payment-inbox.js
+        run: |
+          node --check public/payment-inbox.js
+          node --check public/payment-inbox-shadow-preview.js
+          node --check public/sanad-display-standards.js
 
       - name: Check required assets
         shell: bash
@@ -31,9 +38,28 @@ jobs:
           test -s public/payment-inbox.html
           test -s public/payment-inbox.css
           test -s public/payment-inbox.js
+          test -s public/payment-inbox-shadow-preview.css
+          test -s public/payment-inbox-shadow-preview.js
+          test -s public/sanad-ui-standards.css
+          test -s public/sanad-display-standards.js
+          grep -Fq '/sanad-ui-standards.css' public/payment-inbox.html
           grep -Fq '/payment-inbox.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-shadow-preview.css' public/payment-inbox.html
+          grep -Fq '/sanad-display-standards.js' public/payment-inbox.html
+          grep -Fq '/payment-inbox-shadow-preview.js' public/payment-inbox.html
           grep -Fq '/payment-inbox.js' public/payment-inbox.html
+          grep -Fq 'data-status="shadow_preview"' public/payment-inbox.html
           grep -Fq '/payment-inbox.html' src/components/business/BusinessManage.tsx
+
+      - name: Enforce SANAD typography and numerals
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'IBM+Plex+Sans+Arabic' public/sanad-ui-standards.css
+          grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
+          grep -Fq 'font-variant-numeric: lining-nums tabular-nums' public/sanad-ui-standards.css
+          grep -Fq 'toLatinDigits' public/sanad-display-standards.js
+          grep -Eq '\[٠-٩\].*\[۰-۹\]|\[۰-۹\].*\[٠-٩\]' public/sanad-display-standards.js
 
       - name: Enforce atomic inbox contracts
         shell: bash
@@ -45,3 +71,19 @@ jobs:
           grep -Fq 'business_payment_inbox_events' supabase/migrations/*payment_inbox*.sql
           grep -Fq 'replica identity full' supabase/migrations/*payment_inbox*.sql
           ! grep -Eiq 'insert[^;]+business_operation_links' public/payment-inbox.js
+
+      - name: Enforce read-only shadow preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260731151500_business_payment_shadow_preview.sql'
+          test -s "$migration"
+          grep -Fq 'get_business_payment_shadow_preview' "$migration"
+          grep -Fq "private.has_business_payment_permission(p_business_id, 'view', auth.uid())" "$migration"
+          grep -Fq "'operational', false" "$migration"
+          grep -Fq "'claim', false" "$migration"
+          grep -Fq "'complete', false" "$migration"
+          grep -Fq 'grant execute' "$migration"
+          ! grep -Eiq 'insert[[:space:][:print:]]*business_payment_inbox' "$migration"
+          ! grep -Eiq 'insert[[:space:][:print:]]*business_operation_links' "$migration"
+          ! grep -Eiq 'claim_business_payment|complete_business_payment|release_business_payment|reject_business_payment' public/payment-inbox-shadow-preview.js
