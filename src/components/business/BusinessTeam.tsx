@@ -17,6 +17,7 @@ import {
   Users
 } from 'lucide-react';
 import { getUserBusinessContexts } from '../../lib/businessApi';
+import { getActiveManagedBusinessId } from '../../lib/businessManagementApi';
 import {
   DEFAULT_TEAM_PERMISSIONS,
   createBusinessTeamInvitationV2,
@@ -43,8 +44,23 @@ const PERMISSION_LABELS: Record<BusinessTeamPermissionKey, string> = {
   contact_customers: 'التواصل مع العملاء',
   manage_catalog: 'إدارة الكتالوج',
   view_reports: 'عرض التقارير',
-  link_operations: 'إضافة العمليات إلى النشاط'
+  link_operations: 'إضافة العمليات إلى النشاط',
+  'payments.view': 'عرض وارد المدفوعات',
+  'payments.claim': 'استلام عمليات الدفع',
+  'payments.complete': 'إكمال عمليات الدفع',
+  'payments.release': 'تحرير العملية المستلمة',
+  'payments.reassign': 'إعادة تعيين العملية لموظف آخر',
+  'payments.review': 'مراجعة ورفض المطابقة'
 };
+
+const PAYMENT_PERMISSION_KEYS: BusinessTeamPermissionKey[] = [
+  'payments.view',
+  'payments.claim',
+  'payments.complete',
+  'payments.release',
+  'payments.reassign',
+  'payments.review'
+];
 
 function formatDate(value?: string | null) {
   if (!value) return 'غير متوفر';
@@ -91,7 +107,10 @@ export default function BusinessTeam({ onNavigate, businessId: providedBusinessI
       return { id: providedBusinessId, name: providedBusinessName || '' };
     }
     const contexts = await getUserBusinessContexts();
-    const current = contexts.owned_businesses?.[0] || null;
+    const activeBusinessId = getActiveManagedBusinessId();
+    const current = contexts.owned_businesses?.find((business) => business.id === activeBusinessId)
+      || contexts.owned_businesses?.[0]
+      || null;
     if (!current) throw new Error('لا يوجد نشاط مملوك متاح لإدارة الفريق.');
     return { id: current.id, name: current.name };
   };
@@ -301,10 +320,17 @@ export default function BusinessTeam({ onNavigate, businessId: providedBusinessI
       {editing && (
         <div className="fixed inset-0 z-[120] flex items-end bg-slate-950/60 sm:items-center sm:justify-center">
           <button className="absolute inset-0" onClick={() => setEditing(null)} aria-label="إغلاق" />
-          <section className="relative z-10 w-full rounded-t-[28px] bg-white p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-3xl">
+          <section className="relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-[28px] bg-white p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:max-w-lg sm:rounded-3xl">
             <h3 className="text-sm font-bold">صلاحيات {editing.profile?.full_name || 'الموظف'}</h3>
             <label className="mt-4 block space-y-1 text-[10px] font-bold text-slate-600">المسمى الوظيفي<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs" /></label>
-            <div className="mt-4 space-y-2">{(Object.keys(PERMISSION_LABELS) as BusinessTeamPermissionKey[]).map((key) => <label key={key} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-xs"><span>{PERMISSION_LABELS[key]}</span><input type="checkbox" checked={editPermissions[key]} onChange={(event) => setEditPermissions((current) => ({ ...current, [key]: event.target.checked }))} /></label>)}</div>
+
+            <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+              <strong className="text-[11px] text-emerald-900">صلاحيات وارد المدفوعات</strong>
+              <p className="mt-1 text-[9px] leading-5 text-emerald-700">امنح أقل صلاحية يحتاجها الموظف. إعادة التعيين ورفض المطابقة مناسبتان للمدير فقط.</p>
+              <div className="mt-3 space-y-2">{PAYMENT_PERMISSION_KEYS.map((key) => <label key={key} className="flex items-center justify-between rounded-xl border border-emerald-100 bg-white p-3 text-xs"><span>{PERMISSION_LABELS[key]}</span><input type="checkbox" checked={editPermissions[key]} onChange={(event) => setEditPermissions((current) => ({ ...current, [key]: event.target.checked }))} /></label>)}</div>
+            </div>
+
+            <div className="mt-4 space-y-2">{(Object.keys(PERMISSION_LABELS) as BusinessTeamPermissionKey[]).filter((key) => !PAYMENT_PERMISSION_KEYS.includes(key)).map((key) => <label key={key} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 text-xs"><span>{PERMISSION_LABELS[key]}</span><input type="checkbox" checked={editPermissions[key]} onChange={(event) => setEditPermissions((current) => ({ ...current, [key]: event.target.checked }))} /></label>)}</div>
             <div className="mt-4 flex gap-2"><button onClick={() => setEditing(null)} className="flex-1 rounded-xl border p-3 text-xs">إلغاء</button><button disabled={savingMember} onClick={() => void savePermissions()} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 p-3 text-xs font-bold text-white">{savingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ</button></div>
           </section>
         </div>

@@ -1,0 +1,3 @@
+create index business_payment_inbox_claimed_by_user_idx
+on public.business_payment_inbox(claimed_by_user_id)
+where claimed_by_user_id is not null;
