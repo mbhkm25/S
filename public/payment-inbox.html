@@ -11,12 +11,13 @@
   <link rel="stylesheet" href="/sanad-ui-standards.css" />
   <link rel="stylesheet" href="/payment-inbox.css" />
   <link rel="stylesheet" href="/payment-inbox-shadow-preview.css" />
+  <link rel="stylesheet" href="/payment-inbox-operational-ui.css" />
 </head>
 <body>
   <div class="shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">سند للأعمال · تشغيل مشترك</p>
+        <p class="eyebrow">سند للأعمال · تشغيل الفريق</p>
         <h1>وارد المدفوعات</h1>
         <p>استلم العملية على جهازك، راجع الإشعار، ثم أكملها دون تسليم هاتف العميل أو تكرار العمل بين الكاشيرات.</p>
       </div>
@@ -35,7 +36,7 @@
       <div id="connectionState" class="connection-pill offline"><span></span> جارٍ الاتصال</div>
     </section>
 
-    <section id="statsSection" class="stats-grid"></section>
+    <section id="statsSection" class="stats-grid" aria-hidden="true"></section>
 
     <nav class="tabs" aria-label="حالات وارد المدفوعات">
       <button type="button" data-status="new" class="active">جديدة</button>
@@ -53,7 +54,7 @@
   <div id="actionModal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
     <section class="modal-card" role="dialog" aria-modal="true">
-      <header><div><p class="eyebrow">إجراء تشغيلي</p><h2 id="modalTitle">العملية</h2></div><button id="closeModal" class="close" type="button">×</button></header>
+      <header><div><p class="eyebrow">وارد المدفوعات</p><h2 id="modalTitle">العملية</h2></div><button id="closeModal" class="close" type="button" aria-label="إغلاق">×</button></header>
       <div id="modalBody" class="modal-body"></div>
     </section>
   </div>
@@ -64,5 +65,6 @@
   <script src="/payment-inbox-shadow-preview.js" defer></script>
   <script src="/payment-inbox.js" defer></script>
   <script src="/payment-inbox-workflow-state.js" defer></script>
+  <script src="/payment-inbox-operational-ui.js" defer></script>
 </body>
 </html>
