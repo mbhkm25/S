@@ -3,6 +3,7 @@ name: Financial routing latency quality
 on:
   pull_request:
     paths:
+      - "supabase/functions/deno.json"
       - "supabase/functions/sanad-v3-whatsapp-intake/**"
       - "supabase/functions/sanad-v3-analyze-operation/**"
       - "supabase/migrations/*pipeline_latency*"
@@ -25,10 +26,10 @@ jobs:
           deno-version: v2.x
 
       - name: Deno check WhatsApp intake
-        run: deno check supabase/functions/sanad-v3-whatsapp-intake/index.ts
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
 
       - name: Deno check operation analyzer
-        run: deno check supabase/functions/sanad-v3-analyze-operation/index.ts
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
 
       - name: Enforce intake latency and privacy invariants
         shell: bash
