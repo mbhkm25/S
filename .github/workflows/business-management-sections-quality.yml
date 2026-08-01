@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "BusinessFinancialAccountsCenter" src/components/business/BusinessManage.tsx
+          grep -Fq "BusinessFinancialAccountsCenter" src/components/business/BusinessManageV3.tsx
           grep -Fq "الحسابات المالية والتوجيه" src/components/business/BusinessFinancialAccountsCenter.tsx
           if grep -Fq "id: 'accounts'" src/components/business/BusinessManageV3.tsx; then
             echo 'Legacy financial accounts tab must not be exposed.' >&2
@@ -45,11 +45,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          grep -Fq "التشغيل والهوية المالية" src/components/business/BusinessManageV3.tsx
           grep -Fq "إدارة النشاط" src/components/business/BusinessManageV3.tsx
           grep -Fq "المتابعة والرقابة" src/components/business/BusinessManageV3.tsx
-          grep -Fq "التشغيل والهوية المالية" src/components/business/BusinessManage.tsx
-          grep -Fq "الملف العام" src/components/business/BusinessManage.tsx
-          grep -Fq "وارد المدفوعات" src/components/business/BusinessManage.tsx
+          grep -Fq "الملف العام" src/components/business/BusinessManageV3.tsx
+          grep -Fq "وارد المدفوعات" src/components/business/BusinessManageV3.tsx
+          grep -Fq "BusinessManageV3" src/components/business/BusinessManage.tsx
+
+      - name: Validate navigation and active business consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "getActiveManagedBusinessId" src/components/business/BusinessManageV3.tsx
+          grep -Fq "owned.find(item => item.id === activeBusinessId)" src/components/business/BusinessManageV3.tsx
+          grep -Fq "selectTab('overview')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "فتح جميع أقسام إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "window.location.assign('/payment-inbox.html')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "onNavigate('business-manage-profile')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "max-w-6xl" src/components/business/BusinessManageV3.tsx
+          grep -Fq "grid grid-cols-2" src/components/business/BusinessManageV3.tsx
+
+      - name: Validate operational feedback states
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "جارٍ تجهيز إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "إعادة المحاولة" src/components/business/BusinessManageV3.tsx
+          grep -Fq "تحديث بيانات النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq 'role="status"' src/components/business/BusinessManageV3.tsx
+          grep -Fq 'role="alert"' src/components/business/BusinessManageV3.tsx
 
       - name: Validate public projection synchronization
         shell: bash
