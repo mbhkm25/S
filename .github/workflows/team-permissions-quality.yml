@@ -1,0 +1,81 @@
+name: Team permissions quality
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*team_permissions*.sql'
+      - 'src/lib/businessTeamApi.ts'
+      - 'src/components/business/BusinessTeam.tsx'
+      - '.github/workflows/team-permissions-quality.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/*team_permissions*.sql'
+      - 'src/lib/businessTeamApi.ts'
+      - 'src/components/business/BusinessTeam.tsx'
+      - '.github/workflows/team-permissions-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate permission migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="$(find supabase/migrations -maxdepth 1 -type f -name '*team_permissions_end_to_end.sql' | sort | tail -n 1)"
+          test -n "$migration"
+          echo "MIGRATION=$migration" >> "$GITHUB_ENV"
+
+      - name: Validate permission persistence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "'permissions_updated'" "$MIGRATION"
+          grep -Fq "previous_permissions" "$MIGRATION"
+          grep -Fq "permissions = v_normalized" "$MIGRATION"
+          grep -Fq "updated_at = now()" "$MIGRATION"
+          grep -Fq "for update" "$MIGRATION"
+          grep -Fq "permission_value_must_be_boolean" "$MIGRATION"
+          grep -Fq "invalid_permission_key" "$MIGRATION"
+
+      - name: Validate centralized authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "create or replace function public.has_business_team_permission" "$MIGRATION"
+          grep -Fq "public.has_business_team_permission(" "$MIGRATION"
+          grep -Fq "'payments.' || p_permission" "$MIGRATION"
+          grep -Fq "p.status = 'active'" "$MIGRATION"
+          grep -Fq "m.status = 'active'" "$MIGRATION"
+          if grep -Fq "m.membership_role in ('manager','cashier')" "$MIGRATION"; then
+            echo 'Payment permissions must not be granted implicitly by role.' >&2
+            exit 1
+          fi
+
+      - name: Validate permission dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "contact_customers_requires_view_customers" "$MIGRATION"
+          grep -Fq "payment_actions_require_payments_view" "$MIGRATION"
+          for key in \
+            view_customers contact_customers manage_catalog view_reports link_operations \
+            payments.view payments.claim payments.complete payments.release payments.reassign payments.review
+          do
+            grep -Fq "'$key'" "$MIGRATION"
+          done
+
+      - name: Validate execution grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "grant execute on function public.has_business_team_permission" "$MIGRATION"
+          grep -Fq "grant execute on function public.update_business_team_member_permissions" "$MIGRATION"
+          grep -Fq "revoke all on function public.update_business_team_member_permissions" "$MIGRATION"
