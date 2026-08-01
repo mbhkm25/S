@@ -1,0 +1,65 @@
+name: Business management sections quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/business/BusinessManage.tsx'
+      - 'src/components/business/BusinessManageV3.tsx'
+      - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
+      - '.github/workflows/business-management-sections-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/BusinessManage.tsx'
+      - 'src/components/business/BusinessManageV3.tsx'
+      - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
+      - '.github/workflows/business-management-sections-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate single financial accounts editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "BusinessFinancialAccountsCenter" src/components/business/BusinessManage.tsx
+          grep -Fq "الحسابات المالية والتوجيه" src/components/business/BusinessFinancialAccountsCenter.tsx
+          if grep -Fq "id: 'accounts'" src/components/business/BusinessManageV3.tsx; then
+            echo 'Legacy financial accounts tab must not be exposed.' >&2
+            exit 1
+          fi
+          if grep -Eq "upsertFinancialAccount|deleteFinancialAccount|profile_sections\?\.financial_accounts" src/components/business/BusinessManageV3.tsx; then
+            echo 'Legacy financial account editing logic must not remain in BusinessManageV3.' >&2
+            exit 1
+          fi
+
+      - name: Validate contextual section organization
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "المتابعة والرقابة" src/components/business/BusinessManageV3.tsx
+          grep -Fq "التشغيل والهوية المالية" src/components/business/BusinessManage.tsx
+          grep -Fq "الملف العام" src/components/business/BusinessManage.tsx
+          grep -Fq "وارد المدفوعات" src/components/business/BusinessManage.tsx
+
+      - name: Validate public projection synchronization
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="$(find supabase/migrations -maxdepth 1 -type f -name '*unify_business_financial_accounts_public_projection.sql' | sort | tail -n 1)"
+          test -n "$migration"
+          grep -Fq "sync_business_financial_accounts_legacy_cache" "$migration"
+          grep -Fq "trg_business_financial_accounts_public_projection" "$migration"
+          grep -Fq "trg_business_financial_identifiers_public_projection" "$migration"
+          grep -Fq "business_financial_accounts" "$migration"
+          grep -Fq "business_financial_identifiers" "$migration"
+          grep -Fq "revoke all on function public.refresh_business_financial_accounts_projection" "$migration"
