@@ -89,9 +89,7 @@ function EntityLogo({ entity }: { entity: string }) {
 }
 
 function buildInboxUrl(admin: boolean, businessId: string): string {
-  const params = new URLSearchParams({
-    view: admin ? 'payment-inbox-admin' : 'payment-inbox'
-  });
+  const params = new URLSearchParams({ view: admin ? 'payment-inbox-admin' : 'payment-inbox' });
   if (businessId) params.set('business_id', businessId);
   return `/business/manage/operations?${params.toString()}`;
 }
@@ -170,45 +168,26 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
               {admin ? 'متابعة عمليات الفريق والحالات التي تحتاج قرارًا إشرافيًا.' : 'استلام أحدث العمليات المرتبطة بالنشاط والتحقق منها.'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadItems()}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700"
-            aria-label="تحديث وارد المدفوعات"
-          >
+          <button type="button" onClick={() => void loadItems()} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700" aria-label="تحديث وارد المدفوعات">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <select
-            value={businessId}
-            onChange={event => setBusinessId(event.target.value)}
-            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-900 outline-none"
-            aria-label="اختيار النشاط التجاري"
-          >
+          <select value={businessId} onChange={event => setBusinessId(event.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-900 outline-none" aria-label="اختيار النشاط التجاري">
             {contexts.map(item => <option key={item.business_id} value={item.business_id}>{item.business_name}</option>)}
           </select>
 
           {!admin && activeContext?.is_supervisor && (
-            <a
-              href={buildInboxUrl(true, businessId)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-black text-white"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              إدارة وارد المدفوعات
+            <a href={buildInboxUrl(true, businessId)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-black text-white">
+              <ShieldCheck className="h-4 w-4" /> إدارة وارد المدفوعات
             </a>
           )}
         </div>
 
         <div className={`mt-3 grid gap-2 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>
           {tabs.map(tab => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setView(tab.value)}
-              className={`h-10 rounded-2xl px-3 text-xs font-black transition ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}
-            >
+            <button key={tab.value} type="button" onClick={() => setView(tab.value)} className={`h-10 rounded-2xl px-3 text-xs font-black transition ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}>
               {tab.label}
             </button>
           ))}
@@ -217,15 +196,12 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
 
       {error && (
         <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-        </div>
+        <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div>
       ) : items.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <Inbox className="mx-auto h-8 w-8 text-slate-300" />
@@ -236,9 +212,11 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
         <div className="space-y-3">
           {items.map(item => {
             const entity = item.financial_entity || 'جهة مالية';
-            const identity = item.resolved_business_name || item.account_holder_name || item.raw_receiver_name || 'عملية مالية واردة';
+            const identity = item.account_holder_name || item.receiver_name || item.business_name || 'عملية مالية واردة';
             const point = item.merchant_point || item.receiver_account;
             const busy = busyId === item.id;
+            const canClaim = item.action_permissions?.can_claim === true;
+            const canComplete = item.action_permissions?.can_complete === true;
 
             return (
               <article key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -249,7 +227,7 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
                       <h3 className="truncate text-sm font-black text-slate-900">{entity}</h3>
                       <p className="mt-1 truncate text-[11px] text-slate-500">{identity}</p>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
-                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.received_at || item.created_at)}</span>
+                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{formatTime(item.created_at || item.transaction_datetime)}</span>
                         {point && <span>الحساب/النقطة: <b className="text-slate-600">{toLatinDigits(point)}</b></span>}
                         {item.reference_number && <span>المرجع: <b className="text-slate-600">{toLatinDigits(item.reference_number)}</b></span>}
                       </div>
@@ -264,8 +242,7 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
 
                 {admin && item.claimed_by_name && (
                   <div className="mx-4 mb-3 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] text-slate-600">
-                    <UserRoundCheck className="h-4 w-4 text-slate-400" />
-                    <span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span>
+                    <UserRoundCheck className="h-4 w-4 text-slate-400" /><span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span>
                   </div>
                 )}
 
@@ -274,7 +251,7 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
                     <Eye className="h-4 w-4" /> فتح الإشعار
                   </button>
 
-                  {view === 'new' && (
+                  {canClaim && (
                     <>
                       <button type="button" disabled={busy} onClick={() => void runAction(item, 'claim')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white disabled:opacity-60">
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />} استلام العملية
@@ -285,7 +262,7 @@ export default function PaymentInbox({ admin = false, onNavigate }: PaymentInbox
                     </>
                   )}
 
-                  {view === 'mine' && (
+                  {canComplete && (
                     <button type="button" disabled={busy} onClick={() => void runAction(item, 'complete')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white disabled:opacity-60">
                       <CheckCircle2 className="h-4 w-4" /> إكمال العملية
                     </button>
