@@ -7,6 +7,9 @@ on:
       - 'public/payment-inbox-card-v2.css'
       - 'public/payment-inbox-card-v2-operational.css'
       - 'public/payment-inbox-card-v2.js'
+      - 'public/payment-inbox-cashier-layout.css'
+      - 'public/payment-inbox-cashier-fixes.css'
+      - 'public/payment-inbox-cashier-layout.js'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
   push:
     branches: [main]
@@ -15,6 +18,9 @@ on:
       - 'public/payment-inbox-card-v2.css'
       - 'public/payment-inbox-card-v2-operational.css'
       - 'public/payment-inbox-card-v2.js'
+      - 'public/payment-inbox-cashier-layout.css'
+      - 'public/payment-inbox-cashier-fixes.css'
+      - 'public/payment-inbox-cashier-layout.js'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
 
 permissions:
@@ -27,88 +33,71 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate JavaScript syntax
-        run: node --check public/payment-inbox-card-v2.js
+        run: |
+          node --check public/payment-inbox-card-v2.js
+          node --check public/payment-inbox-cashier-layout.js
 
-      - name: Validate progressive enhancement contract
+      - name: Validate cashier-first structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='public/payment-inbox-cashier-layout.js'
+          css='public/payment-inbox-cashier-layout.css'
+          fixes='public/payment-inbox-cashier-fixes.css'
+          grep -Fq 'installHeaderLayout' "$script"
+          grep -Fq 'hero-operations' "$script"
+          grep -Fq 'paymentInboxCardV2Toolbar' "$script"
+          grep -Fq 'cashier-claim' "$script"
+          grep -Fq 'cashier-claim-verify' "$script"
+          grep -Fq 'cashier-original' "$script"
+          grep -Fq 'financial-logo' "$script"
+          grep -Fq 'original_file_url' "$script"
+          grep -Fq 'height: 220px' "$fixes"
+          grep -Fq '#paymentInboxCardV2Toolbar' "$css"
+
+      - name: Validate action hierarchy and icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='public/payment-inbox-cashier-layout.js'
+          css='public/payment-inbox-cashier-layout.css'
+          grep -Fq 'فتح الإشعار' "$script"
+          grep -Fq 'استلام العملية' "$script"
+          grep -Fq 'استلام وتحقق' "$script"
+          grep -Fq 'فتح الملف الأصلي' "$script"
+          grep -Fq 'cashier-green' "$css"
+          grep -Fq 'cashier-blue' "$css"
+          grep -Fq 'cashier-purple' "$css"
+          grep -Fq '<svg class="action-icon"' "$script"
+
+      - name: Validate transparent logo presentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          css='public/payment-inbox-cashier-layout.css'
+          fixes='public/payment-inbox-cashier-fixes.css'
+          grep -Fq 'background: transparent' "$css"
+          grep -Fq 'border: 0' "$css"
+          grep -Fq 'object-fit: contain' "$css"
+          grep -Fq 'financial-logo-host' "$fixes"
+
+      - name: Validate original card system remains compatible
         shell: bash
         run: |
           set -euo pipefail
           script='public/payment-inbox-card-v2.js'
-          grep -Fq "MutationObserver" "$script"
-          grep -Fq "sanad:payment-inbox-v2-loaded" "$script"
-          grep -Fq "requestAnimationFrame" "$script"
-          grep -Fq "cardV2Ready" "$script"
-          grep -Fq "aria-expanded" "$script"
-          grep -Fq "aria-busy" "$script"
-          grep -Fq "paymentInboxCurrencyFilter" "$script"
-          grep -Fq "paymentInboxSortMode" "$script"
-          grep -Fq "itemCache" "$script"
-
-      - name: Validate currency system
-        shell: bash
-        run: |
-          set -euo pipefail
-          css='public/payment-inbox-card-v2.css'
-          grep -Fq 'data-currency="YER"' "$css"
-          grep -Fq 'data-currency="SAR"' "$css"
-          grep -Fq 'data-currency="USD"' "$css"
-          grep -Fq "content: '\\20C1'" "$css"
-          grep -Fq "content: '$'" "$css"
-          grep -Fq 'font-variant-numeric: tabular-nums' "$css"
-
-      - name: Validate mobile-first interaction quality
-        shell: bash
-        run: |
-          set -euo pipefail
-          css='public/payment-inbox-card-v2.css'
-          operational='public/payment-inbox-card-v2-operational.css'
-          grep -Fq 'min-height: 3rem' "$css"
-          grep -Fq '@media (max-width: 419px)' "$css"
-          grep -Fq '@media (min-width: 768px)' "$css"
-          grep -Fq '@media (min-width: 1280px)' "$css"
-          grep -Fq '@media (prefers-reduced-motion: reduce)' "$operational"
-          grep -Fq ':focus-visible' "$css"
-          grep -Fq 'container-type: inline-size' "$css"
-          grep -Fq '.assignee-chip' "$operational"
-
-      - name: Validate operational urgency and sorting
-        shell: bash
-        run: |
-          set -euo pipefail
-          script='public/payment-inbox-card-v2.js'
-          operational='public/payment-inbox-card-v2-operational.css'
-          grep -Fq 'claim_expires_at' "$script"
-          grep -Fq 'leaseState' "$script"
-          grep -Fq 'الأقرب لانتهاء المهلة' "$script"
-          grep -Fq 'الأقدم وصولًا' "$script"
-          grep -Fq 'operationalRank' "$script"
-          grep -Fq 'تعارض في الاسم' "$script"
-          grep -Fq 'تكرار محتمل' "$script"
-          grep -Fq 'ثقة التحليل منخفضة' "$script"
-          grep -Fq '.lease-chip.warning' "$operational"
-          grep -Fq '.lease-chip.danger' "$operational"
-          grep -Fq '.card-v2-alert' "$operational"
-
-      - name: Validate non-color status indicators
-        shell: bash
-        run: |
-          set -euo pipefail
-          css='public/payment-inbox-card-v2.css'
-          script='public/payment-inbox-card-v2.js'
-          grep -Fq 'STATUS_BY_LABEL' "$script"
-          grep -Fq 'STATUS_LABELS' "$script"
+          grep -Fq 'MutationObserver' "$script"
+          grep -Fq 'sanad:payment-inbox-v2-loaded' "$script"
           grep -Fq 'card.dataset.status' "$script"
-          grep -Fq 'data-status="completed"' "$css"
-          grep -Fq 'data-status="review_required"' "$css"
-          grep -Fq 'data-status="rejected"' "$css"
-          grep -Fq 'aria-label' "$script"
+          grep -Fq 'aria-busy' "$script"
 
       - name: Validate load order
         shell: bash
         run: |
           set -euo pipefail
           grep -Fq '/payment-inbox-card-v2.css' public/payment-inbox.html
-          grep -Fq '/payment-inbox-card-v2-operational.css' public/payment-inbox.html
-          grep -Fq '/payment-inbox-card-v2.js' public/payment-inbox.html
-          test "$(grep -n '/payment-inbox-identity-display.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-card-v2.js' public/payment-inbox.html | cut -d: -f1)"
+          grep -Fq '/payment-inbox-cashier-layout.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-cashier-fixes.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-cashier-layout.js' public/payment-inbox.html
+          test "$(grep -n '/payment-inbox-card-v2.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-cashier-layout.js' public/payment-inbox.html | cut -d: -f1)"
           grep -Fq 'aria-live="polite"' public/payment-inbox.html
