@@ -97,7 +97,7 @@ jobs:
           script='public/payment-inbox-card-v2.js'
           grep -Fq 'STATUS_BY_LABEL' "$script"
           grep -Fq 'STATUS_LABELS' "$script"
-          grep -Fq 'data-status' "$script"
+          grep -Fq 'card.dataset.status' "$script"
           grep -Fq 'data-status="completed"' "$css"
           grep -Fq 'data-status="review_required"' "$css"
           grep -Fq 'data-status="rejected"' "$css"
