@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/payment-inbox.css" />
   <link rel="stylesheet" href="/payment-inbox-shadow-preview.css" />
   <link rel="stylesheet" href="/payment-inbox-operational-ui.css?v=20260801-2" />
+  <link rel="stylesheet" href="/payment-inbox-card-v2.css?v=20260802-1" />
 </head>
 <body>
   <div class="shell">
@@ -48,7 +49,7 @@
       <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
     </nav>
 
-    <main id="queueSection" class="queue-list">
+    <main id="queueSection" class="queue-list" aria-live="polite" aria-busy="true">
       <div class="panel loading"><div class="spinner"></div></div>
     </main>
   </div>
@@ -72,5 +73,6 @@
   <script src="/payment-inbox-supervisor-tabs.js?v=20260802-1" defer></script>
   <script src="/payment-inbox-review-resolution.js?v=20260802-1" defer></script>
   <script src="/payment-inbox-identity-display.js?v=20260802-1" defer></script>
+  <script src="/payment-inbox-card-v2.js?v=20260802-1" defer></script>
 </body>
 </html>
