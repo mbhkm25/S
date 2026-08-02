@@ -4,14 +4,19 @@
   const ALLOWED_RETURN_PATHS = new Set([
     '/profile',
     '/profile#business-workspaces',
-    '/business/manage'
+    '/business/manage',
+    '/payment-inbox.html',
+    '/payment-inbox-admin.html'
   ]);
 
   function normalizedReturnPath() {
     const requested = new URL(window.location.href).searchParams.get('return_to') || '';
-    if (!requested.startsWith('/') || requested.startsWith('//')) return '/profile#business-workspaces';
+    const fallback = document.body.classList.contains('admin-mode')
+      ? '/payment-inbox.html'
+      : '/profile#business-workspaces';
+    if (!requested.startsWith('/') || requested.startsWith('//')) return fallback;
     const decoded = decodeURIComponent(requested);
-    return ALLOWED_RETURN_PATHS.has(decoded) ? decoded : '/profile#business-workspaces';
+    return ALLOWED_RETURN_PATHS.has(decoded) ? decoded : fallback;
   }
 
   function applyReturnLink() {
