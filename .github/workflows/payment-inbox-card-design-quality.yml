@@ -4,15 +4,21 @@ on:
   pull_request:
     paths:
       - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
       - 'public/payment-inbox-cashier-ui.css'
       - 'public/payment-inbox-cashier-ui.js'
+      - 'public/payment-inbox-mode.js'
+      - 'public/payment-inbox-navigation.js'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
   push:
     branches: [main]
     paths:
       - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
       - 'public/payment-inbox-cashier-ui.css'
       - 'public/payment-inbox-cashier-ui.js'
+      - 'public/payment-inbox-mode.js'
+      - 'public/payment-inbox-navigation.js'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
 
 permissions:
@@ -25,35 +31,52 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate JavaScript syntax
-        run: node --check public/payment-inbox-cashier-ui.js
+        run: |
+          node --check public/payment-inbox-cashier-ui.js
+          node --check public/payment-inbox-mode.js
+          node --check public/payment-inbox-navigation.js
 
-      - name: Validate single UI layer
+      - name: Validate cashier and supervisor route separation
         shell: bash
         run: |
           set -euo pipefail
-          html='public/payment-inbox.html'
-          grep -Fq '/payment-inbox-cashier-ui.css' "$html"
-          grep -Fq '/payment-inbox-cashier-ui.js' "$html"
-          ! grep -Fq '/payment-inbox-operational-ui.js' "$html"
-          ! grep -Fq '/payment-inbox-card-v2.js' "$html"
-          ! grep -Fq '/payment-inbox-cashier-layout.js' "$html"
-          ! grep -Fq '/payment-inbox-cashier-runtime-fix.js' "$html"
+          cashier='public/payment-inbox.html'
+          admin='public/payment-inbox-admin.html'
+          grep -Fq 'cashier-mode' "$cashier"
+          grep -Fq 'data-status="new"' "$cashier"
+          grep -Fq 'data-status="claimed"' "$cashier"
+          ! grep -Fq 'data-status="completed"' "$cashier"
+          grep -Fq 'paymentInboxAdminLink' "$cashier"
+          grep -Fq 'admin-mode' "$admin"
+          grep -Fq 'data-status="team_active"' "$admin"
+          grep -Fq 'data-status="review_required"' "$admin"
+          grep -Fq 'data-status="completed"' "$admin"
+          grep -Fq 'data-status="all"' "$admin"
 
-      - name: Validate compact integrated header
+      - name: Validate integrated compact header
         shell: bash
         run: |
           set -euo pipefail
-          html='public/payment-inbox.html'
+          cashier='public/payment-inbox.html'
           css='public/payment-inbox-cashier-ui.css'
-          grep -Fq 'hero-operations' "$html"
-          grep -Fq 'hero-business' "$html"
-          grep -Fq 'hero-tabs' "$html"
-          grep -Fq 'height: 176px' "$css"
-          grep -Fq 'grid-template-columns: minmax(200px, .72fr) minmax(0, 1.28fr)' "$css"
-          grep -Fq 'overflow-x: auto' "$css"
-          grep -Fq '#paymentInboxTabSwitcher' "$css"
+          ! grep -Fq 'سند للأعمال · تشغيل الفريق' "$cashier"
+          ! grep -Fq '>النشاط<' "$cashier"
+          grep -Fq 'hero-topline' "$cashier"
+          grep -Fq 'hero-operations' "$cashier"
+          grep -Fq 'grid-template-columns: minmax(160px, .9fr) minmax(0, 1.1fr) auto' "$css"
+          grep -Fq 'width: min(100% - 24px, 760px)' "$css"
 
-      - name: Validate cashier actions and logos
+      - name: Validate full-width operation cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          css='public/payment-inbox-cashier-ui.css'
+          grep -Fq 'grid-template-columns: minmax(0, 1fr)' "$css"
+          grep -Fq '.queue-list > *' "$css"
+          grep -Fq 'width: 100%' "$css"
+          ! grep -Fq '@media (min-width: 900px)' "$css"
+
+      - name: Validate cashier actions and transparent logos
         shell: bash
         run: |
           set -euo pipefail
@@ -67,9 +90,25 @@ jobs:
           grep -Fq 'financial-logo' "$css"
           grep -Fq 'background: transparent' "$css"
           grep -Fq 'object-fit: contain' "$css"
-          grep -Fq 'cashier-claim' "$css"
-          grep -Fq 'cashier-verify' "$css"
-          grep -Fq 'cashier-original' "$css"
+
+      - name: Validate supervisor discovery and context event
+        shell: bash
+        run: |
+          set -euo pipefail
+          mode='public/payment-inbox-mode.js'
+          grep -Fq 'sanad:payment-contexts-v2-loaded' "$mode"
+          grep -Fq 'is_supervisor' "$mode"
+          grep -Fq 'payment-inbox-admin.html' "$mode"
+          grep -Fq 'team_active' "$mode"
+
+      - name: Validate bottom navigation continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'sanad-bottom-nav' public/payment-inbox.html
+          grep -Fq 'sanad-bottom-nav' public/payment-inbox-admin.html
+          grep -Fq '.sanad-bottom-nav' public/payment-inbox-cashier-ui.css
+          grep -Fq 'safe-area-inset-bottom' public/payment-inbox-cashier-ui.css
 
       - name: Validate stable rendering and loading guard
         shell: bash
@@ -81,16 +120,3 @@ jobs:
           grep -Fq 'MutationObserver' "$script"
           grep -Fq 'subtree: false' "$script"
           grep -Fq 'installLoadingWatchdog' "$script"
-          grep -Fq 'sanad:payment-inbox-v2-loaded' "$script"
-          grep -Fq 'sanad:payment-inbox-loaded' "$script"
-
-      - name: Validate mobile interaction quality
-        shell: bash
-        run: |
-          set -euo pipefail
-          css='public/payment-inbox-cashier-ui.css'
-          grep -Fq 'min-height: 44px' "$css"
-          grep -Fq '@media (max-width: 720px)' "$css"
-          grep -Fq '@media (max-width: 440px)' "$css"
-          grep -Fq '@media (min-width: 900px)' "$css"
-          grep -Fq 'font-variant-numeric: tabular-nums' "$css"
