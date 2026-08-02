@@ -1,0 +1,61 @@
+name: Payment inbox React integration quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+      - '.github/workflows/payment-inbox-react-integration-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+      - name: Validate app-shell integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "view === 'payment-inbox'" src/components/business/BusinessOperations.tsx
+          grep -Fq "view === 'payment-inbox-admin'" src/components/business/BusinessOperations.tsx
+          grep -Fq "get_business_payment_inbox_v2" src/lib/paymentInboxApi.ts
+          grep -Fq "get_my_business_payment_inbox_contexts_v2" src/lib/paymentInboxApi.ts
+          ! grep -Fq "bottom_nav" src/components/business/PaymentInbox.tsx
+          ! grep -Fq "global_header" src/components/business/PaymentInbox.tsx
+          grep -Fq "/business/manage/operations" public/payment-inbox.html
+          grep -Fq "/business/manage/operations" public/payment-inbox-admin.html
+
+      - name: Validate cashier and supervisor separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "{ value: 'new', label: 'جديدة' }" src/components/business/PaymentInbox.tsx
+          grep -Fq "{ value: 'mine', label: 'لدي' }" src/components/business/PaymentInbox.tsx
+          grep -Fq "{ value: 'team_active', label: 'لدى الفريق' }" src/components/business/PaymentInbox.tsx
+          grep -Fq "إدارة وارد المدفوعات" src/components/business/PaymentInbox.tsx
+          grep -Fq "استلام العملية" src/components/business/PaymentInbox.tsx
+          grep -Fq "استلام وتحقق" src/components/business/PaymentInbox.tsx
+          grep -Fq "فتح الملف الأصلي" src/components/business/PaymentInbox.tsx
