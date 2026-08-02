@@ -1,0 +1,89 @@
+name: Payment inbox card design quality
+
+on:
+  pull_request:
+    paths:
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-card-v2.css'
+      - 'public/payment-inbox-card-v2.js'
+      - '.github/workflows/payment-inbox-card-design-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-card-v2.css'
+      - 'public/payment-inbox-card-v2.js'
+      - '.github/workflows/payment-inbox-card-design-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        run: node --check public/payment-inbox-card-v2.js
+
+      - name: Validate progressive enhancement contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='public/payment-inbox-card-v2.js'
+          grep -Fq "MutationObserver" "$script"
+          grep -Fq "sanad:payment-inbox-v2-loaded" "$script"
+          grep -Fq "requestAnimationFrame" "$script"
+          grep -Fq "data-card-v2-ready" "$script" || grep -Fq "cardV2Ready" "$script"
+          grep -Fq "aria-expanded" "$script"
+          grep -Fq "aria-busy" "$script"
+          grep -Fq "paymentInboxCurrencyFilter" "$script"
+          grep -Fq "paymentInboxSortMode" "$script"
+
+      - name: Validate currency system
+        shell: bash
+        run: |
+          set -euo pipefail
+          css='public/payment-inbox-card-v2.css'
+          grep -Fq 'data-currency="YER"' "$css"
+          grep -Fq 'data-currency="SAR"' "$css"
+          grep -Fq 'data-currency="USD"' "$css"
+          grep -Fq "content: '\\20C1'" "$css"
+          grep -Fq "content: '$'" "$css"
+          grep -Fq 'font-variant-numeric: tabular-nums' "$css"
+
+      - name: Validate mobile-first interaction quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          css='public/payment-inbox-card-v2.css'
+          grep -Fq 'min-height: 3rem' "$css"
+          grep -Fq '@media (max-width: 419px)' "$css"
+          grep -Fq '@media (min-width: 768px)' "$css"
+          grep -Fq '@media (min-width: 1280px)' "$css"
+          grep -Fq '@media (prefers-reduced-motion: reduce)' "$css"
+          grep -Fq ':focus-visible' "$css"
+          grep -Fq 'container-type: inline-size' "$css"
+
+      - name: Validate non-color status indicators
+        shell: bash
+        run: |
+          set -euo pipefail
+          css='public/payment-inbox-card-v2.css'
+          script='public/payment-inbox-card-v2.js'
+          grep -Fq 'STATUS_BY_LABEL' "$script"
+          grep -Fq 'data-status' "$script"
+          grep -Fq 'data-status="completed"' "$css"
+          grep -Fq 'data-status="review_required"' "$css"
+          grep -Fq 'data-status="rejected"' "$css"
+          grep -Fq 'aria-label' "$script"
+
+      - name: Validate load order
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '/payment-inbox-card-v2.css' public/payment-inbox.html
+          grep -Fq '/payment-inbox-card-v2.js' public/payment-inbox.html
+          test "$(grep -n '/payment-inbox-identity-display.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-card-v2.js' public/payment-inbox.html | cut -d: -f1)"
+          grep -Fq 'aria-live="polite"' public/payment-inbox.html
