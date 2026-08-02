@@ -1,0 +1,95 @@
+name: Operation identity quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/digits.ts'
+      - 'src/lib/operationIdentity.ts'
+      - 'supabase/migrations/*operation_identity_projection.sql'
+      - 'docs/operation-identity-investigation-bahkam.md'
+      - '.github/workflows/operation-identity-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/digits.ts'
+      - 'src/lib/operationIdentity.ts'
+      - 'supabase/migrations/*operation_identity_projection.sql'
+      - 'docs/operation-identity-investigation-bahkam.md'
+      - '.github/workflows/operation-identity-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate identity precedence
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          test -s "$migration"
+          grep -Fq "when linked.business_id is not null then 'linked_business'" "$migration"
+          grep -Fq "then 'exact_identifier_match'" "$migration"
+          grep -Fq "else 'document_extraction'" "$migration"
+          grep -Fq "unique_exact_identifier_match" "$migration"
+          grep -Fq "has_name_conflict" "$migration"
+          grep -Fq "normalize_financial_name" "$migration"
+          grep -Fq "operation_routing_shadow_runs" "$migration"
+          grep -Fq "business_operation_links" "$migration"
+
+      - name: Validate raw and resolved identity separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          grep -Fq "'raw_receiver_name'" "$migration"
+          grep -Fq "'resolved_business_name'" "$migration"
+          grep -Fq "'resolved_account_holder_name'" "$migration"
+          grep -Fq "'identity_source'" "$migration"
+          grep -Fq "'identity_confidence'" "$migration"
+          grep -Fq "'field_evidence'" "$migration"
+
+      - name: Validate card titles never promote raw OCR to business identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "identitySource === 'linked_business'" src/lib/digits.ts
+          grep -Fq "identitySource === 'exact_identifier_match'" src/lib/digits.ts
+          grep -Fq 'عملية لدى' src/lib/digits.ts
+          grep -Fq 'عملية مطابقة لحساب' src/lib/digits.ts
+          grep -Fq 'إشعار استلام لـ' src/lib/digits.ts
+          test "$(grep -n "identitySource === 'linked_business'" src/lib/digits.ts | cut -d: -f1)" -lt "$(grep -n 'إشعار استلام لـ' src/lib/digits.ts | cut -d: -f1)"
+
+      - name: Validate client identity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s src/lib/operationIdentity.ts
+          grep -Fq "get_operation_identity_projection" src/lib/operationIdentity.ts
+          grep -Fq "OperationIdentitySource" src/lib/operationIdentity.ts
+          grep -Fq "has_name_conflict" src/lib/operationIdentity.ts
+          grep -Fq "getOperationIdentityTitle" src/lib/operationIdentity.ts
+
+      - name: Validate investigation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          doc='docs/operation-identity-investigation-bahkam.md'
+          grep -Fq 'a690dfe2-2563-4738-97aa-67ac17f95f5d' "$doc"
+          grep -Fq '825121' "$doc"
+          grep -Fq 'حاكم للعسل' "$doc"
+          grep -Fq 'باحكم للعسل' "$doc"
+          grep -Fq 'unique_exact_identifier_match' "$doc"
+          grep -Fq 'shadow_only' "$doc"
+
+      - name: Validate execution grant
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          grep -Fq 'revoke all on function public.get_operation_identity_projection(uuid[]) from public' "$migration"
+          grep -Fq 'grant execute on function public.get_operation_identity_projection(uuid[]) to authenticated' "$migration"
