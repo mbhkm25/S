@@ -13,6 +13,7 @@ on:
       - "public/routing-benchmark.html"
       - "public/routing-rollout.html"
       - "src/components/business/BusinessManage.tsx"
+      - "src/components/business/BusinessManageV3.tsx"
       - "supabase/migrations/*payment_inbox*"
       - "supabase/tests/*payment_inbox*"
       - ".github/workflows/payment-inbox-quality.yml"
@@ -51,7 +52,7 @@ jobs:
           grep -Fq '/payment-inbox-shadow-preview.js' public/payment-inbox.html
           grep -Fq '/payment-inbox.js' public/payment-inbox.html
           grep -Fq 'data-status="shadow_preview"' public/payment-inbox.html
-          grep -Fq '/payment-inbox.html' src/components/business/BusinessManage.tsx
+          grep -Fq "window.location.assign('/payment-inbox.html')" src/components/business/BusinessManageV3.tsx
 
       - name: Enforce SANAD typography and numerals
         shell: bash
