@@ -1,0 +1,136 @@
+/* Final cashier header conflict resolution */
+.hero.cashier-hero {
+  height: 176px !important;
+  min-height: 176px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-rows: auto 1fr !important;
+  padding: .85rem 1rem !important;
+  gap: .45rem .75rem !important;
+}
+
+.hero.cashier-hero .hero-copy h1 {
+  margin: 0 !important;
+  font-size: clamp(1.85rem, 4vw, 2.45rem) !important;
+  line-height: 1.05 !important;
+}
+
+.hero.cashier-hero .eyebrow {
+  margin-bottom: .15rem !important;
+}
+
+.hero.cashier-hero .hero-operations {
+  grid-column: 1 / -1 !important;
+  grid-template-columns: minmax(14rem, .85fr) minmax(0, 1.65fr) !important;
+  gap: .55rem !important;
+  padding-top: .5rem !important;
+  border-top: 1px solid rgba(255,255,255,.12) !important;
+}
+
+.hero.cashier-hero .hero-business {
+  align-self: center !important;
+}
+
+.hero.cashier-hero .hero-business label {
+  gap: .1rem !important;
+}
+
+.hero.cashier-hero .hero-business select {
+  min-height: 2.2rem !important;
+  height: 2.2rem !important;
+  padding-block: .25rem !important;
+  border-radius: .72rem !important;
+  font-size: .78rem !important;
+}
+
+.hero.cashier-hero .hero-business .connection-pill {
+  min-height: 2.05rem !important;
+  height: 2.05rem !important;
+  padding-inline: .55rem !important;
+  font-size: .6rem !important;
+}
+
+#paymentInboxTabSwitcher {
+  display: none !important;
+}
+
+.hero.cashier-hero .hero-tabs.tabs,
+.hero.cashier-hero .hero-tabs.tabs.tabs-native-hidden {
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(4.2rem, 1fr)) !important;
+  gap: .3rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  scrollbar-width: none;
+}
+
+.hero.cashier-hero .hero-tabs.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.hero.cashier-hero .hero-tabs.tabs button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 4.2rem !important;
+  min-height: 2.2rem !important;
+  height: 2.2rem !important;
+  padding: .25rem .4rem !important;
+  border-radius: .72rem !important;
+  font-size: .65rem !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+.hero.cashier-hero .hero-tabs.tabs button[hidden] {
+  display: none !important;
+}
+
+.hero.cashier-hero .hero-tabs.tabs button.active {
+  background: #1d4ed8 !important;
+  color: #fff !important;
+  border-color: #60a5fa !important;
+}
+
+.queue-list,
+.queue-list.card-v2-grid {
+  width: 100% !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.queue-list > .empty,
+.queue-list > .panel.loading {
+  width: 100% !important;
+  max-width: none !important;
+  grid-column: 1 / -1 !important;
+}
+
+@media (max-width: 680px) {
+  .hero.cashier-hero {
+    height: 168px !important;
+    min-height: 168px !important;
+    padding: .75rem .8rem !important;
+  }
+
+  .hero.cashier-hero .hero-operations {
+    grid-template-columns: minmax(8.5rem, .8fr) minmax(0, 1.5fr) !important;
+  }
+
+  .hero.cashier-hero .hero-business .connection-pill {
+    display: none !important;
+  }
+
+  .hero.cashier-hero .hero-tabs.tabs,
+  .hero.cashier-hero .hero-tabs.tabs.tabs-native-hidden {
+    grid-template-columns: repeat(7, minmax(3.85rem, 1fr)) !important;
+  }
+
+  .hero.cashier-hero .hero-tabs.tabs button {
+    min-width: 3.85rem !important;
+    font-size: .61rem !important;
+  }
+}
