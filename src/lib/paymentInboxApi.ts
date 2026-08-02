@@ -5,14 +5,17 @@ export type PaymentInboxView = 'new' | 'mine' | 'team_active' | 'review' | 'comp
 export interface PaymentInboxContext {
   business_id: string;
   business_name: string;
-  role?: string | null;
+  slug?: string | null;
   is_owner?: boolean;
   is_supervisor?: boolean;
-  can_claim?: boolean;
-  can_complete?: boolean;
-  can_release?: boolean;
-  can_reassign?: boolean;
-  can_review?: boolean;
+  permissions?: {
+    view?: boolean;
+    claim?: boolean;
+    review?: boolean;
+    release?: boolean;
+    complete?: boolean;
+    reassign?: boolean;
+  };
 }
 
 export interface PaymentInboxItem {
@@ -20,29 +23,38 @@ export interface PaymentInboxItem {
   operation_id: string;
   public_token: string;
   business_id: string;
+  business_name?: string | null;
   status: string;
   row_version: number;
   amount?: number | null;
   currency?: string | null;
   financial_entity?: string | null;
   financial_entity_code?: string | null;
-  reference_number?: string | null;
+  receiver_name?: string | null;
   receiver_account?: string | null;
   merchant_point?: string | null;
+  reference_number?: string | null;
+  transaction_datetime?: string | null;
+  account_label?: string | null;
   account_holder_name?: string | null;
-  resolved_business_name?: string | null;
-  raw_receiver_name?: string | null;
-  original_file_url?: string | null;
-  file_url?: string | null;
-  received_at?: string | null;
-  created_at?: string | null;
   claimed_at?: string | null;
   claim_expires_at?: string | null;
   claimed_by_name?: string | null;
   completed_at?: string | null;
   completed_by_name?: string | null;
-  review_reason?: string | null;
-  source?: string | null;
+  completed_source?: string | null;
+  created_at?: string | null;
+  latest_event_type?: string | null;
+  latest_event_at?: string | null;
+  action_permissions?: {
+    can_claim?: boolean;
+    can_complete?: boolean;
+    can_release?: boolean;
+    can_reassign?: boolean;
+    can_request_review?: boolean;
+    can_reject?: boolean;
+    can_view_history?: boolean;
+  };
 }
 
 function unwrapItems<T>(payload: unknown): T[] {
@@ -76,6 +88,15 @@ export async function getPaymentInbox(
   return unwrapItems<PaymentInboxItem>(data);
 }
 
+function ensureActionSucceeded(data: unknown, fallback: string): void {
+  if (!data || typeof data !== 'object') return;
+  const result = data as { ok?: boolean; reason?: string };
+  if (result.ok !== false) return;
+  if (result.reason === 'claim_race_lost') throw new Error('سبقك عضو آخر إلى استلام العملية.');
+  if (result.reason === 'stale_item') throw new Error('تغيّرت العملية على جهاز آخر. حدّث القائمة وحاول مجددًا.');
+  throw new Error(fallback);
+}
+
 export async function claimPaymentInboxItem(item: PaymentInboxItem): Promise<void> {
   const { data, error } = await supabase.rpc('claim_business_payment_v2', {
     p_inbox_id: item.id,
@@ -84,10 +105,7 @@ export async function claimPaymentInboxItem(item: PaymentInboxItem): Promise<voi
     p_source: 'payment_inbox'
   });
   if (error) throw error;
-  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
-    const reason = (data as { reason?: string }).reason;
-    throw new Error(reason === 'claim_race_lost' ? 'سبقك عضو آخر إلى استلام العملية.' : 'لم تعد العملية متاحة للاستلام.');
-  }
+  ensureActionSucceeded(data, 'لم تعد العملية متاحة للاستلام.');
 }
 
 export async function completePaymentInboxItem(item: PaymentInboxItem): Promise<void> {
@@ -98,9 +116,7 @@ export async function completePaymentInboxItem(item: PaymentInboxItem): Promise<
     p_source: 'payment_inbox'
   });
   if (error) throw error;
-  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
-    throw new Error('تغيّرت حالة العملية. حدّث القائمة وحاول مجددًا.');
-  }
+  ensureActionSucceeded(data, 'تعذر إكمال العملية بعد تغير حالتها.');
 }
 
 export async function requestPaymentReview(item: PaymentInboxItem, reason: string): Promise<void> {
@@ -111,7 +127,5 @@ export async function requestPaymentReview(item: PaymentInboxItem, reason: strin
     p_source: 'payment_inbox'
   });
   if (error) throw error;
-  if (data && typeof data === 'object' && (data as { ok?: boolean }).ok === false) {
-    throw new Error('تعذر إرسال العملية للمراجعة بعد تغير حالتها.');
-  }
+  ensureActionSucceeded(data, 'تعذر إرسال العملية للمراجعة بعد تغير حالتها.');
 }
