@@ -1,0 +1,38 @@
+name: Operation analysis identity guardrails quality
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*operation_analysis_identity_guardrails.sql'
+      - '.github/workflows/operation-analysis-identity-guardrails-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*operation_analysis_identity_guardrails.sql'
+      - '.github/workflows/operation-analysis-identity-guardrails-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate prompt versioning and extraction boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802221500_operation_analysis_identity_guardrails.sql'
+          test -s "$migration"
+          grep -Fq "prompt_key='sanad_operation_extraction_v1'" "$migration"
+          grep -Fq "operation_identity_guardrails_v1" "$migration"
+          grep -Fq 'استخرج الاسم كما يظهر بصريًا في المستند' "$migration"
+          grep -Fq 'لا تستنتج اسم النشاط الرسمي' "$migration"
+          grep -Fq 'field_confidences.receiver_name' "$migration"
+          grep -Fq 'receiver_name_visual_ambiguity' "$migration"
+          grep -Fq 'field_evidence.receiver_name' "$migration"
+          grep -Fq 'merchant_point ورقم الحساب والمعرّفات المالية حقول مستقلة' "$migration"
+          grep -Fq 'المطابقة والهوية الرسمية تتمان لاحقًا داخل سند' "$migration"
+          grep -Fq 'version+1' "$migration"
+          grep -Fq 'not exists' "$migration"
