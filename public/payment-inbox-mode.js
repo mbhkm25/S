@@ -22,7 +22,7 @@
 
   function activeContext() {
     const id = currentBusinessId();
-    return contexts.find(item => item?.business_id === id) || null;
+    return contexts.find(item => item?.business_id === id) || contexts[0] || null;
   }
 
   function applySupervisorState() {
@@ -51,19 +51,18 @@
   }
 
   function activateAdminDefaultTab() {
-    if (!isAdmin || adminTabActivated) return;
+    if (!isAdmin || adminTabActivated || !currentBusinessId()) return;
     const tab = document.querySelector('[data-status="team_active"]');
     if (!(tab instanceof HTMLButtonElement)) return;
     adminTabActivated = true;
-    window.setTimeout(() => tab.click(), 250);
+    window.setTimeout(() => tab.click(), 100);
   }
 
-  window.addEventListener('sanad:payment-inbox-contexts', readContexts);
-  window.addEventListener('sanad:payment-inbox-v2-contexts', readContexts);
-  window.addEventListener('sanad:payment-inbox-v2-loaded', event => {
+  window.addEventListener('sanad:payment-contexts-v2-loaded', event => {
     readContexts(event);
     activateAdminDefaultTab();
   });
+  window.addEventListener('sanad:payment-inbox-v2-loaded', () => activateAdminDefaultTab());
 
   businessSelect?.addEventListener('change', () => {
     applySupervisorState();
@@ -75,6 +74,5 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     updateAdminHref();
-    activateAdminDefaultTab();
   }, { once: true });
 })();
