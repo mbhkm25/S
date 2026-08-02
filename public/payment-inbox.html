@@ -11,35 +11,33 @@
   <link rel="stylesheet" href="/sanad-ui-standards.css" />
   <link rel="stylesheet" href="/payment-inbox.css" />
   <link rel="stylesheet" href="/payment-inbox-shadow-preview.css" />
-  <link rel="stylesheet" href="/payment-inbox-cashier-ui.css?v=20260803-1" />
+  <link rel="stylesheet" href="/payment-inbox-cashier-ui.css?v=20260803-2" />
 </head>
-<body>
+<body class="payment-inbox-page cashier-mode">
   <div class="shell">
     <header class="hero cashier-hero">
-      <div class="hero-copy">
-        <p class="eyebrow">سند للأعمال · تشغيل الفريق</p>
-        <h1>وارد المدفوعات</h1>
+      <div class="hero-topline">
+        <div class="hero-copy"><h1>وارد المدفوعات</h1></div>
+        <div class="hero-actions">
+          <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
+          <a id="paymentInboxBackLink" class="icon-button" href="/profile#business-workspaces" aria-label="العودة">←</a>
+        </div>
       </div>
-      <div class="hero-actions">
-        <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
-        <a id="paymentInboxBackLink" class="icon-button" href="/profile#business-workspaces" aria-label="العودة إلى مساحات العمل">←</a>
-      </div>
+
       <section class="hero-operations" aria-label="سياق وارد المدفوعات">
         <div class="hero-business">
-          <label>النشاط
-            <select id="businessSelect"></select>
-          </label>
+          <select id="businessSelect" aria-label="اختيار النشاط التجاري"></select>
           <div id="connectionState" class="connection-pill offline"><span></span> جارٍ الاتصال</div>
         </div>
-        <nav class="tabs hero-tabs" aria-label="حالات وارد المدفوعات">
+
+        <nav class="tabs hero-tabs cashier-tabs" aria-label="حالات وارد المدفوعات">
           <button type="button" data-status="new" class="active">جديدة</button>
           <button type="button" data-status="claimed">لدي</button>
-          <button type="button" data-status="team_active" data-supervisor-only hidden>لدى الفريق</button>
-          <button type="button" data-status="review_required">مراجعة</button>
-          <button type="button" data-status="completed">مكتملة</button>
-          <button type="button" data-status="all" data-supervisor-only hidden>الكل</button>
-          <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
         </nav>
+
+        <a id="paymentInboxAdminLink" class="inbox-admin-link" href="/payment-inbox-admin.html" hidden>
+          <span>إدارة وارد المدفوعات</span><span aria-hidden="true">←</span>
+        </a>
       </section>
     </header>
 
@@ -50,6 +48,13 @@
       <div class="panel loading"><div class="spinner"></div></div>
     </main>
   </div>
+
+  <nav class="sanad-bottom-nav" aria-label="التنقل الرئيسي">
+    <a href="/" aria-label="الرئيسية"><span aria-hidden="true">⌂</span><small>الرئيسية</small></a>
+    <a href="/operations" aria-label="العمليات"><span aria-hidden="true">▤</span><small>العمليات</small></a>
+    <a class="active" href="/payment-inbox.html" aria-current="page"><span aria-hidden="true">⇩</span><small>الوارد</small></a>
+    <a href="/profile" aria-label="حسابي"><span aria-hidden="true">◉</span><small>حسابي</small></a>
+  </nav>
 
   <div id="actionModal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>
@@ -64,12 +69,10 @@
   <script src="/payment-inbox-navigation.js" defer></script>
   <script src="/payment-inbox-v2-compatibility.js?v=20260803-1" defer></script>
   <script src="/payment-inbox-workflow-hardening.js?v=20260802-1" defer></script>
-  <script src="/payment-inbox-shadow-preview.js" defer></script>
   <script src="/payment-inbox.js?v=20260801-1" defer></script>
   <script src="/payment-inbox-workflow-state.js" defer></script>
-  <script src="/payment-inbox-supervisor-tabs.js?v=20260802-1" defer></script>
   <script src="/payment-inbox-review-resolution.js?v=20260802-1" defer></script>
   <script src="/payment-inbox-identity-display.js?v=20260802-1" defer></script>
-  <script src="/payment-inbox-cashier-ui.js?v=20260803-1" defer></script>
+  <script src="/payment-inbox-cashier-ui.js?v=20260803-2" defer></script>
 </body>
 </html>
