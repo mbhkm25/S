@@ -1,0 +1,65 @@
+.hero.cashier-hero {
+  height: 220px;
+  gap: .45rem .8rem;
+  padding: .95rem 1rem;
+}
+
+.hero-operations {
+  gap: .45rem;
+  padding-top: .5rem;
+}
+
+.hero-tabs.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(72px, 1fr);
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding-bottom: .05rem;
+}
+
+.hero-tabs.tabs::-webkit-scrollbar { display: none; }
+
+.hero-tabs.tabs button {
+  min-height: 2.3rem;
+  white-space: nowrap;
+}
+
+.cashier-card .entity-mark.financial-logo-host {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  width: 3.15rem !important;
+  height: 2.35rem !important;
+  min-width: 3.15rem;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 560px) {
+  .hero.cashier-hero {
+    height: 220px;
+    padding: .85rem .9rem;
+  }
+
+  .hero-operations {
+    grid-template-columns: 1fr;
+    gap: .32rem;
+    padding-top: .4rem;
+  }
+
+  .hero-business select,
+  .hero-business .connection-pill,
+  .hero-tabs.tabs button {
+    min-height: 2.15rem;
+  }
+
+  .hero-tabs.tabs {
+    grid-auto-columns: minmax(68px, 1fr);
+  }
+}
