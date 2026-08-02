@@ -1,0 +1,38 @@
+name: Business team operation identity quality
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*business_team_operation_identity_projection.sql'
+      - '.github/workflows/business-team-operation-identity-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*business_team_operation_identity_projection.sql'
+      - '.github/workflows/business-team-operation-identity-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate team history identity separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802222000_business_team_operation_identity_projection.sql'
+          test -s "$migration"
+          grep -Fq 'get_business_team_member_operations_v2_core' "$migration"
+          grep -Fq "'raw_receiver_name'" "$migration"
+          grep -Fq "'resolved_business_name'" "$migration"
+          grep -Fq "'identity_source'" "$migration"
+          grep -Fq "'display_title'" "$migration"
+          grep -Fq "'has_name_conflict'" "$migration"
+          grep -Fq 'عملية لدى' "$migration"
+          grep -Fq 'عملية ضمن نشاط' "$migration"
+          grep -Fq 'normalize_financial_name(operation.receiver_name)' "$migration"
+          grep -Fq 'revoke all on function public.get_business_team_member_operations_v2_core' "$migration"
+          grep -Fq 'grant execute on function public.get_business_team_member_operations_v2' "$migration"
