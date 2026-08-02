@@ -1,0 +1,168 @@
+/* Operational extensions for SANAD payment inbox card V2 */
+.card-v2-toolbar {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.card-v2-count {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64748b;
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.payment-card.card-v2 .card-v2-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: 0 1rem .8rem;
+}
+
+.payment-card.card-v2 .assignee-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: .55rem;
+  padding: .45rem .65rem;
+  border: 1px solid #dbeafe;
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.payment-card.card-v2 .assignee-avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  border-radius: .75rem;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.payment-card.card-v2 .assignee-chip small,
+.payment-card.card-v2 .assignee-chip strong {
+  display: block;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-card.card-v2 .assignee-chip small {
+  color: #64748b;
+  font-size: .61rem;
+  line-height: 1.4;
+}
+
+.payment-card.card-v2 .assignee-chip strong {
+  margin-top: .08rem;
+  color: #0f172a;
+  font-size: .73rem;
+}
+
+.payment-card.card-v2 .lease-chip,
+.payment-card.card-v2 .source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  min-height: 2rem;
+  padding: .42rem .65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: .67rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.payment-card.card-v2 .lease-chip.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.payment-card.card-v2 .lease-chip.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+  animation: lease-warning-pulse 1.8s ease-in-out infinite;
+}
+
+.payment-card.card-v2 .card-v2-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin: 0 1rem .8rem;
+}
+
+.payment-card.card-v2 .card-v2-alert {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  max-width: 100%;
+  padding: .32rem .58rem;
+  border: 1px solid #e2e8f0;
+  border-radius: .75rem;
+  background: #f8fafc;
+  color: #475569;
+  font-size: .65rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.payment-card.card-v2 .card-v2-alert.warning,
+.payment-card.card-v2 .card-v2-alert.review {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.payment-card.card-v2 .card-v2-alert.info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.payment-card.card-v2[data-status="review_required"] {
+  border-color: #fcd34d;
+}
+
+.payment-card.card-v2[data-status="claimed"]:has(.lease-chip.danger) {
+  border-color: #fda4af;
+  box-shadow: 0 14px 34px rgba(190, 18, 60, .11);
+}
+
+@keyframes lease-warning-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+  50% { box-shadow: 0 0 0 .28rem rgba(225, 29, 72, .09); }
+}
+
+@media (max-width: 419px) {
+  .card-v2-toolbar { grid-template-columns: 1fr; }
+  .card-v2-count { grid-column: 1; }
+  .payment-card.card-v2 .card-v2-context { align-items: stretch; }
+  .payment-card.card-v2 .assignee-chip { width: 100%; }
+  .payment-card.card-v2 .lease-chip,
+  .payment-card.card-v2 .source-chip { justify-content: center; flex: 1 1 auto; }
+}
+
+@media (min-width: 768px) {
+  .card-v2-toolbar {
+    grid-template-columns: minmax(12rem, 16rem) minmax(12rem, 16rem) auto;
+    align-items: end;
+  }
+  .card-v2-count {
+    grid-column: auto;
+    align-self: center;
+    text-align: end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-card.card-v2 .lease-chip.danger { animation: none; }
+}
