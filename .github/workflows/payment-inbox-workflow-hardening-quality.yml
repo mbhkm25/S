@@ -7,10 +7,14 @@ on:
       - 'public/payment-inbox-workflow-hardening.js'
       - 'public/payment-inbox-supervisor-tabs.js'
       - 'public/payment-inbox-review-resolution.js'
+      - 'src/components/business/BusinessTeamMemberOperations.tsx'
+      - 'src/lib/businessTeamOperationsApi.ts'
       - 'supabase/migrations/*payment_inbox_workflow_hardening.sql'
       - 'supabase/migrations/*payment_inbox_review_state_and_context_fix.sql'
       - 'supabase/migrations/*payment_inbox_assignee_owner_support.sql'
+      - 'supabase/migrations/*business_team_member_operations_v2.sql'
       - 'supabase/tests/payment_inbox_workflow_hardening.sql'
+      - 'supabase/tests/business_team_member_operations_v2.sql'
       - '.github/workflows/payment-inbox-workflow-hardening-quality.yml'
   push:
     branches: [main]
@@ -19,10 +23,14 @@ on:
       - 'public/payment-inbox-workflow-hardening.js'
       - 'public/payment-inbox-supervisor-tabs.js'
       - 'public/payment-inbox-review-resolution.js'
+      - 'src/components/business/BusinessTeamMemberOperations.tsx'
+      - 'src/lib/businessTeamOperationsApi.ts'
       - 'supabase/migrations/*payment_inbox_workflow_hardening.sql'
       - 'supabase/migrations/*payment_inbox_review_state_and_context_fix.sql'
       - 'supabase/migrations/*payment_inbox_assignee_owner_support.sql'
+      - 'supabase/migrations/*business_team_member_operations_v2.sql'
       - 'supabase/tests/payment_inbox_workflow_hardening.sql'
+      - 'supabase/tests/business_team_member_operations_v2.sql'
       - '.github/workflows/payment-inbox-workflow-hardening-quality.yml'
 
 permissions:
@@ -106,6 +114,48 @@ jobs:
           grep -Fq 'review_resumed' "$test_file"
           grep -Fq 'rollback;' "$test_file"
 
+      - name: Validate team member history source of truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802171300_business_team_member_operations_v2.sql'
+          test_file='supabase/tests/business_team_member_operations_v2.sql'
+          test -s "$migration"
+          test -s "$test_file"
+          grep -Fq 'get_business_team_member_operations_v2' "$migration"
+          grep -Fq 'business_payment_inbox_events' "$migration"
+          grep -Fq 'business_payment_inbox' "$migration"
+          grep -Fq 'business_operation_links' "$migration"
+          grep -Fq 'operation_user_links' "$migration"
+          grep -Fq "p_activity_type not in ('all','in_progress','completed','review_required','released','linked')" "$migration"
+          grep -Fq "'current_status'" "$migration"
+          grep -Fq "'contribution'" "$migration"
+          grep -Fq "'member_events'" "$migration"
+          grep -Fq "'average_completion_seconds'" "$migration"
+          grep -Fq 'business_payment_supervision_required' "$migration"
+          grep -Fq 'member_operations_v2_current_state_mismatch' "$test_file"
+          grep -Fq 'member_operations_v2_in_progress_filter_failed' "$test_file"
+          grep -Fq 'rollback;' "$test_file"
+
+      - name: Validate team member history UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='src/lib/businessTeamOperationsApi.ts'
+          ui='src/components/business/BusinessTeamMemberOperations.tsx'
+          test -s "$api"
+          test -s "$ui"
+          grep -Fq "supabase.rpc('get_business_team_member_operations_v2'" "$api"
+          grep -Fq "'in_progress'" "$api"
+          grep -Fq 'member_events' "$api"
+          grep -Fq 'current_assignee' "$api"
+          grep -Fq 'السجل التشغيلي لعضو الفريق' "$ui"
+          grep -Fq 'مساهمة' "$ui"
+          grep -Fq 'الحالة الحالية' "$ui"
+          grep -Fq 'سجل إجراءات العضو' "$ui"
+          grep -Fq 'متوسط الإكمال' "$ui"
+          grep -Fq 'عبر QR أو الرابط المباشر' "$ui"
+
       - name: Validate UI uses V2 contracts
         shell: bash
         run: |
@@ -143,3 +193,4 @@ jobs:
             grep -Fq "grant execute on function public.$fn" "$migration"
           done
           grep -Fq 'grant execute on function public.resume_business_payment_review_v2' supabase/migrations/20260802171100_payment_inbox_review_state_and_context_fix.sql
+          grep -Fq 'grant execute on function public.get_business_team_member_operations_v2' supabase/migrations/20260802171300_business_team_member_operations_v2.sql
