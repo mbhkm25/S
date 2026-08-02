@@ -92,6 +92,7 @@
 
   function installLogo(container, item, entityName) {
     container.innerHTML = '';
+    container.classList.add('financial-logo-host');
     const wrap = document.createElement('span');
     wrap.className = 'financial-logo-wrap';
     const image = document.createElement('img');
@@ -144,19 +145,21 @@
 
   function waitForClaimSuccess(timeout = 6000) {
     return new Promise(resolve => {
-      const started = Date.now();
+      let settled = false;
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve(value);
+      };
       const observer = new MutationObserver(() => {
         const text = notice?.textContent || '';
-        if (text.includes('تم استلام العملية')) {
-          observer.disconnect();
-          resolve(true);
-        } else if (Date.now() - started > timeout) {
-          observer.disconnect();
-          resolve(false);
-        }
+        if (text.includes('تم استلام العملية')) finish(true);
+        if (notice?.classList.contains('error')) finish(false);
       });
       if (notice) observer.observe(notice, { childList: true, characterData: true, subtree: true, attributes: true });
-      setTimeout(() => { observer.disconnect(); resolve(false); }, timeout);
+      const timer = setTimeout(() => finish(false), timeout);
     });
   }
 
@@ -167,21 +170,22 @@
     const openHref = `/v/${encodeURIComponent(item.public_token)}?src=payment_inbox`;
     const originalHref = bestOriginalUrl(item);
     const canClaim = Boolean(existingClaim);
-    const isClaimedByMe = item.status === 'claimed' && item.is_mine;
 
     const open = `<a class="cashier-open" target="_blank" rel="noopener" href="${esc(openHref)}">${ICONS.eye}<span>فتح الإشعار</span></a>`;
     const claim = canClaim ? `<button class="cashier-claim" type="button" data-cashier-action="claim">${ICONS.claim}<span>استلام العملية</span></button>` : '';
     const claimVerify = canClaim ? `<button class="cashier-claim-verify" type="button" data-cashier-action="claim-verify">${ICONS.verify}<span>استلام وتحقق</span></button>` : '';
     const original = `<a class="cashier-original" target="_blank" rel="noopener" href="${esc(originalHref)}">${ICONS.file}<span>فتح الملف الأصلي</span></a>`;
 
-    if (!canClaim && !isClaimedByMe) {
-      const preserved = [...group.children].filter(node => node.matches?.('[data-action]:not([data-action="claim"])')).map(node => node.outerHTML).join('');
+    if (!canClaim) {
+      const preserved = [...group.children]
+        .filter(node => node.matches?.('[data-action]:not([data-action="claim"])'))
+        .map(node => node.outerHTML)
+        .join('');
       group.innerHTML = open + original + preserved;
       return;
     }
 
     group.innerHTML = open + claim + claimVerify + original;
-
     group.querySelector('[data-cashier-action="claim"]')?.addEventListener('click', () => existingClaim.click());
     group.querySelector('[data-cashier-action="claim-verify"]')?.addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -207,10 +211,8 @@
 
     const identity = card.querySelector('.card-identity-row');
     const entityName = item.financial_entity || card.querySelector('.entity-name')?.textContent || 'جهة مالية';
-    if (identity) {
-      const oldMark = identity.querySelector('.entity-mark');
-      if (oldMark) installLogo(oldMark, item, entityName);
-    }
+    const oldMark = identity?.querySelector('.entity-mark');
+    if (oldMark) installLogo(oldMark, item, entityName);
     buildMeta(card, item);
     rebuildActions(card, item);
   }
@@ -218,10 +220,7 @@
   function enhanceAll() {
     installHeaderLayout();
     removePreferences();
-    queue.querySelectorAll('.payment-card').forEach(card => {
-      card.dataset.cashierReady = 'false';
-      enhanceCard(card);
-    });
+    queue.querySelectorAll('.payment-card').forEach(enhanceCard);
   }
 
   window.addEventListener('sanad:payment-inbox-v2-loaded', event => {
