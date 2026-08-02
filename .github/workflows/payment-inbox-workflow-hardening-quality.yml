@@ -1,0 +1,145 @@
+name: Payment inbox workflow hardening quality
+
+on:
+  pull_request:
+    paths:
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-workflow-hardening.js'
+      - 'public/payment-inbox-supervisor-tabs.js'
+      - 'public/payment-inbox-review-resolution.js'
+      - 'supabase/migrations/*payment_inbox_workflow_hardening.sql'
+      - 'supabase/migrations/*payment_inbox_review_state_and_context_fix.sql'
+      - 'supabase/migrations/*payment_inbox_assignee_owner_support.sql'
+      - 'supabase/tests/payment_inbox_workflow_hardening.sql'
+      - '.github/workflows/payment-inbox-workflow-hardening-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-workflow-hardening.js'
+      - 'public/payment-inbox-supervisor-tabs.js'
+      - 'public/payment-inbox-review-resolution.js'
+      - 'supabase/migrations/*payment_inbox_workflow_hardening.sql'
+      - 'supabase/migrations/*payment_inbox_review_state_and_context_fix.sql'
+      - 'supabase/migrations/*payment_inbox_assignee_owner_support.sql'
+      - 'supabase/tests/payment_inbox_workflow_hardening.sql'
+      - '.github/workflows/payment-inbox-workflow-hardening-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check public/payment-inbox-workflow-hardening.js
+          node --check public/payment-inbox-supervisor-tabs.js
+          node --check public/payment-inbox-review-resolution.js
+
+      - name: Validate load order and supervisor views
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/payment-inbox-workflow-hardening.js
+          test -s public/payment-inbox-supervisor-tabs.js
+          test -s public/payment-inbox-review-resolution.js
+          grep -Fq 'data-status="team_active"' public/payment-inbox.html
+          grep -Fq 'data-status="all"' public/payment-inbox.html
+          grep -Fq 'data-supervisor-only' public/payment-inbox.html
+          test "$(grep -n '/sanad-supabase-runtime.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-workflow-hardening.js' public/payment-inbox.html | cut -d: -f1)"
+          test "$(grep -n '/payment-inbox-workflow-hardening.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-shadow-preview.js' public/payment-inbox.html | cut -d: -f1)"
+          test "$(grep -n '/payment-inbox-workflow-hardening.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)"
+          grep -Fq 'body:not(.payment-inbox-supervisor)' public/payment-inbox-supervisor-tabs.js
+          grep -Fq 'is_supervisor === true' public/payment-inbox-supervisor-tabs.js
+
+      - name: Validate atomic concurrency contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802171000_payment_inbox_workflow_hardening.sql'
+          test -s "$migration"
+          grep -Fq 'for update' "$migration"
+          grep -Fq 'p_expected_row_version' "$migration"
+          grep -Fq "'claim_race_lost'" "$migration"
+          grep -Fq "'stale_item'" "$migration"
+          grep -Fq "'claim_conflict'" "$migration"
+          grep -Fq "'stale_action_rejected'" "$migration"
+          grep -Fq 'row_version=row_version+1' "$migration"
+          grep -Fq 'private.is_business_payment_supervisor' "$migration"
+          grep -Fq "v_view in ('team_active','all')" "$migration"
+          grep -Fq "raise exception 'payment_inbox_supervisor_required'" "$migration"
+
+      - name: Validate state machine and review resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          core='supabase/migrations/20260802171000_payment_inbox_workflow_hardening.sql'
+          review='supabase/migrations/20260802171100_payment_inbox_review_state_and_context_fix.sql'
+          grep -Fq "v_item.status not in ('new','released')" "$core"
+          grep -Fq "v_item.status<>'claimed'" "$core"
+          grep -Fq "v_item.status<>'review_required'" "$core"
+          grep -Fq 'request_business_payment_review_v2' "$review"
+          grep -Fq 'resume_business_payment_review_v2' "$review"
+          grep -Fq 'review_requested_by_user_id' "$review"
+          grep -Fq "'review_resumed'" "$review"
+          grep -Fq 'get_business_payment_claim_assignees' supabase/migrations/20260802171200_payment_inbox_assignee_owner_support.sql
+          grep -Fq "'owner'::text as membership_role" supabase/migrations/20260802171200_payment_inbox_assignee_owner_support.sql
+
+      - name: Validate unified QR and inbox source of truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_file='supabase/tests/payment_inbox_workflow_hardening.sql'
+          test -s "$test_file"
+          grep -Fq 'complete_business_payment_v2' "$test_file"
+          grep -Fq 'complete_operation_workflow' "$test_file"
+          grep -Fq "'qr_details'" "$test_file"
+          grep -Fq 'qr_did_not_update_same_inbox_record' "$test_file"
+          grep -Fq 'business_operation_links' "$test_file"
+          grep -Fq 'claim_race_lost' "$test_file"
+          grep -Fq 'stale_item' "$test_file"
+          grep -Fq 'review_required' "$test_file"
+          grep -Fq 'review_resumed' "$test_file"
+          grep -Fq 'rollback;' "$test_file"
+
+      - name: Validate UI uses V2 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ui='public/payment-inbox-workflow-hardening.js'
+          grep -Fq 'get_business_payment_inbox_v2' "$ui"
+          grep -Fq 'get_my_business_payment_inbox_contexts_v2' "$ui"
+          grep -Fq 'claim_business_payment_v2' "$ui"
+          grep -Fq 'complete_business_payment_v2' "$ui"
+          grep -Fq 'heartbeat_business_payment_claim_v2' "$ui"
+          grep -Fq 'p_expected_row_version' "$ui"
+          grep -Fq 'get_business_payment_inbox_events_v2' "$ui"
+          grep -Fq 'request_business_payment_review_v2' "$ui"
+          grep -Fq 'reassign_business_payment_v2' "$ui"
+          grep -Fq 'resume_business_payment_review_v2' public/payment-inbox-review-resolution.js
+
+      - name: Validate execution grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802171000_payment_inbox_workflow_hardening.sql'
+          for fn in \
+            get_my_business_payment_inbox_contexts_v2 \
+            get_business_payment_inbox_v2 \
+            claim_business_payment_v2 \
+            heartbeat_business_payment_claim_v2 \
+            complete_business_payment_v2 \
+            release_business_payment_v2 \
+            request_business_payment_review_v2 \
+            reassign_business_payment_v2 \
+            reject_business_payment_v2 \
+            get_business_payment_claim_assignees \
+            get_business_payment_inbox_events_v2
+          do
+            grep -Fq "grant execute on function public.$fn" "$migration"
+          done
+          grep -Fq 'grant execute on function public.resume_business_payment_review_v2' supabase/migrations/20260802171100_payment_inbox_review_state_and_context_fix.sql
