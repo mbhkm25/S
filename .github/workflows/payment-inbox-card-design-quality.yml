@@ -3,23 +3,20 @@ name: Payment inbox card design quality
 on:
   pull_request:
     paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
       - 'public/payment-inbox.html'
       - 'public/payment-inbox-admin.html'
-      - 'public/payment-inbox-cashier-ui.css'
-      - 'public/payment-inbox-cashier-ui.js'
-      - 'public/payment-inbox-mode.js'
-      - 'public/payment-inbox-navigation.js'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
   push:
     branches: [main]
     paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
       - 'public/payment-inbox.html'
       - 'public/payment-inbox-admin.html'
-      - 'public/payment-inbox-cashier-ui.css'
-      - 'public/payment-inbox-cashier-ui.js'
-      - 'public/payment-inbox-mode.js'
-      - 'public/payment-inbox-navigation.js'
-      - '.github/workflows/payment-inbox-card-design-quality.yml'
 
 permissions:
   contents: read
@@ -29,94 +26,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-      - name: Validate JavaScript syntax
-        run: |
-          node --check public/payment-inbox-cashier-ui.js
-          node --check public/payment-inbox-mode.js
-          node --check public/payment-inbox-navigation.js
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
 
-      - name: Validate cashier and supervisor route separation
+      - name: Validate approved app shell integration
         shell: bash
         run: |
           set -euo pipefail
-          cashier='public/payment-inbox.html'
-          admin='public/payment-inbox-admin.html'
-          grep -Fq 'cashier-mode' "$cashier"
-          grep -Fq 'data-status="new"' "$cashier"
-          grep -Fq 'data-status="claimed"' "$cashier"
-          ! grep -Fq 'data-status="completed"' "$cashier"
-          grep -Fq 'paymentInboxAdminLink' "$cashier"
-          grep -Fq 'admin-mode' "$admin"
-          grep -Fq 'data-status="team_active"' "$admin"
-          grep -Fq 'data-status="review_required"' "$admin"
-          grep -Fq 'data-status="completed"' "$admin"
-          grep -Fq 'data-status="all"' "$admin"
+          component='src/components/business/PaymentInbox.tsx'
+          api='src/lib/paymentInboxApi.ts'
+          host='src/components/business/BusinessOperations.tsx'
+          grep -Fq "view === 'payment-inbox'" "$host"
+          grep -Fq "view === 'payment-inbox-admin'" "$host"
+          grep -Fq 'space-y-4 font-arabic' "$component"
+          ! grep -Fq 'bottom_nav' "$component"
+          ! grep -Fq 'global_header' "$component"
+          grep -Fq 'get_business_payment_inbox_v2' "$api"
+          grep -Fq 'action_permissions' "$component"
 
-      - name: Validate integrated compact header
+      - name: Validate cashier-first design
         shell: bash
         run: |
           set -euo pipefail
-          cashier='public/payment-inbox.html'
-          css='public/payment-inbox-cashier-ui.css'
-          ! grep -Fq 'سند للأعمال · تشغيل الفريق' "$cashier"
-          ! grep -Fq '>النشاط<' "$cashier"
-          grep -Fq 'hero-topline' "$cashier"
-          grep -Fq 'hero-operations' "$cashier"
-          grep -Fq 'grid-template-columns: minmax(160px, .9fr) minmax(0, 1.1fr) auto' "$css"
-          grep -Fq 'width: min(100% - 24px, 760px)' "$css"
+          component='src/components/business/PaymentInbox.tsx'
+          grep -Fq "{ value: 'new', label: 'جديدة' }" "$component"
+          grep -Fq "{ value: 'mine', label: 'لدي' }" "$component"
+          grep -Fq 'استلام العملية' "$component"
+          grep -Fq 'استلام وتحقق' "$component"
+          grep -Fq 'فتح الإشعار' "$component"
+          grep -Fq 'فتح الملف الأصلي' "$component"
+          grep -Fq 'object-contain' "$component"
+          grep -Fq 'space-y-3' "$component"
 
-      - name: Validate full-width operation cards
+      - name: Validate supervisor separation and legacy redirects
         shell: bash
         run: |
           set -euo pipefail
-          css='public/payment-inbox-cashier-ui.css'
-          grep -Fq 'grid-template-columns: minmax(0, 1fr)' "$css"
-          grep -Fq '.queue-list > *' "$css"
-          grep -Fq 'width: 100%' "$css"
-          ! grep -Fq '@media (min-width: 900px)' "$css"
-
-      - name: Validate cashier actions and transparent logos
-        shell: bash
-        run: |
-          set -euo pipefail
-          script='public/payment-inbox-cashier-ui.js'
-          css='public/payment-inbox-cashier-ui.css'
-          grep -Fq 'فتح الإشعار' "$script"
-          grep -Fq 'استلام العملية' "$script"
-          grep -Fq 'استلام وتحقق' "$script"
-          grep -Fq 'فتح الملف الأصلي' "$script"
-          grep -Fq 'waitForClaim' "$script"
-          grep -Fq 'financial-logo' "$css"
-          grep -Fq 'background: transparent' "$css"
-          grep -Fq 'object-fit: contain' "$css"
-
-      - name: Validate supervisor discovery and context event
-        shell: bash
-        run: |
-          set -euo pipefail
-          mode='public/payment-inbox-mode.js'
-          grep -Fq 'sanad:payment-contexts-v2-loaded' "$mode"
-          grep -Fq 'is_supervisor' "$mode"
-          grep -Fq 'payment-inbox-admin.html' "$mode"
-          grep -Fq 'team_active' "$mode"
-
-      - name: Validate bottom navigation continuity
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'sanad-bottom-nav' public/payment-inbox.html
-          grep -Fq 'sanad-bottom-nav' public/payment-inbox-admin.html
-          grep -Fq '.sanad-bottom-nav' public/payment-inbox-cashier-ui.css
-          grep -Fq 'safe-area-inset-bottom' public/payment-inbox-cashier-ui.css
-
-      - name: Validate stable rendering and loading guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          script='public/payment-inbox-cashier-ui.js'
-          grep -Fq 'WeakSet' "$script"
-          grep -Fq 'enhanced.has(card)' "$script"
-          grep -Fq 'MutationObserver' "$script"
-          grep -Fq 'subtree: false' "$script"
-          grep -Fq 'installLoadingWatchdog' "$script"
+          component='src/components/business/PaymentInbox.tsx'
+          grep -Fq "{ value: 'team_active', label: 'لدى الفريق' }" "$component"
+          grep -Fq "{ value: 'review', label: 'تحتاج مراجعة' }" "$component"
+          grep -Fq 'إدارة وارد المدفوعات' "$component"
+          grep -Fq "view', 'payment-inbox'" public/payment-inbox.html
+          grep -Fq "view', 'payment-inbox-admin'" public/payment-inbox-admin.html
