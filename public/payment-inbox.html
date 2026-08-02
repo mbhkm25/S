@@ -15,42 +15,39 @@
   <link rel="stylesheet" href="/payment-inbox-card-v2.css?v=20260802-1" />
   <link rel="stylesheet" href="/payment-inbox-card-v2-operational.css?v=20260802-1" />
   <link rel="stylesheet" href="/payment-inbox-cashier-layout.css?v=20260803-2" />
-  <link rel="stylesheet" href="/payment-inbox-cashier-fixes.css?v=20260803-1" />
 </head>
 <body>
   <div class="shell">
-    <header class="hero">
-      <div>
+    <header class="hero cashier-hero">
+      <div class="hero-copy">
         <p class="eyebrow">سند للأعمال · تشغيل الفريق</p>
         <h1>وارد المدفوعات</h1>
-        <p>استلم العملية على جهازك، راجع الإشعار، ثم أكملها دون تسليم هاتف العميل أو تكرار العمل بين الكاشيرات.</p>
       </div>
       <div class="hero-actions">
         <button id="refreshButton" class="icon-button" type="button" aria-label="تحديث">↻</button>
         <a id="paymentInboxBackLink" class="icon-button" href="/profile#business-workspaces" aria-label="العودة إلى مساحات العمل">←</a>
       </div>
+      <section class="hero-operations" aria-label="سياق وارد المدفوعات">
+        <div class="hero-business">
+          <label>النشاط
+            <select id="businessSelect"></select>
+          </label>
+          <div id="connectionState" class="connection-pill offline"><span></span> جارٍ الاتصال</div>
+        </div>
+        <nav class="tabs hero-tabs" aria-label="حالات وارد المدفوعات">
+          <button type="button" data-status="new" class="active">جديدة</button>
+          <button type="button" data-status="claimed">لدي</button>
+          <button type="button" data-status="team_active" data-supervisor-only hidden>لدى الفريق</button>
+          <button type="button" data-status="review_required">مراجعة</button>
+          <button type="button" data-status="completed">مكتملة</button>
+          <button type="button" data-status="all" data-supervisor-only hidden>الكل</button>
+          <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
+        </nav>
+      </section>
     </header>
 
     <div id="notice" class="notice hidden" role="status"></div>
-
-    <section class="panel context-panel">
-      <label>النشاط التجاري
-        <select id="businessSelect"></select>
-      </label>
-      <div id="connectionState" class="connection-pill offline"><span></span> جارٍ الاتصال</div>
-    </section>
-
     <section id="statsSection" class="stats-grid" aria-hidden="true"></section>
-
-    <nav class="tabs" aria-label="حالات وارد المدفوعات">
-      <button type="button" data-status="new" class="active">جديدة</button>
-      <button type="button" data-status="claimed">لدي</button>
-      <button type="button" data-status="team_active" data-supervisor-only hidden>لدى الفريق</button>
-      <button type="button" data-status="review_required">تحتاج مراجعة</button>
-      <button type="button" data-status="completed">مكتملة</button>
-      <button type="button" data-status="all" data-supervisor-only hidden>كل العمليات</button>
-      <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
-    </nav>
 
     <main id="queueSection" class="queue-list" aria-live="polite" aria-busy="true">
       <div class="panel loading"><div class="spinner"></div></div>
