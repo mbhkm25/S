@@ -41,8 +41,10 @@
     <nav class="tabs" aria-label="حالات وارد المدفوعات">
       <button type="button" data-status="new" class="active">جديدة</button>
       <button type="button" data-status="claimed">لدي</button>
+      <button type="button" data-status="team_active" data-supervisor-only hidden>لدى الفريق</button>
       <button type="button" data-status="review_required">تحتاج مراجعة</button>
       <button type="button" data-status="completed">مكتملة</button>
+      <button type="button" data-status="all" data-supervisor-only hidden>كل العمليات</button>
       <button type="button" data-status="shadow_preview" aria-label="المطابقات التجريبية في وضع الظل">تجريبية</button>
     </nav>
 
@@ -67,5 +69,6 @@
   <script src="/payment-inbox.js?v=20260801-1" defer></script>
   <script src="/payment-inbox-workflow-state.js" defer></script>
   <script src="/payment-inbox-operational-ui.js?v=20260801-2" defer></script>
+  <script src="/payment-inbox-supervisor-tabs.js?v=20260802-1" defer></script>
 </body>
 </html>
