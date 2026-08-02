@@ -1,0 +1,71 @@
+/* Final cashier-first compact overrides */
+.hero.cashier-hero {
+  height: 188px;
+  min-height: 188px;
+  grid-template-columns: minmax(0,1fr) auto;
+  grid-template-rows: auto minmax(0,1fr);
+  gap: .5rem .65rem;
+  padding: .85rem .95rem;
+  border-radius: 1.45rem;
+}
+.cashier-hero .hero-copy h1 { font-size: clamp(1.75rem,7vw,2.35rem); line-height: 1.05; }
+.cashier-hero .hero-copy .eyebrow { font-size: .72rem; }
+.cashier-hero .hero-actions { display:flex; gap:.4rem; }
+.cashier-hero .icon-button { width:2.65rem; height:2.65rem; border-radius:.85rem; }
+.hero-operations {
+  grid-column: 1/-1;
+  display:grid;
+  grid-template-columns: minmax(9.5rem,.8fr) minmax(0,1.45fr);
+  gap:.55rem;
+  align-items:center;
+  padding-top:.5rem;
+  min-height:0;
+}
+.hero-business { grid-template-columns:minmax(0,1fr); gap:.28rem; }
+.hero-business label { font-size:.61rem; }
+.hero-business select { min-height:2.2rem; padding:.3rem .55rem; font-size:.78rem; border-radius:.72rem; }
+.hero-business .connection-pill { position:absolute; inset-inline-start:.95rem; inset-block-start:.9rem; min-height:1.65rem; padding:.15rem .5rem; font-size:.58rem; background:rgba(255,255,255,.07); }
+.hero-tabs.tabs {
+  display:flex;
+  gap:.3rem;
+  overflow-x:auto;
+  scrollbar-width:none;
+  padding:.05rem;
+  align-items:center;
+}
+.hero-tabs.tabs::-webkit-scrollbar { display:none; }
+.hero-tabs.tabs button {
+  flex:0 0 auto;
+  min-height:2.15rem;
+  padding:.32rem .65rem;
+  border-radius:.72rem;
+  font-size:.64rem;
+  white-space:nowrap;
+}
+.queue-list.card-v2-grid { margin-top:.65rem; gap:.65rem; }
+.payment-card.card-v2.cashier-card { border-radius:1.05rem; }
+.payment-card.card-v2.cashier-card .card-head { padding:.7rem .75rem .5rem; gap:.5rem; }
+.cashier-card .card-identity-row { grid-template-columns:2.8rem minmax(0,1fr); gap:.5rem; }
+.cashier-card .financial-logo-wrap { width:2.8rem; height:2.05rem; }
+.cashier-card .amount { font-size:clamp(1.7rem,8vw,2.25rem)!important; }
+.cashier-card .badges { max-width:6.6rem; }
+.cashier-card .identity-display { margin:0 .75rem .45rem; padding:.45rem .6rem; border-radius:.75rem; }
+.cashier-card .cashier-meta { padding:0 .75rem .55rem; gap:.25rem .6rem; font-size:.62rem; }
+.cashier-card .card-actions { padding:.6rem .75rem .72rem!important; }
+.cashier-card .action-group { grid-template-columns:repeat(2,minmax(0,1fr))!important; gap:.4rem!important; }
+.cashier-card .action-group>* { min-height:2.55rem!important; border-radius:.72rem!important; font-size:.68rem!important; padding:.35rem .42rem!important; }
+.cashier-card .action-group svg { width:.95rem; height:.95rem; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:0 0 auto; }
+
+@media (max-width:560px) {
+  .hero.cashier-hero { height:184px; min-height:184px; padding:.78rem .82rem; }
+  .hero-operations { grid-template-columns:minmax(8.5rem,.78fr) minmax(0,1.3fr); gap:.4rem; }
+  .hero-tabs.tabs button { padding-inline:.52rem; font-size:.61rem; }
+  .cashier-card .action-group { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
+}
+
+@media (max-width:360px) {
+  .hero.cashier-hero { height:180px; min-height:180px; }
+  .hero-operations { grid-template-columns:8rem minmax(0,1fr); }
+  .hero-tabs.tabs button { padding-inline:.45rem; }
+  .cashier-card .action-group>* { font-size:.64rem!important; }
+}
