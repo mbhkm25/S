@@ -1,0 +1,383 @@
+/* Unified cashier-first payment inbox UI */
+:root {
+  --pi-navy: #07182d;
+  --pi-navy-soft: #0c2943;
+  --pi-border: #dfe7ef;
+  --pi-text: #0f172a;
+  --pi-muted: #64748b;
+  --pi-green: #15803d;
+  --pi-blue: #1d4ed8;
+  --pi-purple: #7c3aed;
+}
+
+.shell {
+  width: min(100% - 28px, 920px);
+  margin-inline: auto;
+}
+
+.hero.cashier-hero {
+  min-height: 0;
+  height: 176px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr;
+  gap: 10px 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #062a2e 0%, #07182d 58%, #0b1c36 100%);
+  border-radius: 28px;
+}
+
+.cashier-hero .hero-copy {
+  min-width: 0;
+  align-self: start;
+}
+
+.cashier-hero .eyebrow {
+  margin: 0 0 2px;
+  color: #65efb7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cashier-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -.035em;
+}
+
+.cashier-hero .hero-actions {
+  display: flex;
+  gap: 8px;
+  align-self: start;
+}
+
+.cashier-hero .icon-button {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.06);
+  color: #fff;
+}
+
+.hero-operations {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(200px, .72fr) minmax(0, 1.28fr);
+  gap: 12px;
+  align-items: end;
+  min-height: 0;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255,255,255,.13);
+}
+
+.hero-business {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.hero-business label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  color: rgba(255,255,255,.68);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.hero-business select {
+  width: 100%;
+  height: 40px;
+  padding-inline: 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  background: rgba(255,255,255,.075);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+}
+
+.hero-business select option { color: #0f172a; }
+
+.hero-business .connection-pill {
+  height: 40px;
+  min-width: 88px;
+  padding-inline: 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.075);
+  color: #d1fae5;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.hero-tabs.tabs,
+.hero-tabs.tabs.tabs-native-hidden {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+.hero-tabs.tabs::-webkit-scrollbar { display: none; }
+
+.hero-tabs.tabs button {
+  flex: 0 0 auto;
+  min-width: 76px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,.065);
+  color: rgba(255,255,255,.78);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hero-tabs.tabs button.active {
+  background: #2157d8;
+  border-color: #4f83ff;
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(29,78,216,.24);
+}
+
+#paymentInboxTabSwitcher,
+#statsSection,
+#paymentInboxCardV2Toolbar { display: none !important; }
+
+.queue-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.queue-list > .loading,
+.queue-list > .empty {
+  width: 100%;
+  min-height: 150px;
+  grid-column: 1 / -1;
+}
+
+.payment-card.cashier-card {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--pi-border);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15,23,42,.065);
+}
+
+.payment-card.cashier-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: #38bdf8;
+}
+.payment-card.cashier-card[data-status="claimed"]::before { background: #2563eb; }
+.payment-card.cashier-card[data-status="completed"]::before { background: #10b981; }
+.payment-card.cashier-card[data-status="review_required"]::before { background: #f59e0b; }
+.payment-card.cashier-card[data-status="rejected"]::before { background: #ef4444; }
+
+.cashier-card .cashier-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 17px 12px;
+}
+
+.cashier-card .cashier-entity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.cashier-card .financial-logo-wrap {
+  width: 62px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.cashier-card .financial-logo {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.cashier-card .financial-logo-fallback {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cashier-card .entity-name {
+  display: block;
+  overflow: hidden;
+  color: var(--pi-text);
+  font-size: 15px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashier-card .entity-subtitle {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--pi-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cashier-card .cashier-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 7px;
+  color: var(--pi-text);
+  font-size: clamp(34px, 6vw, 46px);
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cashier-card .currency-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+.cashier-card[data-currency="YER"] .currency-badge { color: #b45309; background: #fffbeb; }
+.cashier-card[data-currency="SAR"] .currency-badge { color: #047857; background: #ecfdf5; }
+.cashier-card[data-currency="USD"] .currency-badge { color: #1d4ed8; background: #eff6ff; }
+
+.cashier-card .cashier-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 0 17px 12px;
+  color: var(--pi-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.cashier-card .cashier-meta strong { color: #334155; font-weight: 800; }
+
+.cashier-card .cashier-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 17px 15px;
+  border-top: 1px solid #edf2f7;
+  background: #fbfdff;
+}
+
+.cashier-card .cashier-action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cashier-card .cashier-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cashier-card .cashier-open { background: #eef2f7; color: #334155; border-color: #dce4ed; }
+.cashier-card .cashier-claim { background: var(--pi-green); color: #fff; border-color: #16a34a; }
+.cashier-card .cashier-verify { background: var(--pi-blue); color: #fff; border-color: #2563eb; }
+.cashier-card .cashier-original { background: #f3e8ff; color: #6d28d9; border-color: #ddd6fe; }
+.cashier-card .cashier-action[aria-busy="true"],
+.cashier-card .cashier-action:disabled { opacity: .62; pointer-events: none; }
+
+.cashier-card .cashier-proxies { display: none !important; }
+.cashier-card > .card-head,
+.cashier-card > .facts,
+.cashier-card > .card-actions,
+.cashier-card > .identity-display,
+.cashier-card > .card-v2-context,
+.cashier-card > .card-v2-alerts,
+.cashier-card > .card-v2-expand { display: none !important; }
+
+@media (max-width: 720px) {
+  .hero.cashier-hero {
+    height: 186px;
+    padding: 14px;
+  }
+  .cashier-hero h1 { font-size: 32px; }
+  .cashier-hero .icon-button { width: 42px; height: 42px; }
+  .hero-operations { grid-template-columns: minmax(150px, .78fr) minmax(0, 1.22fr); gap: 8px; }
+  .hero-business { grid-template-columns: 1fr; }
+  .hero-business .connection-pill { display: none; }
+  .hero-tabs.tabs button { min-width: 70px; height: 38px; padding-inline: 10px; }
+  .cashier-card .cashier-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 440px) {
+  .shell { width: min(100% - 20px, 920px); }
+  .hero.cashier-hero { height: 192px; border-radius: 24px; }
+  .hero-operations { grid-template-columns: 44% minmax(0, 56%); }
+  .cashier-card .cashier-main { grid-template-columns: minmax(0, 1fr) auto; padding: 13px 14px 10px; }
+  .cashier-card .cashier-entity { grid-template-columns: 50px minmax(0, 1fr); }
+  .cashier-card .financial-logo-wrap { width: 50px; height: 36px; }
+  .cashier-card .cashier-amount { font-size: 32px; }
+  .cashier-card .cashier-meta { padding-inline: 14px; }
+  .cashier-card .cashier-actions { padding: 10px 14px 13px; gap: 7px; }
+  .cashier-card .cashier-action { min-height: 42px; font-size: 10px; }
+}
+
+@media (min-width: 900px) {
+  .queue-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
