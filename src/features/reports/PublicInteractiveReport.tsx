@@ -187,7 +187,7 @@ export default function PublicInteractiveReport() {
 
         <div className="px-4 py-2 text-[10px] text-slate-500 print:px-0">{visibleOperations.length} عمليات</div>
         <section className="space-y-3 px-3 pb-8 print:px-0">
-          {visibleOperations.map((operation, index) => <OperationCard key={operation.id || index} operation={operation} index={index} />)}
+          {visibleOperations.map((operation, index) => <OperationCard operation={operation} index={index} />)}
         </section>
         <footer className="border-t border-slate-100 px-4 py-5 text-center text-[10px] text-slate-400 print:px-0">
           رابط خاص بالتقرير، صالح حتى {formatDate(data.expires_at)}
