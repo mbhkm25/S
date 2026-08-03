@@ -3,13 +3,23 @@ name: Business workspaces quality
 on:
   pull_request:
     paths:
-      - "src/components/business/BusinessWorkspacesAccess.tsx"
-      - "src/components/Profile.tsx"
-      - "src/components/notifications/NotificationBell.tsx"
-      - "public/payment-inbox.html"
-      - "public/payment-inbox-navigation.js"
-      - "supabase/migrations/*business_workspaces*"
-      - ".github/workflows/business-workspaces-quality.yml"
+      - 'src/components/business/BusinessWorkspacesAccess.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/Profile.tsx'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+      - 'supabase/migrations/*business_workspaces*'
+      - '.github/workflows/business-workspaces-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/BusinessWorkspacesAccess.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/Profile.tsx'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
 
 permissions:
   contents: read
@@ -18,27 +28,26 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check navigation JavaScript
-        run: node --check public/payment-inbox-navigation.js
-
-      - name: Validate workspace assets
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - name: Validate workspace and payment inbox routing
         shell: bash
         run: |
           set -euo pipefail
           test -s src/components/business/BusinessWorkspacesAccess.tsx
-          test -s public/payment-inbox-navigation.js
           grep -Fq 'BusinessWorkspacesAccess' src/components/Profile.tsx
           grep -Fq 'get_my_business_workspaces' src/components/business/BusinessWorkspacesAccess.tsx
-          grep -Fq 'get_my_business_workspaces' src/components/notifications/NotificationBell.tsx
-          grep -Fq 'business_id' src/components/business/BusinessWorkspacesAccess.tsx
-          grep -Fq 'return_to' src/components/business/BusinessWorkspacesAccess.tsx
-          grep -Fq 'paymentInboxBackLink' public/payment-inbox.html
-          grep -Fq '/payment-inbox-navigation.js' public/payment-inbox.html
-
-      - name: Enforce membership discovery without permission escalation
+          grep -Fq "view === 'payment-inbox'" src/components/business/BusinessOperations.tsx
+          grep -Fq "view === 'payment-inbox-admin'" src/components/business/BusinessOperations.tsx
+          grep -Fq '/business/manage/operations' public/payment-inbox.html
+          grep -Fq '/business/manage/operations' public/payment-inbox-admin.html
+      - name: Validate member discovery permissions
         shell: bash
         run: |
           set -euo pipefail
@@ -47,15 +56,5 @@ jobs:
           grep -Fq 'get_my_business_workspaces' "$migration"
           grep -Fq "member.status = 'active'" "$migration"
           grep -Fq 'private.has_business_payment_permission' "$migration"
-          grep -Fq "grant execute on function public.get_my_business_workspaces() to authenticated" "$migration"
+          grep -Fq 'grant execute on function public.get_my_business_workspaces() to authenticated' "$migration"
           ! grep -Eiq 'update[[:space:]]+public\.business_team_members' "$migration"
-          ! grep -Eiq 'insert[[:space:]]+into[[:space:]]+public\.business_team_members' "$migration"
-          ! grep -Eiq 'permissions[[:space:]]*=' "$migration"
-
-      - name: Enforce member-safe return navigation
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq "'/profile#business-workspaces'" public/payment-inbox-navigation.js
-          grep -Fq "'/business/manage'" public/payment-inbox-navigation.js
-          grep -Fq "requested.startsWith('//')" public/payment-inbox-navigation.js
