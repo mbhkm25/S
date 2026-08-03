@@ -48,6 +48,14 @@ export function sanitizeActionPayload(
     const token = getPayloadString(record, ['public_token', 'token'], isSafePublicToken);
     return token ? { public_token: token } : {};
   }
+  if (actionType === 'reports') {
+    const reportToken = getPayloadString(record, ['report_token', 'token'], isSafePublicToken);
+    const reportRequestId = getPayloadString(record, ['report_request_id', 'request_id'], isValidNotificationId);
+    return {
+      ...(reportToken ? { report_token: reportToken } : {}),
+      ...(reportRequestId ? { report_request_id: reportRequestId } : {})
+    };
+  }
   if (actionType === 'business_public_profile') {
     const slug = getPayloadString(record, ['business_slug', 'slug'], isSafeSlug);
     return slug ? { business_slug: slug } : {};
@@ -64,7 +72,12 @@ export function getSafeNavigationTarget(
       const token = getPayloadString(payload, ['public_token', 'token'], isSafePublicToken);
       return token ? { page: 'details', token, source: 'app' } : null;
     }
-    case 'reports': return { page: 'reports' };
+    case 'reports': {
+      const reportToken = getPayloadString(payload, ['report_token', 'token'], isSafePublicToken);
+      if (reportToken) return { page: 'report-view', token: reportToken, source: 'app' };
+      const requestId = getPayloadString(payload, ['report_request_id', 'request_id'], isValidNotificationId);
+      return { page: 'reports', token: requestId || undefined, source: 'app' };
+    }
     case 'business_invitation':
     case 'pro_payment':
     case 'subscription':
@@ -95,7 +108,11 @@ export function buildSafeNotificationPath(
   const base = normalizeBasePath(basePath);
   let path = `${base}notifications`;
   if (target.page === 'details' && target.token) path = `${base}v/${encodeURIComponent(target.token)}`;
-  else if (target.page === 'reports') path = `${base}reports`;
+  else if (target.page === 'report-view' && target.token) path = `${base}reports/view/${encodeURIComponent(target.token)}`;
+  else if (target.page === 'reports') {
+    path = `${base}reports`;
+    if (target.token) path += `?request=${encodeURIComponent(target.token)}`;
+  }
   else if (target.page === 'profile') path = `${base}profile`;
   else if (target.page === 'business-manage') path = `${base}business/manage`;
   else if (target.page === 'business-team') path = `${base}business/manage/team`;
@@ -122,4 +139,3 @@ export function parseNotificationClickMessage(value: unknown): SanadNotification
     actionPayload
   };
 }
-
