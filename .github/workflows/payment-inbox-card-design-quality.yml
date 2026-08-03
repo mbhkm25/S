@@ -5,7 +5,10 @@ on:
     paths:
       - 'src/components/business/PaymentInbox.tsx'
       - 'src/components/business/BusinessOperations.tsx'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'src/features/operations/OperationIdentityDetailsBanner.tsx'
       - 'src/lib/paymentInboxApi.ts'
+      - 'src/main.tsx'
       - 'public/payment-inbox.html'
       - 'public/payment-inbox-admin.html'
       - '.github/workflows/payment-inbox-card-design-quality.yml'
@@ -14,7 +17,10 @@ on:
     paths:
       - 'src/components/business/PaymentInbox.tsx'
       - 'src/components/business/BusinessOperations.tsx'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'src/features/operations/OperationIdentityDetailsBanner.tsx'
       - 'src/lib/paymentInboxApi.ts'
+      - 'src/main.tsx'
       - 'public/payment-inbox.html'
       - 'public/payment-inbox-admin.html'
 
@@ -50,19 +56,35 @@ jobs:
           grep -Fq 'get_business_payment_inbox_v2' "$api"
           grep -Fq 'action_permissions' "$component"
 
-      - name: Validate cashier-first design
+      - name: Validate cashier-first and Pro-gated actions
         shell: bash
         run: |
           set -euo pipefail
           component='src/components/business/PaymentInbox.tsx'
+          intent='src/features/operations/OperationDetailsActionIntent.tsx'
+          api='src/lib/paymentInboxApi.ts'
           grep -Fq "{ value: 'new', label: 'جديدة' }" "$component"
           grep -Fq "{ value: 'mine', label: 'لدي' }" "$component"
+          grep -Fq 'فتح السجل' "$component"
           grep -Fq 'استلام العملية' "$component"
           grep -Fq 'استلام وتحقق' "$component"
-          grep -Fq 'فتح الإشعار' "$component"
           grep -Fq 'فتح الملف الأصلي' "$component"
-          grep -Fq 'object-contain' "$component"
-          grep -Fq 'space-y-3' "$component"
+          grep -Fq 'getPaymentInboxProAccess' "$component"
+          grep -Fq 'plan?.is_pro === true' "$api"
+          grep -Fq "document.getElementById('btn_confirm_verify')" "$intent"
+          grep -Fq "includes('فتح الملف الأصلي')" "$intent"
+          grep -Fq 'claimPaymentInboxItem' "$intent"
+          grep -Fq 'completePaymentInboxItem' "$intent"
+
+      - name: Validate identity banner is inline
+        shell: bash
+        run: |
+          set -euo pipefail
+          banner='src/features/operations/OperationIdentityDetailsBanner.tsx'
+          grep -Fq "document.getElementById('quick_summary_card')" "$banner"
+          grep -Fq "summary.insertAdjacentElement('afterend', node)" "$banner"
+          grep -Fq 'createPortal' "$banner"
+          ! grep -Fq 'fixed inset-x' "$banner"
 
       - name: Validate supervisor separation and legacy redirects
         shell: bash
