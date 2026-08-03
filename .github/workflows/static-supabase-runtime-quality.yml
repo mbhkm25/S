@@ -1,0 +1,71 @@
+name: Static Supabase runtime quality
+
+on:
+  pull_request:
+    paths:
+      - "public/sanad-supabase-runtime.js"
+      - "public/payment-inbox.html"
+      - "public/routing-rollout.html"
+      - ".github/workflows/static-supabase-runtime-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check runtime JavaScript syntax
+        run: node --check public/sanad-supabase-runtime.js
+
+      - name: Validate canonical project reference in public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const source = fs.readFileSync('public/sanad-supabase-runtime.js', 'utf8');
+          const ref = source.match(/const PROJECT_REF = '([^']+)'/)?.[1];
+          const token = source.match(/const ANON_KEY = '([^']+)'/)?.[1];
+          if (!ref || !token) throw new Error('missing runtime project ref or anon key');
+          const payloadPart = token.split('.')[1];
+          if (!payloadPart) throw new Error('invalid JWT public key');
+          const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+          if (payload.ref !== ref) {
+            throw new Error(`public key ref mismatch: ${payload.ref} !== ${ref}`);
+          }
+          if (payload.role !== 'anon') throw new Error('public key role must be anon');
+          NODE
+
+      - name: Ensure runtime loads before static tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for page in public/payment-inbox.html public/routing-rollout.html; do
+            grep -Fq '<script src="/sanad-supabase-runtime.js"></script>' "$page"
+          done
+          node <<'NODE'
+          const fs = require('fs');
+          for (const page of ['public/payment-inbox.html', 'public/routing-rollout.html']) {
+            const html = fs.readFileSync(page, 'utf8');
+            const runtime = html.indexOf('/sanad-supabase-runtime.js');
+            const tool = Math.min(
+              ...['/payment-inbox.js', '/routing-rollout.js']
+                .map(value => html.indexOf(value))
+                .filter(value => value >= 0)
+            );
+            if (runtime < 0 || tool < 0 || runtime > tool) {
+              throw new Error(`${page}: runtime must load before tool script`);
+            }
+          }
+          NODE
+
+      - name: Enforce REST and Realtime key correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "headers.set('apikey', ANON_KEY)" public/sanad-supabase-runtime.js
+          grep -Fq "parsed.searchParams.set('apikey', ANON_KEY)" public/sanad-supabase-runtime.js

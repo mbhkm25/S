@@ -1,0 +1,106 @@
+name: Business management sections quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/business/BusinessManage.tsx'
+      - 'src/components/business/BusinessManageV3.tsx'
+      - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'src/components/Details.tsx'
+      - 'src/index.css'
+      - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
+      - '.github/workflows/business-management-sections-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/BusinessManage.tsx'
+      - 'src/components/business/BusinessManageV3.tsx'
+      - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'src/components/Details.tsx'
+      - 'src/index.css'
+      - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
+      - '.github/workflows/business-management-sections-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate single financial accounts editor
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "BusinessFinancialAccountsCenter" src/components/business/BusinessManageV3.tsx
+          grep -Fq "الحسابات المالية والتوجيه" src/components/business/BusinessFinancialAccountsCenter.tsx
+          if grep -Fq "id: 'accounts'" src/components/business/BusinessManageV3.tsx; then
+            echo 'Legacy financial accounts tab must not be exposed.' >&2
+            exit 1
+          fi
+          if grep -Eq "upsertFinancialAccount|deleteFinancialAccount|profile_sections\?\.financial_accounts" src/components/business/BusinessManageV3.tsx; then
+            echo 'Legacy financial account editing logic must not remain in BusinessManageV3.' >&2
+            exit 1
+          fi
+
+      - name: Validate contextual section organization
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "التشغيل والهوية المالية" src/components/business/BusinessManageV3.tsx
+          grep -Fq "إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "المتابعة والرقابة" src/components/business/BusinessManageV3.tsx
+          grep -Fq "الملف العام" src/components/business/BusinessManageV3.tsx
+          grep -Fq "وارد المدفوعات" src/components/business/BusinessManageV3.tsx
+          grep -Fq "BusinessManageV3" src/components/business/BusinessManage.tsx
+
+      - name: Validate navigation and active business consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "getActiveManagedBusinessId" src/components/business/BusinessManageV3.tsx
+          grep -Fq "owned.find(item => item.id === activeBusinessId)" src/components/business/BusinessManageV3.tsx
+          grep -Fq "selectTab('overview')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "فتح جميع أقسام إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "window.location.assign('/payment-inbox.html')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "onNavigate('business-manage-profile')" src/components/business/BusinessManageV3.tsx
+          grep -Fq "max-w-6xl" src/components/business/BusinessManageV3.tsx
+          grep -Fq "grid grid-cols-2" src/components/business/BusinessManageV3.tsx
+
+      - name: Validate operational feedback states
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "جارٍ تجهيز إدارة النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq "إعادة المحاولة" src/components/business/BusinessManageV3.tsx
+          grep -Fq "تحديث بيانات النشاط" src/components/business/BusinessManageV3.tsx
+          grep -Fq 'role="status"' src/components/business/BusinessManageV3.tsx
+          grep -Fq 'role="alert"' src/components/business/BusinessManageV3.tsx
+
+      - name: Validate operation link prompt usability
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "ربط العملية بنشاط تجاري" src/components/Details.tsx
+          grep -Fq 'background: rgba(15, 23, 42, 0.46)' src/index.css
+          grep -Fq 'align-items: flex-end !important' src/index.css
+          grep -Fq 'padding-bottom: max(0.5rem, env(safe-area-inset-bottom))' src/index.css
+          grep -Fq 'min-height: 3.25rem !important' src/index.css
+          grep -Fq 'font-size: 0.95rem !important' src/index.css
+          grep -Fq 'max-height: min(82dvh, 42rem)' src/index.css
+          grep -Fq 'grid-template-columns: 1fr !important' src/index.css
+
+      - name: Validate public projection synchronization
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="$(find supabase/migrations -maxdepth 1 -type f -name '*unify_business_financial_accounts_public_projection.sql' | sort | tail -n 1)"
+          test -n "$migration"
+          grep -Fq "sync_business_financial_accounts_legacy_cache" "$migration"
+          grep -Fq "trg_business_financial_accounts_public_projection" "$migration"
+          grep -Fq "trg_business_financial_identifiers_public_projection" "$migration"
+          grep -Fq "business_financial_accounts" "$migration"
+          grep -Fq "business_financial_identifiers" "$migration"
+          grep -Fq "revoke all on function public.refresh_business_financial_accounts_projection" "$migration"

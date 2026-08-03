@@ -1,0 +1,52 @@
+name: Financial routing latency quality
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/deno.json"
+      - "supabase/functions/sanad-v3-whatsapp-intake/**"
+      - "supabase/functions/sanad-v3-analyze-operation/**"
+      - "supabase/migrations/*pipeline_latency*"
+      - "supabase/tests/*pipeline_latency*"
+      - ".github/workflows/financial-routing-latency-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deno check WhatsApp intake
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
+
+      - name: Deno check operation analyzer
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
+
+      - name: Enforce intake latency and privacy invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Fq 'api.qrserver.com' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fiq 'x-hub-signature-256' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fq 'verifyMetaSignature' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fq 'Promise.allSettled([analysisPromise, qrPromise])' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fq 'internal:qrcode@1.5.4' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+
+      - name: Enforce strict analysis contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'responseSchema: params.responseSchema' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'GEMINI_REQUEST_TIMEOUT_MS' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'operation_pipeline_spans' supabase/migrations/*pipeline_latency*.sql
+          grep -Fq 'service_record_operation_pipeline_span' supabase/migrations/*pipeline_latency*.sql
+          grep -Fq 'ENABLE_FAST_ROUTING_PASS' supabase/functions/sanad-v3-analyze-operation/index.ts

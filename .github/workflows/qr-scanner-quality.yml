@@ -1,0 +1,78 @@
+name: QR scanner quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/DirectQrScanner.tsx'
+      - 'src/components/NativeAndroidQrScanner.tsx'
+      - 'src/components/VerifyNotice.tsx'
+      - 'src/types/media-track-extensions.d.ts'
+      - '.github/workflows/qr-scanner-quality.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/components/DirectQrScanner.tsx'
+      - 'src/components/NativeAndroidQrScanner.tsx'
+      - 'src/components/VerifyNotice.tsx'
+      - 'src/types/media-track-extensions.d.ts'
+      - '.github/workflows/qr-scanner-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate high-quality rear camera negotiation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s src/components/DirectQrScanner.tsx
+          test -s src/types/media-track-extensions.d.ts
+          grep -Fq "capabilities.width?.max" src/components/DirectQrScanner.tsx
+          grep -Fq "capabilities.height?.max" src/components/DirectQrScanner.tsx
+          grep -Fq "capabilities.frameRate?.max" src/components/DirectQrScanner.tsx
+          grep -Fq "track.contentHint = 'detail'" src/components/DirectQrScanner.tsx
+          grep -Fq "focusMode?.includes('continuous')" src/components/DirectQrScanner.tsx
+          grep -Fq "facingMode: exactRear ? { exact: 'environment' }" src/components/DirectQrScanner.tsx
+          grep -Fq "selectRearCameraCandidates" src/components/DirectQrScanner.tsx
+          grep -Fq "Front camera rejected" src/components/DirectQrScanner.tsx
+          grep -Fq "resizeMode?: ConstrainDOMString" src/types/media-track-extensions.d.ts
+          if grep -Fq "frameRate: { ideal: 30, max: 30 }" src/components/DirectQrScanner.tsx; then
+            echo 'A hard 30fps camera cap must not be reintroduced.' >&2
+            exit 1
+          fi
+          if grep -Fq "SwitchCamera" src/components/DirectQrScanner.tsx; then
+            echo 'The QR scanner must remain locked to the rear camera.' >&2
+            exit 1
+          fi
+          if grep -Fq "switchCamera" src/components/DirectQrScanner.tsx; then
+            echo 'Manual camera cycling must not be reintroduced.' >&2
+            exit 1
+          fi
+
+      - name: Validate first-frame readiness and clear scan window
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "waitForVideoFrame" src/components/DirectQrScanner.tsx
+          grep -Fq "previewReady" src/components/DirectQrScanner.tsx
+          grep -Fq "opacity-0" src/components/DirectQrScanner.tsx
+          grep -Fq "shadow-[0_0_0_9999px_rgba(0,0,0,0.32)" src/components/DirectQrScanner.tsx
+          grep -Fq "bg-transparent" src/components/DirectQrScanner.tsx
+          if grep -Fq "radial-gradient(ellipse" src/components/DirectQrScanner.tsx; then
+            echo 'Elliptical scanner dimming must not be reintroduced.' >&2
+            exit 1
+          fi
+
+      - name: Validate shared scanner entry point
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "directCameraOnly" src/components/VerifyNotice.tsx
+          grep -Fq "NativeAndroidQrScanner" src/components/VerifyNotice.tsx
+          grep -Fq "DirectQrScanner" src/components/NativeAndroidQrScanner.tsx

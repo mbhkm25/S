@@ -5,7 +5,13 @@ export type BusinessTeamPermissionKey =
   | 'contact_customers'
   | 'manage_catalog'
   | 'view_reports'
-  | 'link_operations';
+  | 'link_operations'
+  | 'payments.view'
+  | 'payments.claim'
+  | 'payments.complete'
+  | 'payments.release'
+  | 'payments.reassign'
+  | 'payments.review';
 
 export type BusinessTeamPermissions = Record<BusinessTeamPermissionKey, boolean>;
 
@@ -14,15 +20,21 @@ export const DEFAULT_TEAM_PERMISSIONS: BusinessTeamPermissions = {
   contact_customers: false,
   manage_catalog: false,
   view_reports: false,
-  link_operations: true
+  link_operations: true,
+  'payments.view': false,
+  'payments.claim': false,
+  'payments.complete': false,
+  'payments.release': false,
+  'payments.reassign': false,
+  'payments.review': false
 };
 
 export interface BusinessTeamMemberV2 {
   membership_id: string;
   business_id: string;
   user_id: string;
-  membership_role: 'employee';
-  role: 'employee';
+  membership_role: 'employee' | 'cashier' | 'manager';
+  role: 'employee' | 'cashier' | 'manager';
   job_title: string | null;
   label: string | null;
   permissions: Partial<BusinessTeamPermissions> | null;
@@ -166,8 +178,8 @@ export async function getBusinessTeamV2(businessId: string): Promise<BusinessTea
   return {
     items: items.map((item) => ({
       ...item,
-      membership_role: 'employee',
-      role: 'employee',
+      membership_role: item.membership_role || 'employee',
+      role: item.role || item.membership_role || 'employee',
       permissions: normalizePermissions(item.permissions)
     })),
     pending_invitations: pending

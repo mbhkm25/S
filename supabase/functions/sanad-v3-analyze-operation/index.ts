@@ -7,12 +7,21 @@
 // - GEMINI_API_KEY
 // - SANAD_INTERNAL_API_KEY
 //
-// Optional secrets:
+// Optional configuration:
 // - GEMINI_MODEL = gemini-2.5-flash
 // - SANAD_PROMPT_KEY = sanad_operation_extraction_v1
-// - GEMINI_MAX_ATTEMPTS = 3
+// - GEMINI_MAX_ATTEMPTS = 2
+// - GEMINI_REQUEST_TIMEOUT_MS = 22000
+// - ENABLE_FAST_ROUTING_PASS = false
+// - GEMINI_FAST_MODEL = GEMINI_MODEL
 
 type JsonRecord = Record<string, unknown>;
+
+declare const EdgeRuntime:
+  | undefined
+  | {
+      waitUntil: (promise: Promise<unknown>) => void;
+    };
 
 const SUPABASE_URL = mustGetEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = mustGetEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -20,21 +29,251 @@ const GEMINI_API_KEY = mustGetEnv("GEMINI_API_KEY");
 const SANAD_INTERNAL_API_KEY = mustGetEnv("SANAD_INTERNAL_API_KEY");
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+const GEMINI_FAST_MODEL = Deno.env.get("GEMINI_FAST_MODEL") || GEMINI_MODEL;
 const SANAD_PROMPT_KEY =
   Deno.env.get("SANAD_PROMPT_KEY") || "sanad_operation_extraction_v1";
-
-const GEMINI_MAX_ATTEMPTS = Number(
-  Deno.env.get("GEMINI_MAX_ATTEMPTS") || "3",
+const GEMINI_MAX_ATTEMPTS = Math.max(
+  1,
+  Math.min(3, Number(Deno.env.get("GEMINI_MAX_ATTEMPTS") || "2") || 2),
 );
+const GEMINI_REQUEST_TIMEOUT_MS = Math.max(
+  5000,
+  Math.min(
+    60000,
+    Number(Deno.env.get("GEMINI_REQUEST_TIMEOUT_MS") || "22000") || 22000,
+  ),
+);
+const ENABLE_FAST_ROUTING_PASS =
+  (Deno.env.get("ENABLE_FAST_ROUTING_PASS") || "false") === "true";
 
 const FUNCTION_NAME = "sanad-v3-analyze-operation";
 const DEFAULT_BUCKET = "operation-files";
+const FAST_EXTRACTOR_VERSION = "fast-routing-v1.0";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+const RESPONSE_HEADERS = {
+  "Access-Control-Allow-Origin": "https://app.sanadflow.com",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-sanad-internal-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const FINANCIAL_ENTITIES = [
+  "العمقي موبايل",
+  "البسيري موبايل",
+  "محفظة بي كاش",
+  "الكريمي سعودي",
+  "الكريمي يمني",
+  "الكريمي حاسب",
+  "بن دول صرافة",
+  "بن دول باي",
+  "أم فلوس",
+  "عدن كاش",
+  "القطيبي",
+  "المحضار",
+  "جهة أخرى",
+  "unknown",
+];
+const DOCUMENT_TEMPLATES = [
+  "single_receipt",
+  "transaction_list",
+  "account_history",
+  "wallet_receipt",
+  "transfer_receipt",
+  "statement",
+  "unknown",
+];
+const TRANSACTION_TYPES = [
+  "transfer",
+  "deposit",
+  "withdrawal",
+  "payment",
+  "unknown",
+];
+const TRANSACTION_DIRECTIONS = ["incoming", "outgoing", "internal", "unknown"];
+const IDENTIFIER_TYPES = [
+  "account_number",
+  "wallet_number",
+  "financial_line",
+  "merchant_point",
+  "terminal_number",
+  "phone_number",
+  "iban",
+  "other",
+  "unknown",
+];
+const CONFIDENCE_FIELDS = [
+  "financial_entity",
+  "document_template",
+  "transaction_type",
+  "transaction_direction",
+  "amount",
+  "currency",
+  "sender_name",
+  "sender_account",
+  "receiver_name",
+  "receiver_account",
+  "document_account",
+  "credited_account",
+  "debited_account",
+  "merchant_point",
+  "reference_number",
+  "transaction_datetime",
+];
+
+const nullableString = { type: "STRING", nullable: true };
+const nullableNumber = { type: "NUMBER", nullable: true };
+
+const FULL_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    is_financial_document: { type: "BOOLEAN" },
+    non_financial_reason: nullableString,
+    summary: nullableString,
+    financial_entity: { type: "STRING", enum: FINANCIAL_ENTITIES },
+    financial_entity_raw: nullableString,
+    document_template: { type: "STRING", enum: DOCUMENT_TEMPLATES },
+    document_template_confidence: { type: "NUMBER" },
+    transaction_type: { type: "STRING", enum: TRANSACTION_TYPES },
+    transaction_direction: { type: "STRING", enum: TRANSACTION_DIRECTIONS },
+    transaction_direction_confidence: { type: "NUMBER" },
+    amount: nullableNumber,
+    currency: { type: "STRING", enum: ["YER", "SAR", "USD"], nullable: true },
+    sender_name: nullableString,
+    sender_account: nullableString,
+    sender_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    receiver_name: nullableString,
+    receiver_account: nullableString,
+    receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    document_account: nullableString,
+    credited_account: nullableString,
+    debited_account: nullableString,
+    merchant_point: nullableString,
+    reference_number: nullableString,
+    transaction_datetime: nullableString,
+    transaction_time_present: { type: "BOOLEAN" },
+    transaction_date_source: {
+      type: "STRING",
+      enum: [
+        "labeled_date",
+        "single_visible_date",
+        "document_footer",
+        "explicit_datetime",
+      ],
+      nullable: true,
+    },
+    multiple_operations_present: { type: "BOOLEAN" },
+    selected_operation_position: { type: "INTEGER", nullable: true },
+    confidence_score: { type: "NUMBER" },
+    field_confidences: {
+      type: "OBJECT",
+      properties: Object.fromEntries(
+        CONFIDENCE_FIELDS.map((field) => [field, { type: "NUMBER" }]),
+      ),
+    },
+    field_evidence: {
+      type: "OBJECT",
+      properties: Object.fromEntries(
+        CONFIDENCE_FIELDS.map((field) => [field, nullableString]),
+      ),
+    },
+    possible_fraud: { type: "BOOLEAN" },
+    ai_flags: { type: "ARRAY", items: { type: "STRING" } },
+    missing_fields: { type: "ARRAY", items: { type: "STRING" } },
+    visual_integrity_notes: { type: "ARRAY", items: { type: "STRING" } },
+    sanad_attention_points: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: [
+    "is_financial_document",
+    "non_financial_reason",
+    "summary",
+    "financial_entity",
+    "financial_entity_raw",
+    "document_template",
+    "document_template_confidence",
+    "transaction_type",
+    "transaction_direction",
+    "transaction_direction_confidence",
+    "amount",
+    "currency",
+    "sender_name",
+    "sender_account",
+    "sender_identifier_type",
+    "receiver_name",
+    "receiver_account",
+    "receiver_identifier_type",
+    "document_account",
+    "credited_account",
+    "debited_account",
+    "merchant_point",
+    "reference_number",
+    "transaction_datetime",
+    "transaction_time_present",
+    "transaction_date_source",
+    "multiple_operations_present",
+    "selected_operation_position",
+    "confidence_score",
+    "field_confidences",
+    "field_evidence",
+    "possible_fraud",
+    "ai_flags",
+    "missing_fields",
+    "visual_integrity_notes",
+    "sanad_attention_points",
+  ],
+};
+
+const FAST_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    financial_entity: { type: "STRING", enum: FINANCIAL_ENTITIES },
+    document_template: { type: "STRING", enum: DOCUMENT_TEMPLATES },
+    transaction_direction: { type: "STRING", enum: TRANSACTION_DIRECTIONS },
+    amount: nullableNumber,
+    currency: { type: "STRING", enum: ["YER", "SAR", "USD"], nullable: true },
+    receiver_name: nullableString,
+    receiver_account: nullableString,
+    receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    document_account: nullableString,
+    credited_account: nullableString,
+    merchant_point: nullableString,
+    field_confidences: {
+      type: "OBJECT",
+      properties: {
+        financial_entity: { type: "NUMBER" },
+        transaction_direction: { type: "NUMBER" },
+        receiver_account: { type: "NUMBER" },
+        document_account: { type: "NUMBER" },
+        credited_account: { type: "NUMBER" },
+        merchant_point: { type: "NUMBER" },
+      },
+    },
+    field_evidence: {
+      type: "OBJECT",
+      properties: {
+        financial_entity: nullableString,
+        transaction_direction: nullableString,
+        receiver_account: nullableString,
+        document_account: nullableString,
+        credited_account: nullableString,
+        merchant_point: nullableString,
+      },
+    },
+  },
+  required: [
+    "financial_entity",
+    "document_template",
+    "transaction_direction",
+    "amount",
+    "currency",
+    "receiver_name",
+    "receiver_account",
+    "receiver_identifier_type",
+    "document_account",
+    "credited_account",
+    "merchant_point",
+    "field_confidences",
+    "field_evidence",
+  ],
 };
 
 function mustGetEnv(name: string): string {
@@ -47,16 +286,16 @@ function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...RESPONSE_HEADERS,
       "Content-Type": "application/json; charset=utf-8",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
     },
   });
 }
 
 function truncateText(value: unknown, max = 1200): string {
   const text = String(value ?? "");
-  return text.length > max ? text.slice(0, max) + "…" : text;
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -64,20 +303,19 @@ function sleep(ms: number): Promise<void> {
 }
 
 function retryDelayMs(attempt: number): number {
-  const delays = [0, 1500, 4000, 8000];
-  return delays[Math.min(attempt - 1, delays.length - 1)] ?? 4000;
+  const delays = [0, 500, 1500];
+  return delays[Math.min(attempt - 1, delays.length - 1)] ?? 1500;
 }
 
 function isRetryableGeminiStatus(status: number): boolean {
-  return [429, 500, 502, 503, 504].includes(status);
+  return [408, 429, 500, 502, 503, 504].includes(status);
 }
 
 function toLatinDigits(value: unknown): string | null {
   if (value === undefined || value === null) return null;
-
   return String(value)
-    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
 }
 
 function cleanJsonText(text: string): string {
@@ -89,448 +327,311 @@ function cleanJsonText(text: string): string {
 
 function cleanTextOrNull(value: unknown): string | null {
   if (value === undefined || value === null) return null;
-
   const text = String(value).trim();
-
-  if (!text) return null;
-  if (text.toLowerCase() === "null") return null;
-  if (text === "—" || text === "-") return null;
-
+  if (!text || text.toLowerCase() === "null" || text === "—" || text === "-") {
+    return null;
+  }
   return text;
-}
-
-function normalizeBoolean(value: unknown, defaultValue = false): boolean {
-  if (value === true) return true;
-  if (value === false) return false;
-
-  if (typeof value === "string") {
-    const lower = value.trim().toLowerCase();
-    if (["true", "yes", "1"].includes(lower)) return true;
-    if (["false", "no", "0"].includes(lower)) return false;
-  }
-
-  return defaultValue;
-}
-
-function normalizeArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((v) => cleanTextOrNull(v))
-      .filter((v): v is string => Boolean(v));
-  }
-
-  if (value === undefined || value === null || value === "") return [];
-
-  const text = cleanTextOrNull(value);
-  return text ? [text] : [];
-}
-
-function normalizeConfidence(value: unknown): number {
-  const latin = toLatinDigits(value) ?? String(value ?? 0);
-  const n = Number(latin);
-
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
-
-function parseAmount(value: unknown): number | null {
-  if (value === undefined || value === null || value === "") return null;
-
-  const latin = toLatinDigits(value) ?? String(value);
-  const cleaned = latin
-    .replace(/,/g, "")
-    .replace(/[^\d.]/g, "");
-
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
 }
 
 function cleanNumberLikeText(value: unknown): string | null {
   const text = cleanTextOrNull(value);
   if (!text) return null;
-
   const latin = toLatinDigits(text) ?? text;
+  return latin.replace(/[^\dA-Za-z\-+._/]/g, "").trim() || null;
+}
 
-  return latin
-    .replace(/[^\dA-Za-z\-+._/]/g, "")
-    .trim() || null;
+function normalizeBoolean(value: unknown, fallback = false): boolean {
+  if (value === true || value === false) return value;
+  if (typeof value === "string") {
+    const lower = value.trim().toLowerCase();
+    if (["true", "yes", "1"].includes(lower)) return true;
+    if (["false", "no", "0"].includes(lower)) return false;
+  }
+  return fallback;
+}
+
+function normalizeArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => cleanTextOrNull(item))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 30);
+}
+
+function normalizeConfidence(value: unknown): number {
+  const numeric = Number(toLatinDigits(value) ?? value ?? 0);
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(1, numeric)) : 0;
+}
+
+function parseAmount(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const cleaned = String(toLatinDigits(value) ?? value)
+    .replace(/,/g, "")
+    .replace(/[^\d.]/g, "");
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function enumValue<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  const text = cleanTextOrNull(value) as T | null;
+  return text && allowed.includes(text) ? text : fallback;
 }
 
 function normalizeCurrency(value: unknown): "YER" | "SAR" | "USD" | null {
   const text = cleanTextOrNull(value);
   if (!text) return null;
-
   const upper = (toLatinDigits(text) ?? text).toUpperCase();
-
-  if (
-    upper.includes("YER") ||
-    upper.includes("YEMEN") ||
-    upper.includes("يمني") ||
-    upper.includes("ريال يمني")
-  ) {
-    return "YER";
-  }
-
-  if (
-    upper.includes("SAR") ||
-    upper.includes("SAUDI") ||
-    upper.includes("سعودي") ||
-    upper.includes("ريال سعودي")
-  ) {
-    return "SAR";
-  }
-
-  if (
-    upper.includes("USD") ||
-    upper.includes("DOLLAR") ||
-    upper.includes("دولار")
-  ) {
-    return "USD";
-  }
-
-  if (upper === "YER" || upper === "SAR" || upper === "USD") {
-    return upper;
-  }
-
+  if (upper.includes("YER") || upper.includes("يمني")) return "YER";
+  if (upper.includes("SAR") || upper.includes("سعودي")) return "SAR";
+  if (upper.includes("USD") || upper.includes("دولار")) return "USD";
   return null;
 }
 
-function normalizeFinancialEntity(value: unknown): string {
-  const allowed = new Set([
-    "العمقي موبايل",
-    "البسيري موبايل",
-    "محفظة بي كاش",
-    "الكريمي سعودي",
-    "الكريمي يمني",
-    "الكريمي حاسب",
-    "بن دول صرافة",
-    "بن دول باي",
-    "أم فلوس",
-    "عدن كاش",
-    "القطيبي",
-    "المحضار",
-    "جهة أخرى",
-    "unknown",
-  ]);
-
-  const text = cleanTextOrNull(value);
-  if (!text) return "unknown";
-
-  if (allowed.has(text)) return text;
-
-  return "جهة أخرى";
-}
-
-function normalizeTransactionType(value: unknown): string | null {
-  const text = cleanTextOrNull(value);
-  if (!text) return null;
-
-  const lower = text.toLowerCase();
-
-  const allowed = new Set([
-    "transfer",
-    "deposit",
-    "withdrawal",
-    "payment",
-    "unknown",
-  ]);
-
-  if (allowed.has(lower)) return lower;
-
-  if (text.includes("تحويل") || text.includes("حوالة")) return "transfer";
-  if (text.includes("إيداع") || text.includes("ايداع")) return "deposit";
-  if (text.includes("سحب")) return "withdrawal";
-  if (text.includes("دفع") || text.includes("سداد")) return "payment";
-
-  return "unknown";
-}
-
-function normalizeTransactionDatetime(value: unknown): string | null {
+function normalizeDatetime(value: unknown): string | null {
   const text = cleanTextOrNull(toLatinDigits(value));
-  if (!text) return null;
-
-  // Postgres timestamptz accepts ISO-like strings.
-  // Avoid patch failure by only keeping date-like values.
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text;
-
-  return null;
+  return text && /^\d{4}-\d{2}-\d{2}/.test(text) ? text : null;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  const chunkSize = 0x8000;
-  let binary = "";
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
+function normalizeConfidenceMap(value: unknown): Record<string, number> {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return Object.fromEntries(
+    CONFIDENCE_FIELDS.map((field) => [field, normalizeConfidence(source[field])]),
+  );
 }
 
-function extractGeminiText(gemini: any): string {
-  const parts = gemini?.candidates?.[0]?.content?.parts;
-
-  if (Array.isArray(parts)) {
-    const text = parts
-      .map((p: any) => p?.text || "")
-      .join("\n")
-      .trim();
-
-    if (text) return text;
-  }
-
-  if (typeof gemini?.text === "string") return gemini.text;
-
-  return "";
-}
-
-function parseGeminiJson(text: string): any {
-  const cleaned = cleanJsonText(text);
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new Error("gemini_json_parse_failed");
-    }
-    return JSON.parse(match[0]);
-  }
-}
-
-function buildFallbackSanadPrompt(): string {
-  return `
-أنت محرك استخراج وتحليل إشعارات مالية لمنصة سند.
-
-مهمتك:
-تحليل الملف المرفق، وتحديد هل يحتوي على عملية مالية حقيقية أم لا، ثم استخراج البيانات الظاهرة فقط بصيغة JSON صارمة.
-
-القواعد الصارمة العامة:
-- أعد JSON فقط دون Markdown ودون شرح.
-- لا تخترع أي قيمة غير ظاهرة.
-- لا تستنتج رقم حساب أو رقم مرجع أو اسم من خارج النص/الصورة.
-- أي حقل غير موجود اجعله null.
-- جميع الأرقام المستخرجة يجب أن تُكتب بأرقام لاتينية 0-9 وباتجاه LTR.
-- amount رقم فقط دون فواصل ودون عملة.
-- currency يجب أن تكون واحدة فقط من: YER أو SAR أو USD أو null.
-- confidence_score رقم بين 0 و 1.
-- ai_flags مصفوفة نصية قصيرة.
-- missing_fields مصفوفة بأسماء الحقول المهمة غير الموجودة.
-- visual_integrity_notes ملاحظات عربية قصيرة.
-- sanad_attention_points نقاط عربية قصيرة.
-
-قائمة الجهات المالية المعتمدة في سند:
-[
- "العمقي موبايل",
- "البسيري موبايل",
- "محفظة بي كاش",
- "الكريمي سعودي",
- "الكريمي يمني",
- "الكريمي حاسب",
- "بن دول صرافة",
- "بن دول باي",
- "أم فلوس",
- "عدن كاش",
- "القطيبي",
- "المحضار",
- "جهة أخرى",
- "unknown"
-]
-
-transaction_type يجب أن تكون واحدة من:
-transfer | deposit | withdrawal | payment | unknown | null
-
-أعد JSON مطابقًا لهذا الشكل:
-{
-  "is_financial_document": true,
-  "non_financial_reason": null,
-  "summary": "ملخص عربي واضح ومفيد.",
-  "financial_entity": "unknown",
-  "financial_entity_raw": null,
-  "transaction_type": "transfer",
-  "amount": null,
-  "currency": null,
-  "sender_name": null,
-  "receiver_name": null,
-  "sender_account": null,
-  "receiver_account": null,
-  "reference_number": null,
-  "transaction_datetime": null,
-  "confidence_score": 0.0,
-  "possible_fraud": false,
-  "ai_flags": [],
-  "missing_fields": [],
-  "visual_integrity_notes": [],
-  "sanad_attention_points": []
-}
-`;
+function normalizeEvidenceMap(value: unknown): Record<string, string | null> {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return Object.fromEntries(
+    CONFIDENCE_FIELDS.map((field) => [field, cleanTextOrNull(source[field])]),
+  );
 }
 
 function normalizeExtracted(extracted: any) {
-  const isFinancialDocument = normalizeBoolean(
-    extracted?.is_financial_document,
-    true,
-  );
-
+  const isFinancial = normalizeBoolean(extracted?.is_financial_document, true);
   const normalized = {
-    is_financial_document: isFinancialDocument,
+    is_financial_document: isFinancial,
     non_financial_reason: cleanTextOrNull(extracted?.non_financial_reason),
-
     summary: cleanTextOrNull(extracted?.summary),
-
-    financial_entity: isFinancialDocument
-      ? normalizeFinancialEntity(extracted?.financial_entity)
+    financial_entity: isFinancial
+      ? enumValue(extracted?.financial_entity, FINANCIAL_ENTITIES, "unknown")
       : null,
-
     financial_entity_raw: cleanTextOrNull(extracted?.financial_entity_raw),
-
-    transaction_type: isFinancialDocument
-      ? normalizeTransactionType(extracted?.transaction_type)
+    document_template: enumValue(
+      extracted?.document_template,
+      DOCUMENT_TEMPLATES,
+      "unknown",
+    ),
+    document_template_confidence: normalizeConfidence(
+      extracted?.document_template_confidence,
+    ),
+    transaction_type: isFinancial
+      ? enumValue(extracted?.transaction_type, TRANSACTION_TYPES, "unknown")
       : null,
-
-    amount: isFinancialDocument ? parseAmount(extracted?.amount) : null,
-
-    currency: isFinancialDocument
-      ? normalizeCurrency(extracted?.currency)
-      : null,
-
-    sender_name: isFinancialDocument
-      ? cleanTextOrNull(extracted?.sender_name)
-      : null,
-
-    receiver_name: isFinancialDocument
-      ? cleanTextOrNull(extracted?.receiver_name)
-      : null,
-
-    sender_account: isFinancialDocument
+    transaction_direction: isFinancial
+      ? enumValue(
+        extracted?.transaction_direction,
+        TRANSACTION_DIRECTIONS,
+        "unknown",
+      )
+      : "unknown",
+    transaction_direction_confidence: normalizeConfidence(
+      extracted?.transaction_direction_confidence,
+    ),
+    amount: isFinancial ? parseAmount(extracted?.amount) : null,
+    currency: isFinancial ? normalizeCurrency(extracted?.currency) : null,
+    sender_name: isFinancial ? cleanTextOrNull(extracted?.sender_name) : null,
+    sender_account: isFinancial
       ? cleanNumberLikeText(extracted?.sender_account)
       : null,
-
-    receiver_account: isFinancialDocument
+    sender_identifier_type: enumValue(
+      extracted?.sender_identifier_type,
+      IDENTIFIER_TYPES,
+      "unknown",
+    ),
+    receiver_name: isFinancial ? cleanTextOrNull(extracted?.receiver_name) : null,
+    receiver_account: isFinancial
       ? cleanNumberLikeText(extracted?.receiver_account)
       : null,
-
-    reference_number: isFinancialDocument
+    receiver_identifier_type: enumValue(
+      extracted?.receiver_identifier_type,
+      IDENTIFIER_TYPES,
+      "unknown",
+    ),
+    document_account: isFinancial
+      ? cleanNumberLikeText(extracted?.document_account)
+      : null,
+    credited_account: isFinancial
+      ? cleanNumberLikeText(extracted?.credited_account)
+      : null,
+    debited_account: isFinancial
+      ? cleanNumberLikeText(extracted?.debited_account)
+      : null,
+    merchant_point: isFinancial
+      ? cleanNumberLikeText(extracted?.merchant_point)
+      : null,
+    reference_number: isFinancial
       ? cleanNumberLikeText(extracted?.reference_number)
       : null,
-
-    transaction_datetime: isFinancialDocument
-      ? normalizeTransactionDatetime(extracted?.transaction_datetime)
+    transaction_datetime: isFinancial
+      ? normalizeDatetime(extracted?.transaction_datetime)
       : null,
-
+    transaction_time_present: normalizeBoolean(
+      extracted?.transaction_time_present,
+      false,
+    ),
+    transaction_date_source: cleanTextOrNull(extracted?.transaction_date_source),
+    multiple_operations_present: normalizeBoolean(
+      extracted?.multiple_operations_present,
+      false,
+    ),
+    selected_operation_position: Number.isInteger(
+        Number(extracted?.selected_operation_position)
+      )
+      ? Math.max(1, Math.min(100, Number(extracted.selected_operation_position)))
+      : null,
     confidence_score: normalizeConfidence(extracted?.confidence_score),
+    field_confidences: normalizeConfidenceMap(extracted?.field_confidences),
+    field_evidence: normalizeEvidenceMap(extracted?.field_evidence),
     possible_fraud: normalizeBoolean(extracted?.possible_fraud, false),
-
     ai_flags: normalizeArray(extracted?.ai_flags),
     missing_fields: normalizeArray(extracted?.missing_fields),
     visual_integrity_notes: normalizeArray(extracted?.visual_integrity_notes),
     sanad_attention_points: normalizeArray(extracted?.sanad_attention_points),
   };
 
-  if (normalized.is_financial_document) {
-    const requiredFields = [
-      "financial_entity",
-      "transaction_type",
-      "amount",
-      "currency",
-      "reference_number",
-      "transaction_datetime",
-    ];
-
-    for (const field of requiredFields) {
-      const value = (normalized as any)[field];
-
-      if (
-        value === null ||
-        value === undefined ||
-        value === "" ||
-        value === "unknown"
-      ) {
-        if (!normalized.missing_fields.includes(field)) {
-          normalized.missing_fields.push(field);
-        }
-      }
-    }
-  }
-
-  if (!normalized.is_financial_document) {
+  if (!isFinancial) {
+    normalized.summary = normalized.summary || normalized.non_financial_reason ||
+      "الملف لا يحتوي على عملية مالية واضحة.";
     if (!normalized.ai_flags.includes("non_financial_document")) {
       normalized.ai_flags.push("non_financial_document");
     }
-
-    if (!normalized.summary && normalized.non_financial_reason) {
-      normalized.summary = normalized.non_financial_reason;
-    }
-
-    if (!normalized.summary) {
-      normalized.summary = "الملف لا يحتوي على عملية مالية واضحة.";
+  }
+  if (normalized.financial_entity === "unknown" &&
+    !normalized.ai_flags.includes("financial_entity_unknown")) {
+    normalized.ai_flags.push("financial_entity_unknown");
+  }
+  if (normalized.financial_entity === "جهة أخرى" &&
+    !normalized.ai_flags.includes("financial_entity_other")) {
+    normalized.ai_flags.push("financial_entity_other");
+  }
+  for (const field of [
+    "financial_entity",
+    "transaction_type",
+    "amount",
+    "currency",
+    "reference_number",
+    "transaction_datetime",
+  ]) {
+    const value = (normalized as Record<string, unknown>)[field];
+    if (isFinancial && (value == null || value === "" || value === "unknown") &&
+      !normalized.missing_fields.includes(field)) {
+      normalized.missing_fields.push(field);
     }
   }
-
-  if (normalized.financial_entity === "unknown") {
-    if (!normalized.ai_flags.includes("financial_entity_unknown")) {
-      normalized.ai_flags.push("financial_entity_unknown");
-    }
-  }
-
-  if (normalized.financial_entity === "جهة أخرى") {
-    if (!normalized.ai_flags.includes("financial_entity_other")) {
-      normalized.ai_flags.push("financial_entity_other");
-    }
-  }
-
-  if (
-    normalized.reference_number &&
-    normalized.reference_number.toUpperCase().includes("FT")
-  ) {
-    if (!normalized.ai_flags.includes("kuraimi_like_reference")) {
-      normalized.ai_flags.push("kuraimi_like_reference");
-    }
-  }
-
-  if (
-    normalized.reference_number &&
-    /^8-\d+/.test(normalized.reference_number)
-  ) {
-    if (!normalized.ai_flags.includes("alomqy_like_reference")) {
-      normalized.ai_flags.push("alomqy_like_reference");
-    }
-  }
-
   return normalized;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function extractGeminiText(gemini: any): string {
+  const parts = gemini?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const text = parts.map((part: any) => part?.text || "").join("\n").trim();
+    if (text) return text;
+  }
+  return typeof gemini?.text === "string" ? gemini.text : "";
+}
+
+function parseGeminiJson(text: string): any {
+  const cleaned = cleanJsonText(text);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("gemini_json_parse_failed");
+    return JSON.parse(match[0]);
+  }
+}
+
+function buildFallbackSanadPrompt(): string {
+  return `أعد JSON فقط. حلل الإشعار المالي دون اختراع. ميّز الجهة والقالب والاتجاه والمبلغ والعملة والمرسل والمستلم وحساباتهما وحساب رأس المستند والحساب الدائن والمدين ونقطة حاسب والمرجع والتاريخ. إذا كانت الشاشة بنفسجية وبها Haseb أو Haseb Payment فهي الكريمي حاسب. إذا وجدت عدة عمليات استخرج العملية العلوية فقط. لا تخلط رقم رأس الشاشة بالمرجع أو بحساب المستلم. استخدم null للقيمة غير الظاهرة، والأرقام اللاتينية فقط.`;
+}
+
+function buildFastRoutingPrompt(): string {
+  return `أعد JSON فقط لاستخراج حقائق التوجيه السريع من الإشعار. لا تخترع. استخرج الجهة المالية والقالب واتجاه العملية والمبلغ والعملة واسم ورقم المستلم ونوع المعرّف وحساب رأس المستند والحساب الدائن ونقطة حاسب. القالب البنفسجي مع Haseb أو Haseb Payment هو الكريمي حاسب. لا تعتبر رقم رأس الشاشة حساب المستلم إلا إذا ربطه نص العملية صراحة. عند تعدد العمليات استخدم العملية العلوية فقط.`;
 }
 
 function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
   return {
-    "apikey": SUPABASE_SERVICE_ROLE_KEY,
-    "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
     ...extra,
   };
 }
 
-async function supabaseJson<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
+async function supabaseJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
-    headers: {
-      ...supabaseHeaders(init.headers || {}),
-    },
+    headers: { ...supabaseHeaders(init.headers || {}) },
   });
-
-  const text = await res.text();
-
-  if (!res.ok) {
-    throw new Error(
-      `supabase_request_failed ${res.status}: ${truncateText(text, 800)}`,
-    );
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`supabase_request_failed ${response.status}: ${truncateText(text, 800)}`);
   }
+  return text ? JSON.parse(text) as T : null as T;
+}
 
-  if (!text) return null as T;
-
-  return JSON.parse(text) as T;
+async function recordSpan(params: {
+  operationId: string;
+  runId: string;
+  pipeline: "analysis" | "fast_routing";
+  stage: string;
+  status: "success" | "error" | "skipped";
+  startedAtMs: number;
+  metadata?: JsonRecord;
+}): Promise<void> {
+  const completedAtMs = Date.now();
+  try {
+    await supabaseJson("/rest/v1/rpc/service_record_operation_pipeline_span", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_operation_id: params.operationId,
+        p_run_id: params.runId,
+        p_pipeline: params.pipeline,
+        p_stage: params.stage,
+        p_status: params.status,
+        p_function_name: FUNCTION_NAME,
+        p_started_at: new Date(params.startedAtMs).toISOString(),
+        p_completed_at: new Date(completedAtMs).toISOString(),
+        p_duration_ms: Math.max(0, completedAtMs - params.startedAtMs),
+        p_metadata: params.metadata || {},
+      }),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      event: "pipeline_span_write_failed",
+      stage: params.stage,
+      error: truncateText(error instanceof Error ? error.message : String(error), 500),
+    }));
+  }
 }
 
 async function getActivePrompt(): Promise<{
@@ -542,31 +643,20 @@ async function getActivePrompt(): Promise<{
   try {
     const rows = await supabaseJson<any[]>(
       `/rest/v1/ai_prompts?select=prompt_text,prompt_key,version&prompt_key=eq.${encodeURIComponent(SANAD_PROMPT_KEY)}&is_active=eq.true&order=version.desc&limit=1`,
-      {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-        },
-      },
+      { method: "GET", headers: { Accept: "application/json" } },
     );
-
     const row = Array.isArray(rows) ? rows[0] : null;
-    const promptText = row?.prompt_text;
-
-    if (typeof promptText === "string" && promptText.trim().length > 500) {
+    if (typeof row?.prompt_text === "string" && row.prompt_text.trim().length > 500) {
       return {
-        promptText,
+        promptText: row.prompt_text,
         promptSource: "database",
         promptKey: row.prompt_key || SANAD_PROMPT_KEY,
-        promptVersion: Number.isFinite(Number(row.version))
-          ? Number(row.version)
-          : null,
+        promptVersion: Number.isFinite(Number(row.version)) ? Number(row.version) : null,
       };
     }
   } catch {
-    // Fallback silently to built-in prompt.
+    // Built-in fallback preserves availability if prompt lookup fails.
   }
-
   return {
     promptText: buildFallbackSanadPrompt(),
     promptSource: "fallback",
@@ -578,29 +668,17 @@ async function getActivePrompt(): Promise<{
 async function getOperation(operationId: string): Promise<any | null> {
   const rows = await supabaseJson<any[]>(
     `/rest/v1/operations?select=*&id=eq.${encodeURIComponent(operationId)}&limit=1`,
-    {
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-      },
-    },
+    { method: "GET", headers: { Accept: "application/json" } },
   );
-
   return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
-async function patchOperation(
-  operationId: string,
-  patch: JsonRecord,
-): Promise<any[]> {
+async function patchOperation(operationId: string, patch: JsonRecord): Promise<any[]> {
   return await supabaseJson<any[]>(
     `/rest/v1/operations?id=eq.${encodeURIComponent(operationId)}`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-      },
+      headers: { "Content-Type": "application/json", Prefer: "return=representation" },
       body: JSON.stringify(patch),
     },
   );
@@ -611,14 +689,8 @@ async function markOperationRunning(operationId: string): Promise<any[]> {
     `/rest/v1/operations?id=eq.${encodeURIComponent(operationId)}&ai_status=not.in.(running,completed)`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-      },
-      body: JSON.stringify({
-        ai_status: "running",
-        ai_error: null,
-      }),
+      headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ ai_status: "running", ai_error: null }),
     },
   );
 }
@@ -628,22 +700,16 @@ async function insertEvent(
   eventType: "ai_started" | "ai_completed" | "ai_failed",
   metadata: JsonRecord,
 ): Promise<void> {
-  await supabaseJson<any[]>(
-    `/rest/v1/operation_events`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-      },
-      body: JSON.stringify({
-        operation_id: operationId,
-        event_type: eventType,
-        metadata,
-        source: "edge-function",
-      }),
-    },
-  );
+  await supabaseJson("/rest/v1/operation_events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify({
+      operation_id: operationId,
+      event_type: eventType,
+      metadata,
+      source: "edge-function",
+    }),
+  });
 }
 
 async function downloadStorageObject(
@@ -651,318 +717,375 @@ async function downloadStorageObject(
   filePath: string,
 ): Promise<Uint8Array> {
   const encodedPath = encodeURIComponent(filePath).replace(/%2F/g, "/");
-
-  const res = await fetch(
+  const response = await fetch(
     `${SUPABASE_URL}/storage/v1/object/${bucket}/${encodedPath}`,
-    {
-      method: "GET",
-      headers: supabaseHeaders(),
-    },
+    { method: "GET", headers: supabaseHeaders() },
   );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(
-      `storage_download_failed ${res.status}: ${truncateText(text, 800)}`,
-    );
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`storage_download_failed ${response.status}: ${truncateText(text, 800)}`);
   }
-
-  return new Uint8Array(await res.arrayBuffer());
+  return new Uint8Array(await response.arrayBuffer());
 }
 
-async function callGemini(
-  mimeType: string,
-  base64: string,
-  promptText: string,
-): Promise<{ gemini: any; rawText: string; extracted: any; attempts: number }> {
+async function callGemini(params: {
+  model: string;
+  mimeType: string;
+  base64: string;
+  promptText: string;
+  responseSchema: JsonRecord;
+  maxAttempts: number;
+}): Promise<{
+  gemini: any;
+  rawText: string;
+  extracted: any;
+  attempts: number;
+  durationMs: number;
+}> {
   const payload = {
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: promptText,
-          },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64,
-            },
-          },
-        ],
-      },
-    ],
+    contents: [{
+      role: "user",
+      parts: [
+        { text: params.promptText },
+        { inline_data: { mime_type: params.mimeType, data: params.base64 } },
+      ],
+    }],
     generationConfig: {
       temperature: 0,
+      maxOutputTokens: 4096,
       responseMimeType: "application/json",
+      responseSchema: params.responseSchema,
     },
   };
-
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(params.model)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  const startedAtMs = Date.now();
   let lastError = "gemini_request_failed";
-
-  for (let attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= params.maxAttempts; attempt += 1) {
     const delay = retryDelayMs(attempt);
-
-    if (delay > 0) {
-      await sleep(delay);
-    }
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await res.text();
-
-    if (!res.ok) {
-      lastError =
-        `gemini_request_failed ${res.status} attempt ${attempt}/${GEMINI_MAX_ATTEMPTS}: ${truncateText(responseText, 1000)}`;
-
-      if (
-        attempt < GEMINI_MAX_ATTEMPTS &&
-        isRetryableGeminiStatus(res.status)
-      ) {
-        continue;
+    if (delay > 0) await sleep(delay);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        lastError =
+          `gemini_request_failed ${response.status} attempt ${attempt}/${params.maxAttempts}: ${truncateText(responseText, 1000)}`;
+        if (attempt < params.maxAttempts && isRetryableGeminiStatus(response.status)) {
+          continue;
+        }
+        throw new Error(lastError);
       }
-
-      throw new Error(lastError);
-    }
-
-    const gemini = JSON.parse(responseText);
-    const rawText = extractGeminiText(gemini);
-
-    if (!rawText) {
-      lastError =
-        `empty_gemini_response attempt ${attempt}/${GEMINI_MAX_ATTEMPTS}: ${truncateText(responseText, 1000)}`;
-
-      if (attempt < GEMINI_MAX_ATTEMPTS) {
-        continue;
+      const gemini = JSON.parse(responseText);
+      const rawText = extractGeminiText(gemini);
+      if (!rawText) {
+        lastError = `empty_gemini_response attempt ${attempt}/${params.maxAttempts}`;
+        if (attempt < params.maxAttempts) continue;
+        throw new Error(lastError);
       }
-
-      throw new Error(lastError);
+      return {
+        gemini,
+        rawText,
+        extracted: parseGeminiJson(rawText),
+        attempts: attempt,
+        durationMs: Date.now() - startedAtMs,
+      };
+    } catch (error) {
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      lastError = aborted
+        ? `gemini_timeout_after_${GEMINI_REQUEST_TIMEOUT_MS}ms attempt ${attempt}/${params.maxAttempts}`
+        : error instanceof Error
+          ? error.message
+          : String(error);
+      if (attempt >= params.maxAttempts || (!aborted && !lastError.includes("429") && !lastError.includes("50"))) {
+        throw new Error(lastError);
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const extracted = parseGeminiJson(rawText);
-
-    return {
-      gemini,
-      rawText,
-      extracted,
-      attempts: attempt,
-    };
   }
-
   throw new Error(lastError);
+}
+
+async function runFastExtraction(params: {
+  operationId: string;
+  runId: string;
+  mimeType: string;
+  base64: string;
+}): Promise<void> {
+  const startedAtMs = Date.now();
+  if (!ENABLE_FAST_ROUTING_PASS) {
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "fast_routing",
+      stage: "fast_extract",
+      status: "skipped",
+      startedAtMs,
+      metadata: { reason: "ENABLE_FAST_ROUTING_PASS=false" },
+    });
+    return;
+  }
+  try {
+    const result = await callGemini({
+      model: GEMINI_FAST_MODEL,
+      mimeType: params.mimeType,
+      base64: params.base64,
+      promptText: buildFastRoutingPrompt(),
+      responseSchema: FAST_RESPONSE_SCHEMA,
+      maxAttempts: 1,
+    });
+    await supabaseJson("/rest/v1/rpc/service_record_fast_routing_extraction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_operation_id: params.operationId,
+        p_run_id: params.runId,
+        p_extractor_version: FAST_EXTRACTOR_VERSION,
+        p_model: GEMINI_FAST_MODEL,
+        p_status: "completed",
+        p_payload: result.extracted,
+        p_duration_ms: result.durationMs,
+        p_error_message: null,
+      }),
+    });
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "fast_routing",
+      stage: "fast_extract",
+      status: "success",
+      startedAtMs,
+      metadata: { model: GEMINI_FAST_MODEL, attempts: result.attempts },
+    });
+  } catch (error) {
+    const message = truncateText(error instanceof Error ? error.message : String(error));
+    try {
+      await supabaseJson("/rest/v1/rpc/service_record_fast_routing_extraction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          p_operation_id: params.operationId,
+          p_run_id: params.runId,
+          p_extractor_version: FAST_EXTRACTOR_VERSION,
+          p_model: GEMINI_FAST_MODEL,
+          p_status: "failed",
+          p_payload: {},
+          p_duration_ms: Date.now() - startedAtMs,
+          p_error_message: message,
+        }),
+      });
+    } catch {
+      // The primary analysis remains independent from fast extraction telemetry.
+    }
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "fast_routing",
+      stage: "fast_extract",
+      status: "error",
+      startedAtMs,
+      metadata: { error: message, model: GEMINI_FAST_MODEL },
+    });
+  }
 }
 
 Deno.serve(async (req: Request) => {
   let operationId: string | null = null;
   let operationStarted = false;
+  let runId: string | null = null;
+  let analysisStartedAtMs = Date.now();
 
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: CORS_HEADERS,
-    });
+    return new Response("ok", { headers: RESPONSE_HEADERS });
   }
-
   if (req.method !== "POST") {
-    return jsonResponse(
-      {
-        ok: false,
-        error: "method_not_allowed",
-      },
-      405,
-    );
+    return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
   }
-
   const internalKey = req.headers.get("x-sanad-internal-key");
-
   if (!internalKey || internalKey !== SANAD_INTERNAL_API_KEY) {
-    return jsonResponse(
-      {
-        ok: false,
-        error: "unauthorized",
-      },
-      401,
-    );
+    return jsonResponse({ ok: false, error: "unauthorized" }, 401);
   }
 
   try {
     const body = await req.json().catch(() => ({}));
-
-    operationId = cleanTextOrNull(
-      (body as any)?.operation_id ?? (body as any)?.id,
-    );
-
+    operationId = cleanTextOrNull((body as any)?.operation_id ?? (body as any)?.id);
     if (!operationId) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "missing_operation_id",
-          message: "operation_id is required",
-        },
-        400,
-      );
+      return jsonResponse({ ok: false, error: "missing_operation_id" }, 400);
     }
-
     const operation = await getOperation(operationId);
-
     if (!operation?.id) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "operation_not_found",
-          operation_id: operationId,
-        },
-        404,
-      );
+      return jsonResponse({ ok: false, error: "operation_not_found", operation_id: operationId }, 404);
     }
-
     if (!operation.file_path) {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "operation_missing_file_path",
-          operation_id: operation.id,
-        },
-        400,
-      );
+      return jsonResponse({ ok: false, error: "operation_missing_file_path", operation_id: operation.id }, 400);
     }
-
     if (operation.original_file_status !== "stored") {
-      return jsonResponse(
-        {
-          ok: false,
-          error: "original_file_not_stored",
-          operation_id: operation.id,
-          original_file_status: operation.original_file_status,
-        },
-        400,
-      );
+      return jsonResponse({
+        ok: false,
+        error: "original_file_not_stored",
+        operation_id: operation.id,
+        original_file_status: operation.original_file_status,
+      }, 400);
     }
-
     if (operation.ai_status === "completed") {
-      return jsonResponse(
-        {
-          ok: true,
-          skipped: true,
-          reason: "already_completed",
-          operation_id: operation.id,
-          public_token: operation.public_token,
-          ai_status: operation.ai_status,
-        },
-        200,
-      );
+      return jsonResponse({
+        ok: true,
+        skipped: true,
+        reason: "already_completed",
+        operation_id: operation.id,
+        public_token: operation.public_token,
+        ai_status: operation.ai_status,
+      });
     }
-
     if (operation.ai_status === "running") {
-      return jsonResponse(
-        {
-          ok: true,
-          skipped: true,
-          reason: "already_running",
-          operation_id: operation.id,
-          public_token: operation.public_token,
-          ai_status: operation.ai_status,
-        },
-        202,
-      );
+      return jsonResponse({
+        ok: true,
+        skipped: true,
+        reason: "already_running",
+        operation_id: operation.id,
+        public_token: operation.public_token,
+        ai_status: operation.ai_status,
+      }, 202);
     }
 
     const runningRows = await markOperationRunning(operation.id);
-
     if (!Array.isArray(runningRows) || runningRows.length === 0) {
       const latest = await getOperation(operation.id);
-
-      return jsonResponse(
-        {
-          ok: true,
-          skipped: true,
-          reason: "status_changed_before_lock",
-          operation_id: operation.id,
-          public_token: operation.public_token,
-          ai_status: latest?.ai_status ?? null,
-        },
-        latest?.ai_status === "running" ? 202 : 200,
-      );
+      return jsonResponse({
+        ok: true,
+        skipped: true,
+        reason: "status_changed_before_lock",
+        operation_id: operation.id,
+        ai_status: latest?.ai_status ?? null,
+      }, latest?.ai_status === "running" ? 202 : 200);
     }
 
     operationStarted = true;
-
-    const promptInfo = await getActivePrompt();
-
+    runId = crypto.randomUUID();
+    analysisStartedAtMs = Date.now();
     await insertEvent(operation.id, "ai_started", {
       function: FUNCTION_NAME,
       model: GEMINI_MODEL,
       source: "edge-function",
-      prompt_key: promptInfo.promptKey,
-      prompt_version: promptInfo.promptVersion,
-      prompt_source: promptInfo.promptSource,
-      prompt_length: promptInfo.promptText.length,
+      pipeline_run_id: runId,
+      response_schema: "strict-v2",
       gemini_max_attempts: GEMINI_MAX_ATTEMPTS,
+      gemini_timeout_ms: GEMINI_REQUEST_TIMEOUT_MS,
+      fast_routing_enabled: ENABLE_FAST_ROUTING_PASS,
       file_bucket: operation.file_bucket || DEFAULT_BUCKET,
       file_path: operation.file_path,
     });
 
+    const prepareStartedAtMs = Date.now();
     const bucket = operation.file_bucket || DEFAULT_BUCKET;
-    const filePath = operation.file_path;
     const mimeType = operation.file_mime_type || "application/octet-stream";
-
-    const fileBytes = await downloadStorageObject(bucket, filePath);
+    const [promptInfo, fileBytes] = await Promise.all([
+      getActivePrompt(),
+      downloadStorageObject(bucket, operation.file_path),
+    ]);
     const base64 = bytesToBase64(fileBytes);
+    await recordSpan({
+      operationId: operation.id,
+      runId,
+      pipeline: "analysis",
+      stage: "prompt_and_file_prepare",
+      status: "success",
+      startedAtMs: prepareStartedAtMs,
+      metadata: {
+        prompt_source: promptInfo.promptSource,
+        prompt_version: promptInfo.promptVersion,
+        file_bytes: fileBytes.byteLength,
+      },
+    });
 
-    const { gemini, rawText, extracted, attempts } = await callGemini(
+    const fastTask = runFastExtraction({
+      operationId: operation.id,
+      runId,
       mimeType,
       base64,
-      promptInfo.promptText,
-    );
+    });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(fastTask);
+    }
 
-    const ai = extracted;
-    const normalized = normalizeExtracted(ai);
+    const geminiStartedAtMs = Date.now();
+    const result = await callGemini({
+      model: GEMINI_MODEL,
+      mimeType,
+      base64,
+      promptText: promptInfo.promptText,
+      responseSchema: FULL_RESPONSE_SCHEMA,
+      maxAttempts: GEMINI_MAX_ATTEMPTS,
+    });
+    await recordSpan({
+      operationId: operation.id,
+      runId,
+      pipeline: "analysis",
+      stage: "gemini_generate",
+      status: "success",
+      startedAtMs: geminiStartedAtMs,
+      metadata: {
+        model: GEMINI_MODEL,
+        attempts: result.attempts,
+        timeout_ms: GEMINI_REQUEST_TIMEOUT_MS,
+      },
+    });
 
+    const normalized = normalizeExtracted(result.extracted);
+    const persistStartedAtMs = Date.now();
     await patchOperation(operation.id, {
       status: operation.status === "verified" ? "verified" : "ready",
       ai_status: "completed",
       ai_model: GEMINI_MODEL,
       ai_error: null,
-
       summary: normalized.summary,
       structured_data: normalized,
-
       raw_ai_json: {
-        extracted: ai,
+        extracted: result.extracted,
         normalized,
-        raw_gemini_text: rawText,
+        raw_gemini_text: result.rawText,
         model: GEMINI_MODEL,
         prompt_key: promptInfo.promptKey,
         prompt_version: promptInfo.promptVersion,
         prompt_source: promptInfo.promptSource,
         prompt_length: promptInfo.promptText.length,
-        gemini_attempts: attempts,
-        gemini_response: gemini,
+        gemini_attempts: result.attempts,
+        pipeline_run_id: runId,
+        response_schema: "strict-v2",
+        gemini_metadata: {
+          finish_reason: result.gemini?.candidates?.[0]?.finishReason || null,
+          usage_metadata: result.gemini?.usageMetadata || null,
+        },
       },
-
       financial_entity: normalized.financial_entity,
       transaction_type: normalized.transaction_type,
       amount: normalized.amount,
       currency: normalized.currency,
       reference_number: normalized.reference_number,
       transaction_datetime: normalized.transaction_datetime,
-
       confidence_score: normalized.confidence_score,
       ai_confidence_score: normalized.confidence_score,
       possible_fraud: normalized.possible_fraud,
-
       sanad_warnings: normalized.ai_flags,
       missing_fields: normalized.missing_fields,
       visual_integrity_notes: normalized.visual_integrity_notes,
       sanad_attention_points: normalized.sanad_attention_points,
+    });
+    await recordSpan({
+      operationId: operation.id,
+      runId,
+      pipeline: "analysis",
+      stage: "persist_and_shadow",
+      status: "success",
+      startedAtMs: persistStartedAtMs,
+      metadata: { trigger_includes_shadow_routing: true },
     });
 
     await insertEvent(operation.id, "ai_completed", {
@@ -971,61 +1094,86 @@ Deno.serve(async (req: Request) => {
       prompt_key: promptInfo.promptKey,
       prompt_version: promptInfo.promptVersion,
       prompt_source: promptInfo.promptSource,
-      gemini_attempts: attempts,
+      gemini_attempts: result.attempts,
+      pipeline_run_id: runId,
+      schema_enforced: true,
       confidence_score: normalized.confidence_score,
-      summary: normalized.summary,
       financial_entity: normalized.financial_entity,
       amount: normalized.amount,
       currency: normalized.currency,
       reference_number: normalized.reference_number,
+      timings: {
+        gemini_ms: result.durationMs,
+        total_ms: Date.now() - analysisStartedAtMs,
+      },
+    });
+    await recordSpan({
+      operationId: operation.id,
+      runId,
+      pipeline: "analysis",
+      stage: "analysis_total",
+      status: "success",
+      startedAtMs: analysisStartedAtMs,
+      metadata: {
+        model: GEMINI_MODEL,
+        attempts: result.attempts,
+        schema_enforced: true,
+      },
     });
 
-    return jsonResponse(
-      {
-        ok: true,
-        operation_id: operation.id,
-        public_token: operation.public_token,
-        ai_status: "completed",
-        prompt: {
-          key: promptInfo.promptKey,
-          version: promptInfo.promptVersion,
-          source: promptInfo.promptSource,
-        },
-        gemini_attempts: attempts,
-        summary: normalized.summary,
-        normalized,
+    return jsonResponse({
+      ok: true,
+      operation_id: operation.id,
+      public_token: operation.public_token,
+      ai_status: "completed",
+      pipeline_run_id: runId,
+      prompt: {
+        key: promptInfo.promptKey,
+        version: promptInfo.promptVersion,
+        source: promptInfo.promptSource,
       },
-      200,
-    );
+      gemini_attempts: result.attempts,
+      duration_ms: Date.now() - analysisStartedAtMs,
+      summary: normalized.summary,
+      normalized,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-
     if (operationId && operationStarted) {
       try {
         await patchOperation(operationId, {
           ai_status: "failed",
           ai_error: truncateText(message, 1500),
         });
-
         await insertEvent(operationId, "ai_failed", {
           function: FUNCTION_NAME,
           source: "edge-function",
           error: truncateText(message, 1500),
+          pipeline_run_id: runId,
           gemini_max_attempts: GEMINI_MAX_ATTEMPTS,
+          gemini_timeout_ms: GEMINI_REQUEST_TIMEOUT_MS,
         });
+        if (runId) {
+          await recordSpan({
+            operationId,
+            runId,
+            pipeline: "analysis",
+            stage: "analysis_total",
+            status: "error",
+            startedAtMs: analysisStartedAtMs,
+            metadata: { error: truncateText(message, 1000) },
+          });
+        }
       } catch {
-        // Best-effort failure logging only.
+        // Failure reporting is best effort and must not hide the original error.
       }
     }
-
-    return jsonResponse(
-      {
-        ok: false,
-        operation_id: operationId,
-        error: "analysis_failed",
-        message: truncateText(message, 1500),
-      },
-      500,
-    );
+    return jsonResponse({
+      ok: false,
+      operation_id: operationId,
+      pipeline_run_id: runId,
+      error: "analysis_failed",
+      message: truncateText(message, 1500),
+    }, 500);
   }
 });

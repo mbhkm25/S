@@ -100,6 +100,45 @@ body {
   #home_view > div.relative.py-2::after { animation: none; right: 36%; opacity: .7; }
 }
 
+/* Operation-to-business link prompt: mobile-first, stable and easy to act on. */
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in {
+  background: rgba(15, 23, 42, 0.46) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in > div {
+  width: min(100%, 34rem) !important;
+  max-width: 34rem !important;
+  padding: 1.25rem !important;
+  border-radius: 1.75rem !important;
+  gap: 1rem !important;
+}
+
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in > div > div:first-child {
+  padding-bottom: 0.9rem !important;
+  gap: 0.65rem !important;
+}
+
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in h3 {
+  font-size: 1.05rem !important;
+  line-height: 1.55 !important;
+}
+
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in p {
+  font-size: 0.95rem !important;
+  line-height: 1.9 !important;
+  color: #475569 !important;
+}
+
+div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in button {
+  min-height: 3.25rem !important;
+  border-radius: 1rem !important;
+  font-size: 0.95rem !important;
+  line-height: 1.4 !important;
+  padding: 0.8rem 1rem !important;
+}
+
 @media (max-width: 639px) {
   #app_main {
     max-width: none !important;
@@ -121,5 +160,47 @@ body {
   #global_header > div {
     max-width: none !important;
     width: 100% !important;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in {
+    align-items: flex-end !important;
+    justify-content: center !important;
+    padding: 0.5rem !important;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in > div {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: min(82dvh, 42rem) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding: 1.25rem 1.1rem calc(1.1rem + env(safe-area-inset-bottom)) !important;
+    border-radius: 1.75rem 1.75rem 1.25rem 1.25rem !important;
+    box-shadow: 0 -18px 48px rgba(15, 23, 42, 0.24) !important;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in > div::before {
+    content: '';
+    display: block;
+    width: 3rem;
+    height: 0.3rem;
+    margin: -0.45rem auto 0.75rem;
+    border-radius: 999px;
+    background: #dbe3ec;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in .flex.gap-2\.5.pt-2 {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 0.65rem !important;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in .flex.gap-2\.5.pt-2 > button:first-child {
+    order: 1;
+  }
+
+  div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-in .flex.gap-2\.5.pt-2 > button:last-child {
+    order: 2;
   }
 }
