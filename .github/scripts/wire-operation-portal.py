@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 
 # One-shot source transformation executed by the registered workflow.
+# Triggered after the workflow was registered on the default branch.
 
 
 def main() -> None:
