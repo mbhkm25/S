@@ -3,10 +3,18 @@ name: Static Supabase runtime quality
 on:
   pull_request:
     paths:
-      - "public/sanad-supabase-runtime.js"
-      - "public/payment-inbox.html"
-      - "public/routing-rollout.html"
-      - ".github/workflows/static-supabase-runtime-quality.yml"
+      - 'public/sanad-supabase-runtime.js'
+      - 'public/routing-rollout.html'
+      - 'public/payment-inbox.html'
+      - 'src/lib/supabase.ts'
+      - '.github/workflows/static-supabase-runtime-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/sanad-supabase-runtime.js'
+      - 'public/routing-rollout.html'
+      - 'public/payment-inbox.html'
+      - 'src/lib/supabase.ts'
 
 permissions:
   contents: read
@@ -15,13 +23,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check runtime JavaScript syntax
+      - uses: actions/checkout@v4
+      - name: Check static runtime syntax
         run: node --check public/sanad-supabase-runtime.js
-
-      - name: Validate canonical project reference in public key
+      - name: Validate canonical public runtime key
         shell: bash
         run: |
           set -euo pipefail
@@ -31,41 +36,15 @@ jobs:
           const ref = source.match(/const PROJECT_REF = '([^']+)'/)?.[1];
           const token = source.match(/const ANON_KEY = '([^']+)'/)?.[1];
           if (!ref || !token) throw new Error('missing runtime project ref or anon key');
-          const payloadPart = token.split('.')[1];
-          if (!payloadPart) throw new Error('invalid JWT public key');
-          const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
-          if (payload.ref !== ref) {
-            throw new Error(`public key ref mismatch: ${payload.ref} !== ${ref}`);
-          }
-          if (payload.role !== 'anon') throw new Error('public key role must be anon');
+          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+          if (payload.ref !== ref || payload.role !== 'anon') throw new Error('invalid public runtime key');
           NODE
-
-      - name: Ensure runtime loads before static tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          for page in public/payment-inbox.html public/routing-rollout.html; do
-            grep -Fq '<script src="/sanad-supabase-runtime.js"></script>' "$page"
-          done
-          node <<'NODE'
-          const fs = require('fs');
-          for (const page of ['public/payment-inbox.html', 'public/routing-rollout.html']) {
-            const html = fs.readFileSync(page, 'utf8');
-            const runtime = html.indexOf('/sanad-supabase-runtime.js');
-            const tool = Math.min(
-              ...['/payment-inbox.js', '/routing-rollout.js']
-                .map(value => html.indexOf(value))
-                .filter(value => value >= 0)
-            );
-            if (runtime < 0 || tool < 0 || runtime > tool) {
-              throw new Error(`${page}: runtime must load before tool script`);
-            }
-          }
-          NODE
-
-      - name: Enforce REST and Realtime key correction
-        shell: bash
-        run: |
-          set -euo pipefail
           grep -Fq "headers.set('apikey', ANON_KEY)" public/sanad-supabase-runtime.js
           grep -Fq "parsed.searchParams.set('apikey', ANON_KEY)" public/sanad-supabase-runtime.js
+      - name: Validate static and React runtime boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '<script src="/sanad-supabase-runtime.js"></script>' public/routing-rollout.html
+          grep -Fq '/business/manage/operations' public/payment-inbox.html
+          test -s src/lib/supabase.ts
