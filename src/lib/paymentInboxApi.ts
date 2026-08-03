@@ -57,6 +57,12 @@ export interface PaymentInboxItem {
   };
 }
 
+export interface PaymentInboxProAccess {
+  isPro: boolean;
+  user: unknown | null;
+  usage: Record<string, unknown> | null;
+}
+
 function unwrapItems<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
   if (payload && typeof payload === 'object') {
@@ -86,6 +92,24 @@ export async function getPaymentInbox(
   });
   if (error) throw error;
   return unwrapItems<PaymentInboxItem>(data);
+}
+
+export async function getPaymentInboxProAccess(): Promise<PaymentInboxProAccess> {
+  const [{ data: authData, error: authError }, { data: usage, error: usageError }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.rpc('get_my_operation_access_usage')
+  ]);
+  if (authError) throw authError;
+  if (usageError) throw usageError;
+  const payload = usage && typeof usage === 'object' ? usage as Record<string, unknown> : null;
+  const plan = payload?.plan && typeof payload.plan === 'object'
+    ? payload.plan as Record<string, unknown>
+    : null;
+  return {
+    isPro: plan?.is_pro === true,
+    user: authData.user || null,
+    usage: payload
+  };
 }
 
 function ensureActionSucceeded(data: unknown, fallback: string): void {
