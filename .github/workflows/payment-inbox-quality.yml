@@ -3,20 +3,26 @@ name: Payment inbox quality
 on:
   pull_request:
     paths:
-      - "public/payment-inbox.html"
-      - "public/payment-inbox.css"
-      - "public/payment-inbox.js"
-      - "public/payment-inbox-shadow-preview.css"
-      - "public/payment-inbox-shadow-preview.js"
-      - "public/sanad-ui-standards.css"
-      - "public/sanad-display-standards.js"
-      - "public/routing-benchmark.html"
-      - "public/routing-rollout.html"
-      - "src/components/business/BusinessManage.tsx"
-      - "src/components/business/BusinessManageV3.tsx"
-      - "supabase/migrations/*payment_inbox*"
-      - "supabase/tests/*payment_inbox*"
-      - ".github/workflows/payment-inbox-quality.yml"
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+      - 'supabase/migrations/*payment_inbox*'
+      - 'supabase/tests/*payment_inbox*'
+      - '.github/workflows/payment-inbox-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+      - 'supabase/migrations/*payment_inbox*'
+      - 'supabase/tests/*payment_inbox*'
 
 permissions:
   contents: read
@@ -25,77 +31,39 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check JavaScript syntax
-        run: |
-          node --check public/payment-inbox.js
-          node --check public/payment-inbox-shadow-preview.js
-          node --check public/sanad-display-standards.js
-
-      - name: Check required assets
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - name: Validate React payment inbox integration
         shell: bash
         run: |
           set -euo pipefail
-          test -s public/payment-inbox.html
-          test -s public/payment-inbox.css
-          test -s public/payment-inbox.js
-          test -s public/payment-inbox-shadow-preview.css
-          test -s public/payment-inbox-shadow-preview.js
-          test -s public/sanad-ui-standards.css
-          test -s public/sanad-display-standards.js
-          grep -Fq '/sanad-ui-standards.css' public/payment-inbox.html
-          grep -Fq '/payment-inbox.css' public/payment-inbox.html
-          grep -Fq '/payment-inbox-shadow-preview.css' public/payment-inbox.html
-          grep -Fq '/sanad-display-standards.js' public/payment-inbox.html
-          grep -Fq '/payment-inbox-shadow-preview.js' public/payment-inbox.html
-          grep -Fq '/payment-inbox.js' public/payment-inbox.html
-          grep -Fq 'data-status="shadow_preview"' public/payment-inbox.html
-          grep -Fq "window.location.assign('/payment-inbox.html')" src/components/business/BusinessManageV3.tsx
-
-      - name: Enforce SANAD typography and numerals
+          test -s src/components/business/PaymentInbox.tsx
+          test -s src/lib/paymentInboxApi.ts
+          grep -Fq "view === 'payment-inbox'" src/components/business/BusinessOperations.tsx
+          grep -Fq "view === 'payment-inbox-admin'" src/components/business/BusinessOperations.tsx
+          grep -Fq "get_business_payment_inbox_v2" src/lib/paymentInboxApi.ts
+          grep -Fq "get_my_business_payment_inbox_contexts_v2" src/lib/paymentInboxApi.ts
+          grep -Fq 'p_expected_row_version' src/lib/paymentInboxApi.ts
+          grep -Fq 'action_permissions' src/components/business/PaymentInbox.tsx
+          grep -Fq 'استلام العملية' src/components/business/PaymentInbox.tsx
+          grep -Fq 'استلام وتحقق' src/components/business/PaymentInbox.tsx
+          grep -Fq '/business/manage/operations' public/payment-inbox.html
+          grep -Fq '/business/manage/operations' public/payment-inbox-admin.html
+      - name: Validate atomic database contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'IBM+Plex+Sans+Arabic' public/sanad-ui-standards.css
-          grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
-          grep -Fq 'font-variant-numeric: lining-nums tabular-nums' public/sanad-ui-standards.css
-          grep -Fq 'toLatinDigits' public/sanad-display-standards.js
-          grep -Fq '/[٠-٩]/g' public/sanad-display-standards.js
-          grep -Fq '/[۰-۹]/g' public/sanad-display-standards.js
-          for page in public/payment-inbox.html public/routing-benchmark.html public/routing-rollout.html; do
-            grep -Fq '/sanad-ui-standards.css' "$page"
-            grep -Fq '/sanad-display-standards.js' "$page"
-          done
-          test "$(grep -n '/sanad-ui-standards.css' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox.css' public/payment-inbox.html | cut -d: -f1)"
-          test "$(grep -n '/sanad-display-standards.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox.js' public/payment-inbox.html | cut -d: -f1)"
-          test "$(grep -n '/sanad-display-standards.js' public/routing-benchmark.html | cut -d: -f1)" -lt "$(grep -n '/routing-benchmark-v2.js' public/routing-benchmark.html | cut -d: -f1)"
-          test "$(grep -n '/sanad-display-standards.js' public/routing-rollout.html | cut -d: -f1)" -lt "$(grep -n '/routing-rollout.js' public/routing-rollout.html | cut -d: -f1)"
-
-      - name: Enforce atomic inbox contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'claim_business_payment' supabase/migrations/*payment_inbox*.sql
-          grep -Fq 'heartbeat_business_payment_claim' supabase/migrations/*payment_inbox*.sql
-          grep -Fq 'complete_business_payment' supabase/migrations/*payment_inbox*.sql
-          grep -Fq 'business_payment_inbox_events' supabase/migrations/*payment_inbox*.sql
-          grep -Fq 'replica identity full' supabase/migrations/*payment_inbox*.sql
-          ! grep -Eiq 'insert[^;]+business_operation_links' public/payment-inbox.js
-
-      - name: Enforce read-only shadow preview
-        shell: bash
-        run: |
-          set -euo pipefail
-          migration='supabase/migrations/20260731151500_business_payment_shadow_preview.sql'
+          migration='supabase/migrations/20260802171000_payment_inbox_workflow_hardening.sql'
           test -s "$migration"
-          grep -Fq 'get_business_payment_shadow_preview' "$migration"
-          grep -Fq "private.has_business_payment_permission(p_business_id, 'view', auth.uid())" "$migration"
-          grep -Fq "'operational', false" "$migration"
-          grep -Fq "'claim', false" "$migration"
-          grep -Fq "'complete', false" "$migration"
-          grep -Fq 'grant execute' "$migration"
-          ! grep -Eiq 'insert[[:space:][:print:]]*business_payment_inbox' "$migration"
-          ! grep -Eiq 'insert[[:space:][:print:]]*business_operation_links' "$migration"
-          ! grep -Eiq 'claim_business_payment|complete_business_payment|release_business_payment|reject_business_payment' public/payment-inbox-shadow-preview.js
+          grep -Fq 'for update' "$migration"
+          grep -Fq 'p_expected_row_version' "$migration"
+          grep -Fq "'claim_race_lost'" "$migration"
+          grep -Fq "'stale_item'" "$migration"
+          test -s supabase/tests/payment_inbox_workflow_hardening.sql
+          grep -Fq 'rollback;' supabase/tests/payment_inbox_workflow_hardening.sql
