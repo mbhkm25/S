@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>إدارة وارد المدفوعات | سند</title>
+</head>
+<body>
+  <script>
+    (() => {
+      const source = new URL(window.location.href);
+      const target = new URL('/business/manage/operations', window.location.origin);
+      target.searchParams.set('view', 'payment-inbox-admin');
+      const businessId = source.searchParams.get('business_id');
+      if (businessId) target.searchParams.set('business_id', businessId);
+      window.location.replace(`${target.pathname}${target.search}`);
+    })();
+  </script>
+  <noscript>يرجى تفعيل JavaScript لفتح إدارة وارد المدفوعات داخل تطبيق سند.</noscript>
+</body>
+</html>
