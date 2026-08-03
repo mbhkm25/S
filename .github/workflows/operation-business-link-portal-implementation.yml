@@ -6,6 +6,11 @@ on:
       - feature/operation-business-link-portal
     paths:
       - '.github/workflows/operation-business-link-portal-implementation.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operation-business-link-portal-implementation.yml'
 
 permissions:
   contents: write
