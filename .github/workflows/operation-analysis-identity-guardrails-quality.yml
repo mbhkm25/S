@@ -34,5 +34,5 @@ jobs:
           grep -Fq 'field_evidence.receiver_name' "$migration"
           grep -Fq 'merchant_point ورقم الحساب والمعرّفات المالية حقول مستقلة' "$migration"
           grep -Fq 'المطابقة والهوية الرسمية تتمان لاحقًا داخل سند' "$migration"
-          grep -Fq 'version+1' "$migration"
+          grep -Eq 'version[[:space:]]*=[[:space:]]*version[[:space:]]*\+[[:space:]]*1' "$migration"
           grep -Fq 'not exists' "$migration"
