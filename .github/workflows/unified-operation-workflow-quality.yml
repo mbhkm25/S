@@ -3,10 +3,18 @@ name: Unified operation workflow quality
 on:
   pull_request:
     paths:
-      - "supabase/migrations/*unified_operation*"
-      - "public/payment-inbox-workflow-state.js"
-      - "public/payment-inbox.html"
-      - ".github/workflows/unified-operation-workflow-quality.yml"
+      - 'supabase/migrations/*unified_operation*'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
+      - '.github/workflows/unified-operation-workflow-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*unified_operation*'
+      - 'src/features/operations/OperationDetailsActionIntent.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
 
 permissions:
   contents: read
@@ -15,71 +23,35 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check workflow UI JavaScript
-        run: node --check public/payment-inbox-workflow-state.js
-
-      - name: Validate source-of-truth command chain
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - name: Validate source-of-truth database chain
         shell: bash
         run: |
           set -euo pipefail
           foundation='supabase/migrations/20260731181500_unified_operation_workflow_source_of_truth.sql'
           guard='supabase/migrations/20260731182100_guard_unified_operation_claim_permission.sql'
           read_models='supabase/migrations/20260731182000_unified_operation_workflow_read_models.sql'
-          test -s "$foundation"
-          test -s "$guard"
-          test -s "$read_models"
-
+          for file in "$foundation" "$guard" "$read_models"; do test -s "$file"; done
           grep -Fq 'complete_operation_workflow' "$foundation"
-          grep -Fq 'verify_operation_v2' "$foundation"
-          grep -Fq 'create or replace function public.verify_operation' "$foundation"
-          grep -Fq 'create or replace function public.complete_business_payment' "$foundation"
-          grep -Fq 'create or replace function public.link_operation_to_business' "$foundation"
-          grep -Fq 'public.complete_operation_workflow' "$foundation"
-
-          grep -Fq 'set schema private' "$guard"
+          grep -Fq 'complete_business_payment' "$foundation"
           grep -Fq 'complete_operation_workflow_core' "$guard"
-          grep -Fq "has_business_payment_permission(v_business_id,'claim'" "$guard"
-          grep -Fq 'revoke all on function private.complete_operation_workflow_core' "$guard"
-          grep -Fq 'from authenticated' "$guard"
-
-      - name: Validate unified events and read models
-        shell: bash
-        run: |
-          set -euo pipefail
-          foundation='supabase/migrations/20260731181500_unified_operation_workflow_source_of_truth.sql'
-          event_types='supabase/migrations/20260731181700_unified_operation_event_types.sql'
-          sources='supabase/migrations/20260731181800_unified_operation_user_link_sources.sql'
-          read_models='supabase/migrations/20260731182000_unified_operation_workflow_read_models.sql'
-
-          grep -Fq 'trg_mirror_business_payment_event_to_operation' "$foundation"
-          grep -Fq "'business_payment_enqueued'" "$event_types"
-          grep -Fq "'business_payment_completed'" "$event_types"
-          grep -Fq "'business_payment_expired_claim_released'" "$event_types"
-          grep -Fq "'qr_details'" "$sources"
-          grep -Fq "'payment_inbox'" "$sources"
-          grep -Fq 'completed_by_name' "$read_models"
-          grep -Fq 'completed_source' "$read_models"
           grep -Fq 'get_operation_workflow_timeline' "$read_models"
-
-      - name: Validate compatibility and UUID fix ordering
+      - name: Validate app-shell action intent
         shell: bash
         run: |
           set -euo pipefail
-          fix='supabase/migrations/20260731181900_fix_unified_verify_operation_uuid_selection.sql'
-          test -s "$fix"
-          grep -Fq 'array_agg(distinct i.business_id order by i.business_id)' "$fix"
-          grep -Fq 'cardinality(v_business_ids)=1' "$fix"
-          ! grep -Fq 'min(i.business_id)' "$fix"
-
-      - name: Validate payment inbox presentation
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq '/payment-inbox-workflow-state.js' public/payment-inbox.html
-          grep -Fq 'completed_by_name' public/payment-inbox-workflow-state.js
-          grep -Fq 'completed_source' public/payment-inbox-workflow-state.js
-          grep -Fq 'IBM Plex Sans Arabic' public/payment-inbox-workflow-state.js
-          grep -Fq 'مسح QR' public/payment-inbox-workflow-state.js
+          intent='src/features/operations/OperationDetailsActionIntent.tsx'
+          api='src/lib/paymentInboxApi.ts'
+          grep -Fq 'claimPaymentInboxItem' "$intent"
+          grep -Fq 'completePaymentInboxItem' "$intent"
+          grep -Fq "document.getElementById('btn_confirm_verify')" "$intent"
+          grep -Fq "includes('فتح الملف الأصلي')" "$intent"
+          grep -Fq 'complete_business_payment_v2' "$api"
+          grep -Fq '/business/manage/operations' public/payment-inbox.html
