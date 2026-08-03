@@ -3,6 +3,7 @@ import re
 
 # One-shot source transformation executed by the registered workflow.
 # Final trigger PR for the reviewed operation business-link portal refactor.
+# Triggered against the feature branch so the default-branch workflow can apply the refactor.
 
 
 def main() -> None:
