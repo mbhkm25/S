@@ -7,6 +7,11 @@ on:
     paths:
       - '.github/workflows/operation-business-link-portal-implementation.yml'
       - '.github/scripts/wire-operation-portal.py'
+  pull_request:
+    branches:
+      - feature/operation-business-link-portal
+    paths:
+      - '.github/scripts/wire-operation-portal.py'
 
 permissions:
   contents: write
