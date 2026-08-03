@@ -1,0 +1,151 @@
+name: Operation identity quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/digits.ts'
+      - 'src/lib/operationIdentity.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-identity-display.js'
+      - 'supabase/migrations/*operation_identity_projection.sql'
+      - 'supabase/migrations/*operation_identity_feed_contracts.sql'
+      - 'supabase/tests/operation_identity_projection.sql'
+      - 'docs/operation-identity-investigation-bahkam.md'
+      - '.github/workflows/operation-identity-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/digits.ts'
+      - 'src/lib/operationIdentity.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-identity-display.js'
+      - 'supabase/migrations/*operation_identity_projection.sql'
+      - 'supabase/migrations/*operation_identity_feed_contracts.sql'
+      - 'supabase/tests/operation_identity_projection.sql'
+      - 'docs/operation-identity-investigation-bahkam.md'
+      - '.github/workflows/operation-identity-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JavaScript syntax
+        run: node --check public/payment-inbox-identity-display.js
+
+      - name: Validate identity precedence
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          test -s "$migration"
+          grep -Fq "when linked.business_id is not null then 'linked_business'" "$migration"
+          grep -Fq "then 'exact_identifier_match'" "$migration"
+          grep -Fq "else 'document_extraction'" "$migration"
+          grep -Fq "unique_exact_identifier_match" "$migration"
+          grep -Fq "has_name_conflict" "$migration"
+          grep -Fq "normalize_financial_name" "$migration"
+          grep -Fq "operation_routing_shadow_runs" "$migration"
+          grep -Fq "business_operation_links" "$migration"
+
+      - name: Validate raw and resolved identity separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          grep -Fq "'raw_receiver_name'" "$migration"
+          grep -Fq "'resolved_business_name'" "$migration"
+          grep -Fq "'resolved_account_holder_name'" "$migration"
+          grep -Fq "'identity_source'" "$migration"
+          grep -Fq "'identity_confidence'" "$migration"
+          grep -Fq "'field_evidence'" "$migration"
+
+      - name: Validate user feeds expose trusted identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          feed='supabase/migrations/20260802220500_operation_identity_feed_contracts.sql'
+          test -s "$feed"
+          grep -Fq 'raw_receiver_name text' "$feed"
+          grep -Fq 'resolved_business_name text' "$feed"
+          grep -Fq 'resolved_account_holder_name text' "$feed"
+          grep -Fq 'identity_source text' "$feed"
+          grep -Fq "then 'linked_business'" "$feed"
+          grep -Fq "then 'exact_identifier_match'" "$feed"
+          grep -Fq 'get_operation_identity_by_token' "$feed"
+          grep -Fq 'get_operation_identity_projection(array[v_operation_id])' "$feed"
+
+      - name: Validate payment inbox separates linked and extracted names
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='public/payment-inbox-identity-display.js'
+          test -s "$script"
+          grep -Fq 'item.business_name || item.account_holder_name' "$script"
+          grep -Fq 'الاسم المستخرج من الإشعار' "$script"
+          grep -Fq 'القراءة المستخرجة تختلف عن هوية النشاط المرتبطة' "$script"
+          grep -Fq 'sanad:payment-inbox-v2-loaded' "$script"
+          grep -Fq '/payment-inbox-identity-display.js' public/payment-inbox.html
+          test "$(grep -n '/payment-inbox-workflow-hardening.js' public/payment-inbox.html | cut -d: -f1)" -lt "$(grep -n '/payment-inbox-identity-display.js' public/payment-inbox.html | cut -d: -f1)"
+
+      - name: Validate card titles never promote raw OCR to business identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "identitySource === 'linked_business'" src/lib/digits.ts
+          grep -Fq "identitySource === 'exact_identifier_match'" src/lib/digits.ts
+          grep -Fq 'عملية لدى' src/lib/digits.ts
+          grep -Fq 'عملية مطابقة لحساب' src/lib/digits.ts
+          grep -Fq 'إشعار استلام لـ' src/lib/digits.ts
+          test "$(grep -n "identitySource === 'linked_business'" src/lib/digits.ts | cut -d: -f1)" -lt "$(grep -n 'إشعار استلام لـ' src/lib/digits.ts | cut -d: -f1)"
+
+      - name: Validate client identity contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s src/lib/operationIdentity.ts
+          grep -Fq 'get_operation_identity_projection' src/lib/operationIdentity.ts
+          grep -Fq 'OperationIdentitySource' src/lib/operationIdentity.ts
+          grep -Fq 'has_name_conflict' src/lib/operationIdentity.ts
+          grep -Fq 'getOperationIdentityTitle' src/lib/operationIdentity.ts
+
+      - name: Validate identity regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_file='supabase/tests/operation_identity_projection.sql'
+          test -s "$test_file"
+          grep -Fq 'حاكم للعسل' "$test_file"
+          grep -Fq 'باحكم للعسل' "$test_file"
+          grep -Fq '825121' "$test_file"
+          grep -Fq 'raw_receiver_name_was_silently_changed' "$test_file"
+          grep -Fq 'resolved_business_identity_not_preferred' "$test_file"
+          grep -Fq 'linked_business_did_not_override_shadow_match' "$test_file"
+          grep -Fq 'rollback;' "$test_file"
+
+      - name: Validate investigation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          doc='docs/operation-identity-investigation-bahkam.md'
+          grep -Fq 'a690dfe2-2563-4738-97aa-67ac17f95f5d' "$doc"
+          grep -Fq '825121' "$doc"
+          grep -Fq 'حاكم للعسل' "$doc"
+          grep -Fq 'باحكم للعسل' "$doc"
+          grep -Fq 'unique_exact_identifier_match' "$doc"
+          grep -Fq 'shadow_only' "$doc"
+
+      - name: Validate execution grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          projection='supabase/migrations/20260802213000_operation_identity_projection.sql'
+          feed='supabase/migrations/20260802220500_operation_identity_feed_contracts.sql'
+          grep -Fq 'revoke all on function public.get_operation_identity_projection(uuid[]) from public' "$projection"
+          grep -Fq 'grant execute on function public.get_operation_identity_projection(uuid[]) to authenticated' "$projection"
+          grep -Fq 'grant execute on function public.get_my_operations(text,timestamptz,timestamptz,integer,integer) to authenticated' "$feed"
+          grep -Fq 'grant execute on function public.get_operation_identity_by_token(uuid) to authenticated' "$feed"

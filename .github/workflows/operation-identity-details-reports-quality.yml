@@ -1,0 +1,69 @@
+name: Operation identity details and reports quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/main.tsx'
+      - 'src/features/operations/OperationIdentityDetailsBanner.tsx'
+      - 'supabase/migrations/*operation_identity_details_and_reports.sql'
+      - '.github/workflows/operation-identity-details-reports-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/main.tsx'
+      - 'src/features/operations/OperationIdentityDetailsBanner.tsx'
+      - 'supabase/migrations/*operation_identity_details_and_reports.sql'
+      - '.github/workflows/operation-identity-details-reports-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check application
+        run: npx tsc --noEmit
+
+      - name: Build application
+        run: npm run build
+
+      - name: Validate details identity projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          component='src/features/operations/OperationIdentityDetailsBanner.tsx'
+          migration='supabase/migrations/20260802223000_operation_identity_details_and_reports.sql'
+          test -s "$component"
+          test -s "$migration"
+          grep -Fq 'get_operation_identity_by_token' "$component"
+          grep -Fq 'resolved_business_name' "$component"
+          grep -Fq 'raw_receiver_name' "$component"
+          grep -Fq 'has_name_conflict' "$component"
+          grep -Fq 'OperationIdentityDetailsBanner' src/main.tsx
+          grep -Fq 'identity_projection' "$migration"
+          grep -Fq 'display_title' "$migration"
+          grep -Fq 'open_operation_access_identity_core' "$migration"
+
+      - name: Validate report identity separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration='supabase/migrations/20260802223000_operation_identity_details_and_reports.sql'
+          grep -Fq 'get_report_payload_v2_identity_core' "$migration"
+          grep -Fq "'raw_receiver_name'" "$migration"
+          grep -Fq "'resolved_business_name'" "$migration"
+          grep -Fq "'resolved_account_holder_name'" "$migration"
+          grep -Fq "'identity_source'" "$migration"
+          grep -Fq "'identity_display_title'" "$migration"
+          grep -Fq "unique_exact_identifier_match" "$migration"
+          grep -Fq 'grant execute on function public.get_report_payload_v2(uuid) to service_role' "$migration"
