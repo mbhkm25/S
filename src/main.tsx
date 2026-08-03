@@ -4,6 +4,7 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import OperationEntryGate from './features/operations/OperationEntryGate';
 import OperationIdentityDetailsBanner from './features/operations/OperationIdentityDetailsBanner';
+import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import './index.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
@@ -13,8 +14,6 @@ import { Capacitor } from '@capacitor/core';
 const PwaUpdatePrompt = lazy(() => import('./features/pwa/PwaUpdatePrompt'));
 const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
 
-// PWA updates apply only to the browser-installed app. Capacitor releases are
-// updated through their native distribution channel.
 const isCapacitorNative = Capacitor.isNativePlatform() ||
                           window.location.origin.includes('capacitor') ||
                           window.location.origin.startsWith('file:');
@@ -24,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <OperationEntryGate />
     <OperationIdentityDetailsBanner />
+    <OperationDetailsActionIntent />
     <Suspense fallback={null}>
       <KnowledgeAdminRoute />
     </Suspense>
