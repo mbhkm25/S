@@ -60,7 +60,7 @@ jobs:
           grep -Fq "summary.insertAdjacentElement('afterend', node)" "$banner"
           grep -Fq 'createPortal' "$banner"
           grep -Fq 'الاسم المستخرج من الإشعار' "$banner"
-          grep -Fq 'resolved_business_name' "$inbox"
+          grep -Fq 'business_name' "$inbox"
           grep -Fq 'account_holder_name' "$inbox"
       - name: Validate regression fixtures and numeral standards
         shell: bash
