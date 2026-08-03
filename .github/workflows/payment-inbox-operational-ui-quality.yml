@@ -3,11 +3,20 @@ name: Payment inbox operational UI quality
 on:
   pull_request:
     paths:
-      - "public/payment-inbox.html"
-      - "public/payment-inbox.js"
-      - "public/payment-inbox-operational-ui.css"
-      - "public/payment-inbox-operational-ui.js"
-      - ".github/workflows/payment-inbox-operational-ui-quality.yml"
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
+      - '.github/workflows/payment-inbox-operational-ui-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/business/PaymentInbox.tsx'
+      - 'src/components/business/BusinessOperations.tsx'
+      - 'src/lib/paymentInboxApi.ts'
+      - 'public/payment-inbox.html'
+      - 'public/payment-inbox-admin.html'
 
 permissions:
   contents: read
@@ -16,56 +25,32 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check JavaScript syntax
-        run: |
-          node --check public/payment-inbox.js
-          node --check public/payment-inbox-operational-ui.js
-
-      - name: Validate proven boot ordering
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - name: Validate cashier and supervisor separation
         shell: bash
         run: |
           set -euo pipefail
-          test -s public/payment-inbox-operational-ui.css
-          test -s public/payment-inbox-operational-ui.js
-          grep -Fq '/payment-inbox.js?v=' public/payment-inbox.html
-          grep -Fq '/payment-inbox-operational-ui.js?v=' public/payment-inbox.html
-          ! grep -Fq '/payment-inbox-network-guard.js' public/payment-inbox.html
-          ! grep -Fq '/payment-inbox-operational-guard.js' public/payment-inbox.html
-          base_js_line=$(grep -n '/payment-inbox.js?v=' public/payment-inbox.html | cut -d: -f1)
-          workflow_line=$(grep -n '/payment-inbox-workflow-state.js' public/payment-inbox.html | cut -d: -f1)
-          ui_line=$(grep -n '/payment-inbox-operational-ui.js?v=' public/payment-inbox.html | cut -d: -f1)
-          test "$workflow_line" -gt "$base_js_line"
-          test "$ui_line" -gt "$workflow_line"
-
-      - name: Enforce isolated compact design
+          ui='src/components/business/PaymentInbox.tsx'
+          grep -Fq "{ value: 'new', label: 'جديدة' }" "$ui"
+          grep -Fq "{ value: 'mine', label: 'لدي' }" "$ui"
+          grep -Fq "{ value: 'team_active', label: 'لدى الفريق' }" "$ui"
+          grep -Fq "{ value: 'review', label: 'تحتاج مراجعة' }" "$ui"
+          grep -Fq 'إدارة وارد المدفوعات' "$ui"
+          grep -Fq 'action_permissions' "$ui"
+          grep -Fq 'min-h-11' "$ui"
+          grep -Fq 'dir="ltr"' "$ui"
+      - name: Validate legacy redirects
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq '.tab-switcher-summary' public/payment-inbox-operational-ui.css
-          grep -Fq '.tabs-native-hidden' public/payment-inbox-operational-ui.css
-          grep -Fq '.tertiary-action{display:none' public/payment-inbox-operational-ui.css
-          grep -Fq '.badges,.preview-gates,.preview-operation-note,.shadow-preview-banner{display:none' public/payment-inbox-operational-ui.css
-          grep -Fq 'setupSwitcher' public/payment-inbox-operational-ui.js
-          grep -Fq 'renderSwitcher' public/payment-inbox-operational-ui.js
-          ! grep -Fq "observe(tabs" public/payment-inbox-operational-ui.js
-          ! grep -Fq "attributeFilter" public/payment-inbox-operational-ui.js
-          grep -Fq 'openDetails' public/payment-inbox-operational-ui.js
-          grep -Fq 'data-proxy-action' public/payment-inbox-operational-ui.js
-          grep -Fq 'ENTITY_DEFINITIONS' public/payment-inbox-operational-ui.js
-          grep -Fq '/assets/financial-entities/alamqi-mobile.webp' public/payment-inbox-operational-ui.js
-          grep -Fq '/assets/financial-entities/alkuraimi-hasib.webp' public/payment-inbox-operational-ui.js
-          grep -Fq 'IBM Plex Sans Arabic' public/sanad-ui-standards.css
-
-      - name: Preserve operational actions and data contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq "get_my_business_payment_inbox_contexts" public/payment-inbox.js
-          grep -Fq "get_business_payment_inbox" public/payment-inbox.js
-          grep -Fq "event.target.closest('a,button,textarea,input,select,summary')" public/payment-inbox-operational-ui.js
-          grep -Fq 'action?.click()' public/payment-inbox-operational-ui.js
-          grep -Fq 'payment-inbox-shadow-preview.js' public/payment-inbox.html
-          grep -Fq 'payment-inbox-workflow-state.js' public/payment-inbox.html
+          grep -Fq "view', 'payment-inbox'" public/payment-inbox.html
+          grep -Fq "view', 'payment-inbox-admin'" public/payment-inbox-admin.html
+          grep -Fq '/business/manage/operations' public/payment-inbox.html
+          grep -Fq '/business/manage/operations' public/payment-inbox-admin.html
