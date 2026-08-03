@@ -15,6 +15,22 @@ export function handleNotificationAction(
   try {
     const target = getSafeNavigationTarget(actionType, actionPayload);
     if (!target || actionType === 'none') return false;
+
+    if (target.page === 'report-view' && target.token) {
+      const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+      const cleanBase = base.endsWith('/') ? base : `${base}/`;
+      window.location.assign(`${cleanBase}reports/view/${encodeURIComponent(target.token)}`);
+      return true;
+    }
+
+    if (target.page === 'reports' && target.token) {
+      const base = import.meta.env.VITE_APP_BASE_PATH || '/';
+      const cleanBase = base.endsWith('/') ? base : `${base}/`;
+      window.history.pushState({}, '', `${cleanBase}reports?request=${encodeURIComponent(target.token)}`);
+      navigateTo('reports', undefined, 'app');
+      return true;
+    }
+
     navigateTo(target.page, target.token, target.source);
     return true;
   } catch {
