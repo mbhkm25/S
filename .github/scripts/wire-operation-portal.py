@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 
 # One-shot source transformation executed by the registered workflow.
+# This branch change exists only to trigger the PR-targeted wiring job.
 
 
 def main() -> None:
