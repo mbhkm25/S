@@ -1,0 +1,34 @@
+name: Wire operation business link portal
+
+on:
+  push:
+    branches:
+      - feature/operation-business-link-portal
+    paths:
+      - '.github/workflows/operation-business-link-portal-implementation.yml'
+      - '.github/scripts/wire-operation-portal.py'
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/operation-business-link-portal
+          fetch-depth: 0
+
+      - name: Apply portal wiring
+        run: python .github/scripts/wire-operation-portal.py
+
+      - name: Commit completed implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Wire operation business linking through a body portal"
+          git push origin HEAD:feature/operation-business-link-portal
