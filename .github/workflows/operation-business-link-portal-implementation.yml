@@ -1,4 +1,4 @@
-name: Implement operation business link portal
+name: Wire operation business link portal
 
 on:
   push:
@@ -6,245 +6,81 @@ on:
       - feature/operation-business-link-portal
     paths:
       - '.github/workflows/operation-business-link-portal-implementation.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/operation-business-link-portal-implementation.yml'
 
 permissions:
   contents: write
 
 jobs:
-  implement:
+  wire:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: feature/operation-business-link-portal
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Create portal component and wire details view
+      - name: Wire portal and remove legacy styling
         shell: bash
         run: |
           set -euo pipefail
-
-          cat > src/components/business/OperationBusinessLinkSheet.tsx <<'EOF'
-          import { useEffect } from 'react';
-          import { createPortal } from 'react-dom';
-          import { CheckCircle2, Loader2, ShieldAlert, Store, X } from 'lucide-react';
-          import type { LinkableBusinessItem } from '../../lib/businessApi';
-
-          interface OperationBusinessLinkSheetProps {
-            open: boolean;
-            businesses: LinkableBusinessItem[];
-            linking: boolean;
-            success: boolean;
-            error: string | null;
-            onLink: (businessId: string) => void;
-            onClose: () => void;
-          }
-
-          export default function OperationBusinessLinkSheet({
-            open,
-            businesses,
-            linking,
-            success,
-            error,
-            onLink,
-            onClose
-          }: OperationBusinessLinkSheetProps) {
-            useEffect(() => {
-              if (!open) return;
-
-              const previousOverflow = document.body.style.overflow;
-              const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-              document.body.style.overflow = 'hidden';
-              document.body.style.overscrollBehavior = 'none';
-
-              const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.key === 'Escape' && !linking) onClose();
-              };
-
-              window.addEventListener('keydown', handleKeyDown);
-              return () => {
-                document.body.style.overflow = previousOverflow;
-                document.body.style.overscrollBehavior = previousOverscrollBehavior;
-                window.removeEventListener('keydown', handleKeyDown);
-              };
-            }, [linking, onClose, open]);
-
-            if (!open || businesses.length === 0 || typeof document === 'undefined') return null;
-
-            const modal = (
-              <div
-                className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 p-2 backdrop-blur-[2px] sm:items-center sm:p-4"
-                dir="rtl"
-                role="presentation"
-                data-operation-business-sheet-overlay
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget && !linking) onClose();
-                }}
-              >
-                <section
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="operation-business-link-title"
-                  className="w-full max-w-lg overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white text-right shadow-2xl sm:rounded-3xl"
-                  data-operation-business-sheet
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" aria-hidden="true" />
-
-                  <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-800">
-                        <Store className="h-4.5 w-4.5" />
-                      </span>
-                      <div className="min-w-0">
-                        <h3 id="operation-business-link-title" className="text-sm font-bold text-slate-950">
-                          ربط العملية بنشاط تجاري
-                        </h3>
-                        <p className="mt-0.5 text-[10px] leading-5 text-slate-500">
-                          حدّد ما إذا كانت العملية تخص نشاطك أم أنها عملية شخصية.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      disabled={linking}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label="إغلاق نافذة ربط العملية"
-                    >
-                      <X className="h-4.5 w-4.5" />
-                    </button>
-                  </header>
-
-                  <div className="max-h-[min(72dvh,34rem)] overflow-y-auto overscroll-contain px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                    {success ? (
-                      <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-center text-emerald-800" role="status" aria-live="polite">
-                        <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                        <span className="text-sm font-bold">تم ربط العملية بالنشاط التجاري بنجاح.</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {error && (
-                          <div className="flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-[11px] leading-5 text-rose-800" role="alert">
-                            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-                            <span>{error}</span>
-                          </div>
-                        )}
-
-                        {businesses.length === 1 ? (
-                          <div className="space-y-4">
-                            <p className="text-sm leading-7 text-slate-600">
-                              أنت عضو في فريق <strong className="text-slate-950">{businesses[0].name}</strong>. هل تريد ربط هذه العملية بهذا النشاط؟
-                            </p>
-                            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                              <button
-                                type="button"
-                                disabled={linking}
-                                onClick={() => onLink(businesses[0].business_id)}
-                                className="order-1 flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 sm:order-none"
-                              >
-                                {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'ربط بالنشاط'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={linking}
-                                onClick={onClose}
-                                className="order-2 min-h-13 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                لا، عملية شخصية
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <p className="text-sm leading-7 text-slate-600">اختر النشاط الذي تريد إسناد هذه العملية إليه:</p>
-                            <div className="space-y-2">
-                              {businesses.map((business) => (
-                                <button
-                                  type="button"
-                                  key={business.business_id}
-                                  disabled={linking}
-                                  onClick={() => onLink(business.business_id)}
-                                  className="flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right transition hover:border-slate-300 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{business.name}</span>
-                                  <span className="shrink-0 text-[10px] font-medium text-slate-500">{business.label || 'موظف'}</span>
-                                </button>
-                              ))}
-                            </div>
-                            <button
-                              type="button"
-                              disabled={linking}
-                              onClick={onClose}
-                              className="min-h-13 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              لا، عملية شخصية
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </section>
-              </div>
-            );
-
-            return createPortal(modal, document.body);
-          }
-          EOF
-
           python - <<'PY'
           from pathlib import Path
           import re
 
-          path = Path('src/components/Details.tsx')
-          text = path.read_text()
+          details_path = Path('src/components/Details.tsx')
+          details = details_path.read_text(encoding='utf-8')
 
-          text = text.replace(
-              "import OperationNote from './OperationNote';\n",
-              "import OperationNote from './OperationNote';\nimport OperationBusinessLinkSheet from './business/OperationBusinessLinkSheet';\n"
+          if "import OperationBusinessLinkSheet from './business/OperationBusinessLinkSheet';" not in details:
+              details = details.replace(
+                  "import OperationNote from './OperationNote';\n",
+                  "import OperationNote from './OperationNote';\nimport OperationBusinessLinkSheet from './business/OperationBusinessLinkSheet';\n",
+                  1,
+              )
+          details = details.replace(', X, Store, Copy,', ', X, Copy,', 1)
+
+          start_marker = '      {/* Business Linking Modal Overlay */}'
+          end_marker = '    </div>\n  );\n}'
+          start = details.find(start_marker)
+          end = details.rfind(end_marker)
+          if start == -1 or end == -1 or end <= start:
+              raise SystemExit('Could not locate legacy business-link modal block')
+
+          sheet = '''      <OperationBusinessLinkSheet
+            open={showLinkModal && linkableBusinesses.length > 0}
+            businesses={linkableBusinesses}
+            linking={linkingBusiness}
+            success={linkSuccess}
+            error={linkError}
+            onLink={handleLinkToBusiness}
+            onClose={() => {
+              if (!linkingBusiness) setShowLinkModal(false);
+            }}
+          />
+'''
+          details = details[:start] + sheet + details[end:]
+          details_path.write_text(details, encoding='utf-8')
+
+          css_path = Path('src/index.css')
+          css = css_path.read_text(encoding='utf-8')
+          css = re.sub(
+              r'\n/\* Operation-to-business link prompt: mobile-first, stable and easy to act on\. \*/.*?(?=\n@media \(max-width: 639px\) \{)',
+              '\n',
+              css,
+              count=1,
+              flags=re.S,
           )
-          text = text.replace(', X, Store, Copy,', ', X, Copy,')
-
-          pattern = re.compile(
-              r"\n      \{/\* Business Linking Modal Overlay \*/\}.*?\n      \)\}\n",
-              re.DOTALL,
+          css = re.sub(
+              r'\n  div\.fixed\.inset-0\.z-50\.flex\[class~="bg-slate-900/60"\]\.font-arabic\.animate-fade-in \{.*?\n  \}\n(?=\})',
+              '\n',
+              css,
+              count=1,
+              flags=re.S,
           )
-          replacement = """
+          css_path.write_text(css, encoding='utf-8')
 
-      <OperationBusinessLinkSheet
-        open={showLinkModal && linkableBusinesses.length > 0}
-        businesses={linkableBusinesses}
-        linking={linkingBusiness}
-        success={linkSuccess}
-        error={linkError}
-        onLink={handleLinkToBusiness}
-        onClose={() => {
-          if (!linkingBusiness) setShowLinkModal(false);
-        }}
-      />
-"""
-          text, count = pattern.subn(replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'Expected to replace one business linking modal, replaced {count}')
-
-          path.write_text(text)
-
-          workflow = Path('.github/workflows/business-management-sections-quality.yml')
-          quality = workflow.read_text()
-          old = """          grep -Fq \"ربط العملية بنشاط تجاري\" src/components/Details.tsx
+          quality_path = Path('.github/workflows/business-management-sections-quality.yml')
+          quality = quality_path.read_text(encoding='utf-8')
+          legacy = '''          grep -Fq "ربط العملية بنشاط تجاري" src/components/Details.tsx
           grep -Fq 'background: rgba(15, 23, 42, 0.46)' src/index.css
           grep -Fq 'align-items: flex-end !important' src/index.css
           grep -Fq 'padding-bottom: max(0.5rem, env(safe-area-inset-bottom))' src/index.css
@@ -252,35 +88,29 @@ jobs:
           grep -Fq 'font-size: 0.95rem !important' src/index.css
           grep -Fq 'max-height: min(82dvh, 42rem)' src/index.css
           grep -Fq 'grid-template-columns: 1fr !important' src/index.css
-"""
-          new = """          grep -Fq 'OperationBusinessLinkSheet' src/components/Details.tsx
+'''
+          portal = '''          grep -Fq 'OperationBusinessLinkSheet' src/components/Details.tsx
           grep -Fq 'createPortal(modal, document.body)' src/components/business/OperationBusinessLinkSheet.tsx
           grep -Fq 'data-operation-business-sheet-overlay' src/components/business/OperationBusinessLinkSheet.tsx
           grep -Fq 'z-[120]' src/components/business/OperationBusinessLinkSheet.tsx
-          grep -Fq \"document.body.style.overflow = 'hidden'\" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "document.body.style.overflow = 'hidden'" src/components/business/OperationBusinessLinkSheet.tsx
           grep -Fq 'overscroll-contain' src/components/business/OperationBusinessLinkSheet.tsx
           grep -Fq 'env(safe-area-inset-bottom)' src/components/business/OperationBusinessLinkSheet.tsx
-          grep -Fq 'aria-modal=\"true\"' src/components/business/OperationBusinessLinkSheet.tsx
-"""
-          if old not in quality:
-              raise SystemExit('Expected legacy operation link quality checks were not found')
-          workflow.write_text(quality.replace(old, new))
+          grep -Fq 'aria-modal="true"' src/components/business/OperationBusinessLinkSheet.tsx
+'''
+          if legacy not in quality:
+              raise SystemExit('Legacy portal quality checks not found')
+          quality_path.write_text(quality.replace(legacy, portal, 1), encoding='utf-8')
           PY
 
           rm .github/workflows/operation-business-link-portal-implementation.yml
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build application
-        run: npm run build
-
-      - name: Commit implementation
+      - name: Commit completed implementation
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/Details.tsx src/components/business/OperationBusinessLinkSheet.tsx .github/workflows/business-management-sections-quality.yml .github/workflows/operation-business-link-portal-implementation.yml
-          git commit -m "Fix operation business linking with a body portal"
+          git add -A
+          git commit -m "Wire operation business linking through a body portal"
           git push origin HEAD:feature/operation-business-link-portal
