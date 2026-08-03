@@ -1,6 +1,8 @@
 from pathlib import Path
 import re
 
+# One-shot source transformation executed by the registered workflow.
+
 
 def main() -> None:
     details_path = Path('src/components/Details.tsx')
