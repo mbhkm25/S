@@ -1,13 +1,8 @@
 name: Wire operation business link portal
 
 on:
-  push:
-    branches:
-      - feature/operation-business-link-portal
-    paths:
-      - '.github/workflows/operation-business-link-portal-implementation.yml'
-      - '.github/scripts/wire-operation-portal.py'
-  pull_request:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
     branches:
       - feature/operation-business-link-portal
     paths:
