@@ -18,7 +18,11 @@ const LOGOS = [
   { names: ['القطيبي'], paths: ['/assets/financial-entities/alqutaibi.png', '/assets/financial-entities/alqutaibi.webp'] }
 ];
 
-const CASHIER_TABS: Array<{ value: PaymentInboxView; label: string }> = [{ value: 'new', label: 'جديدة' }, { value: 'mine', label: 'لدي' }];
+const CASHIER_TABS: Array<{ value: PaymentInboxView; label: string }> = [
+  { value: 'new', label: 'جديدة' },
+  { value: 'mine', label: 'لدي' },
+  { value: 'completed', label: 'مكتملة' }
+];
 const ADMIN_TABS: Array<{ value: PaymentInboxView; label: string }> = [
   { value: 'team_active', label: 'لدى الفريق' },
   { value: 'review', label: 'تحتاج مراجعة' },
@@ -158,11 +162,11 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
           <select value={businessId} onChange={event => setBusinessId(event.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-900 outline-none" aria-label="اختيار النشاط التجاري">{contexts.map(item => <option key={item.business_id} value={item.business_id}>{item.business_name}</option>)}</select>
           {!admin && activeContext?.is_supervisor && <a href={buildInboxUrl(true, businessId)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-black text-white"><ShieldCheck className="h-4 w-4" /> إدارة وارد المدفوعات</a>}
         </div>
-        <div className={`mt-3 grid gap-2 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'}`}>{tabs.map(tab => <button key={tab.value} type="button" onClick={() => setView(tab.value)} className={`h-10 rounded-2xl px-3 text-xs font-black transition ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}>{tab.label}</button>)}</div>
+        <div className={`mt-3 grid gap-2 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>{tabs.map(tab => <button key={tab.value} type="button" onClick={() => setView(tab.value)} className={`h-10 rounded-2xl px-3 text-xs font-black transition ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}>{tab.label}</button>)}</div>
       </header>
 
       {error && <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
-      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">لا توجد عمليات في هذا القسم</h2><p className="mt-1 text-[10px] text-slate-400">ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.</p></div> : (
+      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">{view === 'completed' ? 'لا توجد عمليات مكتملة' : 'لا توجد عمليات في هذا القسم'}</h2><p className="mt-1 text-[10px] text-slate-400">{view === 'completed' ? 'ستظهر هنا العمليات التي أكملتها واعتمدتها لهذا النشاط.' : 'ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.'}</p></div> : (
         <div className="space-y-3">{items.map(item => {
           const entity = item.financial_entity || 'جهة مالية أخرى';
           const identity = item.account_holder_name || item.receiver_name || item.business_name || 'عملية مالية واردة';
