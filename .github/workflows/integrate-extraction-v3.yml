@@ -30,6 +30,14 @@ jobs:
           ref: feature/operation-details-v3-extraction-preview-hardening
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
       - name: Apply extraction v3.1 integration
         run: python .github/scripts/integrate-extraction-v3.py
 
