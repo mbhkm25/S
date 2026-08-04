@@ -3,19 +3,31 @@ export type ExtractionRecord = Record<string, unknown>;
 export type CoreExtractionAssessment = {
   complete: boolean;
   score: number;
+  confidence: number;
+  required: string[];
   missing: string[];
   escalationReasons: string[];
 };
 
-export const EXTRACTION_PIPELINE_VERSION = 'operation-extraction-v3';
-export const PRIMARY_EXTRACTION_MODEL = 'gemini-3.6-flash';
-export const ESCALATION_EXTRACTION_MODEL = 'gemini-2.5-pro';
-export const CORE_EXTRACTION_FIELDS = [
+export const EXTRACTION_PIPELINE_VERSION = 'operation-extraction-v3.1';
+
+const BASE_REQUIRED_FIELDS = [
   'financial_entity',
   'amount',
   'currency',
+  'transaction_type',
+] as const;
+
+const RECEIPT_REQUIRED_FIELDS = [
+  'receiver_name',
   'receiver_account',
   'reference_number',
+  'transaction_datetime',
+] as const;
+
+export const CORE_EXTRACTION_FIELDS = [
+  ...BASE_REQUIRED_FIELDS,
+  ...RECEIPT_REQUIRED_FIELDS,
 ] as const;
 
 export const REFERENCE_600_GROUND_TRUTH = Object.freeze({
@@ -30,6 +42,43 @@ export const REFERENCE_600_GROUND_TRUTH = Object.freeze({
 
 function clean(value: unknown): string {
   return String(value ?? '').trim();
+}
+
+function isMissing(value: unknown): boolean {
+  const normalized = clean(value).toLowerCase();
+  return value === null || value === undefined || normalized === '' || normalized === 'unknown' || normalized === 'null';
+}
+
+function comparable(value: unknown): string {
+  return clean(value)
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function confidenceFor(record: ExtractionRecord, field?: string): number {
+  const fieldMap = record.field_confidences && typeof record.field_confidences === 'object'
+    ? record.field_confidences as Record<string, unknown>
+    : {};
+  const direct = field ? Number(fieldMap[field]) : Number(record.confidence_score);
+  if (Number.isFinite(direct) && direct >= 0 && direct <= 1) return direct;
+  return 0;
+}
+
+function requiredFieldsFor(record: ExtractionRecord): string[] {
+  const template = clean(record.document_template);
+  const transactionType = clean(record.transaction_type);
+  const direction = clean(record.transaction_direction);
+  const receiptLike = [
+    'single_receipt',
+    'wallet_receipt',
+    'transfer_receipt',
+  ].includes(template) || ['deposit', 'transfer', 'payment', 'withdrawal'].includes(transactionType) || ['incoming', 'outgoing'].includes(direction);
+
+  return receiptLike
+    ? [...BASE_REQUIRED_FIELDS, ...RECEIPT_REQUIRED_FIELDS]
+    : [...BASE_REQUIRED_FIELDS];
 }
 
 export function stripJsonFences(value: string): string {
@@ -104,12 +153,19 @@ export function buildSyntaxRetryPrompt(basePrompt: string): string {
 }
 
 export function assessCoreExtraction(record: ExtractionRecord): CoreExtractionAssessment {
-  const missing = CORE_EXTRACTION_FIELDS.filter((field) => {
-    const value = record[field];
-    return value === null || value === undefined || clean(value) === '' || clean(value) === 'unknown';
-  });
-  const score = (CORE_EXTRACTION_FIELDS.length - missing.length) / CORE_EXTRACTION_FIELDS.length;
-  const confidence = Number(record.confidence_score ?? 0);
+  const required = requiredFieldsFor(record);
+  const missing = required.filter((field) => isMissing(record[field]));
+  const score = (required.length - missing.length) / required.length;
+  const fieldConfidences = required
+    .filter((field) => !isMissing(record[field]))
+    .map((field) => confidenceFor(record, field))
+    .filter((value) => value > 0);
+  const overall = confidenceFor(record);
+  const confidence = overall > 0
+    ? overall
+    : fieldConfidences.length
+      ? fieldConfidences.reduce((sum, value) => sum + value, 0) / fieldConfidences.length
+      : score;
   const escalationReasons: string[] = [];
 
   if (missing.length) escalationReasons.push(`missing_core_fields:${missing.join(',')}`);
@@ -125,13 +181,15 @@ export function assessCoreExtraction(record: ExtractionRecord): CoreExtractionAs
   return {
     complete: missing.length === 0 && confidence >= 0.82,
     score,
+    confidence,
+    required,
     missing,
     escalationReasons,
   };
 }
 
 export function coreExtractionScore(record: ExtractionRecord): number {
-  return assessCoreExtraction(record).score * CORE_EXTRACTION_FIELDS.length;
+  return assessCoreExtraction(record).score;
 }
 
 export function shouldEscalateExtraction(record: ExtractionRecord): boolean {
@@ -145,13 +203,16 @@ export function buildExtractionV3Rules(): string {
 export function buildDeterministicCandidateRules(): string[] {
   return [
     'لا تخترع أي قيمة غير ظاهرة في المستند.',
+    'اقرأ المستند كاملًا، لكن اختر عملية مالية واحدة فقط عند وجود عملية واحدة واضحة.',
     'القيمة المحاطة بعلامتي # والمجاورة لوصف المبلغ مرشح مبلغ قوي.',
-    'كلمة سعودي أو ريال سعودي تطبع إلى SAR.',
-    'الرقم المسمى المرجع أو رقم الإشعار هو المرجع، وليس حساب المستلم.',
-    'حساب المستلم يفضّل من عبارة إلى حساب أو رقم الحساب المرتبط باسم المستلم.',
+    'كلمة سعودي أو ريال سعودي تطبع إلى SAR، ويمني إلى YER، ودولار إلى USD.',
+    'الرقم المسمى المرجع أو رقم الإشعار هو reference_number، وليس حساب المستلم.',
+    'حساب المستلم يفضّل من عبارة إلى حساب أو حساب المستفيد أو رقم الحساب المرتبط باسم المستلم.',
+    'اسم المستلم هو الاسم المرتبط مباشرة بحساب المستفيد أو بعبارة تم الإيداع إلى حساب.',
     'لا تستخدم رقم جواز أو بطاقة أو هوية أو حساب المرسل كحساب المستلم.',
-    'في ملف 600 المرجعي، 254073867 هو حساب المستلم و8-226242876 هو المرجع.',
-    'استخدم null عند عدم اليقين وسجل الدليل والثقة لكل حقل.',
+    'transaction_type يجب أن يكون transfer أو deposit أو withdrawal أو payment فقط.',
+    'transaction_datetime يجب أن يكون ISO-8601 محليًا بصيغة YYYY-MM-DDTHH:mm:ss عند ظهور التاريخ والوقت.',
+    'استخدم null عند عدم وجود دليل بصري، وسجل الدليل والثقة لكل حقل.',
   ];
 }
 
@@ -160,11 +221,11 @@ export function benchmarkAgainstReference600(record: ExtractionRecord) {
   const checks = {
     amount: Number(record.amount) === expected.amount,
     currency: clean(record.currency).toUpperCase() === expected.currency,
-    receiver_name: clean(record.receiver_name).replace(/\s+/g, ' ') === expected.receiver_name,
-    receiver_account: clean(record.receiver_account) === expected.receiver_account,
-    reference_number: clean(record.reference_number) === expected.reference_number,
-    transaction_type: clean(record.transaction_type) === expected.transaction_type,
-    transaction_datetime: clean(record.transaction_datetime).startsWith('2026-05-14T20:04'),
+    receiver_name: comparable(record.receiver_name) === comparable(expected.receiver_name),
+    receiver_account: comparable(record.receiver_account) === expected.receiver_account,
+    reference_number: comparable(record.reference_number) === expected.reference_number,
+    transaction_type: comparable(record.transaction_type) === expected.transaction_type,
+    transaction_datetime: comparable(record.transaction_datetime).startsWith('2026-05-14t20:04'),
   };
   const passed = Object.values(checks).filter(Boolean).length;
   return {
@@ -177,34 +238,77 @@ export function benchmarkAgainstReference600(record: ExtractionRecord) {
 }
 
 export function reconcileExtraction(primary: ExtractionRecord, escalation?: ExtractionRecord | null) {
+  const primaryAssessment = assessCoreExtraction(primary);
   if (!escalation) {
     return {
       selected: primary,
       source: 'primary',
       conflicts: [],
-      primaryAssessment: assessCoreExtraction(primary),
+      unresolvedConflicts: [],
+      primaryAssessment,
+      finalAssessment: primaryAssessment,
+      reviewRequired: !primaryAssessment.complete,
     };
   }
 
-  const conflicts: Array<{ field: string; primary: unknown; escalation: unknown }> = [];
-  for (const field of CORE_EXTRACTION_FIELDS) {
+  const escalationAssessment = assessCoreExtraction(escalation);
+  const selected: ExtractionRecord = {
+    ...primary,
+    field_confidences: {
+      ...((primary.field_confidences as Record<string, unknown>) || {}),
+      ...((escalation.field_confidences as Record<string, unknown>) || {}),
+    },
+    field_evidence: {
+      ...((primary.field_evidence as Record<string, unknown>) || {}),
+      ...((escalation.field_evidence as Record<string, unknown>) || {}),
+    },
+  };
+  const conflicts: Array<{ field: string; primary: unknown; escalation: unknown; selected: unknown }> = [];
+  const unresolvedConflicts: string[] = [];
+  const candidateFields = new Set([...Object.keys(primary), ...Object.keys(escalation)]);
+
+  for (const field of candidateFields) {
+    if (field === 'field_confidences' || field === 'field_evidence') continue;
     const first = primary[field];
     const second = escalation[field];
-    if (first != null && second != null && clean(first) !== clean(second)) {
-      conflicts.push({ field, primary: first, escalation: second });
+    if (isMissing(first) && !isMissing(second)) {
+      selected[field] = second;
+      continue;
+    }
+    if (isMissing(second)) continue;
+    if (comparable(first) === comparable(second)) continue;
+
+    const firstConfidence = confidenceFor(primary, field);
+    const secondConfidence = confidenceFor(escalation, field);
+    const chooseEscalation = secondConfidence >= firstConfidence + 0.08 || isMissing(first);
+    selected[field] = chooseEscalation ? second : first;
+    conflicts.push({ field, primary: first, escalation: second, selected: selected[field] });
+
+    if (CORE_EXTRACTION_FIELDS.includes(field as typeof CORE_EXTRACTION_FIELDS[number])) {
+      const confidenceGap = Math.abs(secondConfidence - firstConfidence);
+      if (confidenceGap < 0.15 || Math.max(firstConfidence, secondConfidence) < 0.88) {
+        unresolvedConflicts.push(field);
+      }
     }
   }
 
-  const primaryAssessment = assessCoreExtraction(primary);
-  const escalationAssessment = assessCoreExtraction(escalation);
-  const selected = escalationAssessment.score > primaryAssessment.score ? escalation : primary;
+  const selectedConfidence = Math.max(
+    confidenceFor(primary),
+    confidenceFor(escalation),
+    primaryAssessment.confidence,
+    escalationAssessment.confidence,
+  );
+  selected.confidence_score = selectedConfidence;
+  const finalAssessment = assessCoreExtraction(selected);
 
   return {
     selected,
-    source: selected === escalation ? 'escalation' : 'primary',
+    source: 'reconciled',
     conflicts,
+    unresolvedConflicts,
     primaryAssessment,
     escalationAssessment,
-    reviewRequired: conflicts.length > 0,
+    finalAssessment,
+    reviewRequired: !finalAssessment.complete || unresolvedConflicts.length > 0,
   };
 }
