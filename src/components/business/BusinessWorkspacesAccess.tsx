@@ -15,8 +15,10 @@ type WorkspacePermissions = {
 type WorkspaceCounts = {
   new?: number;
   mine?: number;
+  team_active?: number;
   review_required?: number;
   completed_today?: number;
+  open_total?: number;
 };
 
 export type BusinessWorkspaceContext = {
@@ -61,6 +63,10 @@ function workspaceUrl(businessId: string): string {
 
 function countLabel(value: number | undefined): string {
   return toLatinDigits(String(Number(value || 0)));
+}
+
+function workspaceCountLabel(count: number): string {
+  return count === 1 ? 'مساحة عمل' : 'مساحات عمل';
 }
 
 export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
@@ -137,8 +143,9 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
           <p className="mt-1 text-[9px] leading-5 text-slate-500">كل نشاط تملكه أو ترتبط به كعضو فريق يظهر هنا، مع صلاحياتك الفعلية.</p>
         </div>
         <div className="shrink-0 text-left">
-          <strong className="block text-base text-slate-950">{countLabel(totals.new)}</strong>
-          <span className="text-[8px] font-bold text-slate-400">جديدة</span>
+          <strong className="block text-base text-slate-950">{countLabel(items.length)}</strong>
+          <span className="block text-[8px] font-bold text-slate-400">{workspaceCountLabel(items.length)}</span>
+          <span className="mt-1 block whitespace-nowrap text-[8px] font-bold text-slate-500">جديدة: {countLabel(totals.new)} · لدي: {countLabel(totals.mine)}</span>
         </div>
       </header>
 
@@ -170,11 +177,7 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
           );
 
           return canView ? (
-            <a
-              key={workspace.business_id}
-              href={workspaceUrl(workspace.business_id)}
-              className="group flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50/80 p-3.5 text-right transition active:scale-[0.99] active:bg-slate-100"
-            >
+            <a key={workspace.business_id} href={workspaceUrl(workspace.business_id)} className="group flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50/80 p-3.5 text-right transition active:scale-[0.99] active:bg-slate-100">
               {content}
             </a>
           ) : (
