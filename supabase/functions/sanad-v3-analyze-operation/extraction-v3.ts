@@ -321,6 +321,13 @@ export function assessCoreExtraction(record: ExtractionRecord): CoreExtractionAs
       : score;
   const escalationReasons: string[] = [];
   const conflicts = identifierConflicts(record);
+  const selectedType = selectedIdentifier?.type ?? null;
+  const selectedValue = selectedIdentifier?.value ?? '';
+  const receiverScalar = numericIdentifier(record.receiver_account);
+  const receiverEvidence = comparable((record.field_evidence as Record<string, unknown> | undefined)?.receiver_account);
+  const identityOnlyReceiver = Boolean(selectedIdentifier)
+    && ['national_id', 'passport_number'].includes(selectedType || '')
+    && (receiverScalar === selectedValue || /(^|\s)(بط|بطاقة|هوية|ج|جواز)(\s|$)/.test(receiverEvidence));
 
   if (missing.length) escalationReasons.push(`missing_core_fields:${missing.join(',')}`);
   if (!selectedIdentifier) escalationReasons.push('no_unique_financial_identifier');
@@ -330,12 +337,13 @@ export function assessCoreExtraction(record: ExtractionRecord): CoreExtractionAs
     escalationReasons.push('unknown_template_or_entity');
   }
   if (conflicts.length > 0) escalationReasons.push('financial_identity_conflict');
+  if (identityOnlyReceiver) escalationReasons.push('identity_only_receiver_requires_account_recovery');
   if (Array.isArray(record.ai_flags) && record.ai_flags.some((flag) => /conflict|ambiguous|identifier/i.test(clean(flag)))) {
     escalationReasons.push('identifier_conflict');
   }
 
   return {
-    complete: missing.length === 0 && confidence >= 0.82 && conflicts.length === 0,
+    complete: missing.length === 0 && confidence >= 0.82 && conflicts.length === 0 && !identityOnlyReceiver,
     score,
     confidence,
     required,

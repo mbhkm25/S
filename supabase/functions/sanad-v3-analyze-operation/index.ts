@@ -783,6 +783,8 @@ function buildTargetedRecoveryPrompt(primary: Record<string, unknown>, reasons: 
     "أعد JSON فقط وفق المخطط. هذه مراجعة مالية مستهدفة وليست تلخيصًا.",
     "استخرج الحقول الجوهرية من المستند الأصلي نفسه، ولا تعتمد على الملخص النصي وحده.",
     "صحح الحقول الناقصة أو الخاطئة فقط، ولا تخترع قيمة غير ظاهرة.",
+    "إذا كان معرّف المستلم الحالي بطاقة أو هوية أو جوازًا، فابحث في سطر المستلم والأسطر المجاورة عن رقم الحساب المالي المستقل، خصوصًا الرقم المسبوق بكلمة رقم أو حساب.",
+    "لا تُعد بط أو بطاقة أو هوية أو جواز حسابًا ماليًا، ولا تنهِ المراجعة قبل فحص وجود financial_account_number منفصل للطرف المستلم.",
     `أسباب المراجعة: ${reasons.join(" | ") || "quality_gate"}`,
     `النتيجة الأولية للمقارنة: ${JSON.stringify(compactPrimary)}`,
     buildExtractionV3Rules(),
@@ -1290,7 +1292,9 @@ Deno.serve(async (req: Request) => {
           sanad_attention_points: primaryNormalized.sanad_attention_points,
         });
         reconciliation = reconcileExtraction(primaryNormalized, recoveryCandidate);
-        normalized = reconciliation.selected as typeof normalized;
+        // Re-run canonical normalization so the compatibility projection follows
+        // the reconciled party identifiers rather than stale scalar fields.
+        normalized = normalizeExtracted(reconciliation.selected);
         await recordSpan({
           operationId: operation.id,
           runId,
@@ -1372,6 +1376,9 @@ Deno.serve(async (req: Request) => {
       transaction_type: normalized.transaction_type,
       amount: normalized.amount,
       currency: normalized.currency,
+      receiver_name: normalized.receiver_name,
+      receiver_account: normalized.receiver_account,
+      receiver_identifier_type: normalized.receiver_identifier_type,
       reference_number: normalized.reference_number,
       transaction_datetime: normalized.transaction_datetime,
       confidence_score: normalized.confidence_score,
@@ -1429,6 +1436,11 @@ Deno.serve(async (req: Request) => {
         model: GEMINI_MODEL,
         attempts: result.attempts,
         schema_enforced: true,
+        extraction_pipeline_version: EXTRACTION_PIPELINE_VERSION,
+        quality_complete: finalAssessment.complete,
+        review_required: reviewRequired,
+        recovery_used: Boolean(recoveryResult),
+        selected_identifier: finalAssessment.selectedIdentifier,
       },
     });
 
