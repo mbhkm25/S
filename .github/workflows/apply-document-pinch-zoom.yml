@@ -1,0 +1,57 @@
+name: Apply document pinch zoom
+
+on:
+  push:
+    branches:
+      - fix/document-preview-pinch-zoom
+    paths:
+      - '.github/workflows/apply-document-pinch-zoom.yml'
+      - '.github/scripts/apply-document-pinch-zoom.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/document-preview-pinch-zoom
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply pinch zoom patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/apply-document-pinch-zoom.py
+          rm .github/scripts/apply-document-pinch-zoom.py
+
+      - name: Validate interaction implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'handlePreviewPointerDown' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q "touchAction: 'none'" src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'MAX_PREVIEW_ZOOM = 4' src/features/operations/OperationDetailsRuntimeV2.tsx
+          npx tsc --noEmit
+          npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add pinch zoom and pan to document preview"
+          git pull --rebase origin fix/document-preview-pinch-zoom
+          git push origin HEAD:fix/document-preview-pinch-zoom
