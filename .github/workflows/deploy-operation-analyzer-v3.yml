@@ -6,11 +6,11 @@ on:
       - main
     paths:
       - '.github/workflows/deploy-operation-analyzer-v3.yml'
-      - '.github/scripts/fix-operation-analyzer-deno-narrowing.py'
       - 'supabase/functions/sanad-v3-analyze-operation/**'
+      - 'supabase/migrations/**operation_analysis_contract**'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   deploy:
@@ -20,9 +20,6 @@ jobs:
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feature/operation-details-v3-extraction-preview-hardening
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -36,15 +33,6 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Apply Deno narrowing correction
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f .github/scripts/fix-operation-analyzer-deno-narrowing.py ]; then
-            python .github/scripts/fix-operation-analyzer-deno-narrowing.py
-            rm -f .github/scripts/fix-operation-analyzer-deno-narrowing.py
-          fi
-
       - name: Validate analyzer
         shell: bash
         run: |
@@ -54,19 +42,6 @@ jobs:
           grep -q 'identifier is NonNullable<ReturnType<typeof normalizePartyIdentifier>>' supabase/functions/sanad-v3-analyze-operation/index.ts
           deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
           npx tsc --noEmit
-
-      - name: Commit correction
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "Fix Deno narrowing in operation analyzer"
-            git pull --rebase origin feature/operation-details-v3-extraction-preview-hardening
-            git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
-          fi
 
       - uses: supabase/setup-cli@v1
         with:
