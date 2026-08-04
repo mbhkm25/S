@@ -11,7 +11,7 @@ type PreviewJob = {
   source_sha256?: string | null;
 };
 
-type ServiceClient = ReturnType<typeof createClient>;
+type ServiceClient = any;
 type Bounds = { x: number; y: number; width: number; height: number };
 type PreviewResult = { bytes: Uint8Array; width: number; height: number; metadata: Record<string, unknown> };
 
@@ -66,7 +66,7 @@ async function pngToWebp(png: Uint8Array, width: number, height: number) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#fff}img{display:block;width:${width}px;height:${height}px}</style></head><body><img id="source" src="source.png"><script>source.onload=()=>window.__READY__=true</script></body></html>`;
   const form = new FormData();
   form.append("files", new Blob([html], { type: "text/html;charset=utf-8" }), "index.html");
-  form.append("files", new Blob([png], { type: "image/png" }), "source.png");
+  form.append("files", new Blob([png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer], { type: "image/png" }), "source.png");
   for (const [key, value] of Object.entries({ width: String(width), height: String(height), clip: "true", deviceScaleFactor: "1", format: "webp", omitBackground: "false", optimizeForSpeed: "true", waitDelay: "30ms", waitForExpression: "window.__READY__ === true", failOnResourceLoadingFailed: "true" })) form.append(key, value);
   const bytes = await gotenberg("/forms/chromium/screenshot/html", form, 20000);
   if (!isWebp(bytes)) throw new Error("webp_encoding_stage_invalid");
@@ -77,7 +77,7 @@ function luminance(r: number, g: number, b: number) {
   return (r * 299 + g * 587 + b * 114) / 1000;
 }
 
-function hasContent(bitmap: Uint8Array, canvasWidth: number, x: number, y: number) {
+function hasContent(bitmap: Uint8Array | Uint8ClampedArray, canvasWidth: number, x: number, y: number) {
   const i = (y * canvasWidth + x) * 4;
   const r = bitmap[i], g = bitmap[i + 1], b = bitmap[i + 2], a = bitmap[i + 3];
   return a > 20 && (luminance(r, g, b) < 238 || Math.max(r, g, b) - Math.min(r, g, b) > 16);
@@ -172,7 +172,11 @@ async function buildImagePreview(source: Uint8Array, mime: string): Promise<Prev
 }
 
 async function recordFailure(service: ServiceClient, token: string, job: PreviewJob, message: string) {
-  await service.rpc("fail_operation_media_preview_job", { p_worker_token: token, p_job_id: job.job_id, p_error: message.slice(0, 500) }).catch(() => null);
+  try {
+    await service.rpc("fail_operation_media_preview_job", { p_worker_token: token, p_job_id: job.job_id, p_error: message.slice(0, 500) });
+  } catch {
+    // Failure telemetry must not hide the original preview error.
+  }
 }
 
 async function processJob(service: ServiceClient, token: string, job: PreviewJob) {
