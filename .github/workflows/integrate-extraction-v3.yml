@@ -40,14 +40,13 @@ jobs:
           ! grep -Rqi 'Saudi_Riyal_Symbol\|symbolAsset' src .github/workflows docs
           npx tsc --noEmit
 
-      - name: Remove temporary integration files and obsolete workflows
+      - name: Remove temporary integration files
         shell: bash
         run: |
           rm -f .github/scripts/integrate-extraction-v3.py
           rm -f .github/scripts/upgrade-extraction-v32.py
           rm -f .github/workflows/integrate-extraction-v3.yml
           rm -f .github/workflows/bundle-official-sar-symbol.yml
-          rm -f .github/workflows/deploy-operation-analyzer-v3.yml
 
       - name: Commit integrated engine
         shell: bash
