@@ -30,6 +30,8 @@ jobs:
           set -euo pipefail
           test -n "${SUPABASE_ACCESS_TOKEN:-}"
 
+      # This deployment is intentionally triggered from a human/app-authored commit
+      # after the integration workflow creates the final analyzer commit.
       - name: Deploy analyzer preserving custom authentication
         shell: bash
         run: |
