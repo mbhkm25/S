@@ -7,12 +7,14 @@ on:
     paths:
       - '.github/workflows/apply-document-pinch-zoom.yml'
       - '.github/scripts/apply-document-pinch-zoom.py'
+      - '.github/scripts/fix_pinch_types.py'
   pull_request:
     branches:
       - main
     paths:
       - '.github/workflows/apply-document-pinch-zoom.yml'
       - '.github/scripts/apply-document-pinch-zoom.py'
+      - '.github/scripts/fix_pinch_types.py'
       - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
 
 permissions:
@@ -43,6 +45,10 @@ jobs:
             python .github/scripts/apply-document-pinch-zoom.py
             rm .github/scripts/apply-document-pinch-zoom.py
           fi
+          if [ -f .github/scripts/fix_pinch_types.py ]; then
+            python .github/scripts/fix_pinch_types.py
+            rm .github/scripts/fix_pinch_types.py
+          fi
 
       - name: Validate interaction implementation
         shell: bash
@@ -51,6 +57,7 @@ jobs:
           grep -q 'handlePreviewPointerDown' src/features/operations/OperationDetailsRuntimeV2.tsx
           grep -q "touchAction: 'none'" src/features/operations/OperationDetailsRuntimeV2.tsx
           grep -q 'MAX_PREVIEW_ZOOM = 4' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'ReactPointerEvent<HTMLDivElement>' src/features/operations/OperationDetailsRuntimeV2.tsx
           npx tsc --noEmit
           npm run build
 
