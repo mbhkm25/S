@@ -16,7 +16,7 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     arabicName: 'ريال سعودي',
     englishName: 'Saudi Riyal',
     symbol: 'ر.س',
-    symbolAsset: '/currencies/saudi-riyal-symbol.svg',
+    symbolAsset: 'https://www.sama.gov.sa/ar-sa/Currency/Documents/Saudi_Riyal_Symbol-2.svg',
     minorUnits: 2,
     accessibilityLabel: 'ريال سعودي',
   },
