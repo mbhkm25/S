@@ -6,6 +6,7 @@ import OperationEntryGate from './features/operations/OperationEntryGate';
 import OperationIdentityDetailsBanner from './features/operations/OperationIdentityDetailsBanner';
 import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
+import OperationCommandCenter from './features/operations/OperationCommandCenter';
 import './index.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <>
         <OperationEntryGate />
+        <OperationCommandCenter />
         <OperationIdentityDetailsBanner />
         <OperationDetailsActionIntent />
         <OperationDocumentPreviewEnhancer />

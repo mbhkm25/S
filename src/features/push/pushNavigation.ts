@@ -26,11 +26,7 @@ export function isSafeSlug(value: unknown): value is string {
   return typeof value === 'string' && SAFE_SLUG_PATTERN.test(value);
 }
 
-function getPayloadString(
-  payload: Record<string, unknown>,
-  keys: string[],
-  validator: (value: unknown) => value is string
-): string | null {
+function getPayloadString(payload: Record<string, unknown>, keys: string[], validator: (value: unknown) => value is string): string | null {
   for (const key of keys) {
     const value = payload[key];
     if (validator(value)) return value;
@@ -38,23 +34,29 @@ function getPayloadString(
   return null;
 }
 
-export function sanitizeActionPayload(
-  actionType: NotificationActionType,
-  payload: unknown
-): Record<string, string> {
+export function sanitizeActionPayload(actionType: NotificationActionType, payload: unknown): Record<string, string> {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
   const record = payload as Record<string, unknown>;
   if (actionType === 'operation_details') {
     const token = getPayloadString(record, ['public_token', 'token'], isSafePublicToken);
     return token ? { public_token: token } : {};
   }
+  if (actionType === 'business_operations') {
+    const businessId = getPayloadString(record, ['business_id'], isValidNotificationId);
+    const inboxId = getPayloadString(record, ['payment_inbox_id'], isValidNotificationId);
+    const surface = record.inbox_surface === 'payment-inbox-admin' ? 'payment-inbox-admin' : 'payment-inbox';
+    const inboxView = ['new','mine','team_active','review','completed','all'].includes(String(record.inbox_view || '')) ? String(record.inbox_view) : 'new';
+    return {
+      ...(businessId ? { business_id: businessId } : {}),
+      ...(inboxId ? { payment_inbox_id: inboxId } : {}),
+      inbox_surface: surface,
+      inbox_view: inboxView
+    };
+  }
   if (actionType === 'reports') {
     const reportToken = getPayloadString(record, ['report_token', 'token'], isSafePublicToken);
     const reportRequestId = getPayloadString(record, ['report_request_id', 'request_id'], isValidNotificationId);
-    return {
-      ...(reportToken ? { report_token: reportToken } : {}),
-      ...(reportRequestId ? { report_request_id: reportRequestId } : {})
-    };
+    return { ...(reportToken ? { report_token: reportToken } : {}), ...(reportRequestId ? { report_request_id: reportRequestId } : {}) };
   }
   if (actionType === 'business_public_profile') {
     const slug = getPayloadString(record, ['business_slug', 'slug'], isSafeSlug);
@@ -63,10 +65,7 @@ export function sanitizeActionPayload(
   return {};
 }
 
-export function getSafeNavigationTarget(
-  actionType: NotificationActionType,
-  payload: Record<string, unknown>
-): SafeNavigationTarget | null {
+export function getSafeNavigationTarget(actionType: NotificationActionType, payload: Record<string, unknown>): SafeNavigationTarget | null {
   switch (actionType) {
     case 'operation_details': {
       const token = getPayloadString(payload, ['public_token', 'token'], isSafePublicToken);
@@ -98,31 +97,28 @@ function normalizeBasePath(basePath: string): string {
   return safe.endsWith('/') ? safe : `${safe}/`;
 }
 
-export function buildSafeNotificationPath(
-  actionType: NotificationActionType,
-  payload: Record<string, unknown>,
-  notificationId: string | null,
-  basePath = '/'
-): string {
-  const target = getSafeNavigationTarget(actionType, payload) || { page: 'notifications' };
+export function buildSafeNotificationPath(actionType: NotificationActionType, payload: Record<string, unknown>, notificationId: string | null, basePath = '/'): string {
   const base = normalizeBasePath(basePath);
+  if (actionType === 'business_operations') {
+    const sanitized = sanitizeActionPayload(actionType, payload);
+    const params = new URLSearchParams({ view: sanitized.inbox_surface || 'payment-inbox' });
+    if (sanitized.business_id) params.set('business_id', sanitized.business_id);
+    if (sanitized.inbox_view) params.set('inbox_view', sanitized.inbox_view);
+    if (sanitized.payment_inbox_id) params.set('payment_inbox_id', sanitized.payment_inbox_id);
+    if (isValidNotificationId(notificationId)) params.set('notification', notificationId);
+    return `${base}business/manage/operations?${params.toString()}`;
+  }
+  const target = getSafeNavigationTarget(actionType, payload) || { page: 'notifications' };
   let path = `${base}notifications`;
   if (target.page === 'details' && target.token) path = `${base}v/${encodeURIComponent(target.token)}`;
   else if (target.page === 'report-view' && target.token) path = `${base}reports/view/${encodeURIComponent(target.token)}`;
-  else if (target.page === 'reports') {
-    path = `${base}reports`;
-    if (target.token) path += `?request=${encodeURIComponent(target.token)}`;
-  }
+  else if (target.page === 'reports') { path = `${base}reports`; if (target.token) path += `?request=${encodeURIComponent(target.token)}`; }
   else if (target.page === 'profile') path = `${base}profile`;
   else if (target.page === 'business-manage') path = `${base}business/manage`;
   else if (target.page === 'business-team') path = `${base}business/manage/team`;
   else if (target.page === 'business-operations') path = `${base}business/manage/operations`;
-  else if (target.page === 'public-business-profile' && target.token) {
-    path = `${base}b/${encodeURIComponent(target.token)}`;
-  }
-  if (isValidNotificationId(notificationId)) {
-    path += `${path.includes('?') ? '&' : '?'}notification=${encodeURIComponent(notificationId)}`;
-  }
+  else if (target.page === 'public-business-profile' && target.token) path = `${base}b/${encodeURIComponent(target.token)}`;
+  if (isValidNotificationId(notificationId)) path += `${path.includes('?') ? '&' : '?'}notification=${encodeURIComponent(notificationId)}`;
   return path;
 }
 
@@ -132,10 +128,5 @@ export function parseNotificationClickMessage(value: unknown): SanadNotification
   if (message.type !== 'SANAD_NOTIFICATION_CLICK' || !isNotificationActionType(message.actionType)) return null;
   const notificationId = isValidNotificationId(message.notificationId) ? message.notificationId : null;
   const actionPayload = sanitizeActionPayload(message.actionType, message.actionPayload);
-  return {
-    type: 'SANAD_NOTIFICATION_CLICK',
-    notificationId,
-    actionType: message.actionType,
-    actionPayload
-  };
+  return { type: 'SANAD_NOTIFICATION_CLICK', notificationId, actionType: message.actionType, actionPayload };
 }

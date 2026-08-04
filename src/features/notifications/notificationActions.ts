@@ -1,11 +1,10 @@
-import { getSafeNavigationTarget } from '../push/pushNavigation';
+import { getSafeNavigationTarget, isValidNotificationId } from '../push/pushNavigation';
 import { NotificationActionType } from './types';
 
-/**
- * Safely processes and routes notification action intents to the main app navigator.
- * Prevents arbitrary navigation and handles errors gracefully if payload values are missing or malformed.
- * Returns true if navigation was successfully executed, false otherwise.
- */
+function safeInboxSurface(value: unknown): 'payment-inbox' | 'payment-inbox-admin' {
+  return value === 'payment-inbox-admin' ? 'payment-inbox-admin' : 'payment-inbox';
+}
+
 export function handleNotificationAction(
   actionType: NotificationActionType,
   actionPayload: Record<string, unknown>,
@@ -13,6 +12,20 @@ export function handleNotificationAction(
   onError: (message: string) => void
 ): boolean {
   try {
+    if (actionType === 'business_operations') {
+      const businessId = typeof actionPayload.business_id === 'string' && isValidNotificationId(actionPayload.business_id)
+        ? actionPayload.business_id : null;
+      const surface = safeInboxSurface(actionPayload.inbox_surface);
+      const params = new URLSearchParams({ view: surface });
+      if (businessId) params.set('business_id', businessId);
+      if (typeof actionPayload.inbox_view === 'string') params.set('inbox_view', actionPayload.inbox_view);
+      if (typeof actionPayload.payment_inbox_id === 'string' && isValidNotificationId(actionPayload.payment_inbox_id)) {
+        params.set('payment_inbox_id', actionPayload.payment_inbox_id);
+      }
+      window.location.assign(`/business/manage/operations?${params.toString()}`);
+      return true;
+    }
+
     const target = getSafeNavigationTarget(actionType, actionPayload);
     if (!target || actionType === 'none') return false;
 
