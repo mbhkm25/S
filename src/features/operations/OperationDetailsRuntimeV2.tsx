@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
@@ -85,6 +86,28 @@ type PreviewResponse = {
 
 const TOKEN_PATTERN = /\/v\/([0-9a-fA-F-]{36})(?:\/|$)/;
 const ANALYSIS_POLL_MS = 3500;
+const MIN_PREVIEW_ZOOM = 1;
+const MAX_PREVIEW_ZOOM = 4;
+
+type PreviewPoint = { x: number; y: number };
+type PreviewGesture = {
+  distance: number;
+  center: PreviewPoint;
+  zoom: number;
+  pan: PreviewPoint;
+};
+
+function clampPreviewZoom(value: number) {
+  return Math.min(MAX_PREVIEW_ZOOM, Math.max(MIN_PREVIEW_ZOOM, value));
+}
+
+function pointerDistance(a: PreviewPoint, b: PreviewPoint) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function pointerCenter(a: PreviewPoint, b: PreviewPoint): PreviewPoint {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
 
 function currentToken() {
   return window.location.pathname.match(TOKEN_PATTERN)?.[1] || null;
@@ -173,7 +196,11 @@ export default function OperationDetailsRuntimeV2() {
   const [previewState, setPreviewState] = useState<PreviewState>('idle');
   const [fullscreen, setFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<PreviewPoint>({ x: 0, y: 0 });
   const hiddenRef = useRef(new Map<HTMLElement, string>());
+  const previewPointersRef = useRef(new Map<number, PreviewPoint>());
+  const previewGestureRef = useRef<PreviewGesture | null>(null);
+  const previewDragRef = useRef<{ point: PreviewPoint; pan: PreviewPoint } | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setToken((value) => currentToken() === value ? value : currentToken()), 300);
@@ -249,6 +276,15 @@ export default function OperationDetailsRuntimeV2() {
   }, [token]);
 
   useEffect(() => {
+    if (fullscreen) return;
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    previewPointersRef.current.clear();
+    previewGestureRef.current = null;
+    previewDragRef.current = null;
+  }, [fullscreen]);
+
+  useEffect(() => {
     if (!runtime || analysisState(runtime.operation.ai_status) === 'ready') return;
     const id = window.setInterval(() => { void fetchRuntime().then((data) => data && setRuntime(data)).catch(() => null); }, ANALYSIS_POLL_MS);
     return () => window.clearInterval(id);
@@ -272,6 +308,66 @@ export default function OperationDetailsRuntimeV2() {
   }, [token, runtime?.operation.id]);
 
   const refresh = useCallback(async () => { const data = await fetchRuntime(); if (data) setRuntime(data); }, [fetchRuntime]);
+
+  const updatePreviewZoom = useCallback((nextZoom: number) => {
+    const clamped = clampPreviewZoom(nextZoom);
+    setZoom(clamped);
+    if (clamped === 1) setPan({ x: 0, y: 0 });
+  }, []);
+
+  const handlePreviewPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = { x: event.clientX, y: event.clientY };
+    previewPointersRef.current.set(event.pointerId, point);
+    const points = Array.from(previewPointersRef.current.values()) as PreviewPoint[];
+    if (points.length >= 2) {
+      const [first, second] = points;
+      previewGestureRef.current = {
+        distance: Math.max(1, pointerDistance(first, second)),
+        center: pointerCenter(first, second),
+        zoom,
+        pan,
+      };
+      previewDragRef.current = null;
+    } else if (zoom > 1) {
+      previewDragRef.current = { point, pan };
+    }
+  }, [pan, zoom]);
+
+  const handlePreviewPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!previewPointersRef.current.has(event.pointerId)) return;
+    const point = { x: event.clientX, y: event.clientY };
+    previewPointersRef.current.set(event.pointerId, point);
+    const points = Array.from(previewPointersRef.current.values()) as PreviewPoint[];
+    if (points.length >= 2 && previewGestureRef.current) {
+      event.preventDefault();
+      const [first, second] = points;
+      const gesture = previewGestureRef.current;
+      const center = pointerCenter(first, second);
+      const nextZoom = clampPreviewZoom(gesture.zoom * (pointerDistance(first, second) / gesture.distance));
+      setZoom(nextZoom);
+      setPan({
+        x: gesture.pan.x + center.x - gesture.center.x,
+        y: gesture.pan.y + center.y - gesture.center.y,
+      });
+      return;
+    }
+    if (points.length === 1 && zoom > 1 && previewDragRef.current) {
+      event.preventDefault();
+      const drag = previewDragRef.current;
+      setPan({ x: drag.pan.x + point.x - drag.point.x, y: drag.pan.y + point.y - drag.point.y });
+    }
+  }, [zoom]);
+
+  const handlePreviewPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    previewPointersRef.current.delete(event.pointerId);
+    const points = Array.from(previewPointersRef.current.values()) as PreviewPoint[];
+    if (points.length < 2) previewGestureRef.current = null;
+    if (points.length === 1 && zoom > 1) previewDragRef.current = { point: points[0], pan };
+    else if (points.length === 0) previewDragRef.current = null;
+    if (zoom <= 1) setPan({ x: 0, y: 0 });
+  }, [pan, zoom]);
 
   const claim = async () => {
     if (!runtime?.inbox) return;
@@ -374,6 +470,6 @@ export default function OperationDetailsRuntimeV2() {
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="إجراءات العملية"><div className="mb-3"><h2 className="text-sm font-black text-slate-900">إجراءات العملية</h2><p className="mt-1 text-[10px] leading-5 text-slate-500">إجراءات ثابتة داخل الصفحة، وتختفي تلقائيًا عند الرجوع أو الانتقال.</p></div>{action}</section>
       </section>, host)}
 
-    {fullscreen && documentUrl ? createPortal(<div className="fixed inset-0 z-[220] flex flex-col bg-black/95" dir="rtl"><div className="flex items-center justify-between px-4 pb-3 pt-[calc(12px+env(safe-area-inset-top))] text-white"><div><p className="text-sm font-bold">معاينة المستند</p><p className="text-[10px] text-white/60">{previewState === 'ready' ? 'نسخة WebP كاملة' : 'المستند الأصلي'}</p></div><button onClick={() => setFullscreen(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10"><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-auto px-3 py-2"><div className="flex min-h-full items-center justify-center">{previewState === 'ready' || !mime.includes('pdf') ? <img src={documentUrl} alt="المستند" className="max-w-none origin-center object-contain transition-transform" style={{ width: `${Math.max(100, zoom * 100)}%`, transform: `scale(${zoom})` }} /> : <iframe src={documentUrl} title="المستند الأصلي" className="h-full min-h-[80dvh] w-full bg-white" />}</div></div>{previewState === 'ready' || !mime.includes('pdf') ? <div className="flex items-center justify-center gap-3 border-t border-white/10 bg-black/80 px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3"><button onClick={() => setZoom((value) => Math.max(.75, value - .25))} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"><ZoomOut className="h-5 w-5" /></button><span className="min-w-16 text-center text-xs font-bold text-white">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom((value) => Math.min(3, value + .25))} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white"><ZoomIn className="h-5 w-5" /></button></div> : null}</div>, document.body) : null}
+    {fullscreen && documentUrl ? createPortal(<div className="fixed inset-0 z-[220] flex flex-col bg-black/95" dir="rtl"><div className="flex items-center justify-between px-4 pb-3 pt-[calc(12px+env(safe-area-inset-top))] text-white"><div><p className="text-sm font-bold">معاينة المستند</p><p className="text-[10px] text-white/60">{previewState === 'ready' ? 'قرّب بإصبعين واسحب الصورة' : 'المستند الأصلي'}</p></div><button onClick={() => setFullscreen(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10"><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1 overflow-hidden px-3 py-2">{previewState === 'ready' || !mime.includes('pdf') ? <div className="flex h-full min-h-full touch-none select-none items-center justify-center overflow-hidden" style={{ touchAction: 'none' }} onPointerDown={handlePreviewPointerDown} onPointerMove={handlePreviewPointerMove} onPointerUp={handlePreviewPointerEnd} onPointerCancel={handlePreviewPointerEnd} onDoubleClick={() => updatePreviewZoom(zoom > 1 ? 1 : 2)}><img src={documentUrl} alt="المستند" draggable={false} className="max-h-full w-full max-w-full origin-center object-contain will-change-transform" style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`, transition: previewPointersRef.current.size ? 'none' : 'transform 120ms ease-out' }} /></div> : <iframe src={documentUrl} title="المستند الأصلي" className="h-full min-h-[80dvh] w-full bg-white" />}</div>{previewState === 'ready' || !mime.includes('pdf') ? <div className="flex items-center justify-center gap-3 border-t border-white/10 bg-black/80 px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3"><button onClick={() => updatePreviewZoom(zoom - .25)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white" aria-label="تصغير"><ZoomOut className="h-5 w-5" /></button><button onClick={() => updatePreviewZoom(1)} className="min-w-16 rounded-full px-3 py-2 text-center text-xs font-bold text-white" aria-label="إعادة الضبط">{Math.round(zoom * 100)}%</button><button onClick={() => updatePreviewZoom(zoom + .25)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white" aria-label="تكبير"><ZoomIn className="h-5 w-5" /></button></div> : null}</div>, document.body) : null}
   </>;
 }
