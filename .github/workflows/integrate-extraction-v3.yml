@@ -30,7 +30,7 @@ jobs:
           grep -q 'EXTRACTION_PIPELINE_VERSION' supabase/functions/sanad-v3-analyze-operation/index.ts
           grep -q 'targeted_recovery' supabase/functions/sanad-v3-analyze-operation/index.ts
           grep -q 'sanad_review_status' supabase/functions/sanad-v3-analyze-operation/index.ts
-          ! grep -Rqi 'Saudi_Riyal_Symbol\|symbolAsset' src .github/workflows docs || false
+          ! grep -Rqi 'Saudi_Riyal_Symbol\|symbolAsset' src .github/workflows docs
           npx tsc --noEmit
 
       - name: Remove temporary integration files and obsolete workflows
