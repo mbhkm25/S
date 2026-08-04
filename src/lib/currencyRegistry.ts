@@ -1,7 +1,7 @@
 export type CurrencyCode = 'SAR' | 'YER' | 'USD' | 'AED' | 'OMR';
 
 export type CurrencyPresentation = {
-  code: CurrencyCode;
+  code: CurrencyCode | null;
   arabicName: string;
   englishName: string;
   symbol: string;
@@ -15,8 +15,8 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'SAR',
     arabicName: 'ريال سعودي',
     englishName: 'Saudi Riyal',
-    symbol: 'SAR',
-    symbolAsset: '/currencies/sar-symbol.svg',
+    symbol: 'ر.س',
+    symbolAsset: 'https://www.sama.gov.sa/ar-sa/Currency/Documents/Saudi_Riyal_Symbol-2.svg',
     minorUnits: 2,
     accessibilityLabel: 'ريال سعودي',
   },
@@ -56,9 +56,7 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
 
 export function normalizeCurrencyCode(value: unknown): CurrencyCode | null {
   const code = String(value ?? '').trim().toUpperCase();
-  return Object.prototype.hasOwnProperty.call(REGISTRY, code)
-    ? (code as CurrencyCode)
-    : null;
+  return Object.prototype.hasOwnProperty.call(REGISTRY, code) ? (code as CurrencyCode) : null;
 }
 
 export function getCurrencyPresentation(value: unknown): CurrencyPresentation {
@@ -66,12 +64,12 @@ export function getCurrencyPresentation(value: unknown): CurrencyPresentation {
   if (code) return REGISTRY[code];
   const fallback = String(value ?? '').trim().toUpperCase() || '—';
   return {
-    code: 'USD',
-    arabicName: fallback,
+    code: null,
+    arabicName: fallback === '—' ? 'عملة غير محددة' : fallback,
     englishName: fallback,
     symbol: fallback,
     minorUnits: 2,
-    accessibilityLabel: fallback,
+    accessibilityLabel: fallback === '—' ? 'عملة غير محددة' : fallback,
   };
 }
 
