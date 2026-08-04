@@ -6,12 +6,12 @@ on:
       - main
     paths:
       - '.github/workflows/apply-operation-details-v4.yml'
-      - '.github/scripts/fix-preview-v5-types.py'
       - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
       - 'supabase/functions/sanad-operation-preview-worker/**'
+      - 'supabase/migrations/**operation_details_action_source**'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-and-deploy-preview:
@@ -21,9 +21,6 @@ jobs:
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: fix/operation-details-v4-preview-actions
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -37,15 +34,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply preview type correction
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f .github/scripts/fix-preview-v5-types.py ]; then
-            python .github/scripts/fix-preview-v5-types.py
-            rm .github/scripts/fix-preview-v5-types.py
-          fi
-
       - name: Validate frontend and worker
         shell: bash
         run: |
@@ -54,22 +42,10 @@ jobs:
           grep -q 'إجراءات العملية' src/features/operations/OperationDetailsRuntimeV2.tsx
           ! grep -q 'fixed inset-x-0 bottom-\[calc(68px' src/features/operations/OperationDetailsRuntimeV2.tsx
           grep -q 'content-crop-v5' supabase/functions/sanad-operation-preview-worker/index.ts
+          grep -q 'operation_details_runtime_v3' supabase/migrations/20260804181500_normalize_legacy_operation_details_action_source.sql
           deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
           npx tsc --noEmit
           npm run build
-
-      - name: Commit type correction
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "Fix preview v5 Deno types"
-            git pull --rebase origin fix/operation-details-v4-preview-actions
-            git push origin HEAD:fix/operation-details-v4-preview-actions
-          fi
 
       - uses: supabase/setup-cli@v1
         with:
