@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, Eye, FileText, Inbox, Loader2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, Eye, FileText, Inbox, Landmark, Loader2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { getPaymentInbox, getPaymentInboxContexts, getPaymentInboxProAccess, type PaymentInboxContext, type PaymentInboxItem, type PaymentInboxView } from '../../lib/paymentInboxApi';
 import { toLatinDigits } from '../../lib/digits';
 import ProUpgradeModal from '../ProUpgradeModal';
@@ -47,7 +47,17 @@ function currencyClass(currency?: string | null) {
 function EntityLogo({ entity }: { entity: string }) {
   const candidates = LOGOS.find(entry => entry.names.some(name => entity.includes(name)))?.paths || [];
   const [index, setIndex] = useState(0);
-  if (!candidates[index]) return <span className="text-[11px] font-black text-slate-400">{entity.slice(0, 2)}</span>;
+  if (!candidates[index]) {
+    return (
+      <span
+        className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 shadow-sm"
+        title="جهة مالية أخرى"
+        aria-label="جهة مالية أخرى"
+      >
+        <Landmark className="h-6 w-6" aria-hidden="true" />
+      </span>
+    );
+  }
   return <img src={candidates[index]} alt={`شعار ${entity}`} className="max-h-11 max-w-[72px] object-contain" onError={() => setIndex(value => value + 1)} />;
 }
 
@@ -154,7 +164,7 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
       {error && <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
       {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">لا توجد عمليات في هذا القسم</h2><p className="mt-1 text-[10px] text-slate-400">ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.</p></div> : (
         <div className="space-y-3">{items.map(item => {
-          const entity = item.financial_entity || 'جهة مالية';
+          const entity = item.financial_entity || 'جهة مالية أخرى';
           const identity = item.account_holder_name || item.receiver_name || item.business_name || 'عملية مالية واردة';
           const point = item.merchant_point || item.receiver_account;
           const canClaim = item.action_permissions?.can_claim === true;
