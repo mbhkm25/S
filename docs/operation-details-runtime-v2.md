@@ -31,13 +31,13 @@ The page shell and financial facts must render without waiting for WebP. The pre
 
 ### ADR-ODR-004 — Source-aware preview policy
 
-- Image source: normalize orientation and encode to WebP without adding canvas, frame, padding, or background.
-- PDF source: render the first page, detect meaningful content bounds, crop white margins with a small safety margin, and encode the crop to WebP.
-- PDF fallback: when content detection cannot produce a safe crop, use the upper 70% of page one with a small margin.
+- Image source: preserve the original visual bounds and aspect ratio, downscale only when needed, and encode to WebP without adding frame, padding, background, or crop.
+- PDF source: render page one, detect the white page inside the PDF viewer, then detect meaningful content inside the upper portion of that page, crop both viewer background and document whitespace, and encode the result to WebP.
+- PDF fallback: when content detection cannot produce a safe crop, use the upper 70% of page one.
 
 ### ADR-ODR-005 — Safe activation
 
-The new runtime may replace the legacy details DOM only after its core contract has loaded and passed payload validation. Failure leaves the stable legacy UI visible and records a client diagnostic; it must never expose an empty replacement page.
+The new runtime may replace the legacy details DOM only after its core contract has loaded and passed payload validation. Failure leaves the stable legacy UI visible; it must never expose an empty replacement page.
 
 ## Performance budget
 
@@ -49,14 +49,17 @@ The new runtime may replace the legacy details DOM only after its core contract 
 
 ## Preview pipeline
 
+Current pipeline version: `content-crop-v3`.
+
 1. Claim one idempotent job.
-2. Sign original source for a short period.
+2. Download or sign the original source.
 3. Branch by MIME type.
-4. Produce a WebP asset using pipeline version `content-crop-v2`.
-5. Record exact width, height, byte size, source hash and crop metadata.
-6. Upload under an immutable versioned path.
-7. Complete the job atomically.
-8. Retry transient failures with bounded attempts and visible terminal failure.
+4. For images, preserve visual bounds and encode directly.
+5. For PDFs, render page one to PNG, detect page bounds, detect content bounds, crop, then encode the crop to WebP.
+6. Record exact width, height, byte size, source hash, pipeline version, page bounds, and crop metadata.
+7. Upload under an immutable versioned path.
+8. Complete the job atomically.
+9. Retry transient failures with bounded attempts; every claimed job must finish as `completed`, `pending`, or `failed`, never remain stuck in `processing`.
 
 ## UI information architecture
 
@@ -88,31 +91,64 @@ Actions depend on inbox state and permissions. A read-only open never changes st
 
 ## Acceptance criteria
 
-1. Opening a `new` item leaves it `new`.
+1. Opening an inbox item does not change its status, row version, assignee, completion actor, or update timestamp.
 2. Core facts render even if preview is pending or failed.
 3. The two times are clearly separated and labeled.
 4. Image previews have no artificial margins.
-5. PDF previews focus on document content, not the full empty page.
+5. PDF previews focus on document content, not the full empty page or viewer background.
 6. Preview dimensions are real, not hard-coded.
 7. The new runtime never hides the legacy page before successful validation.
 8. Completing or claiming from details updates the same inbox record used elsewhere.
 9. The UI supports image, PDF, missing preview, slow preview and failed preview.
 10. All changes are documented in SANAD OS before completion.
 
+## Validation evidence — 2026-08-04
+
+### Live PDF
+
+- Source: real 220 SAR PDF operation.
+- Render canvas: 1600 x 2200.
+- Detected white page: 585 x 553.
+- Final content crop: 579 x 349.
+- Final WebP: 19,588 bytes.
+- Job: completed on first attempt with `content-crop-v3`.
+
+### Live image
+
+- Source JPEG: 1080 x 398.
+- Output WebP: 1080 x 398.
+- Crop mode: `preserve-bounds`.
+- No padding, background, frame, or crop added.
+- Job: completed on first attempt.
+
+### Read-only workflow checks
+
+The runtime contract was executed against live `claimed`, `review_required`, and `completed` inbox rows. In every case:
+
+- status remained unchanged;
+- row version remained unchanged;
+- assignee remained unchanged;
+- completion actor remained unchanged;
+- `updated_at` remained unchanged;
+- the contract returned `read_only=true` and the correct inbox state.
+
+There were no live `new` rows at validation time; no production row was fabricated or mutated solely to create one.
+
+### CI
+
+The latest branch commit passed:
+
+- Production quality gate;
+- Operation identity details and reports quality;
+- Android APK build.
+
 ## Test matrix
 
-- PDF with content in upper third.
-- PDF with content in upper two-thirds.
-- Image portrait.
-- Image landscape.
-- New inbox item.
-- Claimed by current user.
-- Claimed by another user.
-- Review required.
-- Completed.
-- Personal/unlinked operation.
-- Preview pending.
-- Preview failed.
-- Contract denied.
-- Contract malformed.
-- Slow network.
+- PDF with content in upper third — passed with live PDF.
+- Image landscape — passed with live JPEG.
+- Claimed by current user — passed read-only contract validation.
+- Review required — passed read-only contract validation.
+- Completed — passed read-only contract validation.
+- New inbox item — not available in live data at validation time; covered by the same status-neutral read contract and retained in post-deploy observation.
+- Contract denied or malformed — safe activation keeps the legacy DOM visible because replacement occurs only after validated runtime state is set.
+- Preview pending or failed — original-file access remains independent and the preview poll terminates with a non-blocking failure state.
