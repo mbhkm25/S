@@ -471,10 +471,18 @@ export function reconcileExtraction(primary: ExtractionRecord, escalation?: Extr
   const primaryIdentifier = selectPreferredIdentifier(primary);
   const escalationIdentifier = selectPreferredIdentifier(escalation);
   if (primaryIdentifier && escalationIdentifier) {
-    const sameKey = primaryIdentifier.type === escalationIdentifier.type
-      && primaryIdentifier.value === escalationIdentifier.value
-      && comparable(primaryIdentifier.financial_entity) === comparable(escalationIdentifier.financial_entity);
-    if (!sameKey) unresolvedConflicts.push('financial_identity_conflict');
+    const sameEntity = comparable(primaryIdentifier.financial_entity)
+      === comparable(escalationIdentifier.financial_entity);
+    const sameType = primaryIdentifier.type === escalationIdentifier.type;
+    const sameValue = primaryIdentifier.value === escalationIdentifier.value;
+
+    // Multiple typed identifiers may legitimately identify the same party.
+    // A national ID/card and a financial account are enrichment, not conflict.
+    // Only two different values competing for the same identifier type inside
+    // the same financial-entity scope require manual review.
+    if (sameEntity && sameType && !sameValue) {
+      unresolvedConflicts.push('financial_identity_conflict');
+    }
   }
 
   const primaryParties = extractParties(primary);
