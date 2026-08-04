@@ -12,6 +12,13 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_first(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count < 1:
+        raise SystemExit(f'{label}: expected at least one match, found {count}')
+    return text.replace(old, new, 1)
+
+
 index = index_path.read_text(encoding='utf-8')
 
 index = replace_once(
@@ -34,7 +41,7 @@ index = replace_once(
     're-normalize reconciled extraction',
 )
 
-index = replace_once(
+index = replace_first(
     index,
     '      amount: normalized.amount,\n'
     '      currency: normalized.currency,\n'
