@@ -1,0 +1,51 @@
+name: Compact payment inbox facts
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/compact-payment-inbox-facts.yml'
+      - '.github/scripts/compact-payment-inbox-facts.py'
+      - 'src/components/business/PaymentInbox.tsx'
+
+permissions:
+  contents: write
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/payment-inbox-compact-facts
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply compact facts layout
+        run: |
+          python .github/scripts/compact-payment-inbox-facts.py
+          rm .github/scripts/compact-payment-inbox-facts.py
+
+      - name: Validate
+        run: |
+          npx tsc --noEmit
+          npm run build
+          grep -Fq 'grid-cols-4' src/components/business/PaymentInbox.tsx
+          grep -Fq 'CompactFact' src/components/business/PaymentInbox.tsx
+          ! grep -Fq 'label="اسم الحساب"' src/components/business/PaymentInbox.tsx
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Compact payment inbox facts table"
+          git pull --rebase origin feature/payment-inbox-compact-facts
+          git push origin HEAD:feature/payment-inbox-compact-facts
