@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, Eye, FileText, Hash, Inbox, Landmark, Loader2, RefreshCw, ShieldCheck, UserRound, UserRoundCheck, WalletCards } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, Eye, FileText, Hash, Inbox, Landmark, Loader2, RefreshCw, ShieldCheck, UserRoundCheck, WalletCards } from 'lucide-react';
 import { getPaymentInbox, getPaymentInboxContexts, getPaymentInboxProAccess, type PaymentInboxContext, type PaymentInboxItem, type PaymentInboxView } from '../../lib/paymentInboxApi';
 import { toLatinDigits } from '../../lib/digits';
 import ProUpgradeModal from '../ProUpgradeModal';
@@ -70,11 +70,11 @@ function EntityLogo({ entity }: { entity: string }) {
   return <img src={candidates[index]} alt={`شعار ${entity}`} className="h-11 w-11 rounded-2xl object-contain" onError={() => setIndex(value => value + 1)} />;
 }
 
-function DataCell({ icon, label, value, ltr = false }: { icon: React.ReactNode; label: string; value?: string | null; ltr?: boolean }) {
+function CompactFact({ icon, label, value, ltr = false }: { icon: React.ReactNode; label: string; value?: string | null; ltr?: boolean }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
-      <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400">{icon}<span>{label}</span></div>
-      <p dir={ltr ? 'ltr' : 'rtl'} className={`mt-1.5 truncate text-[11px] font-black text-slate-800 ${ltr ? 'text-left font-mono' : ''}`}>{value || '—'}</p>
+    <div className="min-w-0 px-2 py-2">
+      <div className="flex items-center gap-1 text-[8px] font-bold text-slate-400">{icon}<span>{label}</span></div>
+      <p dir={ltr ? 'ltr' : 'rtl'} className={`mt-1 truncate text-[10px] font-black text-slate-800 ${ltr ? 'text-left font-mono' : ''}`}>{value || '—'}</p>
     </div>
   );
 }
@@ -186,12 +186,13 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
                 <div className="shrink-0 text-left" dir="ltr"><div className="flex items-end gap-2"><span className={`mb-1 rounded-full border px-2.5 py-1 text-[10px] font-black ${currencyClass(item.currency)}`}>{item.currency || '—'}</span><strong className="text-4xl font-black tracking-tight text-slate-950">{formatAmount(item.amount)}</strong></div><p className="mt-1 text-[10px] font-bold text-slate-400">{currencyName(item.currency)}</p></div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <DataCell icon={<CalendarDays className="h-3.5 w-3.5" />} label="التاريخ" value={formatDate(operationDate)} />
-                <DataCell icon={<Clock3 className="h-3.5 w-3.5" />} label="الوقت" value={formatTime(operationDate)} />
-                <DataCell icon={<WalletCards className="h-3.5 w-3.5" />} label="رقم الحساب" value={accountNumber ? toLatinDigits(accountNumber) : '—'} ltr />
-                <DataCell icon={<Hash className="h-3.5 w-3.5" />} label="المرجع" value={item.reference_number ? toLatinDigits(item.reference_number) : '—'} ltr />
-                <div className="col-span-2"><DataCell icon={<UserRound className="h-3.5 w-3.5" />} label="اسم الحساب" value={accountName} /></div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70">
+                <div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-200">
+                  <CompactFact icon={<CalendarDays className="h-3 w-3" />} label="التاريخ" value={formatDate(operationDate)} />
+                  <CompactFact icon={<Clock3 className="h-3 w-3" />} label="الوقت" value={formatTime(operationDate)} />
+                  <CompactFact icon={<WalletCards className="h-3 w-3" />} label="الحساب" value={accountNumber ? toLatinDigits(accountNumber) : '—'} ltr />
+                  <CompactFact icon={<Hash className="h-3 w-3" />} label="المرجع" value={item.reference_number ? toLatinDigits(item.reference_number) : '—'} ltr />
+                </div>
               </div>
 
               {admin && item.claimed_by_name && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-700"><UserRoundCheck className="h-4 w-4" /><span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span></div>}
