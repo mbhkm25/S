@@ -1,0 +1,12 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:jsonrepair@3.13.1": "3.13.1"
+  },
+  "npm": {
+    "jsonrepair@3.13.1": {
+      "integrity": "sha512-WJeiE0jGfxYmtLwBTEk8+y/mYcaleyLXWaqp5bJu0/ZTSeG0KQq/wWQ8pmnkKenEdN6pdnn6QtcoSUkbqDHWNw==",
+      "bin": true
+    }
+  }
+}

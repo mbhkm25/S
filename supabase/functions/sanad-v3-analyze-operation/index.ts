@@ -556,7 +556,7 @@ function normalizeParties(value: unknown, fallbackEntity: string | null) {
         role: enumValue(source.role, PARTY_ROLES, "unknown"),
         identifiers: (Array.isArray(source.identifiers) ? source.identifiers : [])
           .map((identifier) => normalizePartyIdentifier(identifier, fallbackEntity))
-          .filter(Boolean)
+          .filter((identifier): identifier is NonNullable<ReturnType<typeof normalizePartyIdentifier>> => identifier !== null)
           .slice(0, 12),
       };
     })
