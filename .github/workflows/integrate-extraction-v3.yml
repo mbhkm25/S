@@ -1,4 +1,4 @@
-name: Integrate extraction v3.1
+name: Integrate extraction v3.2
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - feature/operation-details-v3-extraction-preview-hardening
     paths:
       - '.github/scripts/integrate-extraction-v3.py'
+      - '.github/scripts/upgrade-extraction-v32.py'
       - '.github/workflows/integrate-extraction-v3.yml'
 
 permissions:
@@ -20,8 +21,11 @@ jobs:
           ref: feature/operation-details-v3-extraction-preview-hardening
           fetch-depth: 0
 
-      - name: Apply extraction integration
+      - name: Apply extraction v3.1 integration
         run: python .github/scripts/integrate-extraction-v3.py
+
+      - name: Upgrade to party-identifier extraction v3.2
+        run: python .github/scripts/upgrade-extraction-v32.py
 
       - name: Validate changed sources
         shell: bash
@@ -30,6 +34,9 @@ jobs:
           grep -q 'EXTRACTION_PIPELINE_VERSION' supabase/functions/sanad-v3-analyze-operation/index.ts
           grep -q 'targeted_recovery' supabase/functions/sanad-v3-analyze-operation/index.ts
           grep -q 'sanad_review_status' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'selected_party_identifier' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'financial_account_number' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'operation-extraction-v3.2' supabase/functions/sanad-v3-analyze-operation/extraction-v3.ts
           ! grep -Rqi 'Saudi_Riyal_Symbol\|symbolAsset' src .github/workflows docs
           npx tsc --noEmit
 
@@ -37,6 +44,7 @@ jobs:
         shell: bash
         run: |
           rm -f .github/scripts/integrate-extraction-v3.py
+          rm -f .github/scripts/upgrade-extraction-v32.py
           rm -f .github/workflows/integrate-extraction-v3.yml
           rm -f .github/workflows/bundle-official-sar-symbol.yml
           rm -f .github/workflows/deploy-operation-analyzer-v3.yml
@@ -48,5 +56,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Integrate high-confidence extraction recovery and quality gate"
+          git commit -m "Integrate party-identifier extraction v3.2 and quality gate"
           git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
