@@ -1,0 +1,45 @@
+name: Integrate Extraction v3 JSON repair
+
+on:
+  push:
+    branches:
+      - feature/operation-details-v3-extraction-preview-hardening
+    paths:
+      - '.github/workflows/integrate-extraction-v3-json-repair.yml'
+      - '.github/scripts/integrate-extraction-v3-json-repair.py'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/operation-details-v3-extraction-preview-hardening
+          fetch-depth: 0
+
+      - name: Apply bounded JSON repair integration
+        run: python .github/scripts/integrate-extraction-v3-json-repair.py
+
+      - name: Validate analyzer contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'jsonrepair } from "npm:jsonrepair@3.13.1"' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'gemini_json_repaired' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'retryableParseFailure' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'service_record_operation_pipeline_span' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'service_record_fast_routing_extraction' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'markOperationRunning' supabase/functions/sanad-v3-analyze-operation/index.ts
+
+      - name: Commit integrated analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Integrate bounded JSON repair into operation extraction"
+          git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
