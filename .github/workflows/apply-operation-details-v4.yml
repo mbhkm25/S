@@ -6,11 +6,12 @@ on:
       - main
     paths:
       - '.github/workflows/apply-operation-details-v4.yml'
+      - '.github/scripts/fix-preview-v5-types.py'
       - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
       - 'supabase/functions/sanad-operation-preview-worker/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-and-deploy-preview:
@@ -20,6 +21,9 @@ jobs:
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/operation-details-v4-preview-actions
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -33,6 +37,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply preview type correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .github/scripts/fix-preview-v5-types.py ]; then
+            python .github/scripts/fix-preview-v5-types.py
+            rm .github/scripts/fix-preview-v5-types.py
+          fi
+
       - name: Validate frontend and worker
         shell: bash
         run: |
@@ -44,6 +57,19 @@ jobs:
           deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
           npx tsc --noEmit
           npm run build
+
+      - name: Commit type correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Fix preview v5 Deno types"
+            git pull --rebase origin fix/operation-details-v4-preview-actions
+            git push origin HEAD:fix/operation-details-v4-preview-actions
+          fi
 
       - uses: supabase/setup-cli@v1
         with:
