@@ -56,6 +56,10 @@ Pipeline version: `content-crop-v4`.
 
 Persist layout class, crop mode, confidence, page dimensions, crop dimensions, output dimensions, and edge-safety result.
 
+### Current deployment
+
+`sanad-operation-preview-worker` v13 is active with `content-crop-v4`. A one-time runner created for controlled validation was returned immediately to JWT-protected HTTP 410 status. Visual acceptance against 600, 220 and image fixtures remains open.
+
 ## Extraction Pipeline v3
 
 Pipeline version: `operation-extraction-v3`.
@@ -77,9 +81,15 @@ Pipeline version: `operation-extraction-v3`.
 - Stronger model only for malformed output, unknown templates, conflicting identifiers, multiple operations, or low confidence.
 - Model choice must be justified by benchmark results, not naming alone.
 
+### Compatibility rule
+
+Extraction v3 must be integrated incrementally into the canonical analyzer. It may not remove `operation_pipeline_spans`, fast-routing extraction, strict schemas, idempotent locking, existing persistence, or routing triggers. The initial rewrite that violated this rule was reverted through a normal corrective commit; the latency quality gate returned to green.
+
 ## Operation details UI
 
 ### Compact facts card
+
+The v3 card implementation is now on the branch. It uses a compact entity/amount header, a two-column facts grid, smaller vertical spacing, and no scattered placeholder dashes for missing secondary values.
 
 Priority order:
 
@@ -91,19 +101,23 @@ Priority order:
 6. Transaction time.
 7. SANAD receipt time and delay.
 
-Use one compact hierarchy and a two-column metadata grid. Do not render missing secondary fields as large scattered dashes.
-
 ### Analysis states
 
 - running/retrying: show that analysis is in progress and keep the document available.
 - failed: explain that the document is saved but financial facts are not yet approved.
 - completed: show extracted facts.
+- while analysis is incomplete, the runtime refreshes read-only data every 3.5 seconds.
+- operational actions are disabled until extracted facts are ready.
 
 Opening details, previewing, zooming, or opening the original remains read-only.
 
 ## Currency registry
 
-A central registry owns code, Arabic name, English name, symbol asset/fallback, minor units, and accessibility label. ISO codes remain canonical data values. User-facing screens use the official/approved visual symbol where available plus a clear Arabic currency name.
+A central registry owns code, Arabic name, English name, symbol asset/fallback, minor units, and accessibility label. ISO codes remain canonical data values.
+
+- SAR points to the SVG published by the Saudi Central Bank and uses `ر.س` as text fallback.
+- YER, USD, AED and OMR have centralized names and symbols.
+- Unknown values never default to USD.
 
 ## Acceptance gates
 
