@@ -11,6 +11,13 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
         raise SystemExit(f'{label}: expected one match, found {count}')
     return text.replace(old, new, 1)
 
+
+def replace_first(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count < 1:
+        raise SystemExit(f'{label}: expected at least one match, found {count}')
+    return text.replace(old, new, 1)
+
 source = replace_once(
     source,
     '''const IDENTIFIER_TYPES = [
@@ -75,13 +82,15 @@ source = replace_once(
     'party schema constants',
 )
 
-source = replace_once(
+# The same receiver sequence appears in FULL_RESPONSE_SCHEMA and FAST_RESPONSE_SCHEMA.
+# Only the first occurrence belongs to the full canonical extraction schema.
+source = replace_first(
     source,
     '    receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },\n    document_account: nullableString,',
     '    receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },\n    parties: { type: "ARRAY", items: PARTY_SCHEMA },\n    document_account: nullableString,',
     'full schema parties property',
 )
-source = replace_once(
+source = replace_first(
     source,
     '    "receiver_identifier_type",\n    "document_account",',
     '    "receiver_identifier_type",\n    "parties",\n    "document_account",',
