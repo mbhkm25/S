@@ -7,6 +7,13 @@ on:
     paths:
       - '.github/workflows/apply-document-pinch-zoom.yml'
       - '.github/scripts/apply-document-pinch-zoom.py'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-document-pinch-zoom.yml'
+      - '.github/scripts/apply-document-pinch-zoom.py'
+      - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
 
 permissions:
   contents: write
@@ -32,8 +39,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python .github/scripts/apply-document-pinch-zoom.py
-          rm .github/scripts/apply-document-pinch-zoom.py
+          if [ -f .github/scripts/apply-document-pinch-zoom.py ]; then
+            python .github/scripts/apply-document-pinch-zoom.py
+            rm .github/scripts/apply-document-pinch-zoom.py
+          fi
 
       - name: Validate interaction implementation
         shell: bash
@@ -49,9 +58,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Add pinch zoom and pan to document preview"
-          git pull --rebase origin fix/document-preview-pinch-zoom
-          git push origin HEAD:fix/document-preview-pinch-zoom
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Add pinch zoom and pan to document preview"
+            git pull --rebase origin fix/document-preview-pinch-zoom
+            git push origin HEAD:fix/document-preview-pinch-zoom
+          fi
