@@ -1,0 +1,61 @@
+name: Validate operation details v4
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-operation-details-v4.yml'
+      - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
+      - 'supabase/functions/sanad-operation-preview-worker/**'
+      - 'supabase/migrations/**operation_details_action_source**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-deploy-preview:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate frontend and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "p_source: 'operation_details'" src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'إجراءات العملية' src/features/operations/OperationDetailsRuntimeV2.tsx
+          ! grep -q 'fixed inset-x-0 bottom-\[calc(68px' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'content-crop-v5' supabase/functions/sanad-operation-preview-worker/index.ts
+          grep -q 'operation_details_runtime_v3' supabase/migrations/20260804181500_normalize_legacy_operation_details_action_source.sql
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
+          npx tsc --noEmit
+          npm run build
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy preview worker v5
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          supabase functions deploy sanad-operation-preview-worker \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --no-verify-jwt
