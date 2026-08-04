@@ -25,7 +25,7 @@ Deno.serve(async(req:Request)=>{
  try{
   const service=createClient(env("SUPABASE_URL"),env("SUPABASE_SERVICE_ROLE_KEY"),{auth:{persistSession:false,autoRefreshToken:false}});
   let effectiveToken=workerToken;
-  if(internalCall&&!effectiveToken){const {data,error}=await service.schema("private").from("sanad_worker_tokens").select("token_value").eq("worker_name","operation_media_preview").eq("is_active",true).maybeSingle();if(error||!data?.token_value)return reply({ok:false,error:"worker_token_unavailable"},500);effectiveToken=String(data.token_value);}
+  if(internalCall&&!effectiveToken){const {data,error}=await service.rpc("get_operation_media_preview_worker_token_internal");if(error||!data)return reply({ok:false,error:"worker_token_unavailable"},500);effectiveToken=String(data);}
   if(!effectiveToken)return reply({ok:false,error:"missing_worker_token"},401);
   const {data,error}=await service.rpc("claim_operation_media_preview_jobs",{p_worker_token:effectiveToken,p_limit:1});
   if(error){const invalidToken=error.message?.includes("invalid_worker_token");return reply({ok:false,error:invalidToken?"invalid_worker_token":"claim_failed"},invalidToken?401:500);}
