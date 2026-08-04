@@ -1,0 +1,56 @@
+name: Fix extraction v3.2 live benchmark
+
+on:
+  push:
+    branches:
+      - feature/operation-details-v3-extraction-preview-hardening
+    paths:
+      - '.github/scripts/fix-extraction-v32-live-benchmark.py'
+      - '.github/workflows/fix-extraction-v32-live-benchmark.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/operation-details-v3-extraction-preview-hardening
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Apply live benchmark corrections
+        run: python .github/scripts/fix-extraction-v32-live-benchmark.py
+
+      - name: Validate analyzer and helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'identity_only_receiver_requires_account_recovery' supabase/functions/sanad-v3-analyze-operation/extraction-v3.ts
+          grep -q 'receiver_identifier_type: normalized.receiver_identifier_type' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'normalized = normalizeExtracted(reconciliation.selected)' supabase/functions/sanad-v3-analyze-operation/index.ts
+          npx tsc --noEmit
+
+      - name: Remove one-shot patch files
+        run: |
+          rm -f .github/scripts/fix-extraction-v32-live-benchmark.py
+          rm -f .github/workflows/fix-extraction-v32-live-benchmark.yml
+
+      - name: Commit corrected analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix receiver account recovery and persistence in extraction v3.2"
+          git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
