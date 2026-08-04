@@ -41,18 +41,12 @@ function isWebp(bytes: Uint8Array): boolean {
   return header.startsWith("RIFF") && header.slice(8, 12) === "WEBP";
 }
 
-function buildPreviewHtml(sourceUrl: string, mimeType: string): string {
+function imageHtml(sourceUrl: string): string {
   const url = escapeAttribute(sourceUrl);
-  const document = mimeType === "application/pdf"
-    ? `<object id="document" data="${url}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH" type="application/pdf"><embed src="${url}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH" type="application/pdf"></embed></object>`
-    : `<img id="document" src="${url}" alt="Operation document preview">`;
-
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}body{display:flex;align-items:center;justify-content:center}object,embed,img{display:block;width:100%;height:100%;border:0;background:#fff;object-fit:contain}</style></head><body>${document}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}body{display:flex;align-items:center;justify-content:center}img{display:block;width:100%;height:100%;object-fit:contain;background:#fff}</style></head><body><img src="${url}" alt="Operation document preview"></body></html>`;
 }
 
-async function renderWebp(sourceUrl: string, mimeType: string): Promise<Uint8Array> {
-  const form = new FormData();
-  form.append("files", new Blob([buildPreviewHtml(sourceUrl, mimeType)], { type: "text/html; charset=utf-8" }), "index.html");
+function appendScreenshotOptions(form: FormData, waitDelay: string): void {
   form.append("width", "1240");
   form.append("height", "1754");
   form.append("clip", "true");
@@ -60,23 +54,40 @@ async function renderWebp(sourceUrl: string, mimeType: string): Promise<Uint8Arr
   form.append("format", "webp");
   form.append("omitBackground", "false");
   form.append("optimizeForSpeed", "true");
-  form.append("waitDelay", mimeType === "application/pdf" ? "2200ms" : "600ms");
+  form.append("waitDelay", waitDelay);
+}
 
-  const result = await fetch(joinUrl(env("GOTENBERG_URL"), "/forms/chromium/screenshot/html"), {
+async function gotenbergScreenshot(route: string, form: FormData): Promise<Uint8Array> {
+  const result = await fetch(joinUrl(env("GOTENBERG_URL"), route), {
     method: "POST",
     headers: { "X-Gotenberg-Token": env("GOTENBERG_TOKEN") },
     body: form,
     signal: AbortSignal.timeout(25_000),
   });
-
   if (!result.ok) {
     const detail = (await result.text().catch(() => "")).slice(0, 300);
     throw new Error(`gotenberg_preview_failed_${result.status}_${detail}`);
   }
-
   const bytes = new Uint8Array(await result.arrayBuffer());
   if (!isWebp(bytes)) throw new Error("gotenberg_preview_invalid_webp");
-  if (bytes.byteLength < 4_000) throw new Error("gotenberg_preview_too_small");
+  return bytes;
+}
+
+async function renderWebp(sourceUrl: string, mimeType: string): Promise<Uint8Array> {
+  let bytes: Uint8Array;
+  if (mimeType === "application/pdf") {
+    const form = new FormData();
+    form.append("url", `${sourceUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`);
+    appendScreenshotOptions(form, "2400ms");
+    bytes = await gotenbergScreenshot("/forms/chromium/screenshot/url", form);
+    if (bytes.byteLength < 10_000) throw new Error("gotenberg_pdf_preview_probably_blank");
+  } else {
+    const form = new FormData();
+    form.append("files", new Blob([imageHtml(sourceUrl)], { type: "text/html; charset=utf-8" }), "index.html");
+    appendScreenshotOptions(form, "600ms");
+    bytes = await gotenbergScreenshot("/forms/chromium/screenshot/html", form);
+    if (bytes.byteLength < 4_000) throw new Error("gotenberg_image_preview_too_small");
+  }
   return bytes;
 }
 
