@@ -187,7 +187,7 @@ export default function OperationDetailsRuntimeV2() {
   const [token, setToken] = useState<string | null>(() => currentToken());
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
-  const [tab, setTab] = useState<Tab>('operation');
+  const [tab, setTab] = useState<Tab>('document');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
