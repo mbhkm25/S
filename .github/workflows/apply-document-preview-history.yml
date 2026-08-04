@@ -1,0 +1,63 @@
+name: Apply document preview history navigation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-document-preview-history.yml'
+      - '.github/scripts/apply-document-preview-history.py'
+      - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/document-preview-back-navigation
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply navigation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .github/scripts/apply-document-preview-history.py ]; then
+            python .github/scripts/apply-document-preview-history.py
+            rm .github/scripts/apply-document-preview-history.py
+          fi
+
+      - name: Validate history behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'sanadDocumentPreview' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'openDocumentPreview' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q 'closeDocumentPreview' src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q "window.addEventListener('popstate'" src/features/operations/OperationDetailsRuntimeV2.tsx
+          npx tsc --noEmit
+          npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Keep document preview back navigation inside operation details"
+            git pull --rebase origin fix/document-preview-back-navigation
+            git push origin HEAD:fix/document-preview-back-navigation
+          fi
