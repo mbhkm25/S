@@ -3,6 +3,7 @@ import './lib/navigationScrollReset';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import OperationEntryGate from './features/operations/OperationEntryGate';
+import OperationDetailsRuntimeV2 from './features/operations/OperationDetailsRuntimeV2';
 import OperationIdentityDetailsBanner from './features/operations/OperationIdentityDetailsBanner';
 import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <>
         <OperationEntryGate />
+        <OperationDetailsRuntimeV2 />
         <OperationIdentityDetailsBanner />
         <OperationDetailsActionIntent />
         <OperationDocumentPreviewEnhancer />
