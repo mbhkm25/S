@@ -1,9 +1,9 @@
 name: Integrate extraction v3.1
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - feature/operation-details-v3-extraction-preview-hardening
     paths:
       - '.github/scripts/integrate-extraction-v3.py'
       - '.github/workflows/integrate-extraction-v3.yml'
