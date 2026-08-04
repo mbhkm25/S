@@ -6,6 +6,7 @@ on:
       - 'src/components/business/BusinessManage.tsx'
       - 'src/components/business/BusinessManageV3.tsx'
       - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'src/components/business/OperationBusinessLinkSheet.tsx'
       - 'src/components/Details.tsx'
       - 'src/index.css'
       - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
@@ -16,6 +17,7 @@ on:
       - 'src/components/business/BusinessManage.tsx'
       - 'src/components/business/BusinessManageV3.tsx'
       - 'src/components/business/BusinessFinancialAccountsCenter.tsx'
+      - 'src/components/business/OperationBusinessLinkSheet.tsx'
       - 'src/components/Details.tsx'
       - 'src/index.css'
       - 'supabase/migrations/*unify_business_financial_accounts_public_projection.sql'
@@ -79,18 +81,24 @@ jobs:
           grep -Fq 'role="status"' src/components/business/BusinessManageV3.tsx
           grep -Fq 'role="alert"' src/components/business/BusinessManageV3.tsx
 
-      - name: Validate operation link prompt usability
+      - name: Validate operation approval portal
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "ربط العملية بنشاط تجاري" src/components/Details.tsx
-          grep -Fq 'background: rgba(15, 23, 42, 0.46)' src/index.css
-          grep -Fq 'align-items: flex-end !important' src/index.css
-          grep -Fq 'padding-bottom: max(0.5rem, env(safe-area-inset-bottom))' src/index.css
-          grep -Fq 'min-height: 3.25rem !important' src/index.css
-          grep -Fq 'font-size: 0.95rem !important' src/index.css
-          grep -Fq 'max-height: min(82dvh, 42rem)' src/index.css
-          grep -Fq 'grid-template-columns: 1fr !important' src/index.css
+          grep -Fq "OperationBusinessLinkSheet" src/components/Details.tsx
+          grep -Fq "createPortal(modal, document.body)" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "document.body.style.overflow = 'hidden'" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "env(safe-area-inset-bottom)" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq 'aria-modal="true"' src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "هل تخص هذه العملية نشاطًا تجاريًا؟" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "كعملية مكتملة بواسطتك داخل وارد المدفوعات" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "اعتمادها لنشاط" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "إبقاؤها عملية شخصية" src/components/business/OperationBusinessLinkSheet.tsx
+          grep -Fq "عرض وارد المدفوعات" src/components/business/OperationBusinessLinkSheet.tsx
+          if grep -Fq "Business Linking Modal Overlay" src/components/Details.tsx; then
+            echo 'Legacy in-page business linking modal must not remain.' >&2
+            exit 1
+          fi
 
       - name: Validate public projection synchronization
         shell: bash
