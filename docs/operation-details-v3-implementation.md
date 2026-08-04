@@ -124,6 +124,26 @@ A central registry owns code, Arabic name, English name, symbol asset/fallback, 
 - YER, USD, AED and OMR have centralized names and symbols.
 - Unknown values never default to USD.
 
+## Current checkpoints
+
+Completed on the branch:
+
+- implementation and acceptance contract;
+- Preview v4 implementation and worker v13 deployment;
+- compact operation card and explicit analysis states;
+- central currency registry and safe unknown-currency behavior;
+- Extraction v3 helper and executable 600 benchmark contract;
+- temporary preview runner disabled after controlled setup.
+
+Still open:
+
+- visual acceptance of Preview v4 on 600, 220 and an image source;
+- incremental wiring of Extraction v3 into the canonical analyzer;
+- successful reprocessing of operation 600;
+- local bundling of the official SAR SVG;
+- final CI, Android, performance and read-only regression tests;
+- final Notion closure and review-ready transition.
+
 ## Acceptance gates
 
 - The 600 PDF preview contains the full logo, reference, amount, account lines, and footer without the large blank lower page.
