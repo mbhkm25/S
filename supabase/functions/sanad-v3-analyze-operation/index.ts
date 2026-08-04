@@ -15,6 +15,8 @@
 // - ENABLE_FAST_ROUTING_PASS = false
 // - GEMINI_FAST_MODEL = GEMINI_MODEL
 
+import { jsonrepair } from "npm:jsonrepair@3.13.1";
+
 type JsonRecord = Record<string, unknown>;
 
 declare const EdgeRuntime:
@@ -560,12 +562,31 @@ function extractGeminiText(gemini: any): string {
 
 function parseGeminiJson(text: string): any {
   const cleaned = cleanJsonText(text);
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  const candidate = match?.[0] || cleaned;
   try {
-    return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("gemini_json_parse_failed");
-    return JSON.parse(match[0]);
+    return JSON.parse(candidate);
+  } catch (directError) {
+    try {
+      const repaired = jsonrepair(candidate);
+      const parsed = JSON.parse(repaired);
+      console.warn(JSON.stringify({
+        function: FUNCTION_NAME,
+        event: "gemini_json_repaired",
+        direct_error: truncateText(
+          directError instanceof Error ? directError.message : String(directError),
+          300,
+        ),
+      }));
+      return parsed;
+    } catch (repairError) {
+      throw new Error(
+        `gemini_json_parse_failed: ${truncateText(
+          repairError instanceof Error ? repairError.message : String(repairError),
+          400,
+        )}`,
+      );
+    }
   }
 }
 
@@ -803,7 +824,11 @@ async function callGemini(params: {
         : error instanceof Error
           ? error.message
           : String(error);
-      if (attempt >= params.maxAttempts || (!aborted && !lastError.includes("429") && !lastError.includes("50"))) {
+      const retryableParseFailure = lastError.includes("gemini_json_parse_failed");
+      if (
+        attempt >= params.maxAttempts ||
+        (!aborted && !retryableParseFailure && !lastError.includes("429") && !lastError.includes("50"))
+      ) {
         throw new Error(lastError);
       }
     } finally {
