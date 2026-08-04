@@ -83,7 +83,7 @@ begin
     ),$new$
   );
 
-  v_next:=replace(v_next,"'routing-shadow-v2.0'","'routing-shadow-v2.1'");
+  v_next:=replace(v_next,$old$'routing-shadow-v2.0'$old$,$new$'routing-shadow-v2.1'$new$);
 
   if v_next=v_def then
     raise exception 'shadow_routing_join_not_updated';
