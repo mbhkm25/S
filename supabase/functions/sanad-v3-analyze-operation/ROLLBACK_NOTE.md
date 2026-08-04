@@ -1,0 +1,1 @@
+Temporary marker for reverting analyzer contract safely.
