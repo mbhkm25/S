@@ -85,6 +85,10 @@ Pipeline version: `operation-extraction-v3`.
 
 Extraction v3 must be integrated incrementally into the canonical analyzer. It may not remove `operation_pipeline_spans`, fast-routing extraction, strict schemas, idempotent locking, existing persistence, or routing triggers. The initial rewrite that violated this rule was reverted through a normal corrective commit; the latency quality gate returned to green.
 
+### Benchmark contract
+
+`extraction-v3.ts` now contains an executable benchmark contract for `600.pdf`, including all seven required facts, bounded JSON repair, completeness assessment, escalation reasons, deterministic identifier rules, and primary/escalation reconciliation. It is not yet wired into the production analyzer; integration remains gated by CI and the live benchmark.
+
 ## Operation details UI
 
 ### Compact facts card
