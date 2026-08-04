@@ -1,0 +1,52 @@
+name: Integrate extraction v3.1
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/scripts/integrate-extraction-v3.py'
+      - '.github/workflows/integrate-extraction-v3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/operation-details-v3-extraction-preview-hardening
+          fetch-depth: 0
+
+      - name: Apply extraction integration
+        run: python .github/scripts/integrate-extraction-v3.py
+
+      - name: Validate changed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'EXTRACTION_PIPELINE_VERSION' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'targeted_recovery' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'sanad_review_status' supabase/functions/sanad-v3-analyze-operation/index.ts
+          ! grep -Rqi 'Saudi_Riyal_Symbol\|symbolAsset' src .github/workflows docs || false
+          npx tsc --noEmit
+
+      - name: Remove temporary integration files and obsolete workflows
+        shell: bash
+        run: |
+          rm -f .github/scripts/integrate-extraction-v3.py
+          rm -f .github/workflows/integrate-extraction-v3.yml
+          rm -f .github/workflows/bundle-official-sar-symbol.yml
+          rm -f .github/workflows/deploy-operation-analyzer-v3.yml
+
+      - name: Commit integrated engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Integrate high-confidence extraction recovery and quality gate"
+          git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
