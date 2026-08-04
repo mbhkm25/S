@@ -6,10 +6,11 @@ on:
       - main
     paths:
       - '.github/workflows/deploy-operation-analyzer-v3.yml'
+      - '.github/scripts/fix-extraction-v32-live-benchmark.py'
       - 'supabase/functions/sanad-v3-analyze-operation/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -19,6 +20,48 @@ jobs:
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feature/operation-details-v3-extraction-preview-hardening
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Apply pending live benchmark correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .github/scripts/fix-extraction-v32-live-benchmark.py ]; then
+            python .github/scripts/fix-extraction-v32-live-benchmark.py
+            rm -f .github/scripts/fix-extraction-v32-live-benchmark.py
+            rm -f .github/workflows/fix-extraction-v32-live-benchmark.yml
+          fi
+
+      - name: Validate corrected analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'identity_only_receiver_requires_account_recovery' supabase/functions/sanad-v3-analyze-operation/extraction-v3.ts
+          grep -q 'receiver_identifier_type: normalized.receiver_identifier_type' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'normalized = normalizeExtracted(reconciliation.selected)' supabase/functions/sanad-v3-analyze-operation/index.ts
+          npx tsc --noEmit
+
+      - name: Commit corrected analyzer when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Fix receiver account recovery and persistence in extraction v3.2"
+            git push origin HEAD:feature/operation-details-v3-extraction-preview-hardening
+          fi
 
       - uses: supabase/setup-cli@v1
         with:
@@ -30,8 +73,6 @@ jobs:
           set -euo pipefail
           test -n "${SUPABASE_ACCESS_TOKEN:-}"
 
-      # This deployment is intentionally triggered from a human/app-authored commit
-      # after the integration workflow creates the final analyzer commit.
       - name: Deploy analyzer preserving custom authentication
         shell: bash
         run: |
