@@ -16,6 +16,12 @@
 // - GEMINI_FAST_MODEL = GEMINI_MODEL
 
 import { jsonrepair } from "npm:jsonrepair@3.13.1";
+import {
+  assessCoreExtraction,
+  buildExtractionV3Rules,
+  EXTRACTION_PIPELINE_VERSION,
+  reconcileExtraction,
+} from "./extraction-v3.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -32,6 +38,7 @@ const SANAD_INTERNAL_API_KEY = mustGetEnv("SANAD_INTERNAL_API_KEY");
 
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
 const GEMINI_FAST_MODEL = Deno.env.get("GEMINI_FAST_MODEL") || GEMINI_MODEL;
+const GEMINI_RECOVERY_MODEL = Deno.env.get("GEMINI_RECOVERY_MODEL") || GEMINI_FAST_MODEL;
 const SANAD_PROMPT_KEY =
   Deno.env.get("SANAD_PROMPT_KEY") || "sanad_operation_extraction_v1";
 const GEMINI_MAX_ATTEMPTS = Math.max(
@@ -93,14 +100,20 @@ const TRANSACTION_TYPES = [
 ];
 const TRANSACTION_DIRECTIONS = ["incoming", "outgoing", "internal", "unknown"];
 const IDENTIFIER_TYPES = [
-  "account_number",
+  "financial_account_number",
+  "unique_account_name",
+  "national_id",
+  "passport_number",
   "wallet_number",
-  "financial_line",
-  "merchant_point",
-  "terminal_number",
   "phone_number",
-  "iban",
-  "other",
+  "unknown_identifier",
+];
+const PARTY_ROLES = [
+  "credited_party",
+  "debited_party",
+  "sender",
+  "receiver",
+  "beneficiary",
   "unknown",
 ];
 const CONFIDENCE_FIELDS = [
@@ -125,6 +138,29 @@ const CONFIDENCE_FIELDS = [
 const nullableString = { type: "STRING", nullable: true };
 const nullableNumber = { type: "NUMBER", nullable: true };
 
+const PARTY_IDENTIFIER_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    value: { type: "STRING" },
+    label: nullableString,
+    financial_entity: nullableString,
+    confidence: { type: "NUMBER" },
+    evidence: nullableString,
+  },
+  required: ["type", "value", "label", "financial_entity", "confidence", "evidence"],
+};
+
+const PARTY_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    name: nullableString,
+    role: { type: "STRING", enum: PARTY_ROLES },
+    identifiers: { type: "ARRAY", items: PARTY_IDENTIFIER_SCHEMA },
+  },
+  required: ["name", "role", "identifiers"],
+};
+
 const FULL_RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -146,6 +182,7 @@ const FULL_RESPONSE_SCHEMA = {
     receiver_name: nullableString,
     receiver_account: nullableString,
     receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    parties: { type: "ARRAY", items: PARTY_SCHEMA },
     document_account: nullableString,
     credited_account: nullableString,
     debited_account: nullableString,
@@ -203,6 +240,7 @@ const FULL_RESPONSE_SCHEMA = {
     "receiver_name",
     "receiver_account",
     "receiver_identifier_type",
+    "parties",
     "document_account",
     "credited_account",
     "debited_account",
@@ -273,6 +311,72 @@ const FAST_RESPONSE_SCHEMA = {
     "document_account",
     "credited_account",
     "merchant_point",
+    "field_confidences",
+    "field_evidence",
+  ],
+};
+
+const TARGETED_RECOVERY_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    financial_entity: { type: "STRING", enum: FINANCIAL_ENTITIES },
+    document_template: { type: "STRING", enum: DOCUMENT_TEMPLATES },
+    transaction_type: { type: "STRING", enum: TRANSACTION_TYPES },
+    transaction_direction: { type: "STRING", enum: TRANSACTION_DIRECTIONS },
+    amount: nullableNumber,
+    currency: { type: "STRING", enum: ["YER", "SAR", "USD"], nullable: true },
+    receiver_name: nullableString,
+    receiver_account: nullableString,
+    receiver_identifier_type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    parties: { type: "ARRAY", items: PARTY_SCHEMA },
+    reference_number: nullableString,
+    transaction_datetime: nullableString,
+    transaction_time_present: { type: "BOOLEAN" },
+    transaction_date_source: nullableString,
+    confidence_score: { type: "NUMBER" },
+    field_confidences: {
+      type: "OBJECT",
+      properties: {
+        financial_entity: { type: "NUMBER" },
+        transaction_type: { type: "NUMBER" },
+        amount: { type: "NUMBER" },
+        currency: { type: "NUMBER" },
+        receiver_name: { type: "NUMBER" },
+        receiver_account: { type: "NUMBER" },
+        reference_number: { type: "NUMBER" },
+        transaction_datetime: { type: "NUMBER" },
+      },
+    },
+    field_evidence: {
+      type: "OBJECT",
+      properties: {
+        financial_entity: nullableString,
+        transaction_type: nullableString,
+        amount: nullableString,
+        currency: nullableString,
+        receiver_name: nullableString,
+        receiver_account: nullableString,
+        reference_number: nullableString,
+        transaction_datetime: nullableString,
+      },
+    },
+  },
+  required: [
+    "financial_entity",
+    "document_template",
+    "transaction_type",
+    "transaction_direction",
+    "amount",
+    "currency",
+    "receiver_name",
+    "receiver_account",
+    "receiver_identifier_type",
+    "parties",
+    "reference_number",
+    "transaction_datetime",
+    "transaction_time_present",
+    "transaction_date_source",
+    "confidence_score",
     "field_confidences",
     "field_evidence",
   ],
@@ -417,15 +521,76 @@ function normalizeEvidenceMap(value: unknown): Record<string, string | null> {
   );
 }
 
+
+function normalizePartyIdentifier(value: unknown, fallbackEntity: string | null) {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const type = enumValue(source.type, IDENTIFIER_TYPES, "unknown_identifier");
+  const normalizedValue = cleanNumberLikeText(source.value);
+  if (!normalizedValue) return null;
+  const label = cleanTextOrNull(source.label);
+  const labelText = (label || "").trim().toLowerCase();
+  const evidence = cleanTextOrNull(source.evidence);
+  let safeType = type;
+  if (/^(بط|بطاقة|هوية)/.test(labelText)) safeType = "national_id";
+  if (/^(ج|جواز)/.test(labelText)) safeType = "passport_number";
+  return {
+    type: safeType,
+    value: normalizedValue,
+    label,
+    financial_entity: cleanTextOrNull(source.financial_entity) || fallbackEntity,
+    confidence: normalizeConfidence(source.confidence),
+    evidence,
+  };
+}
+
+function normalizeParties(value: unknown, fallbackEntity: string | null) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((party) => party && typeof party === "object" && !Array.isArray(party))
+    .map((party) => {
+      const source = party as Record<string, unknown>;
+      return {
+        name: cleanTextOrNull(source.name),
+        role: enumValue(source.role, PARTY_ROLES, "unknown"),
+        identifiers: (Array.isArray(source.identifiers) ? source.identifiers : [])
+          .map((identifier) => normalizePartyIdentifier(identifier, fallbackEntity))
+          .filter(Boolean)
+          .slice(0, 12),
+      };
+    })
+    .slice(0, 8);
+}
+
+function preferredPartyIdentifier(parties: ReturnType<typeof normalizeParties>) {
+  const priority = [
+    "financial_account_number",
+    "unique_account_name",
+    "national_id",
+    "passport_number",
+    "wallet_number",
+    "phone_number",
+  ];
+  const target = parties.find((party) => ["credited_party", "receiver", "beneficiary"].includes(party.role))
+    || parties.find((party) => party.identifiers.length > 0);
+  if (!target) return null;
+  return [...target.identifiers].sort((left, right) => {
+    const order = priority.indexOf(left.type) - priority.indexOf(right.type);
+    return order !== 0 ? order : right.confidence - left.confidence;
+  })[0] || null;
+}
+
 function normalizeExtracted(extracted: any) {
   const isFinancial = normalizeBoolean(extracted?.is_financial_document, true);
+  const normalizedEntity = isFinancial ? enumValue(extracted?.financial_entity, FINANCIAL_ENTITIES, "unknown") : null;
+  const parties = isFinancial ? normalizeParties(extracted?.parties, normalizedEntity) : [];
+  const preferredIdentifier = preferredPartyIdentifier(parties);
   const normalized = {
     is_financial_document: isFinancial,
     non_financial_reason: cleanTextOrNull(extracted?.non_financial_reason),
     summary: cleanTextOrNull(extracted?.summary),
-    financial_entity: isFinancial
-      ? enumValue(extracted?.financial_entity, FINANCIAL_ENTITIES, "unknown")
-      : null,
+    financial_entity: normalizedEntity,
     financial_entity_raw: cleanTextOrNull(extracted?.financial_entity_raw),
     document_template: enumValue(
       extracted?.document_template,
@@ -461,13 +626,15 @@ function normalizeExtracted(extracted: any) {
     ),
     receiver_name: isFinancial ? cleanTextOrNull(extracted?.receiver_name) : null,
     receiver_account: isFinancial
-      ? cleanNumberLikeText(extracted?.receiver_account)
+      ? (preferredIdentifier?.type === "financial_account_number" ? preferredIdentifier.value : cleanNumberLikeText(extracted?.receiver_account))
       : null,
-    receiver_identifier_type: enumValue(
+    receiver_identifier_type: preferredIdentifier?.type || enumValue(
       extracted?.receiver_identifier_type,
       IDENTIFIER_TYPES,
-      "unknown",
+      "unknown_identifier",
     ),
+    parties,
+    selected_party_identifier: preferredIdentifier,
     document_account: isFinancial
       ? cleanNumberLikeText(extracted?.document_account)
       : null,
@@ -596,6 +763,30 @@ function buildFallbackSanadPrompt(): string {
 
 function buildFastRoutingPrompt(): string {
   return `أعد JSON فقط لاستخراج حقائق التوجيه السريع من الإشعار. لا تخترع. استخرج الجهة المالية والقالب واتجاه العملية والمبلغ والعملة واسم ورقم المستلم ونوع المعرّف وحساب رأس المستند والحساب الدائن ونقطة حاسب. القالب البنفسجي مع Haseb أو Haseb Payment هو الكريمي حاسب. لا تعتبر رقم رأس الشاشة حساب المستلم إلا إذا ربطه نص العملية صراحة. عند تعدد العمليات استخدم العملية العلوية فقط.`;
+}
+
+function buildTargetedRecoveryPrompt(primary: Record<string, unknown>, reasons: string[]): string {
+  const compactPrimary = {
+    financial_entity: primary.financial_entity ?? null,
+    document_template: primary.document_template ?? null,
+    transaction_type: primary.transaction_type ?? null,
+    transaction_direction: primary.transaction_direction ?? null,
+    amount: primary.amount ?? null,
+    currency: primary.currency ?? null,
+    receiver_name: primary.receiver_name ?? null,
+    receiver_account: primary.receiver_account ?? null,
+    parties: primary.parties ?? [],
+    reference_number: primary.reference_number ?? null,
+    transaction_datetime: primary.transaction_datetime ?? null,
+  };
+  return [
+    "أعد JSON فقط وفق المخطط. هذه مراجعة مالية مستهدفة وليست تلخيصًا.",
+    "استخرج الحقول الجوهرية من المستند الأصلي نفسه، ولا تعتمد على الملخص النصي وحده.",
+    "صحح الحقول الناقصة أو الخاطئة فقط، ولا تخترع قيمة غير ظاهرة.",
+    `أسباب المراجعة: ${reasons.join(" | ") || "quality_gate"}`,
+    `النتيجة الأولية للمقارنة: ${JSON.stringify(compactPrimary)}`,
+    buildExtractionV3Rules(),
+  ].join("\n");
 }
 
 function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
@@ -1063,7 +1254,82 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    const normalized = normalizeExtracted(result.extracted);
+    let normalized = normalizeExtracted(result.extracted);
+    const primaryNormalized = normalized;
+    const primaryAssessment = assessCoreExtraction(primaryNormalized);
+    let recoveryResult: Awaited<ReturnType<typeof callGemini>> | null = null;
+    let reconciliation = reconcileExtraction(primaryNormalized);
+
+    if (primaryAssessment.escalationReasons.length > 0) {
+      const recoveryStartedAtMs = Date.now();
+      try {
+        recoveryResult = await callGemini({
+          model: GEMINI_RECOVERY_MODEL,
+          mimeType,
+          base64,
+          promptText: buildTargetedRecoveryPrompt(primaryNormalized, primaryAssessment.escalationReasons),
+          responseSchema: TARGETED_RECOVERY_SCHEMA,
+          maxAttempts: 1,
+        });
+        const recoveryCandidate = normalizeExtracted({
+          ...primaryNormalized,
+          ...recoveryResult.extracted,
+          is_financial_document: primaryNormalized.is_financial_document,
+          field_confidences: {
+            ...primaryNormalized.field_confidences,
+            ...(recoveryResult.extracted?.field_confidences || {}),
+          },
+          field_evidence: {
+            ...primaryNormalized.field_evidence,
+            ...(recoveryResult.extracted?.field_evidence || {}),
+          },
+          parties: recoveryResult.extracted?.parties || primaryNormalized.parties,
+          ai_flags: primaryNormalized.ai_flags,
+          missing_fields: primaryNormalized.missing_fields,
+          visual_integrity_notes: primaryNormalized.visual_integrity_notes,
+          sanad_attention_points: primaryNormalized.sanad_attention_points,
+        });
+        reconciliation = reconcileExtraction(primaryNormalized, recoveryCandidate);
+        normalized = reconciliation.selected as typeof normalized;
+        await recordSpan({
+          operationId: operation.id,
+          runId,
+          pipeline: "analysis",
+          stage: "targeted_recovery",
+          status: "success",
+          startedAtMs: recoveryStartedAtMs,
+          metadata: {
+            model: GEMINI_RECOVERY_MODEL,
+            attempts: recoveryResult.attempts,
+            reasons: primaryAssessment.escalationReasons,
+            conflicts: reconciliation.conflicts,
+          },
+        });
+      } catch (recoveryError) {
+        await recordSpan({
+          operationId: operation.id,
+          runId,
+          pipeline: "analysis",
+          stage: "targeted_recovery",
+          status: "error",
+          startedAtMs: recoveryStartedAtMs,
+          metadata: {
+            model: GEMINI_RECOVERY_MODEL,
+            reasons: primaryAssessment.escalationReasons,
+            error: truncateText(recoveryError instanceof Error ? recoveryError.message : String(recoveryError), 800),
+          },
+        });
+      }
+    }
+
+    const finalAssessment = assessCoreExtraction(normalized);
+    const reviewRequired = reconciliation.reviewRequired === true || !finalAssessment.complete;
+    if (reviewRequired && !normalized.ai_flags.includes("extraction_review_required")) {
+      normalized.ai_flags.push("extraction_review_required");
+    }
+    normalized.missing_fields = finalAssessment.missing;
+    normalized.confidence_score = finalAssessment.confidence;
+
     const persistStartedAtMs = Date.now();
     await patchOperation(operation.id, {
       status: operation.status === "verified" ? "verified" : "ready",
@@ -1084,6 +1350,19 @@ Deno.serve(async (req: Request) => {
         gemini_attempts: result.attempts,
         pipeline_run_id: runId,
         response_schema: "strict-v2",
+        extraction_pipeline_version: EXTRACTION_PIPELINE_VERSION,
+        extraction_quality: {
+          primary: primaryAssessment,
+          final: finalAssessment,
+          recovery_model: recoveryResult ? GEMINI_RECOVERY_MODEL : null,
+          recovery_attempts: recoveryResult?.attempts ?? 0,
+          reconciliation_source: reconciliation.source,
+          conflicts: reconciliation.conflicts,
+          unresolved_conflicts: reconciliation.unresolvedConflicts || [],
+          selected_identifier: finalAssessment.selectedIdentifier,
+          unique_identifier_count: finalAssessment.uniqueIdentifierCount,
+          review_required: reviewRequired,
+        },
         gemini_metadata: {
           finish_reason: result.gemini?.candidates?.[0]?.finishReason || null,
           usage_metadata: result.gemini?.usageMetadata || null,
@@ -1097,9 +1376,12 @@ Deno.serve(async (req: Request) => {
       transaction_datetime: normalized.transaction_datetime,
       confidence_score: normalized.confidence_score,
       ai_confidence_score: normalized.confidence_score,
+      sanad_confidence_score: finalAssessment.confidence,
+      sanad_review_status: reviewRequired ? "needs_review" : "not_required",
+      sanad_risk_level: reviewRequired ? "medium" : "low",
       possible_fraud: normalized.possible_fraud,
       sanad_warnings: normalized.ai_flags,
-      missing_fields: normalized.missing_fields,
+      missing_fields: finalAssessment.missing,
       visual_integrity_notes: normalized.visual_integrity_notes,
       sanad_attention_points: normalized.sanad_attention_points,
     });
@@ -1122,6 +1404,10 @@ Deno.serve(async (req: Request) => {
       gemini_attempts: result.attempts,
       pipeline_run_id: runId,
       schema_enforced: true,
+      extraction_pipeline_version: EXTRACTION_PIPELINE_VERSION,
+      quality_complete: finalAssessment.complete,
+      review_required: reviewRequired,
+      recovery_used: Boolean(recoveryResult),
       confidence_score: normalized.confidence_score,
       financial_entity: normalized.financial_entity,
       amount: normalized.amount,
@@ -1160,6 +1446,15 @@ Deno.serve(async (req: Request) => {
       gemini_attempts: result.attempts,
       duration_ms: Date.now() - analysisStartedAtMs,
       summary: normalized.summary,
+      quality: {
+        pipeline_version: EXTRACTION_PIPELINE_VERSION,
+        primary: primaryAssessment,
+        final: finalAssessment,
+        review_required: reviewRequired,
+        recovery_used: Boolean(recoveryResult),
+        recovery_model: recoveryResult ? GEMINI_RECOVERY_MODEL : null,
+        conflicts: reconciliation.conflicts,
+      },
       normalized,
     });
   } catch (error) {

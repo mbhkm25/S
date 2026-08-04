@@ -4,8 +4,6 @@ export type CurrencyPresentation = {
   code: CurrencyCode | null;
   arabicName: string;
   englishName: string;
-  symbol: string;
-  symbolAsset?: string;
   minorUnits: number;
   accessibilityLabel: string;
 };
@@ -15,8 +13,6 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'SAR',
     arabicName: 'ريال سعودي',
     englishName: 'Saudi Riyal',
-    symbol: 'ر.س',
-    symbolAsset: 'https://www.sama.gov.sa/ar-sa/Currency/Documents/Saudi_Riyal_Symbol-2.svg',
     minorUnits: 2,
     accessibilityLabel: 'ريال سعودي',
   },
@@ -24,7 +20,6 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'YER',
     arabicName: 'ريال يمني',
     englishName: 'Yemeni Rial',
-    symbol: 'ر.ي',
     minorUnits: 2,
     accessibilityLabel: 'ريال يمني',
   },
@@ -32,7 +27,6 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'USD',
     arabicName: 'دولار أمريكي',
     englishName: 'US Dollar',
-    symbol: '$',
     minorUnits: 2,
     accessibilityLabel: 'دولار أمريكي',
   },
@@ -40,7 +34,6 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'AED',
     arabicName: 'درهم إماراتي',
     englishName: 'UAE Dirham',
-    symbol: 'د.إ',
     minorUnits: 2,
     accessibilityLabel: 'درهم إماراتي',
   },
@@ -48,7 +41,6 @@ const REGISTRY: Record<CurrencyCode, CurrencyPresentation> = {
     code: 'OMR',
     arabicName: 'ريال عُماني',
     englishName: 'Omani Rial',
-    symbol: 'ر.ع.',
     minorUnits: 3,
     accessibilityLabel: 'ريال عُماني',
   },
@@ -67,7 +59,6 @@ export function getCurrencyPresentation(value: unknown): CurrencyPresentation {
     code: null,
     arabicName: fallback === '—' ? 'عملة غير محددة' : fallback,
     englishName: fallback,
-    symbol: fallback,
     minorUnits: 2,
     accessibilityLabel: fallback === '—' ? 'عملة غير محددة' : fallback,
   };

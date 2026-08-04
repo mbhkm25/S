@@ -62,7 +62,7 @@ Persist layout class, crop mode, confidence, page dimensions, crop dimensions, o
 
 ## Extraction Pipeline v3
 
-Pipeline version: `operation-extraction-v3`.
+Pipeline version: `operation-extraction-v3.2`.
 
 ### Required behavior
 
@@ -88,6 +88,10 @@ Extraction v3 must be integrated incrementally into the canonical analyzer. It m
 ### Benchmark contract
 
 `extraction-v3.ts` now contains an executable benchmark contract for `600.pdf`, including all seven required facts, bounded JSON repair, completeness assessment, escalation reasons, deterministic identifier rules, and primary/escalation reconciliation. It is not yet wired into the production analyzer; integration remains gated by CI and the live benchmark.
+
+## Extraction identity model v3.2
+
+The canonical extraction contract now represents each financial party with multiple typed identifiers. Automatic matching requires a unique identifier inside the financial-entity scope, using the key `financial_entity + identifier_type + identifier_value`. Priority is financial account, verified unique account name, national ID, passport, wallet, then phone. Labels such as `بط` and `ج` override model guesses and prevent identity/passport values from being projected as financial accounts. `receiver_account` remains a compatibility projection only; `parties[].identifiers[]` is the source of truth. Conflicting unique identifiers force review instead of score-based guessing.
 
 ## Operation details UI
 
@@ -115,14 +119,9 @@ Priority order:
 
 Opening details, previewing, zooming, or opening the original remains read-only.
 
-## Currency registry
+## Currency presentation
 
-A central registry owns code, Arabic name, English name, symbol asset/fallback, minor units, and accessibility label. ISO codes remain canonical data values.
-
-- SAR currently references the official SVG endpoint published by the Saudi Central Bank and uses `ر.س` as text fallback.
-- The official asset still needs to be copied into the application bundle before the PR is review-ready so currency rendering does not depend on an external network request.
-- YER, USD, AED and OMR have centralized names and symbols.
-- Unknown values never default to USD.
+Currency symbols are explicitly deferred. The runtime currently presents canonical ISO codes and localized currency names only. No external or bundled currency-symbol asset is part of this release.
 
 ## Current checkpoints
 
@@ -140,7 +139,6 @@ Still open:
 - visual acceptance of Preview v4 on 600, 220 and an image source;
 - incremental wiring of Extraction v3 into the canonical analyzer;
 - successful reprocessing of operation 600;
-- local bundling of the official SAR SVG;
 - final CI, Android, performance and read-only regression tests;
 - final Notion closure and review-ready transition.
 

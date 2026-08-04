@@ -450,13 +450,13 @@ export default function OperationDetailsRuntimeV2() {
 
   const action = runtime.inbox ? (
     <div className="grid grid-cols-2 gap-2">
-      {runtime.inbox.permissions?.can_claim ? <button onClick={() => void claim()} disabled={acting || !analysisReady} className="h-12 rounded-2xl border border-slate-200 bg-white text-xs font-black text-slate-800 disabled:opacity-40">استلام العملية</button> : null}
-      {runtime.inbox.permissions?.can_complete ? <button onClick={() => void complete()} disabled={acting || !analysisReady} className="h-12 rounded-2xl bg-emerald-600 text-xs font-black text-white shadow-lg shadow-emerald-600/20 disabled:opacity-40">{acting ? 'جارٍ التنفيذ...' : 'اعتماد العملية'}</button> : null}
+      {runtime.inbox.permissions?.can_claim ? <button onClick={() => void claim()} disabled={acting || !analysisReady || runtime.operation.review_status === 'needs_review'} className="h-12 rounded-2xl border border-slate-200 bg-white text-xs font-black text-slate-800 disabled:opacity-40">استلام العملية</button> : null}
+      {runtime.inbox.permissions?.can_complete ? <button onClick={() => void complete()} disabled={acting || !analysisReady || runtime.operation.review_status === 'needs_review'} className="h-12 rounded-2xl bg-emerald-600 text-xs font-black text-white shadow-lg shadow-emerald-600/20 disabled:opacity-40">{acting ? 'جارٍ التنفيذ...' : 'اعتماد العملية'}</button> : null}
       {runtime.inbox.status === 'review_required' && inboxUrl ? <a href={inboxUrl} className="col-span-2 flex h-12 items-center justify-center rounded-2xl bg-amber-600 text-xs font-black text-white">مراجعة العملية في وارد المدفوعات</a> : null}
       {runtime.inbox.status === 'completed' ? <div className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-50 text-xs font-black text-emerald-700"><CheckCircle2 className="h-4 w-4" />اعتمدها {runtime.inbox.completed_by_name || 'عضو الفريق'}</div> : null}
     </div>
   ) : (
-    <button onClick={() => void personalVerify()} disabled={acting || !analysisReady} className="h-12 w-full rounded-2xl bg-emerald-600 text-xs font-black text-white disabled:opacity-40">تسجيل تحقق شخصي</button>
+    <button onClick={() => void personalVerify()} disabled={acting || !analysisReady || runtime.operation.review_status === 'needs_review'} className="h-12 w-full rounded-2xl bg-emerald-600 text-xs font-black text-white disabled:opacity-40">تسجيل تحقق شخصي</button>
   );
 
   return <>
@@ -478,7 +478,7 @@ export default function OperationDetailsRuntimeV2() {
             <div className="min-w-[92px] text-left" aria-label={`${amount} ${currency.accessibilityLabel}`}>
               <div className="flex items-end justify-end gap-1.5">
                 <strong className="text-[38px] font-black leading-none tracking-tight text-slate-950">{amount}</strong>
-                {runtime.operation.currency === 'SAR' && currency.symbolAsset ? <img src={currency.symbolAsset} alt="" className="mb-1 h-5 w-5 object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : <span className="mb-0.5 text-[12px] font-black text-emerald-700">{currency.symbol}</span>}
+                <span className="mb-0.5 text-[11px] font-black text-emerald-700">{currency.code || runtime.operation.currency || ''}</span>
               </div>
               <span className="mt-1 block text-[9px] font-bold text-slate-500">{analysisReady ? currency.arabicName : 'لم تعتمد العملة بعد'}</span>
             </div>
