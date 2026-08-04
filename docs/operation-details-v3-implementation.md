@@ -115,7 +115,8 @@ Opening details, previewing, zooming, or opening the original remains read-only.
 
 A central registry owns code, Arabic name, English name, symbol asset/fallback, minor units, and accessibility label. ISO codes remain canonical data values.
 
-- SAR points to the SVG published by the Saudi Central Bank and uses `ر.س` as text fallback.
+- SAR currently references the official SVG endpoint published by the Saudi Central Bank and uses `ر.س` as text fallback.
+- The official asset still needs to be copied into the application bundle before the PR is review-ready so currency rendering does not depend on an external network request.
 - YER, USD, AED and OMR have centralized names and symbols.
 - Unknown values never default to USD.
 
