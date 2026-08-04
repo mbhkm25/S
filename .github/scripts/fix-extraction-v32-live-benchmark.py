@@ -1,3 +1,4 @@
+# One-shot corrective patch triggered after the workflow file is registered.
 from pathlib import Path
 
 index_path = Path('supabase/functions/sanad-v3-analyze-operation/index.ts')
