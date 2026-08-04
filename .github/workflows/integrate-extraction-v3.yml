@@ -8,12 +8,21 @@ on:
       - '.github/scripts/integrate-extraction-v3.py'
       - '.github/scripts/upgrade-extraction-v32.py'
       - '.github/workflows/integrate-extraction-v3.yml'
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/scripts/integrate-extraction-v3.py'
+      - '.github/scripts/upgrade-extraction-v32.py'
+      - '.github/workflows/integrate-extraction-v3.yml'
 
 permissions:
   contents: write
 
 jobs:
   integrate:
+    if: github.head_ref == 'feature/operation-details-v3-extraction-preview-hardening' || github.ref_name == 'feature/operation-details-v3-extraction-preview-hardening'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
