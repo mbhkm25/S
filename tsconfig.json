@@ -26,6 +26,7 @@
   "exclude": [
     "landing",
     "supabase/functions",
-    "services/push-worker"
+    "services/push-worker",
+    "services/sanad-fast-analyzer"
   ]
 }
