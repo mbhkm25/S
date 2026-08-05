@@ -15,16 +15,26 @@ export type TransactionType =
   | "account_transfer"
   | "unknown";
 
+/**
+ * Canonical SANAD financial identifier types used by business account routing.
+ * Legacy aliases remain accepted while old parsers are migrated.
+ */
 export type IdentifierType =
+  | "account_number"
   | "financial_account_number"
-  | "card_number"
+  | "wallet_number"
+  | "customer_line"
+  | "merchant_point"
+  | "terminal_number"
+  | "phone_number"
   | "national_id"
   | "passport_number"
-  | "phone_number"
-  | "wallet_number"
-  | "merchant_point"
+  | "unique_account_name"
+  | "iban"
+  | "card_number"
   | "document_reference"
   | "transfer_reference"
+  | "other"
   | "unknown_identifier";
 
 export interface Evidence {
@@ -37,7 +47,13 @@ export interface Evidence {
 export interface ExtractedIdentifier {
   type: IdentifierType;
   value: string;
+  /** Normalized by SANAD code, never trusted directly from the model. */
+  normalizedValue?: string;
+  /** Exact label printed in the source document, e.g. رقم المستفيد. */
+  sourceLabel?: string;
+  /** Backward-compatible alias used by existing local parsers. */
   label?: string;
+  isPrimaryRoutingIdentifier?: boolean;
   confidence: number;
   evidence: Evidence[];
 }
@@ -49,10 +65,11 @@ export interface ExtractedParty {
 }
 
 export interface CoreFinancialExtraction {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   templateCode: string;
   templateVersion: number;
   financialEntity: string;
+  financialEntityCode?: string;
   transactionType: TransactionType;
   transactionDirection: TransactionDirection;
   amount?: number;
