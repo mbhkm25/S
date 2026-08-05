@@ -1,3 +1,21 @@
+interface PortableCommandOutput {
+  success: boolean;
+  code: number;
+  stdout: Uint8Array;
+  stderr: Uint8Array;
+}
+
+declare const Deno: {
+  Command: new (
+    command: string,
+    options: {
+      args: string[];
+      stdout: "piped";
+      stderr: "piped";
+    },
+  ) => { output(): Promise<PortableCommandOutput> };
+};
+
 export interface PdfTextExtractionResult {
   text: string;
   durationMs: number;
@@ -24,7 +42,7 @@ export class PdftotextExtractor implements PdfTextExtractor {
       stderr: "piped",
     });
 
-    let output: Deno.CommandOutput;
+    let output: PortableCommandOutput;
     try {
       output = await command.output();
     } catch (error) {
