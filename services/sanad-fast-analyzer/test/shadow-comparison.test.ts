@@ -47,8 +47,8 @@ Deno.test("shadow comparison treats Yemeni phone variants as the same routing va
     transactionDatetime: "2026-08-05T19:40:58+03:00",
   }, shadow);
 
-  assertEquals(result.fields.receiver_identifier_value.status, "match");
-  assertEquals(result.fields.transaction_datetime.status, "match");
+  assertEquals(result.fields.receiver_identifier_value?.status, "match");
+  assertEquals(result.fields.transaction_datetime?.status, "match");
   assertEquals(result.exactCriticalMatch, true);
   assertEquals(result.criticalAccuracy, 1);
 });
@@ -68,7 +68,7 @@ Deno.test("shadow comparison reports a one-digit phone OCR error as a mismatch",
     transactionDatetime: "2026-08-05T19:40:00+03:00",
   }, broken);
 
-  assertEquals(result.fields.receiver_identifier_value.status, "mismatch");
+  assertEquals(result.fields.receiver_identifier_value?.status, "mismatch");
   assertEquals(result.exactCriticalMatch, false);
   assertEquals(result.criticalMatchCount, 6);
 });
