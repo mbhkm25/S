@@ -54,7 +54,8 @@ Deno.test("keeps sender identity separate from sender account", () => {
   const account = sender?.identifiers.find((item) => item.type === "financial_account_number");
   assert(passport?.value === "14380001", "passport value mismatch");
   assert(account?.value === "254220002", "account value mismatch");
-  assert(passport.value !== account.value, "identity and account must remain distinct");
+  assert(sender?.identifiers.filter((item) => item.type === "passport_number").length === 1, "passport classification duplicated");
+  assert(sender?.identifiers.filter((item) => item.type === "financial_account_number").length === 1, "account classification duplicated");
 });
 
 Deno.test("rejects unrelated financial text without enough anchors", () => {
