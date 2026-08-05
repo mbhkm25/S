@@ -166,12 +166,12 @@ export function parseAmqiMobileWithdrawalText(rawText: string): AmqiWithdrawalPa
     documentAccount: documentAccount ? 0.995 : 0,
   };
 
-  const critical = [
-    fieldConfidence.amount,
-    fieldConfidence.currency,
-    fieldConfidence.documentReference,
-    fieldConfidence.senderAccount,
-    fieldConfidence.receiverAccount,
+  const critical: number[] = [
+    fieldConfidence.amount ?? 0,
+    fieldConfidence.currency ?? 0,
+    fieldConfidence.documentReference ?? 0,
+    fieldConfidence.senderAccount ?? 0,
+    fieldConfidence.receiverAccount ?? 0,
   ];
   const confidence = critical.reduce((sum, value) => sum + value, 0) / critical.length;
   const reviewRequired = missing.length > 0 || warnings.length > 0 || confidence < 0.98;
