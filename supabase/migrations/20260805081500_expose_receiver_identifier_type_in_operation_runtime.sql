@@ -1,9 +1,9 @@
 do $migration$
 declare
   v_definition text;
-  v_old text := $needle$'receiver_account', coalesce(v_operation.receiver_account_normalized, v_operation.receiver_account, ''),$needle$;
-  v_new text := $replacement$'receiver_account', coalesce(v_operation.receiver_account_normalized, v_operation.receiver_account, ''),
-      'receiver_identifier_type', nullif(v_operation.receiver_identifier_type, ''),$replacement$;
+  v_old text := $needle$'receiver_account',coalesce(v_operation.credited_account_normalized,v_operation.receiver_account_normalized,v_operation.receiver_account,v_operation.document_account_normalized,v_operation.document_account),$needle$;
+  v_new text := $replacement$'receiver_account',coalesce(v_operation.credited_account_normalized,v_operation.receiver_account_normalized,v_operation.receiver_account,v_operation.document_account_normalized,v_operation.document_account),
+      'receiver_identifier_type',nullif(v_operation.receiver_identifier_type,''),$replacement$;
 begin
   select pg_get_functiondef(p.oid)
     into v_definition
