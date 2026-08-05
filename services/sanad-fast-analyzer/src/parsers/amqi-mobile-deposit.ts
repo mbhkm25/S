@@ -56,11 +56,14 @@ function combineDatetime(date: string | undefined, time: string | undefined): st
   if (!time) return `${date}T00:00:00`;
 
   const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return undefined;
+  const hourText = match?.[1];
+  const minuteText = match?.[2];
+  const periodText = match?.[3];
+  if (!hourText || !minuteText || !periodText) return undefined;
 
-  let hour = Number(match[1]);
-  const minute = Number(match[2]);
-  const period = match[3].toUpperCase();
+  let hour = Number(hourText);
+  const minute = Number(minuteText);
+  const period = periodText.toUpperCase();
   if (hour === 12) hour = 0;
   if (period === "PM") hour += 12;
   if (hour > 23 || minute > 59) return undefined;
@@ -91,7 +94,7 @@ export function parseAmqiMobileDepositText(rawText: string): ParseResult {
     /المبلغ\s*#?([0-9,]+(?:\.[0-9]+)?)#?\s*(سعودي|ريال\s*يمني|يمني|دولار|SAR|YER|USD)/iu,
   );
   const narrativeMatch = text.match(
-    /من\s*حساب\s*:\s*(.+?)\/(جواز|بط(?:اقة)?)\-?([0-9]+)\s*رقم\s*([0-9]+)\s*[اإآ]لى\s*حساب\s*:\s*(.+?)\s*بط\-?([0-9]+)\s*رقم\s*([0-9]+)/u,
+    /من\s*حساب\s*:\s*(.+?)\/(جواز|بط(?:اقة)?)-?([0-9]+)\s*رقم\s*([0-9]+)\s*[اإآ]لى\s*حساب\s*:\s*(.+?)\s*بط-?([0-9]+)\s*رقم\s*([0-9]+)/u,
   );
   const footerTimeMatch = text.match(
     /(?:20\d{2}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))/iu,
@@ -162,27 +165,32 @@ export function parseAmqiMobileDepositText(rawText: string): ParseResult {
     parties.push({ role: "receiver", name: receiverName, identifiers: receiverIdentifiers });
   }
 
+  const amountConfidence = amount === undefined ? 0 : 0.995;
+  const currencyConfidence = currency === undefined ? 0 : 0.995;
+  const documentReferenceConfidence = documentReference ? 0.99 : 0;
+  const receiverAccountConfidence = receiverAccount ? 0.995 : 0;
+
   const fieldConfidence: Record<string, number> = {
     financialEntity: 1,
     transactionType: 1,
     transactionDirection: 1,
-    amount: amount === undefined ? 0 : 0.995,
-    currency: currency === undefined ? 0 : 0.995,
-    documentReference: documentReference ? 0.99 : 0,
+    amount: amountConfidence,
+    currency: currencyConfidence,
+    documentReference: documentReferenceConfidence,
     transactionDatetime: transactionDatetime ? 0.96 : date ? 0.85 : 0,
     senderName: senderName ? 0.97 : 0,
     senderAccount: senderAccount ? 0.99 : 0,
     receiverName: receiverName ? 0.97 : 0,
-    receiverAccount: receiverAccount ? 0.995 : 0,
+    receiverAccount: receiverAccountConfidence,
   };
 
-  const requiredConfidence = [
-    fieldConfidence.amount,
-    fieldConfidence.currency,
-    fieldConfidence.documentReference,
-    fieldConfidence.receiverAccount,
+  const requiredConfidence: number[] = [
+    amountConfidence,
+    currencyConfidence,
+    documentReferenceConfidence,
+    receiverAccountConfidence,
   ];
-  const confidence = requiredConfidence.reduce((sum, value) => sum + value, 0) /
+  const confidence = requiredConfidence.reduce((sum: number, value: number) => sum + value, 0) /
     requiredConfidence.length;
 
   const warnings: string[] = [];
