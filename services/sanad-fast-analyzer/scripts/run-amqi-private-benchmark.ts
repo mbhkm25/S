@@ -4,6 +4,14 @@ import { RecordedBaselineEngine } from "../src/benchmark/engines.ts";
 import { runBenchmark } from "../src/benchmark/runner.ts";
 import { analyzeAmqiPdfBytes } from "../src/pipelines/amqi-pdf.ts";
 
+declare const Deno: {
+  args: string[];
+  readFile(path: string): Promise<Uint8Array>;
+  readTextFile(path: string): Promise<string>;
+  writeTextFile(path: string, data: string): Promise<void>;
+  cwd(): string;
+};
+
 interface PrivateManifestCase {
   id: string;
   pdfPath: string;
