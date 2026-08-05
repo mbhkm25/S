@@ -4,7 +4,7 @@
     "noUncheckedIndexedAccess": true
   },
   "tasks": {
-    "check": "deno check src/contracts.ts src/template-registry.ts test/template-registry.test.ts",
-    "test": "deno test test/template-registry.test.ts"
+    "check": "deno check src/contracts.ts src/template-registry.ts src/text-normalization.ts src/parsers/amqi-mobile-deposit.ts test/template-registry.test.ts test/amqi-mobile-deposit.test.ts",
+    "test": "deno test test/template-registry.test.ts test/amqi-mobile-deposit.test.ts"
   }
 }
