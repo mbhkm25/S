@@ -46,6 +46,7 @@ type NormalizedMessage = {
   fileName: string;
   caption: string;
   text: string;
+  interactiveId: string;
 };
 
 type NormalizedStatus = {
@@ -300,7 +301,17 @@ function normalizeWebhook(body: unknown): NormalizedWebhook {
     fileName: cleanText(media?.filename) ||
       (media?.id ? `whatsapp-${messageId}.${extensionFromMime(mimeType)}` : ""),
     caption: cleanText(media?.caption) || "",
-    text: cleanText(message?.text?.body) || "",
+    text: cleanText(
+      message?.text?.body ||
+      message?.button?.text ||
+      message?.interactive?.button_reply?.title ||
+      message?.interactive?.list_reply?.title,
+    ) || "",
+    interactiveId: cleanText(
+      message?.interactive?.button_reply?.id ||
+      message?.interactive?.list_reply?.id ||
+      message?.button?.payload,
+    ) || "",
   };
 }
 
@@ -579,6 +590,222 @@ async function linkUploader(
   }
 }
 
+async function sendTextMessage(to: string, body: string): Promise<Record<string, any>> {
+  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "text",
+      text: { preview_url: true, body },
+    }),
+  });
+}
+
+async function sendGuidanceButtons(params: {
+  to: string;
+  body: string;
+  operationId: string;
+  publicToken: string;
+  guidanceType: "unmatched" | "analysis_failed";
+}): Promise<Record<string, any>> {
+  const prefix = params.guidanceType === "unmatched" ? "unmatched" : "analysis_failed";
+  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: params.to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: params.body },
+        action: {
+          buttons: [
+            {
+              type: "reply",
+              reply: {
+                id: `sanad_show_operation:${params.publicToken}`,
+                title: "عرض العملية وQR",
+              },
+            },
+            {
+              type: "reply",
+              reply: {
+                id: `sanad_business_intro:${prefix}:${params.operationId}`,
+                title: "كيف يستخدم النشاط سند؟",
+              },
+            },
+          ],
+        },
+      },
+    }),
+  });
+}
+
+function isWithinServiceWindow(timestamp: string): boolean {
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds) || seconds <= 0) return true;
+  const ageMs = Date.now() - seconds * 1000;
+  return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+}
+
+async function handleGuidanceAction(message: NormalizedMessage): Promise<boolean> {
+  const actionId = message.interactiveId;
+  if (!actionId || !message.senderPhone) return false;
+
+  if (actionId.startsWith("sanad_show_operation:")) {
+    const token = actionId.slice("sanad_show_operation:".length).trim();
+    if (!token) return true;
+    const url = `${PUBLIC_APP_BASE_URL}/v/${encodeURIComponent(token)}`;
+    await sendTextMessage(
+      message.senderPhone,
+      `هذه هي العملية التي أرسلتها إلى سند:\n${url}\n\nاعرض رمز QR الموجود داخلها على الكاشير أو الشخص الذي سيتحقق من العملية.`,
+    );
+    return true;
+  }
+
+  if (actionId.startsWith("sanad_business_intro:")) {
+    await sendTextMessage(
+      message.senderPhone,
+      `سند ينظم ما يحدث بعد الدفع الإلكتروني.\n\nعندما يسجل النشاط التجاري حساباته المالية في سند، تصل الإشعارات المطابقة مباشرة إلى وارد المدفوعات الخاص بفريقه، ويمكن للكاشير مراجعتها عبر QR دون استلام هاتف العميل.\n\nتثبيت سند وبدء إعداد النشاط:\nhttps://sanadflow.com/install`,
+    );
+    return true;
+  }
+
+  return false;
+}
+
+async function guidanceDeliveryClaim(params: {
+  operationId: string;
+  guidanceType: "unmatched" | "analysis_failed";
+  recipientPhone: string;
+  metadata: JsonRecord;
+}): Promise<Record<string, any>> {
+  return await supabaseJson<Record<string, any>>(
+    "/rest/v1/rpc/claim_operation_sender_guidance",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_operation_id: params.operationId,
+        p_guidance_type: params.guidanceType,
+        p_recipient_phone: params.recipientPhone,
+        p_metadata: params.metadata,
+      }),
+    },
+  );
+}
+
+async function guidanceDeliveryComplete(params: {
+  deliveryId: string;
+  status: "sent" | "failed" | "skipped";
+  metaMessageId?: string | null;
+  error?: string | null;
+  metadata?: JsonRecord;
+}): Promise<void> {
+  await supabaseJson("/rest/v1/rpc/complete_operation_sender_guidance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      p_delivery_id: params.deliveryId,
+      p_status: params.status,
+      p_meta_message_id: params.metaMessageId || null,
+      p_error: params.error || null,
+      p_metadata: params.metadata || {},
+    }),
+  });
+}
+
+async function sendPostAnalysisGuidance(params: {
+  operationId: string;
+  publicToken: string;
+  message: NormalizedMessage;
+}): Promise<void> {
+  if (!params.message.senderPhone) return;
+
+  const operations = await supabaseJson<Record<string, any>[]>(
+    `/rest/v1/operations?select=id,ai_status,ai_error,financial_entity_code,receiver_name,receiver_account_normalized,amount,currency&` +
+      `id=eq.${encodeURIComponent(params.operationId)}&limit=1`,
+    { method: "GET", headers: { Accept: "application/json" } },
+  );
+  const operation = operations[0];
+  if (!operation) return;
+
+  let guidanceType: "unmatched" | "analysis_failed" | null = null;
+  const aiStatus = String(operation.ai_status || "").toLowerCase();
+  if (["failed", "error"].includes(aiStatus)) {
+    guidanceType = "analysis_failed";
+  } else if (aiStatus === "completed") {
+    const inboxRows = await supabaseJson<Record<string, any>[]>(
+      `/rest/v1/business_payment_inbox?select=id,status&operation_id=eq.${encodeURIComponent(params.operationId)}&limit=1`,
+      { method: "GET", headers: { Accept: "application/json" } },
+    );
+    if (!inboxRows.length) guidanceType = "unmatched";
+  }
+  if (!guidanceType) return;
+
+  const claim = await guidanceDeliveryClaim({
+    operationId: params.operationId,
+    guidanceType,
+    recipientPhone: params.message.senderPhone,
+    metadata: {
+      function: FUNCTION_NAME,
+      whatsapp_message_id: params.message.messageId,
+      ai_status: operation.ai_status || null,
+    },
+  });
+  if (!claim?.claimed || !claim.delivery_id) return;
+  const deliveryId = String(claim.delivery_id);
+
+  if (!isWithinServiceWindow(params.message.timestamp)) {
+    await guidanceDeliveryComplete({
+      deliveryId,
+      status: "skipped",
+      metadata: { reason: "outside_24h_service_window" },
+    });
+    return;
+  }
+
+  const body = guidanceType === "unmatched"
+    ? "تم استلام إشعارك ومعالجته وإنشاء العملية بنجاح ✅\n\nلم نتمكن من ربطها تلقائيًا بنشاط تجاري، لأننا لم نجد حسابًا ماليًا مسجلًا ومطابقًا لبيانات المستفيد داخل سند.\n\nاعرض رمز QR على الكاشير أو صاحب النشاط لفتح العملية ومراجعتها. ويمكنك تعريف النشاط بسند حتى تصل إشعاراته القادمة مباشرة إلى وارد المدفوعات الخاص به."
+    : "تم استلام إشعارك وإنشاء العملية ✅\n\nلكن لم نتمكن من قراءة بيانات الإشعار بوضوح، لذلك لم نستطع ربطه تلقائيًا بنشاط تجاري.\n\nيمكنك فتح العملية وعرض رمز QR على الكاشير ليطّلع على الملف الأصلي ويتحقق منه.";
+
+  try {
+    const response = await sendGuidanceButtons({
+      to: params.message.senderPhone,
+      body,
+      operationId: params.operationId,
+      publicToken: params.publicToken,
+      guidanceType,
+    });
+    const metaMessageId = cleanText(response?.messages?.[0]?.id);
+    await guidanceDeliveryComplete({
+      deliveryId,
+      status: "sent",
+      metaMessageId,
+      metadata: { interactive: true, button_count: 2 },
+    });
+    await insertEvent(params.operationId, "whatsapp_sender_guidance_sent", {
+      guidance_type: guidanceType,
+      recipient_phone: params.message.senderPhone,
+      meta_message_id: metaMessageId,
+      interactive: true,
+    });
+  } catch (error) {
+    const errorText = truncate(error instanceof Error ? error.message : error);
+    await guidanceDeliveryComplete({
+      deliveryId,
+      status: "failed",
+      error: errorText,
+    });
+    throw error;
+  }
+}
+
 async function sendUnsupported(to: string): Promise<void> {
   if (!SEND_UNSUPPORTED_REPLY || !to) return;
   await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
@@ -836,8 +1063,12 @@ async function processMessage(
   );
   const supportedAssistant =
     message.messageType === "text" ||
+    message.messageType === "interactive" ||
+    message.messageType === "button" ||
     (message.messageType === "audio" && Boolean(message.mediaId));
   await registerInbound(message, supportedMedia || supportedAssistant);
+
+  if (await handleGuidanceAction(message)) return;
 
   if (supportedAssistant) {
     await triggerAssistant(message);
@@ -986,6 +1217,20 @@ async function processMessage(
   });
 
   const results = await Promise.allSettled([analysisPromise, qrPromise]);
+  try {
+    await sendPostAnalysisGuidance({
+      operationId: operation.id,
+      publicToken,
+      message,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      event: "post_analysis_guidance_failed",
+      operation_id: operation.id,
+      error: truncate(error instanceof Error ? error.message : error),
+    }));
+  }
   await recordSpan({
     operationId: operation.id,
     runId,
