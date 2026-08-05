@@ -26,9 +26,11 @@ const sample: BenchmarkCase = {
 
 Deno.test("Gemini 2.5 Flash benchmark payload explicitly disables thinking", () => {
   const payload = buildGeminiNoThinkingPayload(sample, "cGRm", "extract");
+  const documentPart = payload.contents[0]?.parts[1];
+
   assertEquals(payload.generationConfig.thinkingConfig.thinkingBudget, 0);
   assertEquals(payload.generationConfig.temperature, 0);
   assertEquals(payload.generationConfig.responseMimeType, "application/json");
-  assertEquals(payload.contents[0].parts[1].inlineData.mimeType, "application/pdf");
-  assertEquals(payload.contents[0].parts[1].inlineData.data, "cGRm");
+  assertEquals(documentPart?.inlineData.mimeType, "application/pdf");
+  assertEquals(documentPart?.inlineData.data, "cGRm");
 });
