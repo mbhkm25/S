@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "tasks": {
+    "check": "deno check src/contracts.ts src/template-registry.ts test/template-registry.test.ts",
+    "test": "deno test test/template-registry.test.ts"
+  }
+}
