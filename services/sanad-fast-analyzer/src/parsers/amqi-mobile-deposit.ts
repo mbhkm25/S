@@ -57,8 +57,14 @@ function toIsoDatetime(date: string | undefined, hourText: string | undefined, m
   if (!hourText || !minuteText || !periodText) return `${date}T00:00:00`;
 
   let hour = Number(hourText);
-  const minute = Number(minuteText);
+  let minute = Number(minuteText);
   const period = periodText.toUpperCase();
+
+  // Some logical text extraction exposes 29!08PM for the visual time 08:29 PM.
+  if (hour > 12 && minute >= 1 && minute <= 12) {
+    [hour, minute] = [minute, hour];
+  }
+
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 1 || hour > 12 || minute > 59) return undefined;
   if (hour === 12) hour = 0;
   if (period === "PM") hour += 12;
@@ -66,15 +72,18 @@ function toIsoDatetime(date: string | undefined, hourText: string | undefined, m
 }
 
 function extractDatetime(text: string, date: string | undefined): string | undefined {
-  // Logical text order: 08:29PM or 08!29PM.
+  if (!date) return undefined;
+
+  // Logical order: 08:29PM, 08!29PM, or the malformed 29!08PM.
   const normal = text.match(/\b(\d{1,2})[:!](\d{2})\s*(AM|PM)\b/i);
   if (normal?.[1] && normal[2] && normal[3]) return toIsoDatetime(date, normal[1], normal[2], normal[3]);
 
-  // Raw RTL extraction from Quartz/PDF.js may produce: PM 08!29 2025-06-05.
-  const rtl = text.match(/\b(AM|PM)\s*(\d{1,2})[:!](\d{2})\b/i);
-  if (rtl?.[1] && rtl[2] && rtl[3]) return toIsoDatetime(date, rtl[2], rtl[3], rtl[1]);
+  // Poppler -layout may expose visual RTL order: PM 08!04 2026-05-14.
+  // The first numeric component is minutes and the second is hours.
+  const rtl = text.match(/\b(AM|PM)\s*(\d{1,2})[:!](\d{2})\s+20\d{2}-\d{2}-\d{2}\b/i);
+  if (rtl?.[1] && rtl[2] && rtl[3]) return toIsoDatetime(date, rtl[3], rtl[2], rtl[1]);
 
-  return date ? `${date}T00:00:00` : undefined;
+  return `${date}T00:00:00`;
 }
 
 function firstMatch(text: string, patterns: RegExp[]): RegExpMatchArray | undefined {
