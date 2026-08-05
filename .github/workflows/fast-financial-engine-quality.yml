@@ -44,7 +44,7 @@ jobs:
         run: deno task test
 
       - name: Type-check shadow worker
-        run: deno check supabase/functions/sanad-operation-analysis-shadow/index.ts
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-shadow/index.ts
 
       - name: Reject raw financial sample files
         shell: bash
