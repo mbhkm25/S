@@ -60,7 +60,6 @@ function toIsoDatetime(date: string | undefined, hourText: string | undefined, m
   let minute = Number(minuteText);
   const period = periodText.toUpperCase();
 
-  // Some logical text extraction exposes 29!08PM for the visual time 08:29 PM.
   if (hour > 12 && minute >= 1 && minute <= 12) {
     [hour, minute] = [minute, hour];
   }
@@ -74,13 +73,11 @@ function toIsoDatetime(date: string | undefined, hourText: string | undefined, m
 function extractDatetime(text: string, date: string | undefined): string | undefined {
   if (!date) return undefined;
 
-  // Logical order: 08:29PM, 08!29PM, or the malformed 29!08PM.
-  const normal = text.match(/\b(\d{1,2})[:!](\d{2})\s*(AM|PM)\b/i);
+  const normal = text.match(/\b(\d{1,2})\s*[:!]\s*(\d{2})\s*(AM|PM)\b/i);
   if (normal?.[1] && normal[2] && normal[3]) return toIsoDatetime(date, normal[1], normal[2], normal[3]);
 
-  // Poppler -layout may expose visual RTL order: PM 08!04 2026-05-14.
-  // The first numeric component is minutes and the second is hours.
-  const rtl = text.match(/\b(AM|PM)\s*(\d{1,2})[:!](\d{2})\s+20\d{2}-\d{2}-\d{2}\b/i);
+  // Poppler -layout on RTL PDFs exposes: PM 08 : 04 2026-05-14.
+  const rtl = text.match(/\b(AM|PM)\s*(\d{1,2})\s*[:!]\s*(\d{2})\s+20\d{2}-\d{2}-\d{2}\b/i);
   if (rtl?.[1] && rtl[2] && rtl[3]) return toIsoDatetime(date, rtl[3], rtl[2], rtl[1]);
 
   return `${date}T00:00:00`;
@@ -111,17 +108,18 @@ export function parseAmqiMobileDepositText(rawText: string): ParseResult {
   const dateMatch = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/u);
   const referenceMatch = firstMatch(text, [
     /المرجع\s*:\s*([0-9]+-[0-9]+)/u,
-    /\b([0-9]-[0-9]{6,})\b/u,
+    /\b([0-9]+-[0-9]{6,})\b/u,
   ]);
   const amountMatch = firstMatch(text, [
     /المبلغ\s*#?([0-9,]+(?:\.[0-9]+)?)#?\s*(سعودي|ريال\s*يمني|يمني|دولار|SAR|YER|USD)/iu,
     /#([0-9,]+(?:\.[0-9]+)?)#\s*(سعودي|ريال\s*يمني|يمني|دولار|SAR|YER|USD)/iu,
+    /(سعودي|ريال\s*يمني|يمني|دولار|SAR|YER|USD)\s*#([0-9,]+(?:\.[0-9]+)?)#\s*المبلغ/iu,
   ]);
   const narrativeMatch = text.match(
-    /من\s*حساب\s*:\s*(.+?)\/(جواز|بط(?:اقة)?)-?([0-9]+)\s*رقم\s*([0-9]+)\s*[اإآا]لى\s*حساب\s*:\s*(.+?)\s*بط-?([0-9]+)\s*رقم\s*([0-9]+)/u,
+    /من\s*حساب\s*:\s*(.+?)\/(جواز|بط(?:اقة)?)\s*-?\s*([0-9]+)\s*رقم\s*-?\s*([0-9]+)\s*[اإآا]لى\s*حساب\s*:\s*(.+?)\s*بط\s*-?\s*([0-9]+)\s*رقم\s*-?\s*([0-9]+)/u,
   );
   const headerLogicalMatch = text.match(
-    /السيد\s*:\s*(.+?)\s*بط-?([0-9]+)\s*رقم\s*الحساب\s*([0-9]+)/u,
+    /السيد\s*:\s*(.+?)\s*بط\s*-?\s*([0-9]+)\s*رقم\s*الحساب\s*([0-9]+)/u,
   );
 
   const date = dateMatch?.[1];
@@ -129,8 +127,9 @@ export function parseAmqiMobileDepositText(rawText: string): ParseResult {
   const receiverName = normalizeArabicName(narrativeMatch?.[5] ?? headerLogicalMatch?.[1] ?? "") || undefined;
   const receiverCard = narrativeMatch?.[6] ?? headerLogicalMatch?.[2];
   const receiverAccount = narrativeMatch?.[7] ?? headerLogicalMatch?.[3];
-  const amount = parseAmountText(amountMatch?.[1] ?? "");
-  const currency = currencyFromText(amountMatch?.[2] ?? text);
+  const amountIsReversed = Boolean(amountMatch?.[1] && !/^\d/.test(amountMatch[1]));
+  const amount = parseAmountText(amountIsReversed ? amountMatch?.[2] ?? "" : amountMatch?.[1] ?? "");
+  const currency = currencyFromText(amountIsReversed ? amountMatch?.[1] : amountMatch?.[2] ?? text);
   const senderName = normalizeArabicName(narrativeMatch?.[1] ?? "") || undefined;
   const senderIdentityType = narrativeMatch?.[2]?.startsWith("جواز")
     ? "passport_number"
