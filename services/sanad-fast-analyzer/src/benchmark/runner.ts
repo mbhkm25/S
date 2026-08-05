@@ -61,8 +61,12 @@ export function decideBenchmark(
 
   if (candidate.cases < policy.minimumCases || baseline.cases < policy.minimumCases) {
     reasons.push(`minimum_cases_not_met:${Math.min(candidate.cases, baseline.cases)}/${policy.minimumCases}`);
+    const earlyAccuracyOkay = candidate.meanCriticalAccuracy >= policy.minimumCriticalAccuracy &&
+      candidate.meanCriticalAccuracy >= baseline.meanCriticalAccuracy - policy.maximumCriticalAccuracyRegression;
+    const earlyLatencyPromising = relativeP95Improvement >= policy.minimumRelativeLatencyImprovement &&
+      absoluteP95ImprovementMs >= policy.minimumAbsoluteP95ImprovementMs;
     return {
-      status: "insufficient_data",
+      status: earlyAccuracyOkay && earlyLatencyPromising ? "continue_experiment" : "insufficient_data",
       reasons,
       baseline,
       candidate,
