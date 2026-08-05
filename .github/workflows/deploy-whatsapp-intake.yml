@@ -6,11 +6,12 @@ on:
       - main
     paths:
       - '.github/workflows/deploy-whatsapp-intake.yml'
+      - 'scripts/apply-dynamic-financial-identifier-labels.py'
       - 'supabase/functions/sanad-v3-whatsapp-intake/**'
       - 'supabase/migrations/**whatsapp_sender_guidance**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -20,6 +21,26 @@ jobs:
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply dynamic financial identifier labels
+        run: python scripts/apply-dynamic-financial-identifier-labels.py
+
+      - name: Persist generated source on the feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/features/operations/OperationDetailsRuntimeV2.tsx src/components/Details.tsx
+          if git diff --cached --quiet; then
+            echo 'No generated source changes'
+          else
+            git commit -m 'Use dynamic financial identifier labels in operation details'
+            git push origin HEAD:${{ github.head_ref }}
+          fi
 
       - uses: denoland/setup-deno@v2
         with:
