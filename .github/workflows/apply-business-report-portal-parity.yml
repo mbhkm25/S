@@ -49,3 +49,5 @@ jobs:
             git commit -m 'Open business report setup in an independent portal'
             git push origin HEAD:fix/business-report-portal-parity
           fi
+
+      # This workflow is temporary and will be removed before merge.
