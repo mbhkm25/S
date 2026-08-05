@@ -1,9 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const projectRef = "hudbzlgclghlhazlduas";
-const targetFunction = "sanad-v3-analyze-operation";
-const gatewayName = "sanad-v3-app-trigger-analysis";
-const kHeader = "x-sanad-internal-key";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,7 +9,11 @@ const corsHeaders = {
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -48,10 +48,15 @@ async function canAccessOperation(
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return respond({ ok: false, error: "method_not_allowed" }, 405);
+  if (req.method !== "POST") {
+    return respond({ ok: false, error: "method_not_allowed" }, 405);
+  }
 
-  const k = Deno.env.get("SANAD_INTERNAL_API_KEY");
-  if (!k) return respond({ ok: false, error: "server_misconfigured" }, 500);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return respond({ ok: false, error: "server_misconfigured" }, 500);
+  }
 
   const authorization = req.headers.get("Authorization");
   if (!authorization) return respond({ ok: false, error: "not_authenticated" }, 401);
@@ -75,33 +80,42 @@ Deno.serve(async (req: Request) => {
     return respond({ ok: false, error: "authorization_unavailable" }, 503);
   }
 
-  const headers = new Headers();
-  headers.set("Content-Type", "application/json");
-  headers.set(kHeader, k);
-
-  const upstream = await fetch(
-    `https://${projectRef}.functions.supabase.co/${targetFunction}`,
+  const rpcResponse = await fetch(
+    `${supabaseUrl}/rest/v1/rpc/enqueue_operation_analysis`,
     {
       method: "POST",
-      headers,
-      body: JSON.stringify({ ...payload, gateway: gatewayName }),
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        p_operation_id: payload.operation_id,
+        p_priority: 100,
+        p_source: "app",
+        p_requested_by_user_id: null,
+      }),
     },
   );
 
-  const text = await upstream.text();
-  let body: unknown = null;
+  const raw = await rpcResponse.text();
+  let jobId: unknown = null;
   try {
-    body = text ? JSON.parse(text) : null;
+    jobId = raw ? JSON.parse(raw) : null;
   } catch {
-    body = { raw: text };
+    jobId = raw;
   }
 
-  if (!upstream.ok) {
-    return respond(
-      { ok: false, error: "upstream_failed", status: upstream.status, details: body },
-      upstream.status,
-    );
+  if (!rpcResponse.ok) {
+    return respond({ ok: false, error: "queue_enqueue_failed", details: jobId }, 503);
   }
 
-  return respond(body ?? { ok: true });
+  return respond({
+    ok: true,
+    queued: true,
+    operation_id: payload.operation_id,
+    job_id: jobId,
+    ai_status: "queued",
+    message: "تم استلام العملية ووضعها في قائمة التحليل.",
+  }, 202);
 });
