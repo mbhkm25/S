@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, ChevronLeft, CircleAlert, LockKeyhole, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  ChevronDown,
+  ChevronLeft,
+  CircleAlert,
+  LockKeyhole,
+  RefreshCw,
+  ShieldCheck,
+  Users
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toLatinDigits } from '../../lib/digits';
 
@@ -66,13 +75,14 @@ function countLabel(value: number | undefined): string {
 }
 
 function workspaceCountLabel(count: number): string {
-  return count === 1 ? 'مساحة عمل' : 'مساحات عمل';
+  return count === 1 ? 'نشاط' : 'أنشطة';
 }
 
 export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
   const [items, setItems] = useState<BusinessWorkspaceContext[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,7 +104,11 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
 
   useEffect(() => {
     if (!loading && window.location.hash === '#business-workspaces') {
-      window.setTimeout(() => document.getElementById('business-workspaces')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      setExpanded(true);
+      window.setTimeout(
+        () => document.getElementById('business-workspaces')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        50
+      );
     }
   }, [loading]);
 
@@ -122,7 +136,13 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
           <div className="min-w-0 flex-1">
             <strong className="block text-xs text-rose-800">تعذر تحميل مساحات العمل</strong>
             <p className="mt-1 break-words text-[10px] leading-5 text-rose-700">{error}</p>
-            <button type="button" onClick={() => void load()} className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-bold text-rose-700 shadow-sm">إعادة المحاولة</button>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-3 rounded-xl bg-white px-3 py-2 text-[10px] font-bold text-rose-700 shadow-sm"
+            >
+              إعادة المحاولة
+            </button>
           </div>
         </div>
       </section>
@@ -132,61 +152,109 @@ export default function BusinessWorkspacesAccess({ mode = 'profile' }: Props) {
   if (!items.length) return null;
 
   return (
-    <section id="business-workspaces" className="scroll-mt-24 overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.07)]" dir="rtl" aria-labelledby={`business-workspaces-${mode}`}>
-      <header className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-l from-emerald-50 via-white to-sky-50 px-4 py-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-emerald-300 shadow-lg">
-          <BriefcaseBusiness className="h-5 w-5" />
+    <section
+      id="business-workspaces"
+      className="scroll-mt-24 overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.07)]"
+      dir="rtl"
+      aria-labelledby={`business-workspaces-${mode}`}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded(current => !current)}
+        className="w-full bg-gradient-to-l from-emerald-50 via-white to-sky-50 px-4 py-4 text-right transition active:bg-slate-50"
+        aria-expanded={expanded}
+        aria-controls={`business-workspaces-list-${mode}`}
+      >
+        <span className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-emerald-300 shadow-lg">
+            <BriefcaseBusiness className="h-5 w-5" />
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className="block text-[9px] font-bold text-emerald-700">التشغيل اليومي للفريق</span>
+            <span id={`business-workspaces-${mode}`} className="mt-0.5 block text-sm font-bold text-slate-950">
+              مساحات العمل
+            </span>
+            <span className="mt-1 block text-[9px] leading-5 text-slate-500">
+              اضغط لعرض الأنشطة المرتبطة بك ووارد المدفوعات لكل نشاط.
+            </span>
+          </span>
+
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm">
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+          </span>
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-bold text-emerald-700">التشغيل اليومي للفريق</p>
-          <h2 id={`business-workspaces-${mode}`} className="mt-0.5 text-sm font-bold text-slate-950">مساحات العمل</h2>
-          <p className="mt-1 text-[9px] leading-5 text-slate-500">كل نشاط تملكه أو ترتبط به كعضو فريق يظهر هنا، مع صلاحياتك الفعلية.</p>
-        </div>
-        <div className="shrink-0 text-left">
-          <strong className="block text-base text-slate-950">{countLabel(items.length)}</strong>
-          <span className="block text-[8px] font-bold text-slate-400">{workspaceCountLabel(items.length)}</span>
-          <span className="mt-1 block whitespace-nowrap text-[8px] font-bold text-slate-500">جديدة: {countLabel(totals.new)} · لدي: {countLabel(totals.mine)}</span>
-        </div>
-      </header>
 
-      <div className="grid gap-2 p-3">
-        {items.map((workspace) => {
-          const canView = workspace.permissions?.view === true;
-          const newCount = Number(workspace.counts?.new || 0);
-          const mineCount = Number(workspace.counts?.mine || 0);
-          const content = (
-            <>
-              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ${canView ? 'text-slate-700' : 'text-slate-400'}`}>
-                {canView ? (workspace.is_owner ? <ShieldCheck className="h-5 w-5" /> : <Users className="h-5 w-5" />) : <LockKeyhole className="h-5 w-5" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <strong className="block truncate text-sm text-slate-950">{workspace.business_name}</strong>
-                <span className="mt-1 block text-[9px] font-bold text-slate-500">{roleLabel(workspace)}</span>
-                {canView ? (
-                  <span className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-[8px] font-bold text-emerald-800">جديدة: {countLabel(newCount)}</span>
-                    <span className="rounded-full bg-sky-100 px-2 py-1 text-[8px] font-bold text-sky-800">لدي: {countLabel(mineCount)}</span>
-                    {workspace.permissions.claim && <span className="rounded-full bg-white px-2 py-1 text-[8px] font-bold text-slate-600">يمكنك الاستلام</span>}
-                  </span>
-                ) : (
-                  <span className="mt-2 block text-[9px] leading-5 text-amber-700">عضويتك نشطة، لكن صلاحية وارد المدفوعات لم يمنحها مالك النشاط بعد.</span>
-                )}
-              </span>
-              {canView && <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-1" />}
-            </>
-          );
+        <span className="mt-3 grid grid-cols-3 gap-2" aria-label="ملخص مساحات العمل">
+          <span className="rounded-2xl border border-slate-200 bg-white/90 px-2 py-2.5 text-center shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+            <strong className="block text-base font-black text-slate-950">{countLabel(items.length)}</strong>
+            <span className="mt-0.5 block text-[8px] font-bold text-slate-500">{workspaceCountLabel(items.length)}</span>
+          </span>
+          <span className="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-2 py-2.5 text-center shadow-[0_4px_14px_rgba(16,185,129,0.05)]">
+            <strong className="block text-base font-black text-emerald-800">{countLabel(totals.new)}</strong>
+            <span className="mt-0.5 block text-[8px] font-bold text-emerald-700">جديدة</span>
+          </span>
+          <span className="rounded-2xl border border-sky-200 bg-sky-50/90 px-2 py-2.5 text-center shadow-[0_4px_14px_rgba(14,165,233,0.05)]">
+            <strong className="block text-base font-black text-sky-800">{countLabel(totals.mine)}</strong>
+            <span className="mt-0.5 block text-[8px] font-bold text-sky-700">لدي</span>
+          </span>
+        </span>
+      </button>
 
-          return canView ? (
-            <a key={workspace.business_id} href={workspaceUrl(workspace.business_id)} className="group flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50/80 p-3.5 text-right transition active:scale-[0.99] active:bg-slate-100">
-              {content}
-            </a>
-          ) : (
-            <article key={workspace.business_id} className="flex items-center gap-3 rounded-[1.35rem] border border-amber-100 bg-amber-50/70 p-3.5 text-right">
-              {content}
-            </article>
-          );
-        })}
-      </div>
+      {expanded && (
+        <div id={`business-workspaces-list-${mode}`} className="grid gap-2 border-t border-slate-100 p-3">
+          {items.map((workspace) => {
+            const canView = workspace.permissions?.view === true;
+            const newCount = Number(workspace.counts?.new || 0);
+            const mineCount = Number(workspace.counts?.mine || 0);
+            const content = (
+              <>
+                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ${canView ? 'text-slate-700' : 'text-slate-400'}`}>
+                  {canView
+                    ? (workspace.is_owner ? <ShieldCheck className="h-5 w-5" /> : <Users className="h-5 w-5" />)
+                    : <LockKeyhole className="h-5 w-5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm text-slate-950">{workspace.business_name}</strong>
+                  <span className="mt-1 block text-[9px] font-bold text-slate-500">{roleLabel(workspace)}</span>
+                  {canView ? (
+                    <span className="mt-2 grid grid-cols-2 gap-1.5">
+                      <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center text-[8px] font-bold text-emerald-800">
+                        جديدة: {countLabel(newCount)}
+                      </span>
+                      <span className="rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-center text-[8px] font-bold text-sky-800">
+                        لدي: {countLabel(mineCount)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="mt-2 block text-[9px] leading-5 text-amber-700">
+                      عضويتك نشطة، لكن صلاحية وارد المدفوعات لم يمنحها مالك النشاط بعد.
+                    </span>
+                  )}
+                </span>
+                {canView && <ChevronLeft className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:-translate-x-1" />}
+              </>
+            );
+
+            return canView ? (
+              <a
+                key={workspace.business_id}
+                href={workspaceUrl(workspace.business_id)}
+                className="group flex items-center gap-3 rounded-[1.35rem] border border-slate-100 bg-slate-50/80 p-3.5 text-right transition active:scale-[0.99] active:bg-slate-100"
+              >
+                {content}
+              </a>
+            ) : (
+              <article
+                key={workspace.business_id}
+                className="flex items-center gap-3 rounded-[1.35rem] border border-amber-100 bg-amber-50/70 p-3.5 text-right"
+              >
+                {content}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
