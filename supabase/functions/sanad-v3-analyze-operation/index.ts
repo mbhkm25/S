@@ -14,6 +14,7 @@
 // - GEMINI_REQUEST_TIMEOUT_MS = 22000
 // - ENABLE_FAST_ROUTING_PASS = false
 // - GEMINI_FAST_MODEL = GEMINI_MODEL
+// - ENABLE_OPERATIONAL_SHADOW = false
 
 import { jsonrepair } from "npm:jsonrepair@3.13.1";
 import {
@@ -54,6 +55,8 @@ const GEMINI_REQUEST_TIMEOUT_MS = Math.max(
 );
 const ENABLE_FAST_ROUTING_PASS =
   (Deno.env.get("ENABLE_FAST_ROUTING_PASS") || "false") === "true";
+const ENABLE_OPERATIONAL_SHADOW =
+  (Deno.env.get("ENABLE_OPERATIONAL_SHADOW") || "false") === "true";
 
 const FUNCTION_NAME = "sanad-v3-analyze-operation";
 const DEFAULT_BUCKET = "operation-files";
@@ -1114,6 +1117,63 @@ async function runFastExtraction(params: {
   }
 }
 
+
+async function runOperationalShadow(params: {
+  operationId: string;
+  runId: string;
+}): Promise<void> {
+  const startedAtMs = Date.now();
+  if (!ENABLE_OPERATIONAL_SHADOW) return;
+
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/sanad-operation-shadow-orchestrate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          operation_id: params.operationId,
+          attempt: 1,
+        }),
+      },
+    );
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `operational_shadow_http_${response.status}:${truncateText(responseText, 500)}`,
+      );
+    }
+
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "operational_shadow",
+      stage: "orchestrate",
+      status: "success",
+      startedAtMs,
+      metadata: { response_status: response.status },
+    });
+  } catch (error) {
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "operational_shadow",
+      stage: "orchestrate",
+      status: "error",
+      startedAtMs,
+      metadata: {
+        error: truncateText(error instanceof Error ? error.message : String(error), 800),
+      },
+    });
+  }
+}
+
 Deno.serve(async (req: Request) => {
   let operationId: string | null = null;
   let operationStarted = false;
@@ -1443,6 +1503,16 @@ Deno.serve(async (req: Request) => {
         selected_identifier: finalAssessment.selectedIdentifier,
       },
     });
+
+    const operationalShadowTask = runOperationalShadow({
+      operationId: operation.id,
+      runId,
+    });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(operationalShadowTask);
+    } else {
+      void operationalShadowTask;
+    }
 
     return jsonResponse({
       ok: true,
