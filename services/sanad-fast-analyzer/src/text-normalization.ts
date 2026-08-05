@@ -18,6 +18,7 @@ export function normalizeArabicFinancialText(value: string): string {
     .replace(/\s*#\s*/g, "#")
     .replace(/\s*\/\s*/g, "/")
     .replace(/\s*-\s*/g, "-")
+    .replace(/([0-9]+-[0-9]{6,})\s*المرجع\s*:/gu, "المرجع : $1")
     .replace(/\s+/g, " ")
     .trim();
 }
