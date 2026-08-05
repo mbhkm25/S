@@ -1,3 +1,6 @@
+// The root application TypeScript resolver does not understand Deno's npm: specifier.
+// Deno resolves and type-checks this import in the dedicated fast-engine workflow.
+// @ts-ignore Deno-specific npm specifier
 import { extractText } from "npm:unpdf@1.6.2";
 import { normalizeArabicFinancialText } from "./text-normalization.ts";
 
