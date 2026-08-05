@@ -1153,8 +1153,8 @@ async function runOperationalShadow(params: {
     await recordSpan({
       operationId: params.operationId,
       runId: params.runId,
-      pipeline: "operational_shadow",
-      stage: "orchestrate",
+      pipeline: "analysis",
+      stage: "operational_shadow_orchestrate",
       status: "success",
       startedAtMs,
       metadata: { response_status: response.status },
@@ -1163,8 +1163,8 @@ async function runOperationalShadow(params: {
     await recordSpan({
       operationId: params.operationId,
       runId: params.runId,
-      pipeline: "operational_shadow",
-      stage: "orchestrate",
+      pipeline: "analysis",
+      stage: "operational_shadow_orchestrate",
       status: "error",
       startedAtMs,
       metadata: {
