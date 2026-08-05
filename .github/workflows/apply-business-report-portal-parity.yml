@@ -1,0 +1,51 @@
+name: Apply business report portal parity
+
+on:
+  push:
+    branches:
+      - fix/business-report-portal-parity
+    paths:
+      - 'scripts/apply-business-report-portal-parity.py'
+      - '.github/workflows/apply-business-report-portal-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/business-report-portal-parity
+          fetch-depth: 0
+
+      - name: Apply source patch
+        run: python scripts/apply-business-report-portal-parity.py
+
+      - name: Validate report parity wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "createPortal" src/components/business/reports/BusinessReportRequestSheet.tsx
+          grep -q "document.body" src/components/business/reports/BusinessReportRequestSheet.tsx
+          grep -q "رابط تفاعلي" src/components/business/reports/BusinessReportRequestSheet.tsx
+          grep -q "deliveryFormat" src/components/business/reports/BusinessReportRequestSheet.tsx
+          grep -q "p_delivery_format" src/lib/businessReportsApi.ts
+          npm ci
+          npm run build
+
+      - name: Commit generated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/components/business/reports/BusinessReportRequestSheet.tsx
+          if git diff --cached --quiet; then
+            echo 'No generated source changes'
+          else
+            git commit -m 'Open business report setup in an independent portal'
+            git push origin HEAD:fix/business-report-portal-parity
+          fi
