@@ -4,7 +4,7 @@
     "noUncheckedIndexedAccess": true
   },
   "tasks": {
-    "check": "deno check src/contracts.ts src/template-registry.ts src/text-normalization.ts src/parsers/amqi-mobile-deposit.ts test/template-registry.test.ts test/amqi-mobile-deposit.test.ts",
-    "test": "deno test test/template-registry.test.ts test/amqi-mobile-deposit.test.ts"
+    "check": "deno check src/contracts.ts src/template-registry.ts src/text-normalization.ts src/parsers/amqi-mobile-deposit.ts src/benchmark/contracts.ts src/benchmark/scoring.ts src/benchmark/runner.ts src/benchmark/engines.ts test/template-registry.test.ts test/amqi-mobile-deposit.test.ts test/benchmark-runner.test.ts",
+    "test": "deno test test/template-registry.test.ts test/amqi-mobile-deposit.test.ts test/benchmark-runner.test.ts"
   }
 }
