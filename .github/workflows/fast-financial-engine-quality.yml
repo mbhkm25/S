@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "services/sanad-fast-analyzer/**"
+      - "supabase/functions/sanad-operation-analysis-shadow/**"
+      - "supabase/migrations/*shadow*"
       - "docs/fast-financial-engine-template-corpus-v1.md"
       - ".github/workflows/fast-financial-engine-quality.yml"
   push:
@@ -11,6 +13,8 @@ on:
       - main
     paths:
       - "services/sanad-fast-analyzer/**"
+      - "supabase/functions/sanad-operation-analysis-shadow/**"
+      - "supabase/migrations/*shadow*"
       - "docs/fast-financial-engine-template-corpus-v1.md"
       - ".github/workflows/fast-financial-engine-quality.yml"
 
@@ -31,13 +35,16 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Type-check
+      - name: Type-check engine
         working-directory: services/sanad-fast-analyzer
         run: deno task check
 
-      - name: Test registry
+      - name: Test engine
         working-directory: services/sanad-fast-analyzer
         run: deno task test
+
+      - name: Type-check shadow worker
+        run: deno check supabase/functions/sanad-operation-analysis-shadow/index.ts
 
       - name: Reject raw financial sample files
         shell: bash
