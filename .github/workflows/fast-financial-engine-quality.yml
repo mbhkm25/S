@@ -1,0 +1,50 @@
+name: Fast financial engine quality
+
+on:
+  pull_request:
+    paths:
+      - "services/sanad-fast-analyzer/**"
+      - "docs/fast-financial-engine-template-corpus-v1.md"
+      - ".github/workflows/fast-financial-engine-quality.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/sanad-fast-analyzer/**"
+      - "docs/fast-financial-engine-template-corpus-v1.md"
+      - ".github/workflows/fast-financial-engine-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    name: Registry contracts and guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check
+        working-directory: services/sanad-fast-analyzer
+        run: deno task check
+
+      - name: Test registry
+        working-directory: services/sanad-fast-analyzer
+        run: deno task test
+
+      - name: Reject raw financial sample files
+        shell: bash
+        run: |
+          if find services/sanad-fast-analyzer -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' -o -iname '*.pdf' \) \
+            | grep -q .; then
+            echo "Raw financial sample files must not be committed to the repository."
+            exit 1
+          fi
