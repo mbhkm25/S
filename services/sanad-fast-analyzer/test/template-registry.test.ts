@@ -1,6 +1,10 @@
 import registryJson from "../templates/registry.v1.json" with { type: "json" };
 import { getTemplate, parseTemplateRegistry } from "../src/template-registry.ts";
 
+declare const Deno: {
+  test(name: string, fn: () => void | Promise<void>): void;
+};
+
 Deno.test("initial registry is structurally valid", () => {
   const registry = parseTemplateRegistry(registryJson);
   if (registry.templates.length !== 6) {
