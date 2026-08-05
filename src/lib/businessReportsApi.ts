@@ -9,6 +9,8 @@ export type BusinessReportStatus =
   | 'failed'
   | 'cancelled';
 
+export type BusinessReportDeliveryFormat = 'interactive' | 'pdf' | 'both';
+
 export type BusinessReportBackendOperationStatus =
   | 'all'
   | 'verified'
@@ -72,6 +74,7 @@ export async function createBusinessReportRequest(params: {
   dateTo: string | null;
   filters: Partial<BusinessReportFilters>;
   destinationPhone: string;
+  deliveryFormat: BusinessReportDeliveryFormat;
 }): Promise<string> {
   const requestedStatus = params.filters.status;
   const safeStatus =
@@ -85,6 +88,7 @@ export async function createBusinessReportRequest(params: {
     p_date_to: params.dateTo,
     p_filters: { ...params.filters, status: safeStatus },
     p_destination_phone: params.destinationPhone,
+    p_delivery_format: params.deliveryFormat,
   });
 
   if (error) {
