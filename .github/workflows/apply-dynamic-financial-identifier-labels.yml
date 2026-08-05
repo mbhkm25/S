@@ -1,0 +1,47 @@
+name: Apply dynamic financial identifier labels
+
+on:
+  push:
+    branches:
+      - fix/dynamic-financial-identifier-labels
+    paths:
+      - 'scripts/apply-dynamic-financial-identifier-labels.py'
+      - '.github/workflows/apply-dynamic-financial-identifier-labels.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/dynamic-financial-identifier-labels
+          fetch-depth: 0
+
+      - name: Apply source patch
+        run: python scripts/apply-dynamic-financial-identifier-labels.py
+
+      - name: Validate expected integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "getFinancialIdentifierLabel(runtime.operation.receiver_identifier_type)" src/features/operations/OperationDetailsRuntimeV2.tsx
+          grep -q "getFinancialIdentifierLabel(operation.receiver_identifier_type)" src/components/Details.tsx
+          grep -q "receiver_identifier_type?: string | null" src/features/operations/OperationDetailsRuntimeV2.tsx
+
+      - name: Commit generated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/features/operations/OperationDetailsRuntimeV2.tsx src/components/Details.tsx
+          if git diff --cached --quiet; then
+            echo 'No generated changes'
+          else
+            git commit -m 'Use dynamic financial identifier labels in operation details'
+            git push origin HEAD:fix/dynamic-financial-identifier-labels
+          fi
