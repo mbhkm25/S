@@ -58,6 +58,38 @@ Deno.test("keeps sender identity separate from sender account", () => {
   assert(sender?.identifiers.filter((item) => item.type === "financial_account_number").length === 1, "account classification duplicated");
 });
 
+Deno.test("parses sanitized Poppler RTL layout from the real Al-Amqi template", () => {
+  const result = parseAmqiMobileDepositText(`
+    8-226242876 المرجع : 2026-05-14 التاريخ :
+    254070001 رقم الحساب مستفيد تجريبي بط08010070000 السيد :
+    نود إشعاركم أننا قيدنا لحسابكم لدينا حسب التفاصيل التالية
+    سعودي#600#المبلغ ستة مائة سعودي
+    إشعار إيداع من حساب : مرسل تجريبي/جواز-9747000رقم 254120001الى حساب : مستفيد تجريبي
+    بط-08010070000رقم-254070001تجاري تسديد حساب--عبر تطبيق العمقي جوال
+    PM 08 : 04 2026-05-14 عاجل هذا الاشعار آلي ولايحتاج الى ختم أو توقيع
+  `);
+
+  assert(result.matched, "Poppler layout should match");
+  assert(result.extraction, "extraction should be present");
+  assert(result.extraction.amount === 600, "reversed amount layout mismatch");
+  assert(result.extraction.currency === "SAR", "reversed currency layout mismatch");
+  assert(result.extraction.documentReference === "8-226242876", "RTL reference mismatch");
+  assert(result.extraction.transactionDatetime === "2026-05-14T16:08:00", "RTL visual time mismatch");
+  assert(result.extraction.reviewRequired === false, `unexpected review: ${result.extraction.warnings.join(",")}; missing=${result.missing.join(",")}`);
+});
+
+Deno.test("repairs malformed logical minute-hour ordering", () => {
+  const result = parseAmqiMobileDepositText(`
+    التاريخ: 2025-06-05 المرجع: 8-232094624
+    السيد: مستفيد تجريبي بط-08010070001 رقم الحساب 254070002
+    المبلغ #500# سعودي
+    من حساب: مرسل تجريبي/جواز-14380001 رقم 254220002 إلى حساب: مستفيد تجريبي بط-08010070001 رقم 254070002
+    عبر تطبيق العمقي جوال إشعار إيداع 2025-06-05 29!08PM
+  `);
+
+  assert(result.extraction?.transactionDatetime === "2025-06-05T20:29:00", "minute-hour repair failed");
+});
+
 Deno.test("rejects unrelated financial text without enough anchors", () => {
   const result = parseAmqiMobileDepositText("تحويل مالي بمبلغ 1000 ريال ورقم 12345");
   assert(result.matched === false, "unrelated text must not match");
