@@ -8,6 +8,7 @@ export type TransactionDirection =
 
 export type TransactionType =
   | "deposit"
+  | "withdrawal"
   | "transfer"
   | "payment"
   | "credit_notice"
