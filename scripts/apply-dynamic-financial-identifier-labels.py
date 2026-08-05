@@ -32,8 +32,16 @@ replace_once(
     "import { formatOperationReceivedAt } from '../lib/operationReceiptTime';",
     "import { formatOperationReceivedAt } from '../lib/operationReceiptTime';\nimport { getFinancialIdentifierLabel } from '../lib/financialIdentifierPresentation';",
 )
-replace_once(
-    details,
-    '<DataRow label="رقم الحساب" value={operation.receiver_account} icon={<Hash className="w-4 h-4" />} ltr />',
-    '<DataRow label={getFinancialIdentifierLabel(operation.receiver_identifier_type)} value={operation.receiver_account} icon={<Hash className="w-4 h-4" />} ltr />',
+details_text = details.read_text(encoding='utf-8')
+label_marker = 'label="رقم الحساب"'
+label_count = details_text.count(label_marker)
+if label_count != 1:
+    raise SystemExit(f'{details}: expected one static account label, found {label_count}')
+details.write_text(
+    details_text.replace(
+        label_marker,
+        'label={getFinancialIdentifierLabel(operation.receiver_identifier_type)}',
+        1,
+    ),
+    encoding='utf-8',
 )
