@@ -12,6 +12,19 @@ export interface AmqiFamilyResult {
   reasons: string[];
 }
 
+/**
+ * PDF text engines disagree on RTL token order. Poppler may expose
+ * `PM 08!29 2025-06-05`, while PDF.js/unpdf may expose `29!08PM`.
+ * Convert only the explicit prefix-period form into logical hour-minute order;
+ * the deposit/withdrawal parsers already repair the suffix malformed form.
+ */
+export function normalizeAmqiExtractorOrder(rawText: string): string {
+  return rawText.replace(
+    /\b(AM|PM)\s*(\d{1,2})\s*[:!]\s*(\d{2})(?=\s+20\d{2}-\d{2}-\d{2})/gi,
+    (_match, period: string, hour: string, minute: string) => `${hour}:${minute}${period}`,
+  );
+}
+
 export function classifyAmqiTemplate(rawText: string): AmqiTemplateKind {
   const text = normalizeArabicFinancialText(rawText);
   const hasWithdrawal = /إشعار\s*سحب/u.test(text) || /قيدنا\s*على\s*حسابكم/u.test(text);
@@ -23,9 +36,10 @@ export function classifyAmqiTemplate(rawText: string): AmqiTemplateKind {
 }
 
 export function parseAmqiFamilyText(rawText: string): AmqiFamilyResult {
-  const kind = classifyAmqiTemplate(rawText);
+  const orderedText = normalizeAmqiExtractorOrder(rawText);
+  const kind = classifyAmqiTemplate(orderedText);
   if (kind === "withdrawal") {
-    const result = parseAmqiMobileWithdrawalText(rawText);
+    const result = parseAmqiMobileWithdrawalText(orderedText);
     return {
       matched: result.matched,
       kind,
@@ -35,7 +49,7 @@ export function parseAmqiFamilyText(rawText: string): AmqiFamilyResult {
   }
 
   if (kind === "deposit") {
-    const result = parseAmqiMobileDepositText(rawText);
+    const result = parseAmqiMobileDepositText(orderedText);
     return {
       matched: result.matched,
       kind,
