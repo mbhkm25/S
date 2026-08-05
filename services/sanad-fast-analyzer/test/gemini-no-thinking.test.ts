@@ -31,6 +31,6 @@ Deno.test("Gemini 2.5 Flash benchmark payload explicitly disables thinking", () 
   assertEquals(payload.generationConfig.thinkingConfig.thinkingBudget, 0);
   assertEquals(payload.generationConfig.temperature, 0);
   assertEquals(payload.generationConfig.responseMimeType, "application/json");
-  assertEquals(documentPart?.inlineData.mimeType, "application/pdf");
-  assertEquals(documentPart?.inlineData.data, "cGRm");
+  assertEquals(documentPart?.inlineData?.mimeType, "application/pdf");
+  assertEquals(documentPart?.inlineData?.data, "cGRm");
 });
