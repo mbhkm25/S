@@ -23,6 +23,7 @@ import { requestOperationFileAccess } from '../../lib/operationFileAccess';
 import { claimPaymentInboxItem, type PaymentInboxItem } from '../../lib/paymentInboxApi';
 import { toLatinDigits } from '../../lib/digits';
 import { getCurrencyPresentation } from '../../lib/currencyRegistry';
+import { getFinancialIdentifierLabel } from '../../lib/financialIdentifierPresentation';
 
 type Tab = 'operation' | 'document' | 'record';
 type PreviewState = 'idle' | 'pending' | 'ready' | 'failed';
@@ -42,6 +43,7 @@ type Runtime = {
     currency?: string | null;
     receiver_name?: string | null;
     receiver_account?: string | null;
+    receiver_identifier_type?: string | null;
     reference_number?: string | null;
     confidence_score?: number | null;
     review_status?: string | null;
@@ -487,7 +489,7 @@ export default function OperationDetailsRuntimeV2() {
           </div>
           <div className="my-3 h-px bg-slate-100" />
           <AnalysisNotice state={currentAnalysisState} />
-          {analysisReady ? <div className="grid grid-cols-2 gap-2.5"><Fact label="المستلم" value={runtime.operation.receiver_name || undefined} wide /><Fact label="رقم الحساب" value={runtime.operation.receiver_account ? toLatinDigits(String(runtime.operation.receiver_account)) : undefined} mono /><Fact label="المرجع" value={runtime.operation.reference_number ? toLatinDigits(String(runtime.operation.reference_number)) : undefined} mono /><Fact label="وقت العملية" value={fmt(runtime.timing.transaction_at, 'لم يستخرج')} /><Fact label="وصل إلى سند" value={fmt(runtime.timing.received_at)} />{lag ? <div className="col-span-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-[10px] font-bold text-emerald-800">{lag}</div> : null}</div> : null}
+          {analysisReady ? <div className="grid grid-cols-2 gap-2.5"><Fact label="المستلم" value={runtime.operation.receiver_name || undefined} wide /><Fact label={getFinancialIdentifierLabel(runtime.operation.receiver_identifier_type)} value={runtime.operation.receiver_account ? toLatinDigits(String(runtime.operation.receiver_account)) : undefined} mono /><Fact label="المرجع" value={runtime.operation.reference_number ? toLatinDigits(String(runtime.operation.reference_number)) : undefined} mono /><Fact label="وقت العملية" value={fmt(runtime.timing.transaction_at, 'لم يستخرج')} /><Fact label="وصل إلى سند" value={fmt(runtime.timing.received_at)} />{lag ? <div className="col-span-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-[10px] font-bold text-emerald-800">{lag}</div> : null}</div> : null}
         </article>
 
         <nav className="grid grid-cols-3 rounded-2xl border border-slate-200 bg-slate-100 p-1">{([['operation', 'العملية'], ['document', 'المستند'], ['record', 'السجل']] as Array<[Tab, string]>).map(([value, label]) => <button key={value} onClick={() => setTab(value)} className={`h-10 rounded-xl text-[11px] font-black ${tab === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>{label}</button>)}</nav>
