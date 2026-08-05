@@ -23,6 +23,9 @@ export type FinancialIdentifierType =
   | 'merchant_point'
   | 'terminal_number'
   | 'phone_number'
+  | 'national_id'
+  | 'passport_number'
+  | 'unique_account_name'
   | 'iban'
   | 'other';
 
@@ -47,9 +50,7 @@ export interface BusinessFinancialIdentifier {
 }
 
 export interface BusinessFinancialAccount {
-  /** Stable database UUID used by the canonical v2 RPC. */
   account_id: string;
-  /** Compatibility identifier used by the legacy public profile contract. */
   id: string;
   name: string;
   financial_entity_code: FinancialEntityCode;
@@ -96,6 +97,13 @@ interface FinancialAccountMutationResponse {
   items?: unknown;
 }
 
+const COMPOSITE_IDENTIFIER_TYPES = new Set<FinancialIdentifierType>([
+  'phone_number',
+  'national_id',
+  'passport_number',
+  'unique_account_name'
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -111,9 +119,17 @@ function nullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
+function normalizeComparable(value: string): string {
+  return value
+    .trim()
+    .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/\s+/g, '')
+    .toLowerCase();
+}
+
 function parseIdentifier(value: unknown): BusinessFinancialIdentifier {
   if (!isRecord(value)) throw new Error('استجابة معرّف الحساب المالي غير صالحة.');
-
   return {
     id: requireString(value.id, 'identifier.id'),
     identifier_type: requireString(value.identifier_type, 'identifier.identifier_type') as FinancialIdentifierType,
@@ -121,25 +137,15 @@ function parseIdentifier(value: unknown): BusinessFinancialIdentifier {
     currency: nullableString(value.currency) as FinancialCurrency | null,
     is_primary: value.is_primary === true,
     routing_enabled: value.routing_enabled !== false,
-    verification_status: requireString(
-      value.verification_status ?? 'unverified',
-      'identifier.verification_status'
-    ) as FinancialVerificationStatus
+    verification_status: requireString(value.verification_status ?? 'unverified', 'identifier.verification_status') as FinancialVerificationStatus
   };
 }
 
 function parseAccount(value: unknown): BusinessFinancialAccount {
   if (!isRecord(value)) throw new Error('استجابة الحساب المالي غير صالحة.');
-
-  const identifiers = Array.isArray(value.identifiers)
-    ? value.identifiers.map(parseIdentifier)
-    : [];
-
+  const identifiers = Array.isArray(value.identifiers) ? value.identifiers.map(parseIdentifier) : [];
   const accounts = isRecord(value.accounts)
-    ? Object.fromEntries(
-        Object.entries(value.accounts)
-          .filter(([, accountValue]) => typeof accountValue === 'string' && accountValue.trim() !== '')
-      ) as Partial<Record<FinancialCurrency, string>>
+    ? Object.fromEntries(Object.entries(value.accounts).filter(([, item]) => typeof item === 'string' && item.trim() !== '')) as Partial<Record<FinancialCurrency, string>>
     : null;
 
   return {
@@ -154,10 +160,7 @@ function parseAccount(value: unknown): BusinessFinancialAccount {
     account_number: nullableString(value.account_number),
     accounts,
     routing_enabled: value.routing_enabled !== false,
-    verification_status: requireString(
-      value.verification_status ?? 'unverified',
-      'verification_status'
-    ) as FinancialVerificationStatus,
+    verification_status: requireString(value.verification_status ?? 'unverified', 'verification_status') as FinancialVerificationStatus,
     identifiers
   };
 }
@@ -170,25 +173,25 @@ function parseAccountArray(value: unknown): BusinessFinancialAccount[] {
 function validateUpsertInput(input: UpsertBusinessFinancialAccountInput): void {
   if (!input.businessId) throw new Error('معرّف النشاط مطلوب.');
   if (!input.financialEntityCode) throw new Error('الجهة المالية مطلوبة.');
-  if (input.financialEntityCode === 'unknown') {
-    throw new Error('لا يمكن حفظ حساب مالي تحت جهة غير معروفة.');
-  }
-  if (input.financialEntityCode === 'other' && !input.financialEntityRaw?.trim()) {
-    throw new Error('اكتب اسم الجهة المالية الأخرى.');
-  }
-  if (!Array.isArray(input.identifiers) || input.identifiers.length === 0) {
-    throw new Error('أضف معرّفًا ماليًا واحدًا على الأقل.');
-  }
-  if (input.identifiers.length > 20) {
-    throw new Error('الحد الأقصى 20 معرّفًا للحساب المالي الواحد.');
+  if (input.financialEntityCode === 'unknown') throw new Error('لا يمكن حفظ حساب مالي تحت جهة غير معروفة.');
+  if (input.financialEntityCode === 'other' && !input.financialEntityRaw?.trim()) throw new Error('اكتب اسم الجهة المالية الأخرى.');
+  if (!Array.isArray(input.identifiers) || input.identifiers.length === 0) throw new Error('أضف معرّفًا ماليًا واحدًا على الأقل.');
+  if (input.identifiers.length > 20) throw new Error('الحد الأقصى 20 معرّفًا للحساب المالي الواحد.');
+
+  if (input.identifiers.some(identifier => COMPOSITE_IDENTIFIER_TYPES.has(identifier.identifierType)) && !input.accountHolderName?.trim()) {
+    throw new Error('اسم صاحب الحساب مطلوب عند استخدام رقم جوال أو هوية أو جواز أو اسم حساب فريد.');
   }
 
   const uniqueIdentifiers = new Set<string>();
   for (const identifier of input.identifiers) {
     const value = identifier.identifierValue.trim();
     if (!value) throw new Error('قيمة المعرّف المالي مطلوبة.');
-
-    const key = `${identifier.identifierType}:${identifier.currency ?? ''}:${value}`;
+    if (identifier.identifierType === 'phone_number') {
+      const digits = normalizeComparable(value).replace(/\D/g, '');
+      const local = digits.startsWith('967') ? digits.slice(3) : digits.startsWith('0') ? digits.slice(1) : digits;
+      if (!/^7\d{8}$/.test(local)) throw new Error('رقم الجوال اليمني يجب أن يتكون من 9 أرقام ويبدأ بالرقم 7.');
+    }
+    const key = `${identifier.identifierType}:${identifier.currency ?? ''}:${normalizeComparable(value)}`;
     if (uniqueIdentifiers.has(key)) throw new Error('يوجد معرّف مالي مكرر.');
     uniqueIdentifiers.add(key);
   }
@@ -198,7 +201,6 @@ export async function getFinancialEntities(): Promise<FinancialEntityOption[]> {
   const { data, error } = await supabase.rpc('get_financial_entities');
   if (error) throw new Error(error.message || 'تعذر تحميل الجهات المالية.');
   if (!Array.isArray(data)) return [];
-
   return data.map((item: unknown) => {
     if (!isRecord(item)) throw new Error('استجابة الجهات المالية غير صالحة.');
     return {
@@ -210,16 +212,10 @@ export async function getFinancialEntities(): Promise<FinancialEntityOption[]> {
   });
 }
 
-export async function getBusinessFinancialAccounts(
-  businessId: string
-): Promise<BusinessFinancialAccount[]> {
+export async function getBusinessFinancialAccounts(businessId: string): Promise<BusinessFinancialAccount[]> {
   if (!businessId) throw new Error('معرّف النشاط مطلوب.');
-
-  const { data, error } = await supabase.rpc('get_business_financial_accounts', {
-    p_business_id: businessId
-  });
+  const { data, error } = await supabase.rpc('get_business_financial_accounts', { p_business_id: businessId });
   if (error) throw new Error(error.message || 'تعذر تحميل الحسابات المالية.');
-
   const response = isRecord(data) ? data as FinancialAccountCollectionResponse : null;
   return parseAccountArray(response?.items);
 }
@@ -228,7 +224,6 @@ export async function upsertBusinessFinancialAccount(
   input: UpsertBusinessFinancialAccountInput
 ): Promise<{ item: BusinessFinancialAccount; items: BusinessFinancialAccount[] }> {
   validateUpsertInput(input);
-
   const { data, error } = await supabase.rpc('upsert_business_financial_account_v2', {
     p_business_id: input.businessId,
     p_account_id: input.accountId || null,
@@ -246,31 +241,20 @@ export async function upsertBusinessFinancialAccount(
     })),
     p_routing_enabled: input.routingEnabled !== false
   });
-
   if (error) throw new Error(error.message || 'تعذر حفظ الحساب المالي.');
   if (!isRecord(data)) throw new Error('لم تُرجع قاعدة البيانات نتيجة حفظ صالحة.');
-
   const response = data as FinancialAccountMutationResponse;
   if (response.ok !== true) throw new Error('لم يكتمل حفظ الحساب المالي.');
-
-  return {
-    item: parseAccount(response.item),
-    items: parseAccountArray(response.items)
-  };
+  return { item: parseAccount(response.item), items: parseAccountArray(response.items) };
 }
 
-export async function archiveBusinessFinancialAccount(
-  businessId: string,
-  accountId: string
-): Promise<BusinessFinancialAccount[]> {
+export async function archiveBusinessFinancialAccount(businessId: string, accountId: string): Promise<BusinessFinancialAccount[]> {
   if (!businessId || !accountId) throw new Error('بيانات الحساب المالي غير مكتملة.');
-
   const { data, error } = await supabase.rpc('delete_business_financial_account', {
     p_business_id: businessId,
     p_account_id: accountId
   });
   if (error) throw new Error(error.message || 'تعذر أرشفة الحساب المالي.');
   if (!isRecord(data)) throw new Error('لم تُرجع قاعدة البيانات نتيجة أرشفة صالحة.');
-
   return parseAccountArray(data.items);
 }
