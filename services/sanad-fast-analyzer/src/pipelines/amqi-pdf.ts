@@ -1,12 +1,12 @@
 import type { CoreFinancialExtraction } from "../contracts.ts";
 import { extractPdfTextLayer, type PdfTextExtractionResult } from "../pdf-text.ts";
-import { parseAmqiMobileDepositText, type ParseResult } from "../parsers/amqi-mobile-deposit.ts";
+import { parseAmqiFamilyText, type AmqiFamilyResult } from "../parsers/amqi-family.ts";
 
 export interface AmqiPdfPipelineResult {
   status: "completed" | "not_amqi" | "needs_ocr" | "needs_review" | "failed";
   extraction?: CoreFinancialExtraction;
   pdf: PdfTextExtractionResult;
-  parse?: ParseResult;
+  parse?: AmqiFamilyResult;
   timings: {
     pdfTextMs: number;
     parseMs: number;
@@ -33,7 +33,7 @@ export async function analyzeAmqiPdfBytes(pdfBytes: Uint8Array): Promise<AmqiPdf
   }
 
   const parseStarted = performance.now();
-  const parse = parseAmqiMobileDepositText(pdf.rawText);
+  const parse = parseAmqiFamilyText(pdf.rawText);
   const parseMs = Number((performance.now() - parseStarted).toFixed(3));
   const totalMs = Number((performance.now() - started).toFixed(3));
 
@@ -43,7 +43,7 @@ export async function analyzeAmqiPdfBytes(pdfBytes: Uint8Array): Promise<AmqiPdf
       pdf,
       parse,
       timings: { pdfTextMs: pdf.durationMs, parseMs, totalMs },
-      reasons: [...pdf.warnings, ...parse.missing],
+      reasons: [...pdf.warnings, ...parse.reasons],
     };
   }
 
@@ -53,7 +53,7 @@ export async function analyzeAmqiPdfBytes(pdfBytes: Uint8Array): Promise<AmqiPdf
       pdf,
       parse,
       timings: { pdfTextMs: pdf.durationMs, parseMs, totalMs },
-      reasons: ["amqi_parser_returned_no_extraction"],
+      reasons: ["amqi_family_parser_returned_no_extraction"],
     };
   }
 
@@ -64,6 +64,6 @@ export async function analyzeAmqiPdfBytes(pdfBytes: Uint8Array): Promise<AmqiPdf
     pdf,
     parse,
     timings: { pdfTextMs: pdf.durationMs, parseMs, totalMs },
-    reasons: [...pdf.warnings, ...parse.extraction.warnings, ...parse.missing],
+    reasons: [...pdf.warnings, ...parse.reasons],
   };
 }
