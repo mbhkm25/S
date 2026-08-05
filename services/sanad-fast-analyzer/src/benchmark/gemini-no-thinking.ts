@@ -3,32 +3,97 @@ import type { BenchmarkCase, BenchmarkEngine, EngineExecution } from "./contract
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
+const IDENTIFIER_TYPES = [
+  "account_number",
+  "wallet_number",
+  "customer_line",
+  "merchant_point",
+  "terminal_number",
+  "phone_number",
+  "national_id",
+  "passport_number",
+  "unique_account_name",
+  "iban",
+  "card_number",
+  "document_reference",
+  "transfer_reference",
+  "other",
+  "unknown_identifier",
+];
+
+const IDENTIFIER_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    type: { type: "STRING", enum: IDENTIFIER_TYPES },
+    value: { type: "STRING" },
+    sourceLabel: { type: "STRING", nullable: true },
+    isPrimaryRoutingIdentifier: { type: "BOOLEAN" },
+    confidence: { type: "NUMBER" },
+    evidence: { type: "ARRAY", items: { type: "OBJECT" } },
+  },
+  required: [
+    "type",
+    "value",
+    "sourceLabel",
+    "isPrimaryRoutingIdentifier",
+    "confidence",
+    "evidence",
+  ],
+};
+
+const PARTY_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    role: {
+      type: "STRING",
+      enum: ["sender", "receiver", "credited_party", "debited_party", "beneficiary"],
+    },
+    name: { type: "STRING", nullable: true },
+    identifiers: { type: "ARRAY", items: IDENTIFIER_SCHEMA },
+  },
+  required: ["role", "name", "identifiers"],
+};
+
 const CORE_SCHEMA = {
   type: "OBJECT",
   properties: {
+    schemaVersion: { type: "INTEGER", enum: [2] },
     financialEntity: { type: "STRING" },
+    financialEntityCode: { type: "STRING" },
     templateCode: { type: "STRING" },
+    templateVersion: { type: "INTEGER" },
     transactionType: { type: "STRING" },
     transactionDirection: { type: "STRING" },
     amount: { type: "NUMBER", nullable: true },
+    feeAmount: { type: "NUMBER", nullable: true },
     currency: { type: "STRING", nullable: true },
     documentReference: { type: "STRING", nullable: true },
+    transferReference: { type: "STRING", nullable: true },
     transactionDatetime: { type: "STRING", nullable: true },
-    parties: { type: "ARRAY", items: { type: "OBJECT" } },
+    merchantName: { type: "STRING", nullable: true },
+    merchantPoint: { type: "STRING", nullable: true },
+    parties: { type: "ARRAY", items: PARTY_SCHEMA },
     confidence: { type: "NUMBER" },
     fieldConfidence: { type: "OBJECT" },
     warnings: { type: "ARRAY", items: { type: "STRING" } },
     reviewRequired: { type: "BOOLEAN" },
   },
   required: [
+    "schemaVersion",
     "financialEntity",
+    "financialEntityCode",
     "templateCode",
+    "templateVersion",
     "transactionType",
     "transactionDirection",
     "amount",
+    "feeAmount",
     "currency",
     "documentReference",
+    "transferReference",
     "transactionDatetime",
+    "merchantName",
+    "merchantPoint",
     "parties",
     "confidence",
     "fieldConfidence",
@@ -36,6 +101,23 @@ const CORE_SCHEMA = {
     "reviewRequired",
   ],
 };
+
+const OPERATIONAL_PROMPT = `You are SANAD's deterministic financial-document extractor.
+Return only the operational fields required to route, match, deduplicate, and display a Yemeni financial operation.
+
+Rules:
+1. Identify the financial entity and return its SANAD code when known.
+2. Extract amount, currency, transaction type/direction, references, and transaction datetime.
+3. Extract sender and receiver/beneficiary names.
+4. Extract every routing identifier with its semantic type. A beneficiary number may be a phone_number, wallet_number, customer_line, account_number, merchant_point, or another supported type.
+5. For Bin Dowal Pay and similar notices, treat a beneficiary mobile number as phone_number when the template/label supports that meaning. Do not force it into account_number.
+6. Preserve the exact source value. Do not add country codes, strip digits, or invent normalized values; SANAD normalizes deterministically after extraction.
+7. sourceLabel must preserve the printed label when visible, such as رقم المستفيد.
+8. Mark the strongest receiver-side matching identifier as isPrimaryRoutingIdentifier=true.
+9. Never use a person's name alone as a conclusive routing identifier.
+10. Do not produce narrative explanations, fraud analysis, amount-in-words, or non-operational summaries.
+11. Set reviewRequired=true when a critical field is missing or an identifier type is ambiguous. Add only short machine-readable warnings.
+12. Return JSON matching the supplied schema exactly.`;
 
 export interface GeminiNoThinkingOptions {
   apiKey: string;
@@ -54,10 +136,7 @@ export function buildGeminiNoThinkingPayload(
     contents: [{
       role: "user",
       parts: [
-        {
-          text: prompt ??
-            "Extract the core financial fields from this Yemeni financial document. Return only JSON matching the supplied schema. Preserve account, card, passport, phone, wallet, merchant-point, document-reference, and transfer-reference roles without interchanging them.",
-        },
+        { text: prompt ?? OPERATIONAL_PROMPT },
         {
           inlineData: {
             mimeType: input.input.mimeType,
