@@ -1123,7 +1123,33 @@ async function runOperationalShadow(params: {
   runId: string;
 }): Promise<void> {
   const startedAtMs = Date.now();
-  if (!ENABLE_OPERATIONAL_SHADOW) return;
+  let shouldRun = ENABLE_OPERATIONAL_SHADOW;
+  if (!shouldRun) {
+    try {
+      shouldRun = await supabaseJson<boolean>(
+        "/rest/v1/rpc/service_should_run_operational_shadow",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ p_operation_id: params.operationId }),
+        },
+      );
+    } catch (error) {
+      await recordSpan({
+        operationId: params.operationId,
+        runId: params.runId,
+        pipeline: "analysis",
+        stage: "operational_shadow_gate",
+        status: "error",
+        startedAtMs,
+        metadata: {
+          error: truncateText(error instanceof Error ? error.message : String(error), 500),
+        },
+      });
+      return;
+    }
+  }
+  if (!shouldRun) return;
 
   try {
     const response = await fetch(
