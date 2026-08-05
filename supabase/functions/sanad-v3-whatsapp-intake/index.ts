@@ -636,7 +636,7 @@ async function sendGuidanceButtons(params: {
               type: "reply",
               reply: {
                 id: `sanad_business_intro:${prefix}:${params.operationId}`,
-                title: "كيف يستخدم النشاط سند؟",
+                title: "تشغيل سند للنشاط",
               },
             },
           ],
