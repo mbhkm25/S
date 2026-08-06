@@ -38,8 +38,8 @@ jobs:
       - name: Validate primary analyzer and worker
         run: |
           set -euo pipefail
-          deno check supabase/functions/sanad-operation-analysis-primary/index.ts
-          deno check supabase/functions/sanad-operation-analysis-worker/index.ts
+          deno check --config supabase/functions/sanad-operation-analysis-primary/deno.json supabase/functions/sanad-operation-analysis-primary/index.ts
+          deno check --config supabase/functions/sanad-operation-analysis-worker/deno.json supabase/functions/sanad-operation-analysis-worker/index.ts
           grep -q 'sanad-operation-analysis-primary' supabase/functions/sanad-operation-analysis-worker/index.ts
           grep -q 'original_document_is_source_of_truth: true' supabase/functions/sanad-operation-analysis-primary/index.ts
           grep -q 'callLegacyFallback' supabase/functions/sanad-operation-analysis-primary/index.ts
