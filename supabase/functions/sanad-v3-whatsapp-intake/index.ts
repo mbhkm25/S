@@ -76,6 +76,10 @@ type FinalizedOperation = {
   preview_job_id?: string | null;
 };
 
+type MetaMessageSendResponse = {
+  messages?: Array<{ id?: string }>;
+};
+
 class PipelineError extends Error {
   constructor(
     readonly code: string,
@@ -918,22 +922,29 @@ async function uploadQrToMeta(qr: Uint8Array): Promise<string> {
   return mediaId;
 }
 
-async function sendQr(to: string, mediaId: string, verificationUrl: string) {
-  return await graphJson(`/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "image",
-      image: {
-        id: mediaId,
-        caption:
-          `تم رفع الإشعار المالي إلى سند ✅\n\nيمكنك عرض رمز التحقق أو مشاركة الرابط:\n${verificationUrl}\n\nسيتم تحليل الإشعار ذكيًا خلال لحظات.`,
-      },
-    }),
-  });
+async function sendQr(
+  to: string,
+  mediaId: string,
+  verificationUrl: string,
+): Promise<MetaMessageSendResponse> {
+  return await graphJson<MetaMessageSendResponse>(
+    `/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "image",
+        image: {
+          id: mediaId,
+          caption:
+            `تم رفع الإشعار المالي إلى سند ✅\n\nيمكنك عرض رمز التحقق أو مشاركة الرابط:\n${verificationUrl}\n\nسيتم تحليل الإشعار ذكيًا خلال لحظات.`,
+        },
+      }),
+    },
+  );
 }
 
 async function runQrFlow(params: {
