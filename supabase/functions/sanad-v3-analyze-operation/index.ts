@@ -23,6 +23,10 @@ import {
   EXTRACTION_PIPELINE_VERSION,
   reconcileExtraction,
 } from "./extraction-v3.ts";
+import {
+  buildIdentifierPersistenceProjection,
+  toOperationIdentifierType,
+} from "./identifier-contract.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -1421,6 +1425,9 @@ Deno.serve(async (req: Request) => {
     normalized.confidence_score = finalAssessment.confidence;
 
     const persistStartedAtMs = Date.now();
+    const receiverIdentifierProjection = buildIdentifierPersistenceProjection(
+      normalized.receiver_identifier_type,
+    );
     await patchOperation(operation.id, {
       status: operation.status === "verified" ? "verified" : "ready",
       ai_status: "completed",
@@ -1451,6 +1458,7 @@ Deno.serve(async (req: Request) => {
           unresolved_conflicts: reconciliation.unresolvedConflicts || [],
           selected_identifier: finalAssessment.selectedIdentifier,
           unique_identifier_count: finalAssessment.uniqueIdentifierCount,
+          identifier_persistence_projection: receiverIdentifierProjection,
           review_required: reviewRequired,
         },
         gemini_metadata: {
@@ -1464,7 +1472,9 @@ Deno.serve(async (req: Request) => {
       currency: normalized.currency,
       receiver_name: normalized.receiver_name,
       receiver_account: normalized.receiver_account,
-      receiver_identifier_type: normalized.receiver_identifier_type,
+      receiver_identifier_type: toOperationIdentifierType(
+        normalized.receiver_identifier_type,
+      ),
       reference_number: normalized.reference_number,
       transaction_datetime: normalized.transaction_datetime,
       confidence_score: normalized.confidence_score,
