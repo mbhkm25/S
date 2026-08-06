@@ -2,7 +2,7 @@
 
 - Owner: SANAD engineering
 - Date: 2026-08-06
-- Status: Phase 1 implemented locally; production unchanged
+- Status: Phase 2 baseline replay-verified; production unchanged
 - Depends on: ADR-002
 - Blocks: database deployment of PR #170
 
@@ -14,8 +14,8 @@ Restore a single, replayable, reviewable migration history in GitHub without cha
 
 | Phase | Scope | Status | Exit criterion |
 | --- | --- | --- | --- |
-| 1. Evidence and guardrail | Read-only snapshot, auditor, tests, CI gate | In progress | Draft PR green; gate demonstrably fails closed |
-| 2. Canonical baseline | Authorized schema-only extraction and normalized baseline | Blocked | Empty isolated replay matches production schema |
+| 1. Evidence and guardrail | Read-only snapshot, auditor, tests, CI gate | Complete | Draft PR green; gate demonstrably fails closed |
+| 2. Canonical baseline | Authorized schema-only extraction and normalized baseline | Complete (staged) | Empty isolated replay matches production schema |
 | 3. Ledger reconciliation | Reviewed history manifest and maintenance window | Blocked | Backup, dual approval, exact post-checks |
 | 4. Pipeline revalidation | Rebase PR #170 and run migration/load/failure tests | Blocked | Fresh branch tests and production-safe release decision |
 
@@ -28,8 +28,9 @@ Restore a single, replayable, reviewable migration history in GitHub without cha
 - [x] Reject invalid versions, duplicate versions, changed historical SQL, and ambiguous pending files.
 - [x] Add unit coverage for aligned, mismatched, renamed, duplicated-name, and unsafe-snapshot cases.
 - [x] Add CI evidence artifacts and an explicit expected failure code for current drift.
-- [ ] Obtain independent PR review and green CI.
-- [ ] Record the PR and CI result in the central Notion execution log.
+- [ ] Obtain independent PR review.
+- [x] Confirm all four PR workflows are green.
+- [x] Record the PR and CI result in the central Notion execution log.
 
 ## Phase 2 procedure
 
@@ -41,6 +42,17 @@ Restore a single, replayable, reviewable migration history in GitHub without cha
 6. Replay from empty into an isolated project.
 7. Compare normalized schema fingerprints, database tests, security advisors, Edge Function contracts, and required seed-independent behavior against production.
 8. Delete the paid branch immediately after evidence collection and record its lifetime.
+
+## Phase 2 result
+
+- The fresh branch replayed only the oldest migration, then failed because its prerequisite schema was absent.
+- The authorized exporter captured only `public`, `private`, and `app`, plus storage policies; it excluded rows, Auth users, storage objects, Vault secrets, cron commands, and managed Supabase schemas.
+- Baseline v2 replayed successfully and matched every scoped logical schema and privilege fingerprint.
+- Critical original-document fields and verification metadata remained present.
+- Security-advisor results matched the production schema surface; the production-only leaked-password warning is an Auth project setting, not schema DDL.
+- Empty-branch unused-index findings are not comparable to production usage statistics.
+- The paid branch existed from 15:01:45 to 15:31:36 UTC and was deleted; estimated cost is $0.00669.
+- The artifact is staged under `supabase/baselines`, not active under `supabase/migrations`.
 
 ## Phase 3 change controls
 
@@ -79,5 +91,5 @@ Phase 1 is code-only and can be reverted by reverting its commit. Phase 2 change
 
 - The current ledger is not an empty-database baseline.
 - Only 3 of 311 production entries have an exact local version/name/content match.
-- Phase 2 needs authorized schema-only access and, if a paid branch is used, fresh cost approval.
+- Phase 2 is complete and its paid branch has been deleted.
 - Phase 3 needs a separate production mutation approval; none has been granted.
