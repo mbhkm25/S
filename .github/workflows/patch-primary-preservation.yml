@@ -1,0 +1,55 @@
+name: Patch primary persistence preservation
+
+on:
+  push:
+    branches:
+      - feature/sanad-fast-financial-engine
+    paths:
+      - '.github/workflows/patch-primary-preservation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/sanad-fast-financial-engine
+          fetch-depth: 0
+
+      - name: Patch primary persistence
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('supabase/functions/sanad-operation-analysis-primary/index.ts')
+          text = path.read_text(encoding='utf-8')
+
+          anchor = '''  const run = rows[0];\n  if (!run) throw new Error("primary_run_not_found");\n'''
+          replacement = '''  const run = rows[0];\n  if (!run) throw new Error("primary_run_not_found");\n  const existingRows = await rest<JsonRecord[]>(\n    `/rest/v1/operations?select=status,structured_data,raw_ai_json&id=eq.${encodeURIComponent(operationId)}&limit=1`,\n  );\n  const existing = existingRows[0] ?? {};\n  const existingStructured = existing.structured_data && typeof existing.structured_data === "object"\n    ? existing.structured_data as JsonRecord\n    : {};\n  const existingRaw = existing.raw_ai_json && typeof existing.raw_ai_json === "object"\n    ? existing.raw_ai_json as JsonRecord\n    : {};\n'''
+          if anchor not in text:
+              raise SystemExit('run anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          text = text.replace('''  const structuredData = {\n    schema_version: 3,''', '''  const structuredData = {\n    ...existingStructured,\n    schema_version: 3,''', 1)
+          text = text.replace('''  const rawAiJson = {\n    engine: ENGINE_VERSION,''', '''  const rawAiJson = {\n    ...existingRaw,\n    engine: ENGINE_VERSION,''', 1)
+          text = text.replace('''    status: "ready",''', '''    status: existing.status === "verified" ? "verified" : "ready",''', 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Verify patch
+        run: |
+          set -euo pipefail
+          grep -q 'existingStructured' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'existingRaw' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'existing.status === "verified"' supabase/functions/sanad-operation-analysis-primary/index.ts
+
+      - name: Commit patch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/functions/sanad-operation-analysis-primary/index.ts
+          git commit -m 'fix(analyzer): preserve verified state and operation metadata'
+          git push origin HEAD:feature/sanad-fast-financial-engine
