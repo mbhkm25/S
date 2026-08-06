@@ -17,6 +17,7 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
       RUN_TOKEN: contract-fix-20260806
+      VALIDATION_ROUND: database-contract-v3
     steps:
       - uses: actions/checkout@v4
         with:
