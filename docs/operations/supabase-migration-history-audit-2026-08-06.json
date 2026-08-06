@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-08-06",
+  "repository": "mbhkm25/S",
+  "main_commit": "b4af81e6370357fd4798dd6f747767f072bf8888",
+  "supabase_project_ref": "hudbzlgclghlhazlduas",
+  "snapshot": {
+    "path": "docs/operations/supabase-production-migration-history-2026-08-06.json",
+    "sha256": "c6f585b8519b47f435d1f71208dfc39850503deac985f1628e2e14c44aa14c57",
+    "contains_sql_statements": false,
+    "contains_business_data": false
+  },
+  "summary": {
+    "production_migrations": 311,
+    "local_migrations": 210,
+    "valid_local_cli_versions": 186,
+    "invalid_local_cli_versions": 24,
+    "exact_identity_matches": 49,
+    "exact_identity_and_content_matches": 3,
+    "exact_identity_content_mismatches": 46,
+    "same_name_different_version": 142,
+    "same_content_different_identity": 11,
+    "production_only_names": 119,
+    "local_only_names": 19,
+    "pending_newer_local": 0,
+    "conflicting_newer_local": 2,
+    "conflicting_historical_local": 159
+  },
+  "deployment_gate": {
+    "pass": false,
+    "expected_exit_code": 2,
+    "failures": {
+      "invalid_local_filenames": 24,
+      "production_migrations_missing_exact_local_identity": 262,
+      "exact_identity_content_mismatches": 46,
+      "conflicting_historical_local_migrations": 159,
+      "conflicting_newer_local_migrations": 2,
+      "duplicate_local_versions": 8,
+      "duplicate_remote_versions": 0
+    }
+  },
+  "confirmed_observations": [
+    "The first recorded production migration depends on an older function, so the recorded production history is not an empty-database baseline.",
+    "Production contains two differently hashed migrations named business_payment_shadow_preview.",
+    "The current repository history cannot be treated as a safe replay source or pushed to production without reconciliation."
+  ],
+  "actions_not_performed": [
+    "No production DDL was executed.",
+    "No migration history row was modified.",
+    "No Supabase function was deployed.",
+    "No migration repair or database push command was executed."
+  ]
+}

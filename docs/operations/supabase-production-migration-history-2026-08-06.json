@@ -1,0 +1,1886 @@
+{
+  "schema_version": 1,
+  "source": {
+    "supabase_project_ref": "hudbzlgclghlhazlduas",
+    "table": "supabase_migrations.schema_migrations",
+    "captured_at": "2026-08-06T14:35:46.296Z",
+    "read_only": true,
+    "statement_content_included": false
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "purpose": "change-detection-only",
+    "migration_count": 311,
+    "first_version": "20260702130842",
+    "last_version": "20260806063921",
+    "total_statement_bytes": 1764166
+  },
+  "migrations": [
+    {
+      "version": "20260702130842",
+      "name": "fix_yemen_phone_normalization_leading_zero",
+      "statement_sha256": "56e2217e0ae54f2d74259934128d72bb96f7fb24d22eb2fc101f2814994bf2b4",
+      "statement_bytes": 736
+    },
+    {
+      "version": "20260703064710",
+      "name": "add_sanad_pro_payment_requests",
+      "statement_sha256": "a2a680bafb8a0035566d0be9e21e082bb6cf48d6782d6ed3aba12a8aec394aab",
+      "statement_bytes": 3780
+    },
+    {
+      "version": "20260703064734",
+      "name": "add_sanad_pro_payment_functions_rls",
+      "statement_sha256": "ae49f41fe7c341f3b4cf81762c99656ab67f8009630fdc2f4872501065367718",
+      "statement_bytes": 6816
+    },
+    {
+      "version": "20260703064756",
+      "name": "add_sanad_pro_payment_review_functions",
+      "statement_sha256": "6b834b694ffb325d71945c35470685928a84bd5081a3a9a82d07361b600b8c3f",
+      "statement_bytes": 5155
+    },
+    {
+      "version": "20260703100507",
+      "name": "allow_pro_payment_receipts_storage_path",
+      "statement_sha256": "e58f1234201a3d03fa7dfa588bada140ab81b2f7144cbd1a0ad90cedaf273f27",
+      "statement_bytes": 698
+    },
+    {
+      "version": "20260703140942",
+      "name": "change_free_monthly_access_limit_to_30",
+      "statement_sha256": "8f946d912ea4baeba0555b4a9d28255470d429ffcaca1a3e0e60a802e5bcbd49",
+      "statement_bytes": 176
+    },
+    {
+      "version": "20260708083936",
+      "name": "business_layer_foundation",
+      "statement_sha256": "c861b624c3639df1bc44261915c66dca96c4c87f908b019041e6e3bcc01fa72f",
+      "statement_bytes": 33529
+    },
+    {
+      "version": "20260708132537",
+      "name": "business_profile_catalog_and_team_actions_v2",
+      "statement_sha256": "d46a92f8d598edb89208bd465753b4c46c23628b2adf95f4d3aba0f7ab51bd00",
+      "statement_bytes": 20829
+    },
+    {
+      "version": "20260708142228",
+      "name": "business_media_storage_foundation",
+      "statement_sha256": "29a9ec2cb56f6e558e893910032b2e4e48da80fc257e151cb6f18a3059347294",
+      "statement_bytes": 7965
+    },
+    {
+      "version": "20260708142248",
+      "name": "business_actions_media_signature_support",
+      "statement_sha256": "80ad6ba51600d081aa1c25374315909917bed796a7d816ef5669153a4dbdda8d",
+      "statement_bytes": 382
+    },
+    {
+      "version": "20260708142308",
+      "name": "business_edge_rpc_function_aliases",
+      "statement_sha256": "7221a773bebf0bc3899584f143a674e91a49abaf981819c3c36e5dce2def6d42",
+      "statement_bytes": 2003
+    },
+    {
+      "version": "20260708152642",
+      "name": "fix_business_media_storage_policies",
+      "statement_sha256": "e82a51099a6bbcacf14fe129680af35471f8eb319fa909a15263e7e60fe2eae7",
+      "statement_bytes": 2690
+    },
+    {
+      "version": "20260708155937",
+      "name": "business_whatsapp_catalog_pivot",
+      "statement_sha256": "4e823202805caebaf9f4a315949788a004656ec77395af8479cc25dfa7e2874e",
+      "statement_bytes": 6233
+    },
+    {
+      "version": "20260708162641",
+      "name": "harden_business_media_storage_policies",
+      "statement_sha256": "2fe3a4ce9de69d7a2c8abd89a6d9fa9ab9545e6eaa23760194d9978b6cba2f5b",
+      "statement_bytes": 5149
+    },
+    {
+      "version": "20260708164149",
+      "name": "business_media_wartime_storage_policy_v2",
+      "statement_sha256": "f6cb5f3fa5c04543d6f7db03710c6d437fe65bc0b35f5b79eff6b6a2eb7940d2",
+      "statement_bytes": 1391
+    },
+    {
+      "version": "20260708165711",
+      "name": "unify_update_business_profile_signature",
+      "statement_sha256": "08dd9c1100c6b18a3d11ca3ae7093314a080ffa9e95970a8f0b777c5151cc3ea",
+      "statement_bytes": 4222
+    },
+    {
+      "version": "20260713162659",
+      "name": "business_layer_security_hardening_core",
+      "statement_sha256": "9cf8cdc88ddb0a3b6609fab931a363f3a3d13569cfd1eff716d9307995a9b54d",
+      "statement_bytes": 10678
+    },
+    {
+      "version": "20260713162938",
+      "name": "business_profile_and_media_validation_hardening",
+      "statement_sha256": "d6059a83ca85e344f2a9cdb2cbc3cd1470118921d5a46c1b24073055039a6bca",
+      "statement_bytes": 21620
+    },
+    {
+      "version": "20260713163234",
+      "name": "business_public_data_privacy_hardening",
+      "statement_sha256": "47fa343dda96dc267c0d66c07a423c5f1fa92c7b6f1071d5a1ed855cf72bf5a2",
+      "statement_bytes": 6033
+    },
+    {
+      "version": "20260713163308",
+      "name": "database_function_search_path_hardening",
+      "statement_sha256": "fb0d36cbe2054ff117e9e2fceec04f28eae6dc1ffbbc1508126bbda1024dee7b",
+      "statement_bytes": 735
+    },
+    {
+      "version": "20260713163525",
+      "name": "business_layer_indexes_and_rls_performance",
+      "statement_sha256": "6cb59996afcb5fa70b1da676314dfc0745ffeb939cd04434004d6e715863474c",
+      "statement_bytes": 6003
+    },
+    {
+      "version": "20260714165641",
+      "name": "notifications_foundation",
+      "statement_sha256": "16f13b9cd915a5021bc7dd44e76451ec041a1a25267fd79c743207e075b129b1",
+      "statement_bytes": 17533
+    },
+    {
+      "version": "20260715152714",
+      "name": "add_web_push_delivery_foundation_v2",
+      "statement_sha256": "48b1659e4a79e6067642fbf3952a953aea6ddd46224f1faedf12257278a176e2",
+      "statement_bytes": 10764
+    },
+    {
+      "version": "20260715181721",
+      "name": "add_push_worker_rpc_foundation",
+      "statement_sha256": "26a86f53414cc127be66f2d132629d20454a522c2c68f1fc99702b918f9b7477",
+      "statement_bytes": 11503
+    },
+    {
+      "version": "20260715190553",
+      "name": "add_push_delivery_reservations_and_fencing",
+      "statement_sha256": "017e1ccb0cd7666f528f5a2064d84ab94e31ac4df80861f04986770486eff452",
+      "statement_bytes": 18739
+    },
+    {
+      "version": "20260716194318",
+      "name": "harden_rpc_permissions_rls_and_indexes",
+      "statement_sha256": "3da9ddca98baa11b83e456ae89440ada443552b367688ea800ac3d5eb58c6aa6",
+      "statement_bytes": 4663
+    },
+    {
+      "version": "20260716194714",
+      "name": "enforce_least_privilege_table_grants",
+      "statement_sha256": "c8967b9c9d60f5c883f75fa8f7c0237119f3fa4ae341391a4aa1bd78b9e9dd8c",
+      "statement_bytes": 2949
+    },
+    {
+      "version": "20260716194842",
+      "name": "harden_storage_and_profile_phone_integrity_v3",
+      "statement_sha256": "620670cb8de353f06e9861b36e781c8330393930410558e82d9ec317b8278592",
+      "statement_bytes": 1186
+    },
+    {
+      "version": "20260716194919",
+      "name": "close_anonymous_operational_rpcs_and_document_internal_rls",
+      "statement_sha256": "4ee02a9646fb4994b46c47753f222b67e9dac1b6da058380241f6f64f16e9915",
+      "statement_bytes": 1850
+    },
+    {
+      "version": "20260717115240",
+      "name": "business_reports_workflow_foundation",
+      "statement_sha256": "6974f8536c28c3d6c92d5abb253810d940ae7b21184d87702c64cff1699816de",
+      "statement_bytes": 20619
+    },
+    {
+      "version": "20260718070713",
+      "name": "business_customer_management_schema_v1",
+      "statement_sha256": "4ae21372dca84a9437853e56b147912cc37613cada95d1e73bd850a081c8b5e9",
+      "statement_bytes": 2432
+    },
+    {
+      "version": "20260718070737",
+      "name": "business_customer_management_rpc_v1",
+      "statement_sha256": "6a68e13540b3f96eae95fbb0bfee6a0d137efdbd034f52a830dd075365e488cc",
+      "statement_bytes": 3900
+    },
+    {
+      "version": "20260718070759",
+      "name": "business_customer_management_actions_v1",
+      "statement_sha256": "6bff2dca08f3d1b42a4b0f23e06312b6f2311c387c7678d5b846abdd3902ab87",
+      "statement_bytes": 4177
+    },
+    {
+      "version": "20260718084911",
+      "name": "public_business_profile_catalog_v1",
+      "statement_sha256": "ea6a926cafc82a91934bdf29986db40ff02c2c0b41db3c1564889b8fc97a2892",
+      "statement_bytes": 9209
+    },
+    {
+      "version": "20260718143034",
+      "name": "migrate_legacy_profile_catalog_items",
+      "statement_sha256": "2c2ec815e7a279cea42a846bbc4315edf75a89e7b14be8a1f583e5a17cc11cba",
+      "statement_bytes": 3540
+    },
+    {
+      "version": "20260718145110",
+      "name": "business_management_canonical_v1",
+      "statement_sha256": "574f30fc7a7d4da6bb999ecfbd5e7c65bc8f76414be96404cd2cdd31470cd27c",
+      "statement_bytes": 6008
+    },
+    {
+      "version": "20260718145350",
+      "name": "public_business_profile_management_sections_v1",
+      "statement_sha256": "38188f7474c2250abc2ead6651126fcad06e5c874625cdaa3e2ec73e0e146f2a",
+      "statement_bytes": 2217
+    },
+    {
+      "version": "20260718173715",
+      "name": "public_app_information_foundation",
+      "statement_sha256": "025cea5ca8c338fa5ff3fad18e53d5eb7d92f972ae442ae2a4d14f4c8b5a6dfe",
+      "statement_bytes": 3660
+    },
+    {
+      "version": "20260718190455",
+      "name": "report_whatsapp_delivery_tracking",
+      "statement_sha256": "d5acf0e58acfb563852c3bfc6f5d5531684dade1e3e92f302924ee62dc118acb",
+      "statement_bytes": 3567
+    },
+    {
+      "version": "20260718190828",
+      "name": "report_delivery_status_webhook_rpc",
+      "statement_sha256": "cb83ad07d7c398895f6d4b0f0ee730b4ffc94567351070eb6ac0348d0a7f1dc6",
+      "statement_bytes": 882
+    },
+    {
+      "version": "20260718191231",
+      "name": "remove_unused_report_delivery_webhook_wrapper",
+      "statement_sha256": "c54d3ddaa6342cab82098f77eaf99277deade5bd17e531b423c79a795723648c",
+      "statement_bytes": 115
+    },
+    {
+      "version": "20260719091907",
+      "name": "fix_verification_notification_public_url",
+      "statement_sha256": "ffa1ac5ed0e86aa8a5980ac256b0ac13a09ca99c5c151123991dfd0242176974",
+      "statement_bytes": 3781
+    },
+    {
+      "version": "20260719095254",
+      "name": "claim_whatsapp_uploader_on_access",
+      "statement_sha256": "7c528a6888cf7a3b9254bf0d3189c1a1b8f0177d96905a186c7fee7e4a109253",
+      "statement_bytes": 2243
+    },
+    {
+      "version": "20260719111500",
+      "name": "security_definer_contract_guardrails_20260719",
+      "statement_sha256": "c7aecb06d699730e301b92be30e79a688a6fbbf1927095158beb11c5be03d0fe",
+      "statement_bytes": 3491
+    },
+    {
+      "version": "20260719152023",
+      "name": "whatsapp_contact_tables",
+      "statement_sha256": "c3e618e3261f44ea199501df2a286a43690758d8e35d4f979cb3453535077c70",
+      "statement_bytes": 3628
+    },
+    {
+      "version": "20260719152128",
+      "name": "whatsapp_contact_rpcs",
+      "statement_sha256": "85f0ca6b0a0dbfbd520bd0686777b781b41ac76de7bf0d3c0c205ec79d70759f",
+      "statement_bytes": 7272
+    },
+    {
+      "version": "20260719152302",
+      "name": "whatsapp_contact_profile_linking",
+      "statement_sha256": "9e40df18b9d876aa930fb087679945fe28de5877f0fbf2958a1a2e81dde635e9",
+      "statement_bytes": 1931
+    },
+    {
+      "version": "20260719153542",
+      "name": "whatsapp_operation_contact_queue",
+      "statement_sha256": "f66db38fbacaee12a3d06497453d0d000b16b99be15ceba211d219f28aa8dd2c",
+      "statement_bytes": 2661
+    },
+    {
+      "version": "20260719153635",
+      "name": "whatsapp_welcome_queue_claim",
+      "statement_sha256": "e28c8d800a8c33be530a3bb03c9c04deec1d4005e8bd6130cd2086662b8dd065",
+      "statement_bytes": 2646
+    },
+    {
+      "version": "20260719162856",
+      "name": "link_whatsapp_contact_during_inbound_registration",
+      "statement_sha256": "da20f21658b6dc9850b1a98066e6fb4aa9f1a95ebb1c9623e112835cfd4f6e29",
+      "statement_bytes": 4030
+    },
+    {
+      "version": "20260719190838",
+      "name": "business_management_dashboard_summary_20260719",
+      "statement_sha256": "a3e5312fb794d8889f6f581b21fa8635d92d1d0aaaaffec08a94b8ec3a062e58",
+      "statement_bytes": 5700
+    },
+    {
+      "version": "20260719200335",
+      "name": "business_team_contract_columns_20260719",
+      "statement_sha256": "cddc31f1f4b74f23b4c90f24f6afe9afe010f5e8531d0e2653bbf21575638d00",
+      "statement_bytes": 1377
+    },
+    {
+      "version": "20260719200352",
+      "name": "business_team_get_contract_20260719",
+      "statement_sha256": "3b681bdc1e5706a7ea1985efb69d1b2465b3c311814158583e7b5183709fca5b",
+      "statement_bytes": 2342
+    },
+    {
+      "version": "20260719200407",
+      "name": "business_team_status_contract_20260719",
+      "statement_sha256": "ecc1fac7057cabfbed19ec8a7c069d8df2c606d44232b14b8f5250ed8a14bc24",
+      "statement_bytes": 1780
+    },
+    {
+      "version": "20260719200423",
+      "name": "business_team_permissions_contract_20260719",
+      "statement_sha256": "276e9e98b76c163e633ef8838dcf55ca778c5c29d8ebf2795591dc6a2a14f709",
+      "statement_bytes": 2284
+    },
+    {
+      "version": "20260719201631",
+      "name": "business_contexts_active_memberships_only_20260719",
+      "statement_sha256": "f8511f92db1129ea17547612440c145a38fc028df1308e98546ac424617e4426",
+      "statement_bytes": 3969
+    },
+    {
+      "version": "20260719210554",
+      "name": "catalog_item_media_validation_20260720",
+      "statement_sha256": "9adf66510061e0c2d9d119637cb316e1aadc2fdfc36229bdd1016862dceb8f6c",
+      "statement_bytes": 4709
+    },
+    {
+      "version": "20260719212249",
+      "name": "catalog_media_asset_contract_20260720",
+      "statement_sha256": "69042e02b036d5690ab424c8837517480ea1649204c44dee2e22e2251be36990",
+      "statement_bytes": 1805
+    },
+    {
+      "version": "20260719223620",
+      "name": "catalog_image_limit_three",
+      "statement_sha256": "752b49c93346ab22814427b5632cfed56a864d624c21997333f8d5047ceab384",
+      "statement_bytes": 4739
+    },
+    {
+      "version": "20260719234214",
+      "name": "business_horizontal_public_cover",
+      "statement_sha256": "041db27a6fce51d85536810cf408551de538c18e0dc6d6ff24be93afdb60d2d1",
+      "statement_bytes": 5349
+    },
+    {
+      "version": "20260720185535",
+      "name": "user_profile_avatar",
+      "statement_sha256": "2bdb7678c923c262b31b1e91c3a1ea09ba570ea4311d0eb8e7e454b2586a2138",
+      "statement_bytes": 1439
+    },
+    {
+      "version": "20260721064412",
+      "name": "operation_private_text_audio_notes",
+      "statement_sha256": "882dac28ed610c4693465d356270aae161850c310a6331d5770ecf95785d439b",
+      "statement_bytes": 4343
+    },
+    {
+      "version": "20260721111541",
+      "name": "sanad_pro_entitlements_hardening",
+      "statement_sha256": "bd2565e47888a59397c5b5017492d59a7b05cb6653b2fa679fcbf138a7b6ef06",
+      "statement_bytes": 17860
+    },
+    {
+      "version": "20260721111941",
+      "name": "sanad_pro_lifecycle_notifications",
+      "statement_sha256": "37021285fe6c23f48774a6b05d9ab35f727a2d5d6f982832e3b43407428f7bde",
+      "statement_bytes": 5119
+    },
+    {
+      "version": "20260721142355",
+      "name": "public_landing_information",
+      "statement_sha256": "49fc6078dec831d244c66c70def51eafa67c880bd0d55aecc944cf16fcb90516",
+      "statement_bytes": 1008
+    },
+    {
+      "version": "20260721171250",
+      "name": "platform_admin_console_v1",
+      "statement_sha256": "743f77ec068ac68687418904f1d625e4155b79665b72ca95b7b7e89691bb5544",
+      "statement_bytes": 13941
+    },
+    {
+      "version": "20260721174413",
+      "name": "platform_admin_payment_review",
+      "statement_sha256": "a58fafab6ec6ab1bc74eea01267966e00aa6b0774d6ddcf1591c4cc1b0273664",
+      "statement_bytes": 7354
+    },
+    {
+      "version": "20260721174956",
+      "name": "fix_subscription_notification_category",
+      "statement_sha256": "32ca9e7ff07e642aeda149fdd399a58ba015ab2563f7fa346a7a17ea02d0b30e",
+      "statement_bytes": 4012
+    },
+    {
+      "version": "20260721175107",
+      "name": "fix_admin_receipt_storage_policy",
+      "statement_sha256": "55cf91717d268f9957fe0365535bf739b76f9dea10c985579792c1e31c12359e",
+      "statement_bytes": 691
+    },
+    {
+      "version": "20260722063257",
+      "name": "business_community_launch_controls",
+      "statement_sha256": "c370d926a67270f1d26d9b140628324f0819f734083640cb330fa521ba785109",
+      "statement_bytes": 22804
+    },
+    {
+      "version": "20260722063509",
+      "name": "realtime_private_user_events",
+      "statement_sha256": "697bf2439afb326ec2c53dc97b4f7a75ded5c22b17a679e167173c02d1a2f6f6",
+      "statement_bytes": 4449
+    },
+    {
+      "version": "20260722064045",
+      "name": "business_community_interest_policies",
+      "statement_sha256": "9e4c13c2d5f60297d03ded77ba45ff7292eacc9e7aee31eea7e9019b45119c9d",
+      "statement_bytes": 1022
+    },
+    {
+      "version": "20260722073950",
+      "name": "business_team_pro_purchases",
+      "statement_sha256": "9e195a558f4cf2a400994057f9906918f389eddbbd7ba51636a80efed7988620",
+      "statement_bytes": 42972
+    },
+    {
+      "version": "20260722074922",
+      "name": "platform_admin_team_payment_summary",
+      "statement_sha256": "02e03d06941bafbb08c14a1835036051e3b56e3d899e6b7ffa3a258edd8249c4",
+      "statement_bytes": 5022
+    },
+    {
+      "version": "20260722082429",
+      "name": "phone_identity_verification",
+      "statement_sha256": "e5396a8be0d8a7dff1545bda03e40dd7a5e495f8529dc13ebc2fc008751d45f6",
+      "statement_bytes": 24888
+    },
+    {
+      "version": "20260722082946",
+      "name": "harden_phone_verification",
+      "statement_sha256": "b9e470b26663065f7389dbf3bedb6b50111c3e9dd8ff96f70fbcfed2d866846a",
+      "statement_bytes": 13336
+    },
+    {
+      "version": "20260722083342",
+      "name": "phone_verification_indexes",
+      "statement_sha256": "efe549fefc2775418abe7fc7d57b717a7e799cfb453d376a6cf4652407a1e497",
+      "statement_bytes": 281
+    },
+    {
+      "version": "20260722083345",
+      "name": "fix_phone_verification_identity_columns",
+      "statement_sha256": "9e35ec831568127df5a6c2cd18be1955a70964ae220e44939642091bdbb7e612",
+      "statement_bytes": 903
+    },
+    {
+      "version": "20260722083516",
+      "name": "fix_phone_verification_whatsapp_link",
+      "statement_sha256": "78d962c1534b9f800917b52f48d9ea1e5f13ddd90b31eb555e3c46d24a7f9a4d",
+      "statement_bytes": 5876
+    },
+    {
+      "version": "20260722084853",
+      "name": "platform_admin_whatsapp_audience",
+      "statement_sha256": "f9615b40ab6025e607bd0150e9f87d67c6d35e42c2aae2082dddaf197c9c1336",
+      "statement_bytes": 30561
+    },
+    {
+      "version": "20260722092303",
+      "name": "public_faq_and_business_directory",
+      "statement_sha256": "32ee935a763705c85c4390afe8d23aba857b62702e289ac15bd86dd6c632a5b8",
+      "statement_bytes": 24448
+    },
+    {
+      "version": "20260722135253",
+      "name": "whatsapp_ai_assistant_v1",
+      "statement_sha256": "677b27cb65b9b160cbbb485dc62fb594e1ddb7a6969b918640fe905258ef8688",
+      "statement_bytes": 25815
+    },
+    {
+      "version": "20260722140212",
+      "name": "harden_assistant_catalog_grounding",
+      "statement_sha256": "970479cc15422ad503726d2d0e01c89abb2dec30fb094433e0e09a78206b2dac",
+      "statement_bytes": 3008
+    },
+    {
+      "version": "20260722144152",
+      "name": "whatsapp_assistant_service_v2",
+      "statement_sha256": "7c840faf019284b72f27cd845de3344c945d0de35122a6025d11dc2db0fb85a2",
+      "statement_bytes": 8759
+    },
+    {
+      "version": "20260722151146",
+      "name": "assistant_conversation_guidance_v3",
+      "statement_sha256": "8f46b8f37b67adf3d833aad5d4d7ef2a024f3adced8a23bc6beee8941ea01d7d",
+      "statement_bytes": 6637
+    },
+    {
+      "version": "20260722153102",
+      "name": "assistant_whatsapp_formatting_context_v4",
+      "statement_sha256": "70c23d09348c44e8cf721ed535a9c2a44ebc79af9a0ae5a45aa411a841ec2a6b",
+      "statement_bytes": 7792
+    },
+    {
+      "version": "20260722154110",
+      "name": "assistant_identity_context_and_link_formatting_v5",
+      "statement_sha256": "e35308b77afc70fa192e444f76c54d01c3c37fa86222a0b471a37b1c193210c2",
+      "statement_bytes": 10463
+    },
+    {
+      "version": "20260722154656",
+      "name": "restore_assistant_conversation_v3_dependency",
+      "statement_sha256": "6ed00c24247bc5135684872abee2a6de72d5a93f0fb771e6e9a7076c78986b14",
+      "statement_bytes": 6217
+    },
+    {
+      "version": "20260722155711",
+      "name": "assistant_operation_context_and_continuity_v6",
+      "statement_sha256": "1b1fcc2b07009c82a64c5e0373263691703005a905c80b8e8321b033cdf99c1b",
+      "statement_bytes": 5343
+    },
+    {
+      "version": "20260722155752",
+      "name": "assistant_operation_public_token_match_v6_1",
+      "statement_sha256": "1bd5604a86351a87eb8d825c30b083fa1fdec335d9b1b145248968ed1eba1abf",
+      "statement_bytes": 2572
+    },
+    {
+      "version": "20260723064723",
+      "name": "business_public_profile_modes_v1",
+      "statement_sha256": "077e701612ab68dda7f2b28122e6fab6f9aea01b281bb63e3d967115922b7aad",
+      "statement_bytes": 9562
+    },
+    {
+      "version": "20260723104052",
+      "name": "catalog_ordering_delivery_v1",
+      "statement_sha256": "22837861a5e3c087f939ea05780ee50bda78a14d88b0c87d7e3d5d6da68034d2",
+      "statement_bytes": 11561
+    },
+    {
+      "version": "20260723180141",
+      "name": "admin_managed_business_slugs",
+      "statement_sha256": "ad32fe45ef30e51cb1bf12633edaab4e399b141d6d50ade2561b3d28e94cb04b",
+      "statement_bytes": 3470
+    },
+    {
+      "version": "20260724122652",
+      "name": "customer_relationship_foundation",
+      "statement_sha256": "10511eff788da8d1fe76aefea1f97d3ba4e78530b6f65292b3667461ac379a39",
+      "statement_bytes": 25723
+    },
+    {
+      "version": "20260724122703",
+      "name": "customer_relationship_source_alignment",
+      "statement_sha256": "47f409c11f18409f8a33096ae2d744bb5df1b3ad49bf4c857f4df7efb1f8c1fe",
+      "statement_bytes": 272
+    },
+    {
+      "version": "20260724123206",
+      "name": "customer_engagement_compatibility",
+      "statement_sha256": "fc496cd0a1631ab81c39ec99a70ff098ee6597cd0b3bbc4f71eea7c1e4ba74ff",
+      "statement_bytes": 1564
+    },
+    {
+      "version": "20260724131752",
+      "name": "customer_team_permission_compatibility",
+      "statement_sha256": "a6e61db1342073f057b05449795f88e7329fb97867ba150383a9c94c1846af9b",
+      "statement_bytes": 1743
+    },
+    {
+      "version": "20260725061055",
+      "name": "sanad_knowledge_management_foundation",
+      "statement_sha256": "2bfb91bd75cbb6e47debade8e0ad0de7151825c30d86194812a0e792622772b8",
+      "statement_bytes": 25251
+    },
+    {
+      "version": "20260725062412",
+      "name": "seed_official_install_knowledge",
+      "statement_sha256": "5a835b1fdc5a1261f6327180479312525c3baa41f5eb6af0fd6ce23e387d1ea1",
+      "statement_bytes": 4634
+    },
+    {
+      "version": "20260725063241",
+      "name": "integrate_skms_with_whatsapp_assistant_search",
+      "statement_sha256": "a6a33422d0d77676c8009b63f9590fd0ea9afed6b24a71811ff8de27c55d3af2",
+      "statement_bytes": 7085
+    },
+    {
+      "version": "20260725063549",
+      "name": "seed_facebook_install_campaign_content",
+      "statement_sha256": "0a41cc450ff4529c59cfde6b9212cbc018de658e5ffcec664a856db05c7181da",
+      "statement_bytes": 4613
+    },
+    {
+      "version": "20260725080735",
+      "name": "knowledge_admin_detail_and_test_center",
+      "statement_sha256": "51f4020ff13059790b71ae7f6af78f88653478bfaf541b5d1b68cd5915d0246a",
+      "statement_bytes": 2619
+    },
+    {
+      "version": "20260725124604",
+      "name": "knowledge_file_ingestion_foundation",
+      "statement_sha256": "bd8b770a2f62391e5ba357f325ba58240544750a4d90f83bfba8c558a99a9ee2",
+      "statement_bytes": 10125
+    },
+    {
+      "version": "20260725160011",
+      "name": "fix_knowledge_file_upload_compatibility",
+      "statement_sha256": "c8969f991029f848151809b946d0cb557bd03bbe9853793602c8bedd92f3d85c",
+      "statement_bytes": 4348
+    },
+    {
+      "version": "20260725162940",
+      "name": "operation_entry_access_decision",
+      "statement_sha256": "e99972910ddbfaca7f648ff9afa04e8f5b58aa149ec459997bd036d28ccacead",
+      "statement_bytes": 2551
+    },
+    {
+      "version": "20260725164542",
+      "name": "operation_access_lifetime_uniqueness",
+      "statement_sha256": "6506a85543b6b8e2e8a87f9341ce10e45550410ad9ca7dc7197371f4aa06fb54",
+      "statement_bytes": 4156
+    },
+    {
+      "version": "20260726063957",
+      "name": "phone_verification_delivery_recovery",
+      "statement_sha256": "f5e9f05f0f3c3aac3959af64a4f4f25fd763978a82315132e6bf950bd29b4df7",
+      "statement_bytes": 1325
+    },
+    {
+      "version": "20260726064014",
+      "name": "knowledge_ingestion_queue_watchdog",
+      "statement_sha256": "d9e10d496b3b9d93bb46031db93b1c0da64240b6f4139e88eb1b0b7bd763c14b",
+      "statement_bytes": 965
+    },
+    {
+      "version": "20260726064033",
+      "name": "expire_old_phone_verification_claims",
+      "statement_sha256": "7f3def9cc34502f26342c99f3c19fa55ff9ab9627f8be4322762f400585f076c",
+      "statement_bytes": 321
+    },
+    {
+      "version": "20260726064045",
+      "name": "record_phase1_operational_foundation",
+      "statement_sha256": "0c3982b13f6e8fdecf7e97acffc502948fd398a5134871580a57bfcac26c675a",
+      "statement_bytes": 367
+    },
+    {
+      "version": "20260726064103",
+      "name": "phone_verification_delivery_worker_rpc",
+      "statement_sha256": "d0322ff55415fe00eebc2027e64747e8c354c7bc5ecf4dac3051efb1acb9b333",
+      "statement_bytes": 903
+    },
+    {
+      "version": "20260726064122",
+      "name": "knowledge_file_status_consistency",
+      "statement_sha256": "ff70b1cda2c6143feae8ecc07541fd29e0a53c79da9e7c55341aded3ebf1c15b",
+      "statement_bytes": 254
+    },
+    {
+      "version": "20260726064207",
+      "name": "knowledge_file_retry_visibility_v2",
+      "statement_sha256": "b0aa57937c5191a8e1550551dfed131e89292c11599405714e082c41d5b014e3",
+      "statement_bytes": 1495
+    },
+    {
+      "version": "20260726064246",
+      "name": "phase1_cleanup_failed_audit_attempt",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064338",
+      "name": "phase1_knowledge_file_list_ordering",
+      "statement_sha256": "b0aa57937c5191a8e1550551dfed131e89292c11599405714e082c41d5b014e3",
+      "statement_bytes": 1495
+    },
+    {
+      "version": "20260726064352",
+      "name": "phase1_phone_claim_health_view",
+      "statement_sha256": "edbfcf7dc093a4fdc8613bd257083c98adae8d03871ccdb379aea882372179b9",
+      "statement_bytes": 670
+    },
+    {
+      "version": "20260726064410",
+      "name": "phase1_noop_marker",
+      "statement_sha256": "c4bab7b9ee6de9a3bf91fb2c197690c926bcb0c9223539db98a00d293e7a1fc0",
+      "statement_bytes": 13
+    },
+    {
+      "version": "20260726064434",
+      "name": "phase1_phone_claim_expiration_trigger",
+      "statement_sha256": "7d3b3b92d425f07f8c44ce90ec1302826ee49aa5aa1f8eeee388849d94cf0012",
+      "statement_bytes": 450
+    },
+    {
+      "version": "20260726064459",
+      "name": "phase1_phone_claim_requeue_timeout",
+      "statement_sha256": "ef253a1165adcf3179cf098a8f7b863556153f03dc688707b0eb4ca982030e9d",
+      "statement_bytes": 1616
+    },
+    {
+      "version": "20260726064520",
+      "name": "phase1_phone_claim_recovery_grants",
+      "statement_sha256": "91904101658e4e5bef744973d9215c74c0de5c79aecc9a93b61eb3a693d0ee46",
+      "statement_bytes": 183
+    },
+    {
+      "version": "20260726064552",
+      "name": "phase1_validate_cron_jobs",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064607",
+      "name": "phase1_phone_delivery_health_permissions",
+      "statement_sha256": "b92d9063ddcc89b7412486d22a92710ea6e4a6a88016049e1c77251c025eae62",
+      "statement_bytes": 164
+    },
+    {
+      "version": "20260726064618",
+      "name": "phase1_migration_checkpoint",
+      "statement_sha256": "6d31aeba43fba4c48d8299692cb7ce778e4910fdc4e82ea13e0a95511d013590",
+      "statement_bytes": 27
+    },
+    {
+      "version": "20260726064629",
+      "name": "phase1_last_noop",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064643",
+      "name": "phase1_sanity_checkpoint",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064654",
+      "name": "phase1_tool_reset_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064708",
+      "name": "phase1_final_checkpoint",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064722",
+      "name": "phase1_noop_end",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064749",
+      "name": "phase1_deploy_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726064805",
+      "name": "phase1_marker_after_summary",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726065005",
+      "name": "phase1_post_source_checkpoint",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260726070010",
+      "name": "assistant_v5_and_website_sync_foundation",
+      "statement_sha256": "2cbee859db7a905481d9972d8a608abe611b52b66f8dd41561e7cc5e48e1b948",
+      "statement_bytes": 8559
+    },
+    {
+      "version": "20260726070346",
+      "name": "assistant_v5_quality_test_cases",
+      "statement_sha256": "cc8f15578e0fbc90fe25ebfb3bc82ee193f24071117d235517807defc71fc1a2",
+      "statement_bytes": 2429
+    },
+    {
+      "version": "20260726070513",
+      "name": "allow_official_website_knowledge_scope",
+      "statement_sha256": "536343e470cd710baba09deeaebbfbd7e8882e53630c16f69657bea631f60111",
+      "statement_bytes": 482
+    },
+    {
+      "version": "20260726070619",
+      "name": "allow_website_knowledge_unit_type",
+      "statement_sha256": "2505741effea8b853b3cb2a2e7241e313ee4e49509009e06558680885e26fbd2",
+      "statement_bytes": 445
+    },
+    {
+      "version": "20260726070720",
+      "name": "allow_official_page_knowledge_reference",
+      "statement_sha256": "821b4cb3d376522fc150bae1c4a552c40b6d02d385da4a0af409b070210a3212",
+      "statement_bytes": 420
+    },
+    {
+      "version": "20260726071329",
+      "name": "assistant_v5_admin_settings",
+      "statement_sha256": "4816e82ff2e22362f9497f5c7cd9e438ac747a737c9b85c301c18e6d6384d4a1",
+      "statement_bytes": 2897
+    },
+    {
+      "version": "20260726073908",
+      "name": "seed_sanad_core_operating_knowledge",
+      "statement_sha256": "5a148e706af8a6b53a6b8cc91cbe7ab7f56dd8f2c273c5498eefbfe2503ed4fe",
+      "statement_bytes": 7957
+    },
+    {
+      "version": "20260726080842",
+      "name": "admin_audience_campaigns",
+      "statement_sha256": "7d5f451a38e2192d27cfb854e839e07ba7739ea356d0f5470084485cab5098b8",
+      "statement_bytes": 19529
+    },
+    {
+      "version": "20260726081625",
+      "name": "harden_admin_campaign_dispatch",
+      "statement_sha256": "7d08f5d8e5e8c5bd2c0a54b958c2b5e48de288489db14b8629fea9aca8c2e8a6",
+      "statement_bytes": 4705
+    },
+    {
+      "version": "20260726083729",
+      "name": "transactional_message_automations",
+      "statement_sha256": "77c2a954a5dc364e2d8635d1cbfb55d661256103d82d9519899639ee76687347",
+      "statement_bytes": 18565
+    },
+    {
+      "version": "20260726084329",
+      "name": "route_whatsapp_delivery_to_transactional_outbox",
+      "statement_sha256": "d97e38e04b3f8f251e9036a0f26fec56006e7777f5590b8c709e255bae063a64",
+      "statement_bytes": 2197
+    },
+    {
+      "version": "20260726084418",
+      "name": "allow_report_requested_notification",
+      "statement_sha256": "65dacb1c97fc0e77e24f1716f65eec0adbad10572a2048ab6da1181560517ac0",
+      "statement_bytes": 811
+    },
+    {
+      "version": "20260726084649",
+      "name": "fix_transactional_template_regex",
+      "statement_sha256": "bfa74802a09e899b39c65f8bb3bec40564cd2bcefe346e1df35ea08bdb0bfe42",
+      "statement_bytes": 2025
+    },
+    {
+      "version": "20260726090341",
+      "name": "lock_transactional_delivery_status_rpc",
+      "statement_sha256": "2bb297af4b9dd187da50e1c2f9a9f7a933475535196e6be34beae89faa38694d",
+      "statement_bytes": 259
+    },
+    {
+      "version": "20260727081431",
+      "name": "assistant_user_context_and_conversation_state",
+      "statement_sha256": "e535190ada124e90fe2e3a17dfb897ad9e8df422d79843833bca97683e6b2337",
+      "statement_bytes": 9615
+    },
+    {
+      "version": "20260727085121",
+      "name": "expand_sanad_assistant_knowledge_v1",
+      "statement_sha256": "232e2ff5cae2d353d799aa85e50cf6132ba7b7872beacc82338c31e4cdefb498",
+      "statement_bytes": 26229
+    },
+    {
+      "version": "20260727085233",
+      "name": "add_sanad_knowledge_regression_cases_v1",
+      "statement_sha256": "3286e208b5a32ff5b87ce569210ec3972c187c9a88f6d5ebde117151b2ad9c2b",
+      "statement_bytes": 2853
+    },
+    {
+      "version": "20260727085618",
+      "name": "assistant_execution_tools_and_support",
+      "statement_sha256": "7295a948ec223ed32bb718f7270c606751ea97f3ee4227f8988ac0af268dc522",
+      "statement_bytes": 9014
+    },
+    {
+      "version": "20260727125452",
+      "name": "assistant_enterprise_foundation_v1",
+      "statement_sha256": "c16f433cf8f1b9264ffd301d2a6930f88328e1c7609e9ed8babae67cb0f3e4d3",
+      "statement_bytes": 9538
+    },
+    {
+      "version": "20260727125857",
+      "name": "assistant_media_orchestration_v2",
+      "statement_sha256": "e722eb62771475d775445c1ac743b7bafc8d89d0141eb6271ecf5115fb736766",
+      "statement_bytes": 4582
+    },
+    {
+      "version": "20260727130239",
+      "name": "secure_assistant_media_rpc_execution",
+      "statement_sha256": "4ac642ef3a60f6f205c3122b825af87f79ef0633baf2e7007e97f5b24842d66e",
+      "statement_bytes": 842
+    },
+    {
+      "version": "20260727131135",
+      "name": "assistant_media_health_and_regression_foundation",
+      "statement_sha256": "77d91b974687143a6dbff0e30f716f8ac8ac94c77764eeadf29ef56a58f63073",
+      "statement_bytes": 4025
+    },
+    {
+      "version": "20260727131613",
+      "name": "cascade_whatsapp_status_to_assistant_media",
+      "statement_sha256": "f085c3b604dfd59c1851c94349ae1a8265c6b5458e4fdf897904e214ae813fd3",
+      "statement_bytes": 2740
+    },
+    {
+      "version": "20260727132723",
+      "name": "assistant_media_delivery_observability_v2",
+      "statement_sha256": "6eb38a0c4da049b5a8465db61e768f748e53b8e4394cdf2a73520bf9a82a8093",
+      "statement_bytes": 4816
+    },
+    {
+      "version": "20260727132823",
+      "name": "assistant_regression_suite_foundation",
+      "statement_sha256": "8ec4562dd5079de178ed601a5c1b9fe9d2a07bb65ff4ac66062acbe45122fda8",
+      "statement_bytes": 5947
+    },
+    {
+      "version": "20260727133242",
+      "name": "assistant_eval_release_gates",
+      "statement_sha256": "9022a50be27628c933326d4b5d5983eb94cf2a14e19ca8de52dc6c518f2b7e48",
+      "statement_bytes": 716
+    },
+    {
+      "version": "20260727133524",
+      "name": "run_assistant_contract_evals",
+      "statement_sha256": "0994fb7cfaa132fc5d74c2627007aa5b1a5379b275ae889f12fe062496074fb1",
+      "statement_bytes": 8165
+    },
+    {
+      "version": "20260727133707",
+      "name": "fix_assistant_eval_contracts_v2",
+      "statement_sha256": "9f2fc4cf3b9438cf20bb82614c556d931eb10f06e4e250003d52be59361612ed",
+      "statement_bytes": 8219
+    },
+    {
+      "version": "20260727134413",
+      "name": "assistant_release_governance",
+      "statement_sha256": "dc3db8cf0194dd4b6628a7861f8d161fc0372a2084f38dd9692708abcb343578",
+      "statement_bytes": 4259
+    },
+    {
+      "version": "20260727134640",
+      "name": "assistant_v13_shadow_comparison",
+      "statement_sha256": "060f09ad532b99b3e122e9102462f70d84fdec31bfc4cad447da766811cb13d6",
+      "statement_bytes": 2384
+    },
+    {
+      "version": "20260727135504",
+      "name": "assistant_canary_policy_and_metrics",
+      "statement_sha256": "00cdcf6a615b1e736fbfdc3abac0119fff9fb0ff81630d1f7e6dd9e4eb4f4dbc",
+      "statement_bytes": 6509
+    },
+    {
+      "version": "20260727135734",
+      "name": "fix_assistant_canary_evaluation_error_column",
+      "statement_sha256": "e8cc164927559bc4488a313c8ca068ad88da1f24604ea84ea3ba98c948313b12",
+      "statement_bytes": 3897
+    },
+    {
+      "version": "20260727135855",
+      "name": "assistant_shadow_intent_family_normalization",
+      "statement_sha256": "40fe691ad8bb4a737f2a70da3d7d657d72edfcb90463c64cc3e449bd63207bba",
+      "statement_bytes": 5775
+    },
+    {
+      "version": "20260727140520",
+      "name": "add_shadow_candidate_latency",
+      "statement_sha256": "dd0aa572f3a1d731c5a327079302d1b85693fb5d51046fde5ac66d8fc0393603",
+      "statement_bytes": 301
+    },
+    {
+      "version": "20260727140916",
+      "name": "sanad_assistant_context_snapshot_v1",
+      "statement_sha256": "a882746219b8b6135ef23ef7fe05b3bd36346afcc9aa6b7843085e225b2ab544",
+      "statement_bytes": 2411
+    },
+    {
+      "version": "20260727142511",
+      "name": "assistant_v15_deployment_hardening",
+      "statement_sha256": "fb2813a6c2f61d0fc9dd2ea6c9194b31ac4af5313fe404e00b1063dfeb734558",
+      "statement_bytes": 2731
+    },
+    {
+      "version": "20260727182417",
+      "name": "operation_datetime_timezone_hardening",
+      "statement_sha256": "84407a91aa30cd11ed7e070208565fca38fbaeeead403ed8cb644b4a4b2710f0",
+      "statement_bytes": 3119
+    },
+    {
+      "version": "20260727183046",
+      "name": "normalize_operation_local_datetime_to_aden",
+      "statement_sha256": "5bc14e784d98b2c18ba1fc5b9066e8860721f2d3abfd197d3dba147fffcda08b",
+      "statement_bytes": 1181
+    },
+    {
+      "version": "20260727215111",
+      "name": "operation_temporal_fields",
+      "statement_sha256": "49eccb04764215ddc2ff171d13a952105e4f09276b0137dbaf2fb0120d7327ce",
+      "statement_bytes": 3943
+    },
+    {
+      "version": "20260727215202",
+      "name": "operation_temporal_sync",
+      "statement_sha256": "4103a5dfd6d5186a477f2e156390c1287f8f288975b624bdb8a535e1e7477047",
+      "statement_bytes": 3237
+    },
+    {
+      "version": "20260727215616",
+      "name": "operation_file_access_authorization",
+      "statement_sha256": "0123644a7cfae57e008a43e24687541b6181585db55e45005d3f2550cb827c17",
+      "statement_bytes": 1768
+    },
+    {
+      "version": "20260727215720",
+      "name": "operation_file_access_audit_log",
+      "statement_sha256": "17e9081186111b1bc6b79d5586dfeb5c03efd0cb71c30fb4186996df21822921",
+      "statement_bytes": 1011
+    },
+    {
+      "version": "20260727215735",
+      "name": "operation_file_access_events",
+      "statement_sha256": "17e9081186111b1bc6b79d5586dfeb5c03efd0cb71c30fb4186996df21822921",
+      "statement_bytes": 1011
+    },
+    {
+      "version": "20260727215800",
+      "name": "operation_file_access_event_writer",
+      "statement_sha256": "827be39ec17b142dc75faed7218527d13eaa9042ac869ff798f959206a252290",
+      "statement_bytes": 871
+    },
+    {
+      "version": "20260727215843",
+      "name": "operation_file_access_event_writer_lockdown",
+      "statement_sha256": "3be9d63974f0717a1d9dc985baba7e319e5d7bb68810462fd7608042021759b1",
+      "statement_bytes": 251
+    },
+    {
+      "version": "20260727221234",
+      "name": "operation_temporal_access_contract",
+      "statement_sha256": "c4877ebf8a0f9ee2252c17d12489a18ab672ac0d0493c8df33d19a0279b73c46",
+      "statement_bytes": 2566
+    },
+    {
+      "version": "20260727223421",
+      "name": "operation_received_at_yemen",
+      "statement_sha256": "491f597c84681d71a9dd54b963ba5b361c8a156f360aa07123de0f5fe76b71db",
+      "statement_bytes": 3183
+    },
+    {
+      "version": "20260728060235",
+      "name": "infer_explicit_operation_time",
+      "statement_sha256": "08302a24c7184e3bd5f7a61c04e8aac4c08e6c9be066cdc9284da490f402bcce",
+      "statement_bytes": 3553
+    },
+    {
+      "version": "20260728063155",
+      "name": "whatsapp_meta_received_at",
+      "statement_sha256": "b0bab70344292a9b5f967b039538a2cd786b81cacc01337e0a12f3e94831500b",
+      "statement_bytes": 1387
+    },
+    {
+      "version": "20260728064504",
+      "name": "assistant_reliability_priority_1",
+      "statement_sha256": "83e1ed06f9e4769e2827f812e3fb4d07c0f9a335e23a6b429fef02b707fa7618",
+      "statement_bytes": 6409
+    },
+    {
+      "version": "20260728064622",
+      "name": "assistant_media_health_and_test_expansion",
+      "statement_sha256": "50c498469555deb69be5003c73a6697bea2ac8adee0b215ebc5fecf43656a368",
+      "statement_bytes": 2440
+    },
+    {
+      "version": "20260728064822",
+      "name": "fix_assistant_tool_execution_status_contract",
+      "statement_sha256": "1fae726c7235a3f8aa728aa8d18e6b4c9a1b2900b817ff7b4c3a4e7930cd0e8a",
+      "statement_bytes": 1552
+    },
+    {
+      "version": "20260728083210",
+      "name": "assistant_media_health_selection_enforcement",
+      "statement_sha256": "33d75701c7b48f24affa39bd29cfa916f63c0ea9f3d812c5a4f9625c71ec62aa",
+      "statement_bytes": 2156
+    },
+    {
+      "version": "20260728083257",
+      "name": "assistant_priority_execution_queue_v1",
+      "statement_sha256": "58729c38349b8984faab2a137d216278f0e0176bf1a1193342c5a48872c4f6d5",
+      "statement_bytes": 2704
+    },
+    {
+      "version": "20260728083325",
+      "name": "assistant_tool_permission_matrix_v1",
+      "statement_sha256": "687eda3ee23d51e27244bf0b875b5e9f283fb02d641051fbe6ee4c0d00cc0162",
+      "statement_bytes": 2349
+    },
+    {
+      "version": "20260728083355",
+      "name": "assistant_intent_aliases_v1",
+      "statement_sha256": "848c0bc6172228ffbf4a95b5b8472f7e614e60435281b08b8c1734961191d803",
+      "statement_bytes": 1917
+    },
+    {
+      "version": "20260728083407",
+      "name": "assistant_intent_alias_lookup_v1",
+      "statement_sha256": "6545b801b67de7035cd449312856e37d67d2bc9f5b06ddf398fe360332d358f9",
+      "statement_bytes": 788
+    },
+    {
+      "version": "20260728083533",
+      "name": "assistant_flow_expiry_on_context_v1",
+      "statement_sha256": "c3c6fa2f1e2837a821608d4ea9e52935e59a598bc08ce231d2195d9c26d8ca39",
+      "statement_bytes": 3624
+    },
+    {
+      "version": "20260728083722",
+      "name": "restore_and_harden_assistant_user_context_v2",
+      "statement_sha256": "3aaece5de915dc09579911d68801aa78ae9f94e25acb270f6a07f028f67c9484",
+      "statement_bytes": 7380
+    },
+    {
+      "version": "20260728083759",
+      "name": "assistant_cleanup_legacy_stale_flows",
+      "statement_sha256": "9fbb755e840cf3d85067ed2349cbc4b137bf336325691cab2527784a4223f247",
+      "statement_bytes": 347
+    },
+    {
+      "version": "20260728083907",
+      "name": "assistant_platform_metrics_tool_v1",
+      "statement_sha256": "c026eb43bd7fa5edecf9b92b10a772a81bd37580785472e878fb8c3001f6aed3",
+      "statement_bytes": 2395
+    },
+    {
+      "version": "20260728220407",
+      "name": "business_review_approval_notifications",
+      "statement_sha256": "2c41f7b3a3d753b754f5a422a62be1ca20741735e1ea1bcc1a8abb9780e254dc",
+      "statement_bytes": 3228
+    },
+    {
+      "version": "20260728220520",
+      "name": "extend_transactional_events_for_business_reviews",
+      "statement_sha256": "3f1cee8c54ebe480545d288e7b82657d09f2f653cefa69adb0e96785a0068122",
+      "statement_bytes": 3206
+    },
+    {
+      "version": "20260728220531",
+      "name": "noop_business_notification_delivery_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260729080415",
+      "name": "harden_signup_whatsapp_identity_and_assistant_recovery_v2",
+      "statement_sha256": "b0171d7092d884082b2b52fb58b0cb7c6da6fd2b6736719ead60c1bd6c68d6c7",
+      "statement_bytes": 10772
+    },
+    {
+      "version": "20260729080558",
+      "name": "allow_structured_assistant_tool_outputs",
+      "statement_sha256": "8869906e18afc5fcb94261accfe37e32220b6c8360deadb0b88ed4e076ffa86c",
+      "statement_bytes": 749
+    },
+    {
+      "version": "20260729080647",
+      "name": "assistant_retry_queue_dispatch_support",
+      "statement_sha256": "60f3752b5045b047c75e0f323b4bbc2463f90fd17a98b4ffa77e048f2855499c",
+      "statement_bytes": 1162
+    },
+    {
+      "version": "20260729080713",
+      "name": "schedule_assistant_retry_dispatcher",
+      "statement_sha256": "3025e6240dde9430bd1ea47b95b60021db4f3433692988face2b95e7d4e44fda",
+      "statement_bytes": 924
+    },
+    {
+      "version": "20260729082611",
+      "name": "harden_first_contact_whatsapp_onboarding",
+      "statement_sha256": "bcde9a7b7fb618e3ad4283c967abeb9b1bdf29175b5266c76b2f61b33e1ef732",
+      "statement_bytes": 7185
+    },
+    {
+      "version": "20260729082818",
+      "name": "add_whatsapp_welcome_retry_policy",
+      "statement_sha256": "d404370daaa1bf711b288508a981c8b6327b10e7b5e38b0fa19c2b5b8800e172",
+      "statement_bytes": 3365
+    },
+    {
+      "version": "20260729104159",
+      "name": "align_signup_and_basic_profile_completion",
+      "statement_sha256": "c21e8d7a7b8bfcac0071be4bcb6851b98bd81c2a2fbd98cf257a9f5b0d3af71b",
+      "statement_bytes": 3842
+    },
+    {
+      "version": "20260729141428",
+      "name": "expose_operation_local_temporal_fields",
+      "statement_sha256": "df82972e63a385c28968a958a51dce2366ee7ef60ae42d37d93de596de91d47a",
+      "statement_bytes": 2580
+    },
+    {
+      "version": "20260729154332",
+      "name": "prevent_null_operation_access_payload",
+      "statement_sha256": "3f809d19697d48ddafcc48ca1513daf006b825f611a849f2b54058d8568af61e",
+      "statement_bytes": 2773
+    },
+    {
+      "version": "20260730064607",
+      "name": "bind_approved_meta_transactional_templates",
+      "statement_sha256": "3fedab5e3d7bb45428c12635a62e67e519ae58d9882d908568b01560cae1b977",
+      "statement_bytes": 1403
+    },
+    {
+      "version": "20260730070930",
+      "name": "phone_verification_background_delivery",
+      "statement_sha256": "0998a80b34a25114b610ad5d15870e17e65342b5b03ae27bbe0fa110a20a75ab",
+      "statement_bytes": 6572
+    },
+    {
+      "version": "20260730070939",
+      "name": "phone_verification_background_delivery_grants",
+      "statement_sha256": "6c1f8b5b59f5900046ab05cc051c5109924a6d785a4b811e4a09ed6dd116312b",
+      "statement_bytes": 206
+    },
+    {
+      "version": "20260730071657",
+      "name": "expire_stale_phone_verification_queue",
+      "statement_sha256": "9f81d6e8d5638934767776c0578ab1b655aad1757b42e8ea9fed54131a3f9afb",
+      "statement_bytes": 1192
+    },
+    {
+      "version": "20260730200331",
+      "name": "add_report_payload_v2",
+      "statement_sha256": "f454161154b76214d1911569ef3b7a3ec10a82cd41d2c3a1dcc5a311d6baea0e",
+      "statement_bytes": 1583
+    },
+    {
+      "version": "20260730201052",
+      "name": "report_v2_deployment_checkpoint",
+      "statement_sha256": "06d458cc19c8382202ad347d8aac2db19f73c5ee9cde263c42123aab9ed0e34d",
+      "statement_bytes": 157
+    },
+    {
+      "version": "20260730215901",
+      "name": "extend_report_payload_v2_with_operation_notes",
+      "statement_sha256": "e4b274f211dadd2da3927646ac9b29105ce05f3b0ebbb0ca31119ff6c42e5386",
+      "statement_bytes": 1972
+    },
+    {
+      "version": "20260730220220",
+      "name": "report_v2_1_test_checkpoint",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220235",
+      "name": "report_v2_1_visual_test_ready",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220308",
+      "name": "noop_before_v2_1_deploy",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220330",
+      "name": "report_v2_1_deploy_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220349",
+      "name": "report_v2_1_final_predeploy_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220404",
+      "name": "report_v2_1_execute_now_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220448",
+      "name": "report_v2_1_last_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220506",
+      "name": "report_v2_1_deploy_attempt_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220526",
+      "name": "report_v2_1_actual_deploy_marker",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260730220544",
+      "name": "report_v2_1_release_checkpoint",
+      "statement_sha256": "354b7196c9ba5fb4b21cf615bb6ec4cd5c07503c34229feef033fc081a8c03f4",
+      "statement_bytes": 9
+    },
+    {
+      "version": "20260731095503",
+      "name": "business_financial_routing_schema_foundation",
+      "statement_sha256": "814f9e4404fd5794df87530abc3f2433917e442a145bbdd09323e0dec94e6929",
+      "statement_bytes": 12434
+    },
+    {
+      "version": "20260731095648",
+      "name": "business_financial_routing_legacy_migration",
+      "statement_sha256": "6ed95cd7c0ef7f6586e8a010034fe0315e6f2f6c05d2515722fb3732f5b93a41",
+      "statement_bytes": 12229
+    },
+    {
+      "version": "20260731095834",
+      "name": "business_financial_routing_write_contracts",
+      "statement_sha256": "62662fef57d895435cb5519d2c72f5ef70d07ad0de4a2702dfbb0df6eb34029c",
+      "statement_bytes": 13585
+    },
+    {
+      "version": "20260731100440",
+      "name": "business_financial_routing_fk_indexes",
+      "statement_sha256": "d19ffbde57da8c12c38e70d61f454cabb59f9df930fcf53b3ddbdc91c57d4e96",
+      "statement_bytes": 504
+    },
+    {
+      "version": "20260731101405",
+      "name": "protect_financial_accounts_compatibility_cache",
+      "statement_sha256": "2633a90f39dfe6b39fc7a2b089c9aef772480bebd850b64afaa33ae2b9adea44",
+      "statement_bytes": 8196
+    },
+    {
+      "version": "20260731103813",
+      "name": "operation_analysis_routing_shadow_v2",
+      "statement_sha256": "b109e5f261570caeb89eae4e568bac61608081c02fcc75b826561f1c3e3646b6",
+      "statement_bytes": 21425
+    },
+    {
+      "version": "20260731103911",
+      "name": "fix_operation_routing_shadow_uuid_aggregation",
+      "statement_sha256": "96321dea1423f58676556669fed028c7b2e109484148a5c9ebaf27f105024b37",
+      "statement_bytes": 1332
+    },
+    {
+      "version": "20260731104749",
+      "name": "operation_analysis_contract_v2_trigger_and_prompt",
+      "statement_sha256": "d0a5f58e5cfc8942e664b75aef6f652690840b8d495521951fb8f5762a44a6ce",
+      "statement_bytes": 22940
+    },
+    {
+      "version": "20260731105256",
+      "name": "isolate_operation_routing_shadow_results",
+      "statement_sha256": "a61bff96231095fa8ff44bf7ff8e2e2c92e253056d014acc01d63f3b743acdc3",
+      "statement_bytes": 11356
+    },
+    {
+      "version": "20260731110911",
+      "name": "routing_shadow_benchmark_review_foundation",
+      "statement_sha256": "c362de99f69c21666bfdab97d318a4e2282f56781402e068d448b2eb6ec78dd2",
+      "statement_bytes": 38289
+    },
+    {
+      "version": "20260731111326",
+      "name": "routing_benchmark_review_search_and_release",
+      "statement_sha256": "83b53c4561416adc3443bed96d3a317ecd92fe2369541bc393c374ed74acff0a",
+      "statement_bytes": 4325
+    },
+    {
+      "version": "20260731112104",
+      "name": "harden_routing_benchmark_review_semantics",
+      "statement_sha256": "b849963957d8daf22cd3545a4995b412ccc8c5260975b41c9c19ba5c20ecd787",
+      "statement_bytes": 3587
+    },
+    {
+      "version": "20260731113046",
+      "name": "routing_benchmark_cover_remaining_foreign_keys",
+      "statement_sha256": "86533b8a63448c5370dfa862997b0ad767130edcbcef966e8bae8d08b1372243",
+      "statement_bytes": 424
+    },
+    {
+      "version": "20260731115803",
+      "name": "routing_benchmark_dual_review_foundation",
+      "statement_sha256": "409e1fa3361ee9789037ba6f5523bd67ebb38ed5ab4abed07a84b482ea746fd1",
+      "statement_bytes": 42174
+    },
+    {
+      "version": "20260731120205",
+      "name": "routing_benchmark_dual_review_read_contracts",
+      "statement_sha256": "62ca7270dd0c411b08edc6ee66db8c0f362656c9f1bff83f5070104e2bac4b78",
+      "statement_bytes": 21206
+    },
+    {
+      "version": "20260731120511",
+      "name": "routing_benchmark_dual_review_transition_fix",
+      "statement_sha256": "2f613348b79ab6d420d3c90dde4797f10d6b2793025ac41c0382ac2670d3b84f",
+      "statement_bytes": 13113
+    },
+    {
+      "version": "20260731120758",
+      "name": "routing_benchmark_dual_review_cover_foreign_keys",
+      "statement_sha256": "d757e6fc06b26fa1cbb8fe2652e2629d96a169d02d4504759a0dcf9315c0dd46",
+      "statement_bytes": 368
+    },
+    {
+      "version": "20260731124052",
+      "name": "business_payment_inbox_foundation",
+      "statement_sha256": "354f2e74e47e465707d9aedc32b051443bcfc4faf67bc0648104df581cb5d6b3",
+      "statement_bytes": 34830
+    },
+    {
+      "version": "20260731125503",
+      "name": "business_payment_inbox_team_permissions_and_queue_fix",
+      "statement_sha256": "668c00025424c82dea1fb8de5edd712337da1156c17a60312acff022b560a522",
+      "statement_bytes": 6765
+    },
+    {
+      "version": "20260731125955",
+      "name": "business_payment_inbox_claimed_by_fk_index",
+      "statement_sha256": "336a6d19fd99b704051f825cc839987ff1fff78fb611e77c70e02afc7719c0b5",
+      "statement_bytes": 146
+    },
+    {
+      "version": "20260731130810",
+      "name": "operation_pipeline_latency_observability",
+      "statement_sha256": "0dde126735f4f5837c085442a4cc333e78bd7937716fb3d26f39faca4ca3ff56",
+      "statement_bytes": 10287
+    },
+    {
+      "version": "20260731134059",
+      "name": "financial_routing_rollout_foundation",
+      "statement_sha256": "cfb876d132a0b3fc2149f3da2c5f1db2aa65b03298f18865b44ff3c1536a66ac",
+      "statement_bytes": 27421
+    },
+    {
+      "version": "20260731134306",
+      "name": "financial_routing_rollout_admin_contracts",
+      "statement_sha256": "985e9743f571c1935c510d4c634750ba7c96cedaee2cfcb1a324b4a521dbe719",
+      "statement_bytes": 21080
+    },
+    {
+      "version": "20260731160543",
+      "name": "business_payment_shadow_preview",
+      "statement_sha256": "d62f6670e1bf8d052a45131a4c3e7f193a7cb214b2bae27d9d7e0b90a3ceff27",
+      "statement_bytes": 6257
+    },
+    {
+      "version": "20260731160733",
+      "name": "business_payment_shadow_preview",
+      "statement_sha256": "3ac294e1ad5fc27dbb27367fcf889985acdb4c11b10e8fe7d3fa37a75f7a218f",
+      "statement_bytes": 6225
+    },
+    {
+      "version": "20260731194727",
+      "name": "business_workspaces_member_access",
+      "statement_sha256": "0acfb4d9f30b00526a020f3a7f5ce1378ede8a646c0c6a05285c3b87a808b113",
+      "statement_bytes": 3755
+    },
+    {
+      "version": "20260731194848",
+      "name": "unified_operation_workflow_source_of_truth",
+      "statement_sha256": "99b1ebba05f2d54c33012892a75ec47eb58ef64b18dbc25fbb9b462af00ad689",
+      "statement_bytes": 16525
+    },
+    {
+      "version": "20260731194857",
+      "name": "unified_operation_workflow_link_type",
+      "statement_sha256": "8faf5c7a6848cf8c98fc0614128dee430eaf41e50f0112043b6e24b193461071",
+      "statement_bytes": 462
+    },
+    {
+      "version": "20260731194914",
+      "name": "unified_operation_event_types",
+      "statement_sha256": "5fd9b7d3b1dd487a74272056fcdaad15160e5a24d2b0419721cd6ad8c8e78c78",
+      "statement_bytes": 923
+    },
+    {
+      "version": "20260731194939",
+      "name": "unified_operation_user_link_sources",
+      "statement_sha256": "42b7a000f0c9ad594757963e14e0cae5d38ac7dc4853bdff42625466544cef9c",
+      "statement_bytes": 544
+    },
+    {
+      "version": "20260731195015",
+      "name": "fix_unified_verify_operation_uuid_selection",
+      "statement_sha256": "30c0e43f73734b9773f8ae3ab5f249664a3e07c0aa56342f7e08b0d608a025df",
+      "statement_bytes": 1544
+    },
+    {
+      "version": "20260731195103",
+      "name": "unified_operation_workflow_read_models",
+      "statement_sha256": "f104766e85a9d77c511c10d64adf3e8ae8c256be95de5208401b9aa0afcdcecc",
+      "statement_bytes": 8199
+    },
+    {
+      "version": "20260731195131",
+      "name": "guard_unified_operation_claim_permission",
+      "statement_sha256": "99039bec7813dfe61dbf2588acf7192bcc9428fdf3a517a2f0721e7e4098e0b5",
+      "statement_bytes": 3095
+    },
+    {
+      "version": "20260801075759",
+      "name": "team_permissions_end_to_end",
+      "statement_sha256": "cd857725a53567a3f687fe33d5958d02480e10a0d383ded403d335595a82cfdf",
+      "statement_bytes": 6688
+    },
+    {
+      "version": "20260802170019",
+      "name": "interactive_report_delivery_foundation",
+      "statement_sha256": "5ea36c984fbf73a64f4b33749fc744f7370a2f728bc1a96f3d4de21e703f05b8",
+      "statement_bytes": 7083
+    },
+    {
+      "version": "20260802170150",
+      "name": "create_report_delivery_artifacts_rpc",
+      "statement_sha256": "6a7650a12fcc9c5d4f9c6f2abaabb255a6042cb3a115fd99e760c6507348a8ef",
+      "statement_bytes": 5096
+    },
+    {
+      "version": "20260802170541",
+      "name": "harden_interactive_report_reference",
+      "statement_sha256": "5f5ed17eba75020fa123888783bcc99d1b2e775ed9e84191712ff74856afb4e1",
+      "statement_bytes": 740
+    },
+    {
+      "version": "20260802171527",
+      "name": "extend_report_request_rpcs_with_delivery_format",
+      "statement_sha256": "c3e87a2ca8cfc4da51b11698d595b151cdbf11504e440cc543e8da5fb5063389",
+      "statement_bytes": 9032
+    },
+    {
+      "version": "20260802210412",
+      "name": "harden_assistant_operational_tables",
+      "statement_sha256": "50fb5df8ddc6a3d246c2a20004d125de4d2eef00c12d3a657872b1c9b1c47c41",
+      "statement_bytes": 3386
+    },
+    {
+      "version": "20260802210858",
+      "name": "payment_inbox_workflow_hardening",
+      "statement_sha256": "f3b260c403314171a780288209a1b8969fa21fcca85e9267fab85af63e96174a",
+      "statement_bytes": 33703
+    },
+    {
+      "version": "20260802210948",
+      "name": "payment_inbox_review_state_and_context_fix",
+      "statement_sha256": "5a230fa498fae5bd6a3b853921f587005914fbf656aacb4b5e7fc1199b0fc9ad",
+      "statement_bytes": 8459
+    },
+    {
+      "version": "20260802211012",
+      "name": "payment_inbox_assignee_owner_support",
+      "statement_sha256": "bf0999d05a23d5db4bdf47ef983f69a1016f5e8e6937ea53d0d9967a6d30cac6",
+      "statement_bytes": 1595
+    },
+    {
+      "version": "20260802211101",
+      "name": "business_team_member_operations_v2",
+      "statement_sha256": "6f06d9a3f595ba6350ababdae510698053e080bc9d664ffaf87882cc6d1dd962",
+      "statement_bytes": 12468
+    },
+    {
+      "version": "20260802211140",
+      "name": "operation_identity_projection",
+      "statement_sha256": "93be79854cf42d2799e6c54b499b378b89f66f0896757ae6ac681fc644f220e3",
+      "statement_bytes": 7471
+    },
+    {
+      "version": "20260802211212",
+      "name": "operation_identity_feed_contracts",
+      "statement_sha256": "7f2cca96c19333fb2e0c3e2f341c276a000ad955d5b5c36259872c5f90a853d1",
+      "statement_bytes": 6543
+    },
+    {
+      "version": "20260802211519",
+      "name": "operation_analysis_identity_guardrails",
+      "statement_sha256": "8648573e6068cc98cc1aa9f45c6476d6775ac8100dc928588e541c0594c4e653",
+      "statement_bytes": 2175
+    },
+    {
+      "version": "20260802211538",
+      "name": "business_team_operation_identity_projection",
+      "statement_sha256": "6aabd2bffc711b36ec05b278fa4a441f54d8c9dbcf3698cd57d9414b94b87843",
+      "statement_bytes": 3205
+    },
+    {
+      "version": "20260802211607",
+      "name": "operation_identity_details_and_reports",
+      "statement_sha256": "b0fd25a97a5def2dba8d521330d60a596c3738fda430f4cffc2197f8ccb1e0d5",
+      "statement_bytes": 10164
+    },
+    {
+      "version": "20260802211955",
+      "name": "operation_identity_and_team_history_semantic_fix",
+      "statement_sha256": "38b5f92099af174ae8ea6b9209102bf7781abcb1dc3245edeca055524b55a04b",
+      "statement_bytes": 9895
+    },
+    {
+      "version": "20260802212154",
+      "name": "operation_identity_conflict_fallback_fix",
+      "statement_sha256": "ba20a5a9e75f5b43b3bb8f635d220a91c4b289228cd18271a58a3ebe7a3f1e24",
+      "statement_bytes": 2339
+    },
+    {
+      "version": "20260802221747",
+      "name": "separate_personal_and_business_operation_feeds",
+      "statement_sha256": "063b2539e83610b8ef3c6a05bc2029b246abf46267a20ce0f2b88247e8529b56",
+      "statement_bytes": 3127
+    },
+    {
+      "version": "20260803000853",
+      "name": "simplify_payment_inbox_routing_activation",
+      "statement_sha256": "ea6f1613f383ba3058a82fe89db930ba0a62e65a5e783aabd24c2e3e326fa402",
+      "statement_bytes": 9517
+    },
+    {
+      "version": "20260803001056",
+      "name": "operational_inbox_schema_compatibility",
+      "statement_sha256": "24caa44b202aba6a78dc2b4608a6beb24a75eb4c031f4f15772566c69587f7fd",
+      "statement_bytes": 1002
+    },
+    {
+      "version": "20260803001202",
+      "name": "operational_inbox_source_mode",
+      "statement_sha256": "e954781915bbd8c3283b6f948f2e5fa5a1461c5f25628437b5456adf7996606a",
+      "statement_bytes": 551
+    },
+    {
+      "version": "20260803003554",
+      "name": "operation_identity_compound_name_equivalence",
+      "statement_sha256": "3dd076fd9fda74d325de50cfce32d4615f3a6ad9569627587697fba4bfaab3b4",
+      "statement_bytes": 2340
+    },
+    {
+      "version": "20260803090947",
+      "name": "harden_internal_worker_and_trigger_rpcs",
+      "statement_sha256": "cd6fc8cb7fd4f4b4b63d6e0aefd837402060f70a5fa60f315edaaf54038845c1",
+      "statement_bytes": 2559
+    },
+    {
+      "version": "20260803091340",
+      "name": "harden_public_rpc_output_contracts",
+      "statement_sha256": "b83844c08571fe7c86fd22645d7043ae4e4389accef0441e562c42b07d75015b",
+      "statement_bytes": 5486
+    },
+    {
+      "version": "20260803091503",
+      "name": "fix_security_definer_search_paths",
+      "statement_sha256": "6cf58373492409c78ca8fda491fca5d2a9cd2d241dc67deb6139a74881939703",
+      "statement_bytes": 1414
+    },
+    {
+      "version": "20260803091545",
+      "name": "remove_trigger_functions_from_api",
+      "statement_sha256": "05aae28fb0d8acd713965a58a43cd7dbbc4bbc531cbcfba5bed49db877e1a30f",
+      "statement_bytes": 1268
+    },
+    {
+      "version": "20260803091713",
+      "name": "rate_limit_operation_open_events",
+      "statement_sha256": "c3c96a3c20ab723c78362ce55e9f1fffaabe25ea5508e1d0fa82f10dab2ff800",
+      "statement_bytes": 1750
+    },
+    {
+      "version": "20260803091857",
+      "name": "harden_admin_and_payment_review_auditing",
+      "statement_sha256": "7b967193ba0ae5bdcaffd6ff6c518ae02d1f9eab4a2c562f1c59dd79e8bd59cf",
+      "statement_bytes": 4510
+    },
+    {
+      "version": "20260803141525",
+      "name": "allow_system_claim_expiry_release",
+      "statement_sha256": "b32c7b954b792262b3e54ceba5e56cc906c54b062da6bb020a5bb84ebc1bfe70",
+      "statement_bytes": 705
+    },
+    {
+      "version": "20260803142651",
+      "name": "route_payment_inbox_notifications_to_operation_details",
+      "statement_sha256": "6b21d972f38823056f99a6259d84718eae6ad7df09cb398dda72092a0ececaea",
+      "statement_bytes": 2999
+    },
+    {
+      "version": "20260803144121",
+      "name": "qualify_report_snapshot_digest",
+      "statement_sha256": "8c4710ca2e49b9444a0eb1b3dbe8cf186069ebe42e4c6740798b5b957493373c",
+      "statement_bytes": 4681
+    },
+    {
+      "version": "20260803145858",
+      "name": "qualify_interactive_report_token_digest",
+      "statement_sha256": "90cb58f1646f5224f0694c23bcfc368a12101236fc60c614f27fdb009e3ac1a2",
+      "statement_bytes": 2089
+    },
+    {
+      "version": "20260803155847",
+      "name": "route_report_notifications_to_requested_report",
+      "statement_sha256": "76ad4740c804155996f812ef00611d6776fee534a9ebd68c8b7b865268e6b4f1",
+      "statement_bytes": 4224
+    },
+    {
+      "version": "20260803201154",
+      "name": "add_sanad_pro_kuraimi_hasib_point_account",
+      "statement_sha256": "f30398d635b3e0ec264a21ac6642603e65e838b25a22749802ed48922677fd0f",
+      "statement_bytes": 1314
+    },
+    {
+      "version": "20260803203453",
+      "name": "harden_pro_payment_verification",
+      "statement_sha256": "22f73c9765ab4b6c0a2339dd114c8b1e5960958985e08123be7f2337332c87e7",
+      "statement_bytes": 12273
+    },
+    {
+      "version": "20260804063808",
+      "name": "operation_media_webp_previews",
+      "statement_sha256": "32fea88c96c5e10a4b19a3b558c9dbe4f796ec369705467c4db663cc81541813",
+      "statement_bytes": 14254
+    },
+    {
+      "version": "20260804071014",
+      "name": "make_payment_inbox_claims_durable_and_align_workspace_counts",
+      "statement_sha256": "4c86c278fd7b07ede3b5d69c19fd49f1d50a6bf2a68a03990976fd6b72ef9b99",
+      "statement_bytes": 5656
+    },
+    {
+      "version": "20260804084417",
+      "name": "exact_identifier_routing_preview_worker_and_review_notifications",
+      "statement_sha256": "0eb6afa89b454f6c77e2ee8368f918a70ca34c28259b72c90e96759f6efff349",
+      "statement_bytes": 7907
+    },
+    {
+      "version": "20260804093010",
+      "name": "operation_command_center_context_and_notification_consistency",
+      "statement_sha256": "702ee99fce24ba9a106791e7c5e5506e54836378ae764b906e63b2eb97fccdfd",
+      "statement_bytes": 7708
+    },
+    {
+      "version": "20260804094709",
+      "name": "fix_operation_operational_context_read_contract",
+      "statement_sha256": "e4d23bb7b1110724c4fde5f8858c6f3386a31d11cd2cd4c13bd033a184a12e15",
+      "statement_bytes": 3553
+    },
+    {
+      "version": "20260804101333",
+      "name": "operation_details_runtime_v2_contract",
+      "statement_sha256": "3f6c5e1205ca5dc39afe23aebcaae31b6943db6635e674d190755349b3693390",
+      "statement_bytes": 8264
+    },
+    {
+      "version": "20260804101525",
+      "name": "operation_preview_pipeline_v2",
+      "statement_sha256": "f2066f43050d9a7d92ba63cdb30d8fccb1f1afc97f8a62673111ed90441d9ce1",
+      "statement_bytes": 4527
+    },
+    {
+      "version": "20260804180611",
+      "name": "normalize_legacy_operation_details_action_source",
+      "statement_sha256": "784c81411a99b1753c2a362c8959b5f8d9867a0ae10deb98ac1b53b65945d76d",
+      "statement_bytes": 2302
+    },
+    {
+      "version": "20260804215302",
+      "name": "support_phone_name_financial_routing",
+      "statement_sha256": "0baea05419fef948af582a94264368a2898c7973686828452f3e96f67dcf68e7",
+      "statement_bytes": 9529
+    },
+    {
+      "version": "20260804221831",
+      "name": "generalize_composite_financial_identifiers",
+      "statement_sha256": "dff15994de7b5098ea2457c89660ceee980247d8a6e043c7143b3e9351de1004",
+      "statement_bytes": 17570
+    },
+    {
+      "version": "20260804222247",
+      "name": "preserve_typed_identifiers_in_analysis_and_shadow",
+      "statement_sha256": "a80306dac0e66a4846e31b5e7d43ba8827b97a2aa6b3cfd45f977d0e6691b052",
+      "statement_bytes": 2984
+    },
+    {
+      "version": "20260805072640",
+      "name": "add_whatsapp_sender_guidance_delivery",
+      "statement_sha256": "7ed39a8b85f047613c3bc26cc85625e7efbe67449706e8188ea6356e8fb5cfe9",
+      "statement_bytes": 3940
+    },
+    {
+      "version": "20260805073245",
+      "name": "expose_whatsapp_guidance_service_rpcs",
+      "statement_sha256": "e52b8c843c5a8e3f08ac6ebaf5914d8f6d822db8ca5827f1d79d56a5e6798aa2",
+      "statement_bytes": 1319
+    },
+    {
+      "version": "20260805083055",
+      "name": "expose_receiver_identifier_type_in_operation_runtime",
+      "statement_sha256": "dc5b0d3174cb5738fa7d2005324487766dc2291d472070b5fb20a55e1a58aa0a",
+      "statement_bytes": 1312
+    },
+    {
+      "version": "20260805102918",
+      "name": "index_operation_analysis_requested_by",
+      "statement_sha256": "c4811045fea310117031de6ac485ef84ab6fd9113a0bdc19678c2fa4e87c8d10",
+      "statement_bytes": 173
+    },
+    {
+      "version": "20260805210552",
+      "name": "add_operation_analysis_shadow_runs",
+      "statement_sha256": "4db94394a176e4b6994aea1ab29ab5d75f4af8df4f487e73e87e82828bf302f9",
+      "statement_bytes": 2001
+    },
+    {
+      "version": "20260805210616",
+      "name": "add_shadow_operational_prompt",
+      "statement_sha256": "60d446dfe742dedef0c10e2e83ae329314ea30ddc218ff3e9040f3ec1b5f71b2",
+      "statement_bytes": 2576
+    },
+    {
+      "version": "20260805220402",
+      "name": "add_shadow_financial_identifier_match_rpc",
+      "statement_sha256": "67442c3614f15a72a8fff635e8b1f8248725df895470a3f9e7f59bd189694c2a",
+      "statement_bytes": 2171
+    },
+    {
+      "version": "20260805220619",
+      "name": "noop_verify_shadow_match_rpc",
+      "statement_sha256": "35436f1ebfd8710b8fd77f2ac133af73d208d024ebf23cf2b98c4784ecb9df7e",
+      "statement_bytes": 30
+    },
+    {
+      "version": "20260805222233",
+      "name": "add_operational_shadow_runtime_config",
+      "statement_sha256": "88e9d4927dfce1596952187af35d0cc0e1589c959b341e30d39663e2ea65ad8f",
+      "statement_bytes": 1673
+    },
+    {
+      "version": "20260806055340",
+      "name": "add_operational_shadow_metrics",
+      "statement_sha256": "162a4d24829bd51591a477f3d2114b56031ecdecbbbbf9b697616e8f51d321c3",
+      "statement_bytes": 2154
+    },
+    {
+      "version": "20260806063921",
+      "name": "harden_operation_identifier_persistence_contract",
+      "statement_sha256": "5c3df80999799ca32bf9f851707d2c00052f901f2617616298daaa12add34b39",
+      "statement_bytes": 3584
+    }
+  ]
+}

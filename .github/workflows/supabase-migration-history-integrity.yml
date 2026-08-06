@@ -1,0 +1,63 @@
+name: Supabase migration history integrity
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/audit-supabase-migration-history.mjs"
+      - "scripts/audit-supabase-migration-history.test.mjs"
+      - "docs/operations/supabase-production-migration-history-*.json"
+      - ".github/workflows/supabase-migration-history-integrity.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/audit-supabase-migration-history.mjs"
+      - "scripts/audit-supabase-migration-history.test.mjs"
+      - "docs/operations/supabase-production-migration-history-*.json"
+      - ".github/workflows/supabase-migration-history-integrity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the offline auditor
+        run: node --test scripts/audit-supabase-migration-history.test.mjs
+
+      - name: Produce the read-only audit artifact
+        run: |
+          node scripts/audit-supabase-migration-history.mjs \
+            --mode audit > /tmp/sanad-migration-history-audit.json
+          node -e "const r=require('/tmp/sanad-migration-history-audit.json'); if(r.summary.production_migrations!==311) process.exit(1);"
+
+      - name: Prove current history fails closed
+        shell: bash
+        run: |
+          set +e
+          node scripts/audit-supabase-migration-history.mjs \
+            --mode deploy-gate > /tmp/sanad-migration-history-gate.json
+          status=$?
+          set -e
+          test "$status" -eq 2
+          node -e "const r=require('/tmp/sanad-migration-history-gate.json'); if(r.deployment_gate.pass!==false) process.exit(1);"
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-migration-history-audit
+          path: |
+            /tmp/sanad-migration-history-audit.json
+            /tmp/sanad-migration-history-gate.json
+          retention-days: 14
