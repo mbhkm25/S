@@ -99,6 +99,16 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
   );
   const run = rows[0];
   if (!run) throw new Error("primary_run_not_found");
+  const existingRows = await rest<JsonRecord[]>(
+    `/rest/v1/operations?select=status,structured_data,raw_ai_json&id=eq.${encodeURIComponent(operationId)}&limit=1`,
+  );
+  const existing = existingRows[0] ?? {};
+  const existingStructured = existing.structured_data && typeof existing.structured_data === "object"
+    ? existing.structured_data as JsonRecord
+    : {};
+  const existingRaw = existing.raw_ai_json && typeof existing.raw_ai_json === "object"
+    ? existing.raw_ai_json as JsonRecord
+    : {};
   const normalized = (run.normalized_output ?? {}) as JsonRecord;
   const routing = (run.routing_decision ?? {}) as JsonRecord;
   const semanticIdentifierType = text(normalized.receiverIdentifierType) ?? "unknown_identifier";
@@ -107,6 +117,7 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
   const reviewRequired = normalized.reviewRequired === true || routing.eligible !== true;
 
   const structuredData = {
+    ...existingStructured,
     schema_version: 3,
     analysis_engine: ENGINE_VERSION,
     financial_entity: text(normalized.financialEntity),
@@ -129,6 +140,7 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
   };
 
   const rawAiJson = {
+    ...existingRaw,
     engine: ENGINE_VERSION,
     model: run.model,
     prompt_key: run.prompt_key,
@@ -145,7 +157,7 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
     ai_status: "completed",
     ai_error: null,
     ai_model: run.model,
-    status: "ready",
+    status: existing.status === "verified" ? "verified" : "ready",
     financial_entity: structuredData.financial_entity,
     financial_entity_code: structuredData.financial_entity_code,
     transaction_type: structuredData.transaction_type,
