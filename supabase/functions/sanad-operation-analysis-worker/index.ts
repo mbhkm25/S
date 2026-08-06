@@ -13,7 +13,7 @@ const SUPABASE_URL = mustEnv("SUPABASE_URL");
 const SERVICE_ROLE_KEY = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
 const INTERNAL_KEY = mustEnv("SANAD_INTERNAL_API_KEY");
 const WORKER_NAME = "operation_analysis";
-const ANALYZER_URL = `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
+const ANALYZER_URL = `${SUPABASE_URL}/functions/v1/sanad-operation-analysis-primary`;
 const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -85,7 +85,7 @@ async function processJob(job: AnalysisJob, workerId: string) {
         queue_job_id: job.job_id,
         queue_attempt: job.attempt_count,
       }),
-      signal: AbortSignal.timeout(50000),
+      signal: AbortSignal.timeout(70000),
     });
 
     const raw = await response.text();
@@ -110,7 +110,7 @@ async function processJob(job: AnalysisJob, workerId: string) {
 
     const { data: operation, error: operationError } = await sb
       .from("operations")
-      .select("ai_status,analysis_completed_at,ai_error")
+      .select("ai_status,analysis_completed_at,ai_error,raw_ai_json")
       .eq("id", job.operation_id)
       .maybeSingle();
     if (operationError) throw new Error(`operation_status:${operationError.message}`);
@@ -127,6 +127,8 @@ async function processJob(job: AnalysisJob, workerId: string) {
       return { job_id: job.job_id, operation_id: job.operation_id, ok: false, state, status: 202 };
     }
 
+    const engine = (operation?.raw_ai_json as Record<string, unknown> | null)?.engine ?? "unknown";
+    const fallbackUsed = (operation?.raw_ai_json as Record<string, unknown> | null)?.fallback_used === true;
     const { data: completed, error: completeError } = await sb.rpc("complete_operation_analysis_job", {
       p_job_id: job.job_id,
       p_worker_id: workerId,
@@ -135,6 +137,8 @@ async function processJob(job: AnalysisJob, workerId: string) {
         analyzer_status: response.status,
         analysis_completed_at: operation.analysis_completed_at,
         source: job.source,
+        engine,
+        fallback_used: fallbackUsed,
       },
     });
     if (completeError) throw new Error(`complete_job_rpc:${completeError.message}`);
@@ -144,6 +148,8 @@ async function processJob(job: AnalysisJob, workerId: string) {
       ok: completed === true,
       state: "completed",
       duration_ms: Date.now() - started,
+      engine,
+      fallback_used: fallbackUsed,
       analyzer: payload,
     };
   } catch (error) {
@@ -171,7 +177,7 @@ Deno.serve(async (req: Request) => {
   const { data, error } = await sb.rpc("claim_operation_analysis_jobs", {
     p_worker_id: workerId,
     p_limit: limit,
-    p_lease_seconds: 120,
+    p_lease_seconds: 150,
   });
   if (error) return json({ ok: false, error: "claim_failed", details: error.message }, 500);
 
