@@ -14,6 +14,7 @@
 // - GEMINI_REQUEST_TIMEOUT_MS = 22000
 // - ENABLE_FAST_ROUTING_PASS = false
 // - GEMINI_FAST_MODEL = GEMINI_MODEL
+// - ENABLE_OPERATIONAL_SHADOW = false
 
 import { jsonrepair } from "npm:jsonrepair@3.13.1";
 import {
@@ -22,6 +23,10 @@ import {
   EXTRACTION_PIPELINE_VERSION,
   reconcileExtraction,
 } from "./extraction-v3.ts";
+import {
+  buildIdentifierPersistenceProjection,
+  toOperationIdentifierType,
+} from "./identifier-contract.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -54,6 +59,8 @@ const GEMINI_REQUEST_TIMEOUT_MS = Math.max(
 );
 const ENABLE_FAST_ROUTING_PASS =
   (Deno.env.get("ENABLE_FAST_ROUTING_PASS") || "false") === "true";
+const ENABLE_OPERATIONAL_SHADOW =
+  (Deno.env.get("ENABLE_OPERATIONAL_SHADOW") || "false") === "true";
 
 const FUNCTION_NAME = "sanad-v3-analyze-operation";
 const DEFAULT_BUCKET = "operation-files";
@@ -1114,6 +1121,89 @@ async function runFastExtraction(params: {
   }
 }
 
+
+async function runOperationalShadow(params: {
+  operationId: string;
+  runId: string;
+}): Promise<void> {
+  const startedAtMs = Date.now();
+  let shouldRun = ENABLE_OPERATIONAL_SHADOW;
+  if (!shouldRun) {
+    try {
+      shouldRun = await supabaseJson<boolean>(
+        "/rest/v1/rpc/service_should_run_operational_shadow",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ p_operation_id: params.operationId }),
+        },
+      );
+    } catch (error) {
+      await recordSpan({
+        operationId: params.operationId,
+        runId: params.runId,
+        pipeline: "analysis",
+        stage: "operational_shadow_gate",
+        status: "error",
+        startedAtMs,
+        metadata: {
+          error: truncateText(error instanceof Error ? error.message : String(error), 500),
+        },
+      });
+      return;
+    }
+  }
+  if (!shouldRun) return;
+
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/sanad-operation-shadow-orchestrate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          operation_id: params.operationId,
+          attempt: 1,
+        }),
+      },
+    );
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `operational_shadow_http_${response.status}:${truncateText(responseText, 500)}`,
+      );
+    }
+
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "analysis",
+      stage: "operational_shadow_orchestrate",
+      status: "success",
+      startedAtMs,
+      metadata: { response_status: response.status },
+    });
+  } catch (error) {
+    await recordSpan({
+      operationId: params.operationId,
+      runId: params.runId,
+      pipeline: "analysis",
+      stage: "operational_shadow_orchestrate",
+      status: "error",
+      startedAtMs,
+      metadata: {
+        error: truncateText(error instanceof Error ? error.message : String(error), 800),
+      },
+    });
+  }
+}
+
 Deno.serve(async (req: Request) => {
   let operationId: string | null = null;
   let operationStarted = false;
@@ -1335,6 +1425,9 @@ Deno.serve(async (req: Request) => {
     normalized.confidence_score = finalAssessment.confidence;
 
     const persistStartedAtMs = Date.now();
+    const receiverIdentifierProjection = buildIdentifierPersistenceProjection(
+      normalized.receiver_identifier_type,
+    );
     await patchOperation(operation.id, {
       status: operation.status === "verified" ? "verified" : "ready",
       ai_status: "completed",
@@ -1365,6 +1458,7 @@ Deno.serve(async (req: Request) => {
           unresolved_conflicts: reconciliation.unresolvedConflicts || [],
           selected_identifier: finalAssessment.selectedIdentifier,
           unique_identifier_count: finalAssessment.uniqueIdentifierCount,
+          identifier_persistence_projection: receiverIdentifierProjection,
           review_required: reviewRequired,
         },
         gemini_metadata: {
@@ -1378,7 +1472,9 @@ Deno.serve(async (req: Request) => {
       currency: normalized.currency,
       receiver_name: normalized.receiver_name,
       receiver_account: normalized.receiver_account,
-      receiver_identifier_type: normalized.receiver_identifier_type,
+      receiver_identifier_type: toOperationIdentifierType(
+        normalized.receiver_identifier_type,
+      ),
       reference_number: normalized.reference_number,
       transaction_datetime: normalized.transaction_datetime,
       confidence_score: normalized.confidence_score,
@@ -1443,6 +1539,16 @@ Deno.serve(async (req: Request) => {
         selected_identifier: finalAssessment.selectedIdentifier,
       },
     });
+
+    const operationalShadowTask = runOperationalShadow({
+      operationId: operation.id,
+      runId,
+    });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(operationalShadowTask);
+    } else {
+      void operationalShadowTask;
+    }
 
     return jsonResponse({
       ok: true,
