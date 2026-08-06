@@ -19,7 +19,8 @@
     "lint": "tsc --noEmit",
     "audit:migrations": "node scripts/audit-supabase-migration-history.mjs --mode audit",
     "gate:migrations": "node scripts/audit-supabase-migration-history.mjs --mode deploy-gate",
-    "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs"
+    "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs",
+    "verify:canonical-baseline": "node scripts/verify-supabase-canonical-baseline.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

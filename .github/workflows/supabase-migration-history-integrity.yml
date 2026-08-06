@@ -2,10 +2,11 @@ name: Supabase migration history integrity
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - "supabase/migrations/**"
+      - "supabase/baselines/**"
+      - "scripts/generate-supabase-canonical-baseline.sql"
+      - "scripts/verify-supabase-canonical-baseline.mjs"
       - "scripts/audit-supabase-migration-history.mjs"
       - "scripts/audit-supabase-migration-history.test.mjs"
       - "docs/operations/supabase-production-migration-history-*.json"
@@ -15,6 +16,9 @@ on:
       - main
     paths:
       - "supabase/migrations/**"
+      - "supabase/baselines/**"
+      - "scripts/generate-supabase-canonical-baseline.sql"
+      - "scripts/verify-supabase-canonical-baseline.mjs"
       - "scripts/audit-supabase-migration-history.mjs"
       - "scripts/audit-supabase-migration-history.test.mjs"
       - "docs/operations/supabase-production-migration-history-*.json"
@@ -35,6 +39,9 @@ jobs:
 
       - name: Test the offline auditor
         run: node --test scripts/audit-supabase-migration-history.test.mjs
+
+      - name: Verify the staged canonical baseline
+        run: node scripts/verify-supabase-canonical-baseline.mjs
 
       - name: Produce the read-only audit artifact
         run: |

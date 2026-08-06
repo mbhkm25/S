@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-08-06T15:31:36.424359Z",
+  "source": {
+    "project_ref": "hudbzlgclghlhazlduas",
+    "git_main_commit": "b4af81e6370357fd4798dd6f747767f072bf8888",
+    "read_only_extraction": true,
+    "table_rows_included": false,
+    "sql_bodies_in_evidence": false
+  },
+  "artifact": {
+    "parts": [
+      "supabase/baselines/20260806150947_canonical_schema_baseline/part-0001.sql.part",
+      "supabase/baselines/20260806150947_canonical_schema_baseline/part-0002.sql.part"
+    ],
+    "part_sha256": [
+      "afb0ed2895341d77de9d9c62c82431819fa1fe80883ec4e05313a6a9fda2da70",
+      "52cc3b34bd3ab4cdaa8e05c109cd7c5cd4ffcea1245d7aaace95ec694c279f50"
+    ],
+    "assembly": "byte-concatenation in listed order",
+    "activation_state": "staged_not_active",
+    "sha256": "8d66799f37b3177644efe9ab2a5a70e3499f26c102f59b65c674fc96c8d69dcc",
+    "bytes": 1375100,
+    "lines": 27407,
+    "generator_path": "scripts/generate-supabase-canonical-baseline.sql",
+    "generator_sha256": "7a8600d36ef8aeb05aa78c9b4bf090e4db51972d8dcbba8c05a07f2c73e0bb44"
+  },
+  "scope": {
+    "owned_schemas": ["app", "private", "public"],
+    "managed_objects_included": ["storage.objects policies", "storage.buckets policies"],
+    "excluded": [
+      "application and business rows",
+      "auth users",
+      "storage objects and buckets rows",
+      "Vault secrets",
+      "cron commands",
+      "managed auth/storage/realtime/net/cron table definitions"
+    ]
+  },
+  "isolated_branch": {
+    "branch_id": "712bbc1b-110c-4ea0-b77f-fcba58a850aa",
+    "project_ref": "qbtfbvudtdwsromzchwk",
+    "name": "canonical-baseline-20260806",
+    "with_data": false,
+    "created_at_utc": "2026-08-06T15:01:45.978685Z",
+    "deleted_at_utc": "2026-08-06T15:31:36.424359Z",
+    "deleted": true,
+    "hourly_cost_usd": 0.01344,
+    "estimated_cost_usd": 0.00669,
+    "initial_replay_status": "MIGRATIONS_FAILED",
+    "initial_applied_migrations": 1,
+    "initial_public_tables": 0,
+    "initial_public_functions": 1,
+    "validation_migrations": [
+      "canonical_schema_baseline_validation",
+      "canonical_schema_baseline_validation_v2"
+    ]
+  },
+  "validation": {
+    "result": "schema_equivalent_in_scoped_surface",
+    "exact_fingerprint_categories": [
+      "relations",
+      "logical_columns",
+      "views",
+      "indexes",
+      "constraints",
+      "functions",
+      "triggers",
+      "policies",
+      "row_level_security",
+      "semantic_relation_acl",
+      "semantic_function_acl"
+    ],
+    "counts": {
+      "public_tables": 102,
+      "private_tables": 4,
+      "public_functions": 325,
+      "private_functions": 67,
+      "app_functions": 3,
+      "logical_columns": 1710,
+      "constraints": 806,
+      "indexes": 431,
+      "triggers": 63,
+      "policies_including_storage": 67,
+      "rls_tables": 106
+    },
+    "critical_contracts_present": [
+      "public.operations.file_path",
+      "public.operations.file_bucket",
+      "public.operations.public_token",
+      "public.operations.verification_note",
+      "public.operations.verified_at",
+      "public.operations.verified_by_user_id",
+      "public.sanad_to_latin_digits(text)"
+    ],
+    "physical_catalog_difference": "Dropped-column attribute-number gaps are compacted; logical column order and definitions match.",
+    "extension_difference": "pg_net is 0.20.3 in production and 0.20.4 in the fresh branch image; the other four scoped extensions match exactly.",
+    "advisors": {
+      "security_branch": 244,
+      "security_production": 245,
+      "performance_branch": 293,
+      "performance_production": 162,
+      "interpretation": "Security findings are inherited from the production schema; the one production-only finding is an Auth project setting. Unused-index counts are not comparable on an empty branch."
+    }
+  },
+  "production_mutated": false,
+  "activation_requires": [
+    "independent review of the staged baseline",
+    "approved production migration-ledger reconciliation manifest",
+    "verified backup and restore path",
+    "separate production mutation approval",
+    "fresh isolated replay after activation layout is finalized"
+  ]
+}
