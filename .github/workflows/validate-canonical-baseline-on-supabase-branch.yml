@@ -1,0 +1,128 @@
+name: Validate canonical baseline on isolated Supabase branch
+
+on:
+  pull_request:
+    branches:
+      - agent/supabase-ledger-reconciliation-phase3-prep
+    paths:
+      - '.github/workflows/validate-canonical-baseline-on-supabase-branch.yml'
+      - 'supabase/baselines/20260806150947_canonical_schema_baseline/**'
+      - 'scripts/prepare-supabase-baseline-cutover.mjs'
+      - 'scripts/verify-supabase-baseline-cutover.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canonical-baseline-isolated-branch-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    name: Replay on isolated Supabase branch
+    if: >-
+      github.repository == 'mbhkm25/S' &&
+      github.event.pull_request.number == 175 &&
+      github.event.pull_request.head.ref == 'agent/supabase-baseline-cutover-layout'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TARGET_PROJECT_REF: fjnbrtqlrgpcapxxoemi
+      PRODUCTION_PROJECT_REF: hudbzlgclghlhazlduas
+      EXPECTED_SHA256: 8d66799f37b3177644efe9ab2a5a70e3499f26c102f59b65c674fc96c8d69dcc
+      EXPECTED_BYTES: '1375100'
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Guard target and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          test "$TARGET_PROJECT_REF" = 'fjnbrtqlrgpcapxxoemi'
+          test "$TARGET_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
+          test "${{ github.event.pull_request.head.sha }}" = "$(git rev-parse HEAD)"
+
+      - name: Assemble and verify canonical baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASELINE_DIR='supabase/baselines/20260806150947_canonical_schema_baseline'
+          cat "$BASELINE_DIR/part-0001.sql.part" "$BASELINE_DIR/part-0002.sql.part" > /tmp/canonical.sql
+          test "$(wc -c < /tmp/canonical.sql | tr -d ' ')" = "$EXPECTED_BYTES"
+          test "$(sha256sum /tmp/canonical.sql | awk '{print $1}')" = "$EXPECTED_SHA256"
+
+      - name: Verify isolated branch precondition
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n '{query:"select count(*)::int as migration_count, min(version) as first_version, max(version) as last_version from supabase_migrations.schema_migrations",read_only:true}' > /tmp/preflight.json
+          code=$(curl --silent --show-error --output /tmp/preflight-response.json --write-out '%{http_code}' \
+            --request POST "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/database/query" \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/preflight.json)
+          cat /tmp/preflight-response.json
+          test "$code" = '201'
+          jq -e '.[0].migration_count == 1 and .[0].first_version == "20260702130842" and .[0].last_version == "20260702130842"' /tmp/preflight-response.json
+
+      - name: Apply baseline to isolated branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --rawfile query /tmp/canonical.sql '{query:$query,read_only:false}' > /tmp/apply.json
+          code=$(curl --silent --show-error --max-time 1200 --output /tmp/apply-response.json --write-out '%{http_code}' \
+            --request POST "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/database/query" \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/apply.json)
+          cat /tmp/apply-response.json
+          test "$code" = '201'
+
+      - name: Verify canonical schema contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/verify.sql <<'SQL'
+          with counts as (
+            select
+              (select count(*)::int from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE') as public_tables,
+              (select count(*)::int from information_schema.tables where table_schema = 'private' and table_type = 'BASE TABLE') as private_tables,
+              (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public') as public_functions,
+              (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private') as private_functions,
+              (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='app') as app_functions,
+              (select count(*)::int from information_schema.columns where table_schema in ('public','private','app')) as logical_columns,
+              (select count(*)::int from pg_constraint c join pg_namespace n on n.oid=c.connamespace where n.nspname in ('public','private','app')) as constraints,
+              (select count(*)::int from pg_indexes where schemaname in ('public','private','app')) as indexes,
+              (select count(*)::int from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname in ('public','private','app')) as triggers,
+              (select count(*)::int from pg_policies where schemaname in ('public','private','app','storage')) as policies,
+              (select count(*)::int from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','p') and c.relrowsecurity and n.nspname in ('public','private','app')) as rls_tables,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='file_path') as has_file_path,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='file_bucket') as has_file_bucket,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='public_token') as has_public_token,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='verification_note') as has_verification_note,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='verified_at') as has_verified_at,
+              exists(select 1 from information_schema.columns where table_schema='public' and table_name='operations' and column_name='verified_by_user_id') as has_verified_by_user_id,
+              to_regprocedure('public.sanad_to_latin_digits(text)') is not null as has_digit_function
+          ) select * from counts;
+          SQL
+          jq -n --rawfile query /tmp/verify.sql '{query:$query,read_only:true}' > /tmp/verify.json
+          code=$(curl --silent --show-error --output /tmp/verify-response.json --write-out '%{http_code}' \
+            --request POST "https://api.supabase.com/v1/projects/$TARGET_PROJECT_REF/database/query" \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/verify.json)
+          cat /tmp/verify-response.json | tee canonical-baseline-branch-verification.json
+          test "$code" = '201'
+          jq -e '.[0] | .public_tables == 102 and .private_tables == 4 and .public_functions == 325 and .private_functions == 67 and .app_functions == 3 and .logical_columns == 1710 and .constraints == 806 and .indexes == 431 and .triggers == 63 and .policies == 67 and .rls_tables == 106 and .has_file_path and .has_file_bucket and .has_public_token and .has_verification_note and .has_verified_at and .has_verified_by_user_id and .has_digit_function' /tmp/verify-response.json
+
+      - name: Upload validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-baseline-isolated-branch-evidence
+          path: canonical-baseline-branch-verification.json
+          retention-days: 14
