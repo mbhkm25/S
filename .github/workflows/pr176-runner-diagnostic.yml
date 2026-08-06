@@ -1,0 +1,26 @@
+name: PR 176 runner diagnostic
+
+on:
+  push:
+    branches:
+      - agent/supabase-canonical-cutover-final
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr176-runner-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    name: GitHub hosted runner diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Show runner allocation
+        run: |
+          echo "Runner allocated successfully"
+          uname -a
+          node --version
+          python3 --version
