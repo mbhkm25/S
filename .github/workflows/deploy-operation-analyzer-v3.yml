@@ -40,7 +40,9 @@ jobs:
           grep -q 'identity_only_receiver_requires_account_recovery' supabase/functions/sanad-v3-analyze-operation/extraction-v3.ts
           grep -q 'sameEntity && sameType && !sameValue' supabase/functions/sanad-v3-analyze-operation/extraction-v3.ts
           grep -q 'identifier is NonNullable<ReturnType<typeof normalizePartyIdentifier>>' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -q 'identifier_persistence_projection' supabase/functions/sanad-v3-analyze-operation/index.ts
           deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
+          deno test --allow-none supabase/functions/sanad-v3-analyze-operation/identifier-contract.test.ts
           npx tsc --noEmit
 
       - uses: supabase/setup-cli@v1
