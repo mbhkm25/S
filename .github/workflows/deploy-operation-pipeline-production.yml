@@ -1,0 +1,138 @@
+name: Deploy operation pipeline from main
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operation-pipeline-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Prove the deployment source is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate credentials and pipeline sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          test -n "${SUPABASE_DB_PASSWORD:-}"
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-access/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-routing-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-transactional-message-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-app-trigger-analysis/index.ts
+          deno test supabase/functions/sanad-v3-whatsapp-intake/intake-utils.test.ts
+
+      - name: Require production webhook-signature secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret_inventory="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF")"
+          if ! grep -Eq '(^|[[:space:]])META_APP_SECRET([[:space:]]|$)' <<<"$secret_inventory"; then
+            echo "META_APP_SECRET must be configured before pipeline deployment" >&2
+            exit 1
+          fi
+
+      - name: Link and review tracked database changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          dry_run="$(supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" 2>&1)"
+          printf '%s\n' "$dry_run"
+          unexpected=0
+          while IFS= read -r migration; do
+            case "$migration" in
+              20260806064500_harden_operation_identifier_persistence_contract.sql|\
+              20260806082032_instant_intake_event_pipeline.sql|\
+              20260806084623_preview_queue_immediate_dispatch.sql|\
+              20260806085223_routing_inbox_single_writer_queue.sql|\
+              20260806085818_unified_transactional_outbox_worker.sql|\
+              20260806090000_add_operational_shadow_metrics.sql|\
+              20260806090417_pipeline_observability_percentiles.sql)
+                ;;
+              *)
+                echo "Unexpected pending migration: $migration" >&2
+                unexpected=1
+                ;;
+            esac
+          done < <(printf '%s\n' "$dry_run" | grep -Eo '[0-9]{14}_[A-Za-z0-9_.-]+\.sql' | sort -u || true)
+          test "$unexpected" -eq 0
+
+      - name: Apply tracked database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Deploy pipeline workers and intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase secrets set REQUIRE_META_SIGNATURE=true --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy sanad-operation-analysis-worker --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-operation-preview-worker --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-operation-preview-access --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy sanad-operation-routing-worker --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-v3-transactional-message-worker --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-v3-app-trigger-analysis --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy sanad-v3-whatsapp-intake --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+
+      - name: Verify production authentication boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          assert_status() {
+            expected="$1"
+            endpoint="$2"
+            actual="$(curl --silent --show-error \
+              --output "$response_file" --write-out '%{http_code}' \
+              --request POST --header 'content-type: application/json' \
+              --data '{}' "$endpoint")"
+            if [ "$actual" != "$expected" ]; then
+              echo "Unexpected HTTP status for $endpoint: expected $expected, received $actual" >&2
+              cat "$response_file" >&2
+              exit 1
+            fi
+          }
+          base="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1"
+          assert_status 403 "$base/sanad-v3-whatsapp-intake"
+          assert_status 401 "$base/sanad-operation-analysis-worker"
+          assert_status 401 "$base/sanad-operation-preview-worker"
+          assert_status 401 "$base/sanad-operation-routing-worker"
+          assert_status 401 "$base/sanad-v3-transactional-message-worker"
+          assert_status 401 "$base/sanad-operation-preview-access"
+          assert_status 401 "$base/sanad-v3-app-trigger-analysis"

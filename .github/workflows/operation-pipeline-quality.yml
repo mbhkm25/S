@@ -1,0 +1,240 @@
+name: Operation pipeline quality
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operation-pipeline-quality.yml'
+      - '.github/workflows/deploy-operation-pipeline-production.yml'
+      - '.github/workflows/deploy-whatsapp-intake.yml'
+      - 'docs/architecture/ADR-001-instant-intake-event-driven-pipeline.md'
+      - 'docs/implementation/instant-intake-event-pipeline-plan.md'
+      - 'docs/implementation/operation-pipeline-current-state-audit-2026-08-06.md'
+      - 'docs/implementation/operation-pipeline-validation.md'
+      - 'package.json'
+      - 'scripts/operation-pipeline-db-load.mjs'
+      - 'src/components/admin/TransactionalMessagingAdmin.tsx'
+      - 'src/lib/transactionalMessagingApi.ts'
+      - 'supabase/config.toml'
+      - 'supabase/functions/sanad-v3-whatsapp-intake/**'
+      - 'supabase/functions/sanad-operation-analysis-worker/**'
+      - 'supabase/functions/sanad-operation-preview-worker/**'
+      - 'supabase/functions/sanad-operation-preview-access/**'
+      - 'supabase/functions/sanad-operation-routing-worker/**'
+      - 'supabase/functions/sanad-v3-transactional-message-worker/**'
+      - 'supabase/functions/sanad-v3-app-trigger-analysis/**'
+      - 'supabase/migrations/2026080608*.sql'
+      - 'supabase/migrations/2026080609*.sql'
+      - 'supabase/tests/operation_pipeline_contract_baseline.sql'
+      - 'supabase/tests/instant_event_pipeline.sql'
+      - 'supabase/tests/instant_event_pipeline_integration.sql'
+      - 'supabase/tests/operation_pipeline_routing_outbox_integration.sql'
+      - 'supabase/tests/operation_pipeline_failure_recovery_integration.sql'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/operation-pipeline-quality.yml'
+      - '.github/workflows/deploy-operation-pipeline-production.yml'
+      - '.github/workflows/deploy-whatsapp-intake.yml'
+      - 'package.json'
+      - 'scripts/operation-pipeline-db-load.mjs'
+      - 'src/components/admin/TransactionalMessagingAdmin.tsx'
+      - 'src/lib/transactionalMessagingApi.ts'
+      - 'supabase/functions/sanad-v3-whatsapp-intake/**'
+      - 'supabase/functions/sanad-operation-analysis-worker/**'
+      - 'supabase/functions/sanad-operation-preview-worker/**'
+      - 'supabase/functions/sanad-operation-preview-access/**'
+      - 'supabase/functions/sanad-operation-routing-worker/**'
+      - 'supabase/functions/sanad-v3-transactional-message-worker/**'
+      - 'supabase/functions/sanad-v3-app-trigger-analysis/**'
+      - 'supabase/migrations/2026080608*.sql'
+      - 'supabase/migrations/2026080609*.sql'
+      - 'supabase/tests/operation_pipeline_contract_baseline.sql'
+      - 'supabase/tests/instant_event_pipeline.sql'
+      - 'supabase/tests/instant_event_pipeline_integration.sql'
+      - 'supabase/tests/operation_pipeline_routing_outbox_integration.sql'
+      - 'supabase/tests/operation_pipeline_failure_recovery_integration.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operation-pipeline-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Edge Function types
+        shell: bash
+        run: |
+          set -euo pipefail
+          deno fmt --check \
+            supabase/functions/sanad-v3-whatsapp-intake/index.ts \
+            supabase/functions/sanad-v3-whatsapp-intake/intake-utils.ts \
+            supabase/functions/sanad-v3-whatsapp-intake/intake-utils.test.ts \
+            supabase/functions/sanad-operation-analysis-worker/index.ts \
+            supabase/functions/sanad-operation-preview-worker/index.ts \
+            supabase/functions/sanad-operation-preview-access/index.ts \
+            supabase/functions/sanad-operation-routing-worker/index.ts \
+            supabase/functions/sanad-v3-transactional-message-worker/index.ts \
+            supabase/functions/sanad-v3-app-trigger-analysis/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-access/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-routing-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-transactional-message-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-app-trigger-analysis/index.ts
+
+      - name: Test deterministic intake contracts
+        run: deno test supabase/functions/sanad-v3-whatsapp-intake/intake-utils.test.ts
+
+      - name: Validate architectural invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -q 'sanad-v3-analyze-operation' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -q 'waitUntil' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -q 'sanad-v3-whatsapp-onboarding' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -Eq '^const (META_VERIFY_TOKEN|META_WA_ACCESS_TOKEN|META_WA_PHONE_NUMBER_ID|SANAD_INTERNAL_API_KEY) = mustGetEnv' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -q 'service_record_operation_pipeline_span' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -q 'claim_whatsapp_operation_intake' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -q 'finalize_whatsapp_operation_intake' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -q 'p_spans: params.spans' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -q 'apply_transactional_whatsapp_delivery_status' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -q 'request_operation_analysis_dispatch' supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -q 'request_operation_media_preview_dispatch' supabase/functions/sanad-operation-preview-worker/index.ts
+          ! grep -q 'sanad-operation-preview-worker' supabase/functions/sanad-operation-preview-access/index.ts
+          grep -q 'processing_source.*durable_queue' supabase/functions/sanad-operation-preview-access/index.ts
+          grep -q 'execute_operation_routing_job' supabase/functions/sanad-operation-routing-worker/index.ts
+          grep -q 'mark_transactional_message_result_v2' supabase/functions/sanad-v3-transactional-message-worker/index.ts
+          ! grep -Eq 'sanad-operation-preview-access.*--no-verify-jwt' .github/workflows/deploy-operation-pipeline-production.yml
+          ! grep -Eq 'sanad-v3-app-trigger-analysis.*--no-verify-jwt' .github/workflows/deploy-operation-pipeline-production.yml
+
+      - name: Parse pipeline SQL with PostgreSQL grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts pgsql-parser@17.9.9
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const parser = require('pgsql-parser');
+          (async () => {
+            await parser.loadModule();
+            const files = fs.readdirSync('supabase/migrations')
+              .filter((name) => /^202608060(8|9)/.test(name) && name.endsWith('.sql'))
+              .map((name) => path.join('supabase/migrations', name))
+              .concat([
+                'supabase/tests/operation_pipeline_contract_baseline.sql',
+                'supabase/tests/instant_event_pipeline.sql',
+                'supabase/tests/instant_event_pipeline_integration.sql',
+                'supabase/tests/operation_pipeline_routing_outbox_integration.sql',
+                'supabase/tests/operation_pipeline_failure_recovery_integration.sql',
+              ]);
+            for (const file of files) {
+              const tree = parser.parseSync(fs.readFileSync(file, 'utf8'));
+              if (!tree.stmts.length) throw new Error(`No SQL statements parsed: ${file}`);
+              console.log(`PASS ${file} (${tree.stmts.length} statements)`);
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Application type check
+        run: npm run lint
+
+      - name: Production build and load-harness syntax
+        run: |
+          set -euo pipefail
+          node --check scripts/operation-pipeline-db-load.mjs
+          node --import tsx scripts/check-app-routes.ts
+          node --import tsx scripts/check-email-action-entrypoints.ts
+          npm run build
+
+      - name: Check whitespace
+        run: git diff --check
+
+  semantic-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start an isolated local Supabase database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_root="${RUNNER_TEMP}/sanad-pipeline-contract"
+          mkdir -p "${test_root}/supabase/migrations"
+          cp supabase/config.toml "${test_root}/supabase/config.toml"
+          OPENAI_API_KEY=disabled supabase start \
+            --workdir "${test_root}" \
+            -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          docker exec supabase_db_sanad pg_isready -U postgres -d postgres
+
+      - name: Apply contract baseline and pipeline migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sql() {
+            docker exec -i supabase_db_sanad \
+              psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          }
+          run_sql < supabase/tests/operation_pipeline_contract_baseline.sql
+          run_sql < supabase/migrations/20260806082032_instant_intake_event_pipeline.sql
+          run_sql <<'SQL'
+          update private.pipeline_runtime_config
+          set environment='ci',dispatch_enabled=false,updated_at=now()
+          where singleton=true;
+          SQL
+          run_sql < supabase/migrations/20260806084623_preview_queue_immediate_dispatch.sql
+          run_sql < supabase/migrations/20260806085223_routing_inbox_single_writer_queue.sql
+          run_sql < supabase/migrations/20260806085818_unified_transactional_outbox_worker.sql
+          run_sql < supabase/migrations/20260806090417_pipeline_observability_percentiles.sql
+
+      - name: Execute operation-pipeline database contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sql() {
+            docker exec -i supabase_db_sanad \
+              psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          }
+          run_sql < supabase/tests/instant_event_pipeline.sql
+          run_sql < supabase/tests/instant_event_pipeline_integration.sql
+          run_sql < supabase/tests/operation_pipeline_routing_outbox_integration.sql
+          run_sql < supabase/tests/operation_pipeline_failure_recovery_integration.sql
+
+      - name: Stop isolated Supabase services
+        if: always()
+        shell: bash
+        run: |
+          test_root="${RUNNER_TEMP}/sanad-pipeline-contract"
+          OPENAI_API_KEY=disabled supabase stop \
+            --workdir "${test_root}" --no-backup

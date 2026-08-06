@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -19,7 +20,8 @@ function respond(body: unknown, status = 200) {
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value);
 }
 
 async function canAccessOperation(
@@ -31,7 +33,9 @@ async function canAccessOperation(
   if (!supabaseUrl || !anonKey) throw new Error("server_misconfigured");
 
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/operations?id=eq.${encodeURIComponent(operationId)}&select=id&limit=1`,
+    `${supabaseUrl}/rest/v1/operations?id=eq.${
+      encodeURIComponent(operationId)
+    }&select=id&limit=1`,
     {
       headers: {
         Authorization: authorization,
@@ -47,7 +51,9 @@ async function canAccessOperation(
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
     return respond({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -59,7 +65,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const authorization = req.headers.get("Authorization");
-  if (!authorization) return respond({ ok: false, error: "not_authenticated" }, 401);
+  if (!authorization) {
+    return respond({ ok: false, error: "not_authenticated" }, 401);
+  }
 
   let payload: Record<string, unknown>;
   try {
@@ -107,7 +115,10 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!rpcResponse.ok) {
-    return respond({ ok: false, error: "queue_enqueue_failed", details: jobId }, 503);
+    return respond(
+      { ok: false, error: "queue_enqueue_failed", details: jobId },
+      503,
+    );
   }
 
   return respond({
@@ -115,7 +126,7 @@ Deno.serve(async (req: Request) => {
     queued: true,
     operation_id: payload.operation_id,
     job_id: jobId,
-    ai_status: "queued",
+    ai_status: "pending",
     message: "تم استلام العملية ووضعها في قائمة التحليل.",
   }, 202);
 });
