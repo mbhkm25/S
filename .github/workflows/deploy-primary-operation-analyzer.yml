@@ -43,6 +43,9 @@ jobs:
           grep -q 'sanad-operation-analysis-primary' supabase/functions/sanad-operation-analysis-worker/index.ts
           grep -q 'original_document_is_source_of_truth: true' supabase/functions/sanad-operation-analysis-primary/index.ts
           grep -q 'callLegacyFallback' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'existingStructured' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'existingRaw' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'existing.status === "verified"' supabase/functions/sanad-operation-analysis-primary/index.ts
 
       - uses: supabase/setup-cli@v1
         with:
