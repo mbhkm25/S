@@ -5,7 +5,10 @@ on:
     paths:
       - "supabase/functions/deno.json"
       - "supabase/functions/sanad-v3-whatsapp-intake/**"
-      - "supabase/functions/sanad-v3-analyze-operation/**"
+      - "supabase/functions/sanad-operation-analysis-worker/**"
+      - "supabase/migrations/*instant_intake_event_pipeline*"
+      - "supabase/migrations/*pipeline_observability*"
+      - "supabase/tests/*event_pipeline*"
       - "supabase/migrations/*pipeline_latency*"
       - "supabase/tests/*pipeline_latency*"
       - ".github/workflows/financial-routing-latency-quality.yml"
@@ -28,8 +31,8 @@ jobs:
       - name: Deno check WhatsApp intake
         run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
 
-      - name: Deno check operation analyzer
-        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
+      - name: Deno check durable analysis worker
+        run: deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-worker/index.ts
 
       - name: Enforce intake latency and privacy invariants
         shell: bash
@@ -38,15 +41,21 @@ jobs:
           ! grep -Fq 'api.qrserver.com' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fiq 'x-hub-signature-256' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fq 'verifyMetaSignature' supabase/functions/sanad-v3-whatsapp-intake/index.ts
-          grep -Fq 'Promise.allSettled([analysisPromise, qrPromise])' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -Fq 'sanad-v3-analyze-operation' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -Fq 'analysisPromise' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          ! grep -Fq 'waitUntil' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fq 'claim_whatsapp_operation_intake' supabase/functions/sanad-v3-whatsapp-intake/index.ts
+          grep -Fq 'finalize_whatsapp_operation_intake' supabase/functions/sanad-v3-whatsapp-intake/index.ts
           grep -Fq 'internal:qrcode@1.5.4' supabase/functions/sanad-v3-whatsapp-intake/index.ts
 
-      - name: Enforce strict analysis contract
+      - name: Enforce durable analysis and telemetry contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'responseSchema: params.responseSchema' supabase/functions/sanad-v3-analyze-operation/index.ts
-          grep -Fq 'GEMINI_REQUEST_TIMEOUT_MS' supabase/functions/sanad-v3-analyze-operation/index.ts
-          grep -Fq 'operation_pipeline_spans' supabase/migrations/*pipeline_latency*.sql
-          grep -Fq 'service_record_operation_pipeline_span' supabase/migrations/*pipeline_latency*.sql
-          grep -Fq 'ENABLE_FAST_ROUTING_PASS' supabase/functions/sanad-v3-analyze-operation/index.ts
+          grep -Fq 'claim_operation_analysis_jobs' supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -Fq 'request_operation_analysis_dispatch' supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -Fq 'sanad-operation-analysis-primary' supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -Fq 'private.pipeline_dispatch_leases' supabase/migrations/*instant_intake_event_pipeline*.sql
+          grep -Fq 'operation_pipeline_spans' supabase/migrations/*instant_intake_event_pipeline*.sql
+          grep -Fq 'queue_wait_ms' supabase/migrations/*pipeline_observability*.sql
+          grep -Fq 'execution_ms' supabase/migrations/*pipeline_observability*.sql
