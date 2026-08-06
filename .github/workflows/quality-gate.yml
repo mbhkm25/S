@@ -93,6 +93,11 @@ jobs:
             echo 'Merge conflict markers found in migrations.' >&2
             exit 1
           fi
+      - name: Verify canonical migration layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-supabase-canonical-cutover.mjs
       - name: Deno check WhatsApp Assistant v5
         id: assistant_deno
         shell: bash
@@ -116,12 +121,16 @@ jobs:
         run: deno check --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
       - name: Deno check phone verification
         run: deno check --no-lock supabase/functions/sanad-phone-verification/index.ts
+      - name: Deno check production operation analyzer
+        run: deno check --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
+      - name: Deno check operation analysis worker
+        run: deno check --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
       - name: Audit legacy Edge Functions
         continue-on-error: true
         shell: bash
         run: |
           set -uo pipefail
-          critical='sanad-v3-whatsapp-assistant|sanad-v3-website-knowledge-sync|sanad-v3-knowledge-ingest|sanad-phone-verification'
+          critical='sanad-v3-whatsapp-assistant|sanad-v3-website-knowledge-sync|sanad-v3-knowledge-ingest|sanad-phone-verification|sanad-operation-analysis-primary|sanad-operation-analysis-worker'
           mapfile -t functions < <(find supabase/functions -mindepth 2 -maxdepth 2 -type f -name 'index.ts' | sort | grep -Ev "/(${critical})/index.ts$")
           failed=0
           for entrypoint in "${functions[@]}"; do
@@ -150,6 +159,10 @@ jobs:
             sanad-pro-payment-verify
             sanad-v3-whatsapp-campaign-worker
             sanad-v3-whatsapp-onboarding
+            sanad-operation-analysis-primary
+            sanad-operation-analysis-worker
+            sanad-operation-analysis-shadow
+            sanad-operation-preview-worker
           )
           for fn in "${required[@]}"; do
             test -f "supabase/functions/${fn}/index.ts" || {
