@@ -1,0 +1,60 @@
+name: Deploy primary operation analyzer
+
+on:
+  push:
+    branches:
+      - feature/sanad-fast-financial-engine
+    paths:
+      - 'supabase/functions/sanad-operation-analysis-primary/**'
+      - 'supabase/functions/sanad-operation-analysis-worker/**'
+      - '.github/workflows/deploy-primary-operation-analyzer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/sanad-fast-financial-engine
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Validate primary analyzer and worker
+        run: |
+          set -euo pipefail
+          deno check supabase/functions/sanad-operation-analysis-primary/index.ts
+          deno check supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -q 'sanad-operation-analysis-primary' supabase/functions/sanad-operation-analysis-worker/index.ts
+          grep -q 'original_document_is_source_of_truth: true' supabase/functions/sanad-operation-analysis-primary/index.ts
+          grep -q 'callLegacyFallback' supabase/functions/sanad-operation-analysis-primary/index.ts
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate deployment credentials
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+
+      - name: Deploy primary analyzer
+        run: |
+          set -euo pipefail
+          supabase functions deploy sanad-operation-analysis-primary \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --no-verify-jwt
+
+      - name: Deploy queue worker
+        run: |
+          set -euo pipefail
+          supabase functions deploy sanad-operation-analysis-worker \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --no-verify-jwt
