@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-08-06T16:39:00Z",
+  "repository": "mbhkm25/S",
+  "base_commit": "e6a19caa2b2357b6fbc72455eefe627500abb934",
+  "supabase_project_ref": "hudbzlgclghlhazlduas",
+  "operation": "history_only_reconciliation_preparation",
+  "production_mutation_authorized": false,
+  "expected_before": {
+    "migration_count": 311,
+    "first_version": "20260702130842",
+    "last_version": "20260806063921",
+    "total_statement_bytes": 1764166,
+    "ledger_manifest_sha256": "60285fa75234648a39cf3de5f139c18e61440d04876048c28f54f0eef30d6903"
+  },
+  "canonical_baseline": {
+    "version": "20260806150947",
+    "name": "canonical_schema_baseline",
+    "location": "supabase/baselines/20260806150947_canonical_schema_baseline",
+    "active_migration_location": null,
+    "replay_verified": true,
+    "production_schema_change_expected": false
+  },
+  "required_controls": {
+    "verified_backup": false,
+    "restore_test_evidence": false,
+    "independent_review_count": 0,
+    "required_independent_review_count": 2,
+    "maintenance_window_approved": false,
+    "database_deployments_paused": false,
+    "preflight_rechecked_immediately_before_execution": false
+  },
+  "abort_conditions": [
+    "The production ledger aggregate differs from expected_before.",
+    "The production schema fingerprint differs from the replay-verified baseline evidence.",
+    "A database deployment is active or a new migration appears.",
+    "Backup creation or restore-path verification is incomplete.",
+    "The canonical baseline has not been activated and replayed from an empty isolated database.",
+    "Any reviewer approval or maintenance-window approval is missing."
+  ],
+  "prohibited_actions_in_this_pr": [
+    "No production migration repair.",
+    "No direct write to supabase_migrations.schema_migrations.",
+    "No production DDL.",
+    "No db push.",
+    "No Edge Function deployment.",
+    "No merge or deployment of PR #170."
+  ]
+}

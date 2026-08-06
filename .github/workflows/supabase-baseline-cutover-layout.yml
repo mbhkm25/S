@@ -1,0 +1,52 @@
+name: Supabase baseline cutover layout
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/prepare-supabase-baseline-cutover.mjs'
+      - 'scripts/verify-supabase-baseline-cutover-layout.mjs'
+      - 'supabase/baselines/**'
+      - 'supabase/migrations/**'
+      - 'supabase/migration_archive/**'
+      - '.github/workflows/supabase-baseline-cutover-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify dry-run is non-mutating
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(git status --porcelain)"
+          node scripts/prepare-supabase-baseline-cutover.mjs > /tmp/cutover-plan.json
+          after="$(git status --porcelain)"
+          test "$before" = "$after"
+          node -e "const p=require('/tmp/cutover-plan.json'); if (p.production_mutation !== false || p.mode !== 'dry-run') process.exit(1)"
+
+      - name: Materialize cutover layout in disposable workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a . /tmp/sanad-cutover
+          cd /tmp/sanad-cutover
+          node scripts/prepare-supabase-baseline-cutover.mjs --write
+          node scripts/verify-supabase-baseline-cutover-layout.mjs
+
+      - name: Confirm repository branch remains preparation-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d supabase/migration_archive/pre_canonical_20260806
+          test ! -f supabase/migrations/20260806150947_canonical_schema_baseline.sql
