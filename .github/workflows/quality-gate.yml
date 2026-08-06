@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: quality-gate-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   validate-application:
     name: Application and PWA
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -65,7 +65,7 @@ jobs:
 
   validate-supabase:
     name: Supabase migrations and Edge Functions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
