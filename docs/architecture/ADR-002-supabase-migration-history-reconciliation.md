@@ -1,6 +1,6 @@
 # ADR-002: Supabase migration history reconciliation
 
-- Status: Accepted for preparation; production reconciliation not authorized
+- Status: Phase 2 baseline replay-verified; production reconciliation not authorized
 - Date: 2026-08-06
 - Project: `hudbzlgclghlhazlduas`
 - Repository baseline: `b4af81e6370357fd4798dd6f747767f072bf8888`
@@ -28,7 +28,7 @@ The first recorded production entry calls an older function that is not created 
 We will reconcile migration history in three separately reviewed stages:
 
 1. **Evidence and fail-closed gate.** Store a read-only metadata snapshot containing only version, name, byte count, and SHA-256 hash. Run an offline auditor in CI. The gate must fail whenever an applied production migration lacks one exact local version/name/hash identity, or when historical/duplicate/invalid files exist.
-2. **Canonical baseline.** In a later PR, create a current-schema baseline using an official Supabase schema pull or equivalent schema-only dump from an authorized environment. The baseline must exclude business rows and secrets, replay successfully into an empty isolated project, and produce a schema equivalent to production for the explicitly scoped schemas.
+2. **Canonical baseline.** Create a current-schema baseline using an official Supabase schema pull or an equivalent read-only catalog export from an authorized environment. The baseline must exclude business rows and secrets, replay successfully into an empty isolated project, and produce a schema equivalent to production for the explicitly scoped schemas. The verified artifact remains in `supabase/baselines`, outside the active migration directory, until the ledger cutover is separately approved.
 3. **History maintenance window.** Only after the baseline is reviewed and replay-verified may a separate, dual-approved maintenance procedure reconcile `supabase_migrations.schema_migrations`. It requires a backup, an explicit version-by-version manifest, observed rollback criteria, and post-change comparison. This ADR does not authorize that mutation.
 
 Until all stages pass, database deployment from this history remains blocked. Application PRs may be developed, but a PR containing new migrations—such as the event-driven pipeline—must not be deployed through this inconsistent ledger.
@@ -54,6 +54,14 @@ The deploy gate passes only when:
 
 The preparation CI intentionally expects exit code `2` while the known drift exists. The baseline reconciliation PR must change that assertion to require a passing gate.
 
+## Phase 2 evidence
+
+The first fresh branch replay failed after one migration and produced zero public tables. This confirms the historical ledger is not a valid empty-database bootstrap. A schema-only catalog export was then replayed in the same isolated, data-free branch.
+
+The second normalized baseline matched production for relations, 1,710 logical columns, views, 431 indexes, 806 constraints, 395 functions, 63 triggers, 67 policies, RLS state on 106 owned tables, and semantic relation/function grants. Physical `attnum` gaps left by historically dropped columns were intentionally compacted. The only scoped extension-version difference was the platform-provided `pg_net` 0.20.4 in the fresh branch versus 0.20.3 in production.
+
+The branch was deleted after validation. No production schema, migration ledger, data, Edge Function, or setting was changed. The baseline is deliberately not in `supabase/migrations`: activation before Phase 3 would expose production to an unsafe accidental apply.
+
 ## Security and data handling
 
 The committed production snapshot contains no SQL bodies, row values, credentials, URLs with tokens, or secrets. It is evidence metadata only. A future schema baseline must be reviewed for security-definer functions, ownership, grants, policies, storage objects, extensions, and environment-specific configuration before commit.
@@ -69,6 +77,9 @@ The committed production snapshot contains no SQL bodies, row values, credential
 - `docs/operations/supabase-production-migration-history-2026-08-06.json`
 - `docs/operations/supabase-migration-history-audit-2026-08-06.json`
 - `scripts/audit-supabase-migration-history.mjs`
+- `scripts/generate-supabase-canonical-baseline.sql`
+- `scripts/verify-supabase-canonical-baseline.mjs`
+- `docs/operations/supabase-canonical-baseline-validation-2026-08-06.json`
 - Supabase CLI migration commands: <https://supabase.com/docs/reference/cli/introduction>
 - Supabase database migrations: <https://supabase.com/docs/guides/deployment/database-migrations>
 - Supabase branch migration troubleshooting: <https://supabase.com/docs/guides/troubleshooting/new-branch-doesnt-copy-database>
