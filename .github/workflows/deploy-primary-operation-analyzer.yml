@@ -23,9 +23,17 @@ jobs:
         with:
           ref: feature/sanad-fast-financial-engine
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+
+      - name: Install project dependencies
+        run: npm ci
 
       - name: Validate primary analyzer and worker
         run: |
