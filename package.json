@@ -15,7 +15,10 @@
     "check:routes": "tsx scripts/check-app-routes.ts && tsx scripts/check-email-action-entrypoints.ts",
     "deploy:production": "gh workflow run deploy-production.yml --ref main",
     "clean": "rm -rf dist dist-admin server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "audit:migrations": "node scripts/audit-supabase-migration-history.mjs --mode audit",
+    "gate:migrations": "node scripts/audit-supabase-migration-history.mjs --mode deploy-gate",
+    "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
