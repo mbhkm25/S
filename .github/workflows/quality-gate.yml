@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/verify-supabase-canonical-cutover.mjs
+          node scripts/verify-supabase-baseline-cutover-layout.mjs
       - name: Deno check WhatsApp Assistant v5
         id: assistant_deno
         shell: bash
