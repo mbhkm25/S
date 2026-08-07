@@ -1,0 +1,150 @@
+name: PR 176 emergency validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact PR head SHA to validate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr176-emergency-${{ inputs.expected_sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate-application:
+    name: Application and PWA
+    runs-on: [self-hosted, Windows, X64, sanad-pr176-emergency]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          clean: true
+          fetch-depth: 1
+      - name: Verify checked out revision
+        shell: powershell
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          $expected = '${{ inputs.expected_sha }}'
+          if ($actual -ne $expected) { throw "Checked out SHA $actual does not match expected SHA $expected" }
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            services/push-worker/package-lock.json
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Android icon dependency
+        shell: powershell
+        run: python -m pip install --disable-pip-version-check Pillow
+      - name: Install application dependencies
+        shell: powershell
+        run: npm ci
+      - name: Type-check application
+        shell: powershell
+        run: npm run lint
+      - name: Validate application routes
+        shell: powershell
+        run: npm run check:routes
+      - name: Check patch whitespace
+        shell: powershell
+        run: git diff --check
+      - name: Build production PWA
+        shell: powershell
+        run: npm run build -- --mode production
+      - name: Build Android assets
+        shell: powershell
+        run: npm run build:android
+      - name: Validate production artifacts
+        shell: powershell
+        run: |
+          $required = @('dist/index.html','dist/reset-password.html','dist/sw.js','dist/manifest.webmanifest','dist/version.json','dist/assets')
+          foreach ($path in $required) { if (-not (Test-Path $path)) { throw "Missing production artifact: $path" } }
+      - name: Install push worker dependencies
+        working-directory: services/push-worker
+        shell: powershell
+        run: npm ci
+      - name: Type-check push worker
+        working-directory: services/push-worker
+        shell: powershell
+        run: npm run lint
+      - name: Test push worker
+        working-directory: services/push-worker
+        shell: powershell
+        run: npm test
+
+  validate-supabase:
+    name: Supabase migrations and Edge Functions
+    runs-on: [self-hosted, Windows, X64, sanad-pr176-emergency]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          clean: true
+          fetch-depth: 1
+      - name: Verify checked out revision
+        shell: powershell
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          $expected = '${{ inputs.expected_sha }}'
+          if ($actual -ne $expected) { throw "Checked out SHA $actual does not match expected SHA $expected" }
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate migration filenames
+        shell: powershell
+        run: |
+          $bad = Get-ChildItem 'supabase/migrations' -Filter '*.sql' | Where-Object { $_.Name -notmatch '^\d+_[A-Za-z0-9_-]+\.sql$' }
+          if ($bad) { throw "Invalid migration filenames: $($bad.Name -join ', ')" }
+      - name: Check migrations for merge markers
+        shell: powershell
+        run: |
+          $markers = Get-ChildItem 'supabase/migrations' -Recurse -Filter '*.sql' | Select-String -Pattern '^(<<<<<<<|=======|>>>>>>>)'
+          if ($markers) { throw 'Merge conflict markers found in migrations.' }
+      - name: Verify canonical migration layout
+        shell: powershell
+        run: node scripts/verify-supabase-baseline-cutover-layout.mjs
+      - name: Audit migration history logic
+        shell: powershell
+        run: node --test scripts/audit-supabase-migration-history.test.mjs
+      - name: Deno check WhatsApp Assistant
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-v3-whatsapp-assistant/index.ts
+      - name: Deno check website knowledge sync
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-v3-website-knowledge-sync/index.ts
+      - name: Deno check knowledge ingestion
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
+      - name: Deno check phone verification
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-phone-verification/index.ts
+      - name: Deno check primary analyzer
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
+      - name: Deno check analysis worker
+        shell: powershell
+        run: deno check --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
+      - name: Ensure deployed function sources are tracked
+        shell: powershell
+        run: |
+          $required = @('sanad-v3-analyze-operation','sanad-v3-whatsapp-intake','sanad-v3-whatsapp-assistant','sanad-v3-knowledge-ingest','sanad-v3-website-knowledge-sync','sanad-phone-verification','sanad-v3-process-report','sanad-v3-notify-verification','sanad-pro-payment-verify','sanad-v3-whatsapp-campaign-worker','sanad-v3-whatsapp-onboarding','sanad-operation-analysis-primary','sanad-operation-analysis-worker','sanad-operation-analysis-shadow','sanad-operation-preview-worker')
+          foreach ($fn in $required) { $entry = "supabase/functions/$fn/index.ts"; if (-not (Test-Path $entry)) { throw "Missing tracked source: $entry" } }
