@@ -135,22 +135,22 @@ jobs:
         run: node --test scripts/audit-supabase-migration-history.test.mjs
       - name: Deno check WhatsApp Assistant
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-whatsapp-assistant/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-whatsapp-assistant/index.ts
       - name: Deno check website knowledge sync
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-website-knowledge-sync/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-website-knowledge-sync/index.ts
       - name: Deno check knowledge ingestion
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
       - name: Deno check phone verification
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-phone-verification/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-phone-verification/index.ts
       - name: Deno check primary analyzer
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
       - name: Deno check analysis worker
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
       - name: Ensure deployed function sources are tracked
         shell: powershell
         run: |
