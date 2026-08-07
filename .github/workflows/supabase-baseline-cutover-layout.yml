@@ -7,7 +7,7 @@ on:
       - 'scripts/verify-supabase-baseline-cutover-layout.mjs'
       - 'supabase/baselines/**'
       - 'supabase/migrations/**'
-      - 'supabase/migration_archive/**'
+      - 'supabase/migrations_archive/**'
       - '.github/workflows/supabase-baseline-cutover-layout.yml'
   workflow_dispatch:
 
@@ -25,28 +25,16 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Verify dry-run is non-mutating
-        shell: bash
-        run: |
-          set -euo pipefail
-          before="$(git status --porcelain)"
-          node scripts/prepare-supabase-baseline-cutover.mjs > /tmp/cutover-plan.json
-          after="$(git status --porcelain)"
-          test "$before" = "$after"
-          node -e "const p=require('/tmp/cutover-plan.json'); if (p.production_mutation !== false || p.mode !== 'dry-run') process.exit(1)"
+      - name: Verify canonical cutover layout
+        run: node scripts/verify-supabase-baseline-cutover-layout.mjs
 
-      - name: Materialize cutover layout in disposable workspace
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp -a . /tmp/sanad-cutover
-          cd /tmp/sanad-cutover
-          node scripts/prepare-supabase-baseline-cutover.mjs --write
-          node scripts/verify-supabase-baseline-cutover-layout.mjs
+      - name: Audit migration history logic
+        run: node --test scripts/audit-supabase-migration-history.test.mjs
 
-      - name: Confirm repository branch remains preparation-only
+      - name: Confirm canonical repository state
         shell: bash
         run: |
           set -euo pipefail
-          test ! -d supabase/migration_archive/pre_canonical_20260806
-          test ! -f supabase/migrations/20260806150947_canonical_schema_baseline.sql
+          test -d supabase/migrations_archive/pre_canonical_20260806
+          test -f supabase/migrations/20260806150947_canonical_schema_baseline.sql
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')" = "1"
