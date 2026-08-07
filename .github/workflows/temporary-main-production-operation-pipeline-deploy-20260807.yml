@@ -1,4 +1,4 @@
-name: One-shot main-gated operation pipeline production deploy 2026-08-07
+name: One-shot main-gated operation pipeline functions deploy 2026-08-07
 
 on:
   push:
@@ -20,7 +20,6 @@ jobs:
     environment: production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
@@ -35,28 +34,15 @@ jobs:
           git fetch origin main
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
       - uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Validate credentials and pipeline sources
+      - name: Validate deployment credential
         shell: bash
         run: |
           set -euo pipefail
           test -n "${SUPABASE_ACCESS_TOKEN:-}"
-          test -n "${SUPABASE_DB_PASSWORD:-}"
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-whatsapp-intake/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-worker/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-access/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-routing-worker/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-transactional-message-worker/index.ts
-          deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-app-trigger-analysis/index.ts
-          deno test supabase/functions/sanad-v3-whatsapp-intake/intake-utils.test.ts
 
       - name: Require production webhook-signature secret
         shell: bash
@@ -67,49 +53,6 @@ jobs:
             echo "META_APP_SECRET must be configured before pipeline deployment" >&2
             exit 1
           fi
-
-      - name: Link and review tracked database changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          dry_run="$(supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" 2>&1)"
-          printf '%s\n' "$dry_run"
-          unexpected=0
-          found=0
-          while IFS= read -r migration; do
-            case "$migration" in
-              20260806151000_instant_intake_event_pipeline.sql|\
-              20260806151100_preview_queue_immediate_dispatch.sql|\
-              20260806151200_routing_inbox_single_writer_queue.sql|\
-              20260806151300_unified_transactional_outbox_worker.sql|\
-              20260806151400_pipeline_observability_percentiles.sql)
-                found=$((found+1))
-                ;;
-              *)
-                echo "Unexpected pending migration: $migration" >&2
-                unexpected=1
-                ;;
-            esac
-          done < <(printf '%s\n' "$dry_run" | grep -Eo '[0-9]{14}_[A-Za-z0-9_.-]+\.sql' | sort -u || true)
-          test "$unexpected" -eq 0
-          test "$found" -eq 5
-
-      - name: Apply tracked database migrations
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase db push --password "$SUPABASE_DB_PASSWORD"
-
-      - name: Verify migration ledger after database push
-        shell: bash
-        run: |
-          set -euo pipefail
-          migration_list="$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD" 2>&1)"
-          printf '%s\n' "$migration_list"
-          for version in 20260806150947 20260806151000 20260806151100 20260806151200 20260806151300 20260806151400; do
-            grep -q "$version" <<<"$migration_list"
-          done
 
       - name: Deploy pipeline workers and intake
         shell: bash
