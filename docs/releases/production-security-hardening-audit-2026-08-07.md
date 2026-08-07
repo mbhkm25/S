@@ -12,7 +12,7 @@
 
 The production database authorization model is materially stronger than the raw advisor count suggests: every audited SECURITY DEFINER function has a fixed `search_path`, platform-admin RPCs contain explicit authorization guards, sensitive Storage buckets are private, and RLS-enabled tables without policies are also missing anon/authenticated DML grants and therefore remain deny-by-default.
 
-The material finding was the historical Edge Function attack surface. Seven obsolete one-shot/test functions remained ACTIVE and externally invokable with insufficient inbound authentication while holding privileged runtime credentials or access to private resources. They were retired immediately in production by replacing their bodies with a 410 tombstone and enabling JWT verification. Their tombstone sources are included in this branch so GitHub remains the source of truth.
+The material finding was the historical Edge Function attack surface. Nine obsolete one-shot/test functions remained ACTIVE and externally invokable with insufficient inbound authentication while holding privileged runtime credentials, access to private resources, or trigger capability. They were retired immediately in production by replacing their bodies with a 410 tombstone and enabling JWT verification. Their tombstone sources are included in this branch so GitHub remains the source of truth.
 
 ## Findings
 
@@ -25,10 +25,12 @@ The following historical functions were no longer referenced by current `main` b
 - `sanad-report-v2-storage-test-runner`
 - `sanad-report-v2-test-download`
 - `sanad-report-v2-test-base64`
+- `sanad-report-v2-1-run-once`
+- `sanad-report-v2-2-mobile-run`
 - `sanad-operation-preview-test`
 - `sanad-operation-600-candidate-runner`
 
-Risk included privileged service-role access, access to private report/preview resources, externally triggerable processing, and/or privileged WhatsApp side effects.
+Risk included privileged service-role access, access to private report/preview resources, externally triggerable processing, and/or privileged WhatsApp side effects. Two legacy report runners also relied on source-embedded fixed tokens rather than a runtime secret, which was not accepted as a production authentication boundary.
 
 Production remediation already completed:
 
@@ -91,7 +93,7 @@ The Performance Advisor reports unindexed foreign keys, unused indexes, and an A
 
 ## Edge-function review methodology
 
-`verify_jwt=false` was not treated as a vulnerability by itself. Function bodies were inspected for custom authentication or a closed/tombstone implementation. Examples found to be controlled include internal-key-protected functions and existing 410 validation/batch runners. This avoids breaking intentional webhook/internal-worker authentication flows merely to reduce advisor noise.
+`verify_jwt=false` was not treated as a vulnerability by itself. Function bodies were inspected for custom authentication or a closed/tombstone implementation. Examples found to be controlled include `SANAD_INTERNAL_API_KEY`-protected candidate/recovery functions and existing 410 validation/batch runners. This avoids breaking intentional webhook/internal-worker authentication flows merely to reduce advisor noise.
 
 ## Verification gates
 
