@@ -74,13 +74,11 @@ jobs:
           unexpected=0
           while IFS= read -r migration; do
             case "$migration" in
-              20260806064500_harden_operation_identifier_persistence_contract.sql|\
-              20260806082032_instant_intake_event_pipeline.sql|\
-              20260806084623_preview_queue_immediate_dispatch.sql|\
-              20260806085223_routing_inbox_single_writer_queue.sql|\
-              20260806085818_unified_transactional_outbox_worker.sql|\
-              20260806090000_add_operational_shadow_metrics.sql|\
-              20260806090417_pipeline_observability_percentiles.sql)
+              20260806151000_instant_intake_event_pipeline.sql|\
+              20260806151100_preview_queue_immediate_dispatch.sql|\
+              20260806151200_routing_inbox_single_writer_queue.sql|\
+              20260806151300_unified_transactional_outbox_worker.sql|\
+              20260806151400_pipeline_observability_percentiles.sql)
                 ;;
               *)
                 echo "Unexpected pending migration: $migration" >&2

@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "updated_at": "2026-08-07T11:15:00Z",
+  "repository": "mbhkm25/S",
+  "base_commit": "e0d87f052f47e8bb592baeeb739e4ae2effe53bb",
+  "supabase_project_ref": "hudbzlgclghlhazlduas",
+  "operation": "history_only_reconciliation_final_preparation",
+  "production_mutation_authorized": false,
+  "repository_cutover": {
+    "pull_request": 176,
+    "merged": true,
+    "merge_commit": "e0d87f052f47e8bb592baeeb739e4ae2effe53bb",
+    "canonical_migration": "supabase/migrations/20260806150947_canonical_schema_baseline.sql",
+    "historical_archive": "supabase/migrations_archive/pre_canonical_20260806",
+    "canonical_payload_bytes": 1375100,
+    "canonical_payload_sha256": "8d66799f37b3177644efe9ab2a5a70e3499f26c102f59b65c674fc96c8d69dcc",
+    "isolated_replay_verified": true,
+    "final_validation_run": 31170860119
+  },
+  "expected_before": {
+    "migration_count": 311,
+    "first_version": "20260702130842",
+    "last_version": "20260806063921",
+    "total_statement_bytes": 1764166,
+    "ledger_manifest_sha256": "60285fa75234648a39cf3de5f139c18e61440d04876048c28f54f0eef30d6903"
+  },
+  "expected_after": {
+    "definition": "docs/operations/supabase-ledger-reconciliation-phase3-expected-after.json",
+    "canonical_version": "20260806150947",
+    "legacy_versions_remaining": 0,
+    "production_schema_change_expected": false,
+    "business_data_change_expected": false,
+    "exact_remote_row_payload_fingerprint": "pending_isolated_cli_repair_simulation"
+  },
+  "required_controls": {
+    "verified_backup": false,
+    "restore_test_evidence": false,
+    "independent_review_count": 0,
+    "required_independent_review_count": 2,
+    "maintenance_window_approved": false,
+    "database_deployments_paused": false,
+    "isolated_cli_repair_simulation_passed": false,
+    "exact_command_manifest_frozen": false,
+    "rollback_manifest_proven": false,
+    "preflight_rechecked_immediately_before_execution": false
+  },
+  "abort_conditions": [
+    "The production ledger aggregate differs from expected_before.",
+    "The production schema fingerprint differs from approved evidence.",
+    "A database deployment is active or a new migration appears.",
+    "Backup creation or restore-path verification is incomplete.",
+    "The isolated migration-repair simulation has not proven the exact command sequence and rollback path.",
+    "The command manifest is not frozen to the reviewed commit and CLI version.",
+    "Any reviewer approval or maintenance-window approval is missing."
+  ],
+  "prohibited_actions_in_this_preparation": [
+    "No production migration repair.",
+    "No direct write to supabase_migrations.schema_migrations.",
+    "No production DDL.",
+    "No production db push.",
+    "No Edge Function deployment.",
+    "No merge or deployment of PR #170 before reconciliation and post-reconciliation release gates pass."
+  ]
+}

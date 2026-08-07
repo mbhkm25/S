@@ -24,8 +24,7 @@ on:
       - 'supabase/functions/sanad-operation-routing-worker/**'
       - 'supabase/functions/sanad-v3-transactional-message-worker/**'
       - 'supabase/functions/sanad-v3-app-trigger-analysis/**'
-      - 'supabase/migrations/2026080608*.sql'
-      - 'supabase/migrations/2026080609*.sql'
+      - 'supabase/migrations/20260806151*.sql'
       - 'supabase/tests/operation_pipeline_contract_baseline.sql'
       - 'supabase/tests/instant_event_pipeline.sql'
       - 'supabase/tests/instant_event_pipeline_integration.sql'
@@ -49,8 +48,7 @@ on:
       - 'supabase/functions/sanad-operation-routing-worker/**'
       - 'supabase/functions/sanad-v3-transactional-message-worker/**'
       - 'supabase/functions/sanad-v3-app-trigger-analysis/**'
-      - 'supabase/migrations/2026080608*.sql'
-      - 'supabase/migrations/2026080609*.sql'
+      - 'supabase/migrations/20260806151*.sql'
       - 'supabase/tests/operation_pipeline_contract_baseline.sql'
       - 'supabase/tests/instant_event_pipeline.sql'
       - 'supabase/tests/instant_event_pipeline_integration.sql'
@@ -142,7 +140,7 @@ jobs:
           (async () => {
             await parser.loadModule();
             const files = fs.readdirSync('supabase/migrations')
-              .filter((name) => /^202608060(8|9)/.test(name) && name.endsWith('.sql'))
+              .filter((name) => /^20260806151/.test(name) && name.endsWith('.sql'))
               .map((name) => path.join('supabase/migrations', name))
               .concat([
                 'supabase/tests/operation_pipeline_contract_baseline.sql',
@@ -207,16 +205,16 @@ jobs:
               psql -U postgres -d postgres -v ON_ERROR_STOP=1
           }
           run_sql < supabase/tests/operation_pipeline_contract_baseline.sql
-          run_sql < supabase/migrations/20260806082032_instant_intake_event_pipeline.sql
+          run_sql < supabase/migrations/20260806151000_instant_intake_event_pipeline.sql
           run_sql <<'SQL'
           update private.pipeline_runtime_config
           set environment='ci',dispatch_enabled=false,updated_at=now()
           where singleton=true;
           SQL
-          run_sql < supabase/migrations/20260806084623_preview_queue_immediate_dispatch.sql
-          run_sql < supabase/migrations/20260806085223_routing_inbox_single_writer_queue.sql
-          run_sql < supabase/migrations/20260806085818_unified_transactional_outbox_worker.sql
-          run_sql < supabase/migrations/20260806090417_pipeline_observability_percentiles.sql
+          run_sql < supabase/migrations/20260806151100_preview_queue_immediate_dispatch.sql
+          run_sql < supabase/migrations/20260806151200_routing_inbox_single_writer_queue.sql
+          run_sql < supabase/migrations/20260806151300_unified_transactional_outbox_worker.sql
+          run_sql < supabase/migrations/20260806151400_pipeline_observability_percentiles.sql
 
       - name: Execute operation-pipeline database contracts
         shell: bash
