@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "status": "candidate_requires_isolated_cli_repair_simulation",
+  "repository_base_commit": "e0d87f052f47e8bb592baeeb739e4ae2effe53bb",
+  "supabase_project_ref": "hudbzlgclghlhazlduas",
+  "history_target": {
+    "canonical_version": "20260806150947",
+    "canonical_name": "canonical_schema_baseline",
+    "expected_remote_version_count": 1,
+    "expected_remote_versions": ["20260806150947"],
+    "expected_legacy_versions_remaining": 0,
+    "migration_list_timestamp_alignment_required": true,
+    "db_push_dry_run_historical_pending_count": 0
+  },
+  "invariants": {
+    "production_schema_change_expected": false,
+    "application_or_business_row_change_expected": false,
+    "original_document_metadata_change_expected": false,
+    "edge_function_deployment_expected": false
+  },
+  "payload_evidence": {
+    "exact_remote_row_payload_fingerprint": null,
+    "reason": "Supabase CLI repair row-payload semantics and multi-version execution behavior must be captured with the frozen CLI version in isolated simulation before production GO.",
+    "must_be_frozen_before_production": true
+  },
+  "required_post_checks": [
+    "Expected remote version set equals [20260806150947].",
+    "No legacy pre-canonical version remains in supabase_migrations.schema_migrations.",
+    "supabase migration list aligns local and remote timestamps.",
+    "supabase db push --dry-run reports no historical migration work.",
+    "Scoped schema fingerprint equals the immediately captured pre-mutation fingerprint.",
+    "Protected application-row and original-document metadata checks equal their immediately captured pre-mutation values."
+  ]
+}
