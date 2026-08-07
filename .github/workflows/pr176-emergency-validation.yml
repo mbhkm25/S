@@ -21,15 +21,18 @@ jobs:
     runs-on: [self-hosted, Windows, X64, sanad-pr176-emergency]
     timeout-minutes: 45
     steps:
-      - name: Verify requested revision
-        shell: powershell
-        run: |
-          if ('${{ github.sha }}' -ne '${{ inputs.expected_sha }}') { throw "Dispatched SHA ${{ github.sha }} does not match expected SHA ${{ inputs.expected_sha }}" }
-      - name: Checkout
+      - name: Checkout requested revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.expected_sha }}
           clean: true
           fetch-depth: 1
+      - name: Verify checked out revision
+        shell: powershell
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          $expected = '${{ inputs.expected_sha }}'
+          if ($actual -ne $expected) { throw "Checked out SHA $actual does not match expected SHA $expected" }
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -86,23 +89,34 @@ jobs:
     runs-on: [self-hosted, Windows, X64, sanad-pr176-emergency]
     timeout-minutes: 45
     steps:
-      - name: Verify requested revision
-        shell: powershell
-        run: |
-          if ('${{ github.sha }}' -ne '${{ inputs.expected_sha }}') { throw "Dispatched SHA ${{ github.sha }} does not match expected SHA ${{ inputs.expected_sha }}" }
-      - name: Checkout
+      - name: Checkout requested revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.expected_sha }}
           clean: true
           fetch-depth: 1
+      - name: Verify checked out revision
+        shell: powershell
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          $expected = '${{ inputs.expected_sha }}'
+          if ($actual -ne $expected) { throw "Checked out SHA $actual does not match expected SHA $expected" }
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Install Deno
+        shell: powershell
+        run: |
+          $version = '2.9.5'
+          $root = Join-Path $env:RUNNER_TEMP "deno-$version"
+          $zip = Join-Path $env:RUNNER_TEMP "deno-$version.zip"
+          if (Test-Path $root) { Remove-Item $root -Recurse -Force }
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/denoland/deno/releases/download/v$version/deno-x86_64-pc-windows-msvc.zip" -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $root | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $root 'deno.exe') --version
       - name: Validate migration filenames
         shell: powershell
         run: |
