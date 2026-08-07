@@ -1,0 +1,40 @@
+name: Supabase baseline cutover layout
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/prepare-supabase-baseline-cutover.mjs'
+      - 'scripts/verify-supabase-baseline-cutover-layout.mjs'
+      - 'supabase/baselines/**'
+      - 'supabase/migrations/**'
+      - 'supabase/migrations_archive/**'
+      - '.github/workflows/supabase-baseline-cutover-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify canonical cutover layout
+        run: node scripts/verify-supabase-baseline-cutover-layout.mjs
+
+      - name: Audit migration history logic
+        run: node --test scripts/audit-supabase-migration-history.test.mjs
+
+      - name: Confirm canonical repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d supabase/migrations_archive/pre_canonical_20260806
+          test -f supabase/migrations/20260806150947_canonical_schema_baseline.sql
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')" = "1"

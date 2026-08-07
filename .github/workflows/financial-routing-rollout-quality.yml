@@ -6,7 +6,8 @@ on:
       - "public/routing-rollout.html"
       - "public/routing-rollout.css"
       - "public/routing-rollout.js"
-      - "supabase/migrations/*financial_routing_rollout*"
+      - "supabase/migrations/**"
+      - "supabase/migrations_archive/**"
       - "supabase/tests/financial_routing_rollout.sql"
       - ".github/workflows/financial-routing-rollout-quality.yml"
 
@@ -33,23 +34,41 @@ jobs:
           grep -Fq '/routing-rollout.css' public/routing-rollout.html
           grep -Fq '/routing-rollout.js' public/routing-rollout.html
 
+      - name: Resolve migration contract sources
+        id: migration_sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t sql_files < <(find supabase/migrations supabase/migrations_archive -type f -name '*.sql' 2>/dev/null | sort)
+          if [ "${#sql_files[@]}" -eq 0 ]; then
+            echo 'No migration SQL sources found.' >&2
+            exit 1
+          fi
+          printf '%s\n' "${sql_files[@]}" > /tmp/sanad-migration-contract-sources.txt
+          echo "Resolved ${#sql_files[@]} migration contract sources."
+
       - name: Enforce disabled-by-default policy
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'enabled boolean not null default false' supabase/migrations/*financial_routing_rollout_foundation.sql
-          grep -Fq 'emergency_stop boolean not null default true' supabase/migrations/*financial_routing_rollout_foundation.sql
-          grep -Fq "rollout_mode text not null default 'shadow'" supabase/migrations/*financial_routing_rollout_foundation.sql
-          grep -Fq 'benchmark_gate_not_passed' supabase/migrations/*financial_routing_rollout_foundation.sql
-          grep -Fq 'financial_account_not_verified' supabase/migrations/*financial_routing_rollout_foundation.sql
-          grep -Fq 'candidate_count_not_one' supabase/migrations/*financial_routing_rollout_foundation.sql
+          mapfile -t sql_files < /tmp/sanad-migration-contract-sources.txt
+          grep -Fq 'enabled boolean not null default false' "${sql_files[@]}"
+          grep -Fq 'emergency_stop boolean not null default true' "${sql_files[@]}"
+          grep -Fq "rollout_mode text not null default 'shadow'" "${sql_files[@]}"
+          grep -Fq 'benchmark_gate_not_passed' "${sql_files[@]}"
+          grep -Fq 'financial_account_not_verified' "${sql_files[@]}"
+          grep -Fq 'candidate_count_not_one' "${sql_files[@]}"
 
       - name: Enforce guarded activation contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "raise exception 'benchmark_gate_not_passed'" supabase/migrations/*financial_routing_rollout_admin_contracts.sql
-          grep -Fq "raise exception 'enabled_target_requires_verified_routing_account'" supabase/migrations/*financial_routing_rollout_admin_contracts.sql
-          grep -Fq 'platform_admin_emergency_stop_financial_routing' supabase/migrations/*financial_routing_rollout_admin_contracts.sql
-          grep -Fq 'auto_financial_account_match' supabase/migrations/*financial_routing_rollout_foundation.sql
-          ! grep -Eiq 'service_role.*grant execute.*authenticated|grant all on public.financial_routing_rollout' supabase/migrations/*financial_routing_rollout*.sql
+          mapfile -t sql_files < /tmp/sanad-migration-contract-sources.txt
+          grep -Fq "raise exception 'benchmark_gate_not_passed'" "${sql_files[@]}"
+          grep -Fq "raise exception 'enabled_target_requires_verified_routing_account'" "${sql_files[@]}"
+          grep -Fq 'platform_admin_emergency_stop_financial_routing' "${sql_files[@]}"
+          grep -Fq 'auto_financial_account_match' "${sql_files[@]}"
+          if grep -Eiq 'service_role.*grant execute.*authenticated|grant all on public.financial_routing_rollout' "${sql_files[@]}"; then
+            echo 'Unsafe financial routing grant detected.' >&2
+            exit 1
+          fi

@@ -105,10 +105,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Install Deno
+        shell: powershell
+        run: |
+          $version = '2.9.5'
+          $root = Join-Path $env:RUNNER_TEMP "deno-$version"
+          $zip = Join-Path $env:RUNNER_TEMP "deno-$version.zip"
+          if (Test-Path $root) { Remove-Item $root -Recurse -Force }
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/denoland/deno/releases/download/v$version/deno-x86_64-pc-windows-msvc.zip" -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $root -Force
+          $root | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $root 'deno.exe') --version
       - name: Validate migration filenames
         shell: powershell
         run: |
@@ -127,22 +135,22 @@ jobs:
         run: node --test scripts/audit-supabase-migration-history.test.mjs
       - name: Deno check WhatsApp Assistant
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-whatsapp-assistant/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-whatsapp-assistant/index.ts
       - name: Deno check website knowledge sync
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-website-knowledge-sync/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-website-knowledge-sync/index.ts
       - name: Deno check knowledge ingestion
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-v3-knowledge-ingest/index.ts
       - name: Deno check phone verification
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-phone-verification/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-phone-verification/index.ts
       - name: Deno check primary analyzer
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-operation-analysis-primary/index.ts
       - name: Deno check analysis worker
         shell: powershell
-        run: deno check --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/sanad-operation-analysis-worker/index.ts
       - name: Ensure deployed function sources are tracked
         shell: powershell
         run: |
