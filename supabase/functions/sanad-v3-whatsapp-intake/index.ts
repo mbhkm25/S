@@ -8,28 +8,89 @@
 // - META_WA_ACCESS_TOKEN
 // - META_WA_PHONE_NUMBER_ID
 // - SANAD_INTERNAL_API_KEY
-//
-// Recommended:
 // - META_APP_SECRET
-// - REQUIRE_META_SIGNATURE=true after the secret is configured and verified.
+//
+// Optional override:
+// - REQUIRE_META_SIGNATURE=false is allowed only in an isolated development
+//   environment. Production deployment sets it to true explicitly.
 
-// @ts-types="npm:@types/qrcode@1.5.5"
+// @ts-types="npm:@types/qrcode@1.5.6"
 import QRCode from "npm:qrcode@1.5.4";
+import {
+  deterministicStoragePath,
+  extensionFromMime,
+  sanitizePathPart,
+} from "./intake-utils.ts";
 
 type JsonRecord = Record<string, unknown>;
-type Pipeline =
-  | "whatsapp_intake"
-  | "analysis"
-  | "fast_routing"
-  | "routing"
-  | "payment_inbox";
 type SpanStatus = "success" | "error" | "skipped";
+type PendingSpan = {
+  stage: string;
+  status: SpanStatus;
+  started_at: string;
+  completed_at: string;
+  duration_ms: number;
+  metadata: JsonRecord;
+};
 type SignatureMode = "verified" | "invalid" | "missing" | "not_configured";
 
 type SignatureResult = {
   ok: boolean;
   mode: SignatureMode;
 };
+
+type IntakeClaim = {
+  claimed: boolean;
+  duplicate?: boolean;
+  reason?: string;
+  claim_token?: string;
+  status?: string;
+  stage?: string;
+  pipeline_run_id?: string;
+  attempt_count?: number;
+  retry_after_seconds?: number;
+  source_message_id?: string;
+  webhook_envelope?: unknown;
+  sender_phone?: string | null;
+  media_id?: string | null;
+  declared_mime_type?: string | null;
+  signature_mode?: SignatureMode | null;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  storage_mime_type?: string | null;
+  file_original_name?: string | null;
+  file_size?: number | null;
+  file_sha256?: string | null;
+  media_metadata?: JsonRecord | null;
+  operation_id?: string | null;
+  public_token?: string | null;
+};
+
+type FinalizedOperation = {
+  ok: boolean;
+  idempotent: boolean;
+  operation_id: string;
+  public_token: string;
+  pipeline_run_id: string;
+  analysis_job_id?: string | null;
+  preview_job_id?: string | null;
+};
+
+type MetaMessageSendResponse = {
+  messages?: Array<{ id?: string }>;
+};
+
+class PipelineError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly retryable: boolean,
+    readonly httpStatus?: number,
+  ) {
+    super(message);
+    this.name = "PipelineError";
+  }
+}
 
 type NormalizedMessage = {
   hasMessage: true;
@@ -59,43 +120,23 @@ type NormalizedStatus = {
 
 type NormalizedWebhook = NormalizedMessage | NormalizedStatus;
 
-declare const EdgeRuntime:
-  | undefined
-  | { waitUntil: (promise: Promise<unknown>) => void };
-
 const SUPABASE_URL = mustGetEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = mustGetEnv("SUPABASE_SERVICE_ROLE_KEY");
-const META_VERIFY_TOKEN = mustGetEnv("META_VERIFY_TOKEN");
-const META_WA_ACCESS_TOKEN = mustGetEnv("META_WA_ACCESS_TOKEN");
-const META_WA_PHONE_NUMBER_ID = mustGetEnv("META_WA_PHONE_NUMBER_ID");
-const SANAD_INTERNAL_API_KEY = mustGetEnv("SANAD_INTERNAL_API_KEY");
 
 const META_APP_SECRET = Deno.env.get("META_APP_SECRET") || "";
 const REQUIRE_META_SIGNATURE =
-  (Deno.env.get("REQUIRE_META_SIGNATURE") || "false") === "true";
-const PUBLIC_APP_BASE_URL =
-  Deno.env.get("PUBLIC_APP_BASE_URL") || "https://app.sanadflow.com";
+  (Deno.env.get("REQUIRE_META_SIGNATURE") || "true") !== "false";
+const PUBLIC_APP_BASE_URL = Deno.env.get("PUBLIC_APP_BASE_URL") ||
+  "https://app.sanadflow.com";
 const PUBLIC_APP_ORIGIN = new URL(PUBLIC_APP_BASE_URL).origin;
-const STORAGE_BUCKET =
-  Deno.env.get("SUPABASE_STORAGE_BUCKET") || "operation-files";
-const ANALYZE_URL =
-  Deno.env.get("SANAD_ANALYZE_FUNCTION_URL") ||
-  `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
-const ONBOARDING_URL =
-  Deno.env.get("SANAD_WHATSAPP_ONBOARDING_FUNCTION_URL") ||
-  `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-onboarding`;
-const ASSISTANT_URL =
-  Deno.env.get("SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL") ||
+const STORAGE_BUCKET = Deno.env.get("SUPABASE_STORAGE_BUCKET") ||
+  "operation-files";
+const ASSISTANT_URL = Deno.env.get("SANAD_WHATSAPP_ASSISTANT_FUNCTION_URL") ||
   `${SUPABASE_URL}/functions/v1/sanad-v3-whatsapp-assistant`;
 
 const SEND_UNSUPPORTED_REPLY =
   (Deno.env.get("SEND_UNSUPPORTED_REPLY") || "true") !== "false";
-const SEND_QR_REPLY =
-  (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
-const TRIGGER_ANALYSIS =
-  (Deno.env.get("TRIGGER_ANALYSIS") || "true") !== "false";
-const TRIGGER_ONBOARDING =
-  (Deno.env.get("TRIGGER_ONBOARDING") || "true") !== "false";
+const SEND_QR_REPLY = (Deno.env.get("SEND_QR_REPLY") || "true") !== "false";
 const TRIGGER_ASSISTANT =
   (Deno.env.get("TRIGGER_ASSISTANT") || "true") !== "false";
 
@@ -111,7 +152,7 @@ const ALLOWED_MIME_TYPES = new Set([
 const RESPONSE_HEADERS = {
   "Access-Control-Allow-Origin": PUBLIC_APP_ORIGIN,
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-sanad-internal-key, x-hub-signature-256",
+    "authorization, x-client-info, apikey, content-type, x-sanad-internal-key, x-hub-signature-256, x-sanad-worker-token",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -121,17 +162,28 @@ function mustGetEnv(name: string): string {
   return value;
 }
 
-function textResponse(text: string, status = 200): Response {
+function textResponse(
+  text: string,
+  status = 200,
+  extraHeaders: HeadersInit = {},
+): Response {
   return new Response(text, {
     status,
-    headers: { ...RESPONSE_HEADERS, "Content-Type": "text/plain; charset=utf-8" },
+    headers: {
+      ...RESPONSE_HEADERS,
+      "Content-Type": "text/plain; charset=utf-8",
+      ...extraHeaders,
+    },
   });
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...RESPONSE_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+    headers: {
+      ...RESPONSE_HEADERS,
+      "Content-Type": "application/json; charset=utf-8",
+    },
   });
 }
 
@@ -157,32 +209,29 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-function extensionFromMime(mimeType: string): string {
-  const mime = mimeType.toLowerCase();
-  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
-  if (mime.includes("png")) return "png";
-  if (mime.includes("webp")) return "webp";
-  if (mime.includes("pdf")) return "pdf";
-  if (mime.includes("ogg") || mime.includes("opus")) return "ogg";
-  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
-  if (mime.includes("mp4") || mime.includes("m4a")) return "m4a";
-  if (mime.includes("wav")) return "wav";
-  if (mime.includes("webm")) return "webm";
-  return "bin";
+function asPipelineError(error: unknown, fallbackCode: string): PipelineError {
+  if (error instanceof PipelineError) return error;
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return new PipelineError(
+      `${fallbackCode}_timeout`,
+      `${fallbackCode}_timeout`,
+      true,
+      504,
+    );
+  }
+  return new PipelineError(
+    fallbackCode,
+    truncate(error instanceof Error ? error.message : error),
+    true,
+  );
 }
 
-function attachmentType(mimeType: string, messageType: string): string {
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.includes("pdf")) return "pdf";
-  return messageType === "document" ? "document" : "file";
-}
-
-function sanitizePathPart(value: string, fallback: string): string {
-  const cleaned = value
-    .trim()
-    .replace(/[^\w.\-]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return cleaned || fallback;
+function normalizeSignatureMode(value: unknown): SignatureMode {
+  return ["verified", "invalid", "missing", "not_configured"].includes(
+      String(value),
+    )
+    ? String(value) as SignatureMode
+    : "not_configured";
 }
 
 function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
@@ -193,32 +242,52 @@ function supabaseHeaders(extra: HeadersInit = {}): HeadersInit {
   };
 }
 
-async function supabaseJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function supabaseJson<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
     headers: supabaseHeaders(init.headers || {}),
+    signal: init.signal || AbortSignal.timeout(15_000),
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`supabase_request_failed ${response.status}: ${truncate(text)}`);
+    throw new PipelineError(
+      "supabase_request_failed",
+      `supabase_request_failed ${response.status}: ${truncate(text)}`,
+      response.status === 408 || response.status === 429 ||
+        response.status >= 500,
+      response.status,
+    );
   }
   return text ? JSON.parse(text) as T : null as T;
 }
 
-async function graphJson<T>(pathOrUrl: string, init: RequestInit = {}): Promise<T> {
+async function graphJson<T>(
+  pathOrUrl: string,
+  init: RequestInit = {},
+): Promise<T> {
   const url = pathOrUrl.startsWith("http")
     ? pathOrUrl
     : `${GRAPH_BASE}${pathOrUrl}`;
   const response = await fetch(url, {
     ...init,
     headers: {
-      Authorization: `Bearer ${META_WA_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${mustGetEnv("META_WA_ACCESS_TOKEN")}`,
       ...(init.headers || {}),
     },
+    signal: init.signal || AbortSignal.timeout(20_000),
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`meta_request_failed ${response.status}: ${truncate(text)}`);
+    throw new PipelineError(
+      "meta_request_failed",
+      `meta_request_failed ${response.status}: ${truncate(text)}`,
+      response.status === 408 || response.status === 429 ||
+        response.status >= 500,
+      response.status,
+    );
   }
   return text ? JSON.parse(text) as T : null as T;
 }
@@ -303,53 +372,38 @@ function normalizeWebhook(body: unknown): NormalizedWebhook {
     caption: cleanText(media?.caption) || "",
     text: cleanText(
       message?.text?.body ||
-      message?.button?.text ||
-      message?.interactive?.button_reply?.title ||
-      message?.interactive?.list_reply?.title,
+        message?.button?.text ||
+        message?.interactive?.button_reply?.title ||
+        message?.interactive?.list_reply?.title,
     ) || "",
     interactiveId: cleanText(
       message?.interactive?.button_reply?.id ||
-      message?.interactive?.list_reply?.id ||
-      message?.button?.payload,
+        message?.interactive?.list_reply?.id ||
+        message?.button?.payload,
     ) || "",
   };
 }
 
-async function recordSpan(params: {
-  operationId: string;
-  runId: string;
-  pipeline: Pipeline;
+function pendingSpan(params: {
   stage: string;
   status: SpanStatus;
   startedAtMs: number;
+  completedAtMs: number;
   metadata?: JsonRecord;
-}): Promise<void> {
-  const completedAtMs = Date.now();
-  try {
-    await supabaseJson("/rest/v1/rpc/service_record_operation_pipeline_span", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        p_operation_id: params.operationId,
-        p_run_id: params.runId,
-        p_pipeline: params.pipeline,
-        p_stage: params.stage,
-        p_status: params.status,
-        p_function_name: FUNCTION_NAME,
-        p_started_at: new Date(params.startedAtMs).toISOString(),
-        p_completed_at: new Date(completedAtMs).toISOString(),
-        p_duration_ms: completedAtMs - params.startedAtMs,
-        p_metadata: params.metadata || {},
-      }),
-    });
-  } catch (error) {
-    console.error(JSON.stringify({
-      function: FUNCTION_NAME,
-      event: "pipeline_span_write_failed",
-      stage: params.stage,
-      error: truncate(error instanceof Error ? error.message : error, 500),
-    }));
-  }
+}): PendingSpan {
+  const startedAtMs = Math.max(0, Math.trunc(params.startedAtMs));
+  const completedAtMs = Math.max(
+    startedAtMs,
+    Math.trunc(params.completedAtMs),
+  );
+  return {
+    stage: params.stage,
+    status: params.status,
+    started_at: new Date(startedAtMs).toISOString(),
+    completed_at: new Date(completedAtMs).toISOString(),
+    duration_ms: Math.min(completedAtMs - startedAtMs, 3_600_000),
+    metadata: params.metadata || {},
+  };
 }
 
 async function processDeliveryStatuses(statuses: unknown[]): Promise<void> {
@@ -357,8 +411,10 @@ async function processDeliveryStatuses(statuses: unknown[]): Promise<void> {
     const status = rawStatus as Record<string, any>;
     const messageId = cleanText(status.id);
     const deliveryStatus = cleanText(status.status)?.toLowerCase();
-    if (!messageId || !deliveryStatus ||
-      !["sent", "delivered", "read", "failed"].includes(deliveryStatus)) {
+    if (
+      !messageId || !deliveryStatus ||
+      !["sent", "delivered", "read", "failed"].includes(deliveryStatus)
+    ) {
       continue;
     }
     const timestamp = Number(status.timestamp);
@@ -370,10 +426,12 @@ async function processDeliveryStatuses(statuses: unknown[]): Promise<void> {
     const errorMessage = cleanText(firstError?.title) ||
       cleanText(firstError?.message) ||
       cleanText(firstError?.error_data?.details);
-    for (const rpcName of [
-      "apply_report_whatsapp_delivery_status",
-      "apply_whatsapp_campaign_delivery_status",
-    ]) {
+    for (
+      const rpcName of [
+        "apply_report_whatsapp_delivery_status",
+        "apply_whatsapp_campaign_delivery_status",
+      ]
+    ) {
       try {
         await supabaseJson(`/rest/v1/rpc/${rpcName}`, {
           method: "POST",
@@ -395,6 +453,29 @@ async function processDeliveryStatuses(statuses: unknown[]): Promise<void> {
           error: truncate(error instanceof Error ? error.message : error),
         }));
       }
+    }
+    try {
+      await supabaseJson(
+        "/rest/v1/rpc/apply_transactional_whatsapp_delivery_status",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            p_message_id: messageId,
+            p_status: deliveryStatus,
+            p_event_at: eventAt,
+            p_error: errorMessage || errorCode,
+          }),
+        },
+      );
+    } catch (error) {
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        event: "delivery_status_rpc_failed",
+        rpc: "apply_transactional_whatsapp_delivery_status",
+        message_id: messageId,
+        error: truncate(error instanceof Error ? error.message : error),
+      }));
     }
   }
 }
@@ -465,32 +546,194 @@ async function triggerAssistant(message: NormalizedMessage): Promise<void> {
       }),
     },
   );
-  if (!queued?.message_id || queued.status !== "queued" || queued.duplicate) return;
+  if (!queued?.message_id || queued.status !== "queued" || queued.duplicate) {
+    return;
+  }
   const response = await fetch(ASSISTANT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+      "x-sanad-internal-key": mustGetEnv("SANAD_INTERNAL_API_KEY"),
     },
-    body: JSON.stringify({ message_id: queued.message_id, source: FUNCTION_NAME }),
+    body: JSON.stringify({
+      message_id: queued.message_id,
+      source: FUNCTION_NAME,
+    }),
   });
   if (!response.ok) {
     throw new Error(
-      `assistant_trigger_rejected ${response.status}: ${truncate(await response.text())}`,
+      `assistant_trigger_rejected ${response.status}: ${
+        truncate(await response.text())
+      }`,
     );
   }
 }
 
-async function findExisting(messageId: string): Promise<Record<string, any> | null> {
-  if (!messageId) return null;
-  try {
-    const rows = await supabaseJson<Record<string, any>[]>(
-      `/rest/v1/operations?select=id,public_token,status,ai_status&storage_metadata->>meta_message_id=eq.${encodeURIComponent(messageId)}&limit=1`,
-      { method: "GET", headers: { Accept: "application/json" } },
+async function claimIntake(
+  message: NormalizedMessage,
+  runId: string,
+  signatureMode: SignatureMode,
+): Promise<IntakeClaim> {
+  return await supabaseJson<IntakeClaim>(
+    "/rest/v1/rpc/claim_whatsapp_operation_intake",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_message_id: message.messageId,
+        p_pipeline_run_id: runId,
+        p_sender_phone: message.senderPhone,
+        p_media_id: message.mediaId,
+        p_declared_mime_type: message.mimeType,
+        p_signature_mode: signatureMode,
+        p_webhook_envelope: message.rawWebhook,
+        p_lease_seconds: 180,
+      }),
+    },
+  );
+}
+
+async function claimNextIntake(workerToken: string): Promise<IntakeClaim> {
+  return await supabaseJson<IntakeClaim>(
+    "/rest/v1/rpc/claim_next_whatsapp_operation_intake",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_worker_token: workerToken,
+        p_lease_seconds: 180,
+      }),
+    },
+  );
+}
+
+async function recordIntakeStorage(params: {
+  messageId: string;
+  claimToken: string;
+  storagePath: string;
+  mimeType: string;
+  fileName: string;
+  fileSize: number | null;
+  fileSha256: string | null;
+  mediaMetadata: JsonRecord;
+}): Promise<void> {
+  const recorded = await supabaseJson<boolean>(
+    "/rest/v1/rpc/record_whatsapp_operation_intake_storage",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_message_id: params.messageId,
+        p_claim_token: params.claimToken,
+        p_storage_bucket: STORAGE_BUCKET,
+        p_storage_path: params.storagePath,
+        p_storage_mime_type: params.mimeType,
+        p_file_original_name: params.fileName,
+        p_file_size: params.fileSize,
+        p_file_sha256: params.fileSha256,
+        p_media_metadata: params.mediaMetadata,
+      }),
+    },
+  );
+  if (!recorded) {
+    throw new PipelineError(
+      "stale_intake_claim",
+      "The WhatsApp intake storage checkpoint was rejected",
+      true,
+      409,
     );
-    return rows[0] || null;
-  } catch {
-    return null;
+  }
+}
+
+async function finalizeIntake(
+  messageId: string,
+  claimToken: string,
+  payload: JsonRecord,
+): Promise<FinalizedOperation> {
+  return await supabaseJson<FinalizedOperation>(
+    "/rest/v1/rpc/finalize_whatsapp_operation_intake",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_message_id: messageId,
+        p_claim_token: claimToken,
+        p_operation: payload,
+      }),
+    },
+  );
+}
+
+async function completeIntake(params: {
+  messageId: string;
+  claimToken: string;
+  deliveryStatus: "sent" | "skipped";
+  externalMessageId?: string | null;
+  qrMetadata?: JsonRecord;
+  spans: PendingSpan[];
+}): Promise<void> {
+  const completed = await supabaseJson<boolean>(
+    "/rest/v1/rpc/complete_whatsapp_operation_intake",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_message_id: params.messageId,
+        p_claim_token: params.claimToken,
+        p_qr_delivery_status: params.deliveryStatus,
+        p_qr_external_message_id: params.externalMessageId || null,
+        p_qr_metadata: params.qrMetadata || {},
+        p_spans: params.spans,
+      }),
+    },
+  );
+  if (!completed) {
+    throw new PipelineError(
+      "stale_intake_claim",
+      "The WhatsApp intake completion checkpoint was rejected",
+      true,
+      409,
+    );
+  }
+}
+
+async function failIntake(params: {
+  messageId: string;
+  claimToken: string;
+  error: PipelineError;
+}): Promise<string> {
+  return await supabaseJson<string>(
+    "/rest/v1/rpc/fail_whatsapp_operation_intake",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_message_id: params.messageId,
+        p_claim_token: params.claimToken,
+        p_retryable: params.error.retryable,
+        p_error_code: params.error.code,
+        p_error_message: params.error.message,
+      }),
+    },
+  );
+}
+
+async function requestIntakeDrain(): Promise<void> {
+  try {
+    await supabaseJson(
+      "/rest/v1/rpc/request_whatsapp_operation_intake_dispatch",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ p_reason: "worker_drain" }),
+      },
+    );
+  } catch (error) {
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      event: "intake_drain_dispatch_failed",
+      error: truncate(error instanceof Error ? error.message : error),
+    }));
   }
 }
 
@@ -503,11 +746,20 @@ async function downloadMedia(url: string): Promise<{
   contentType: string | null;
 }> {
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
+    headers: {
+      Authorization: `Bearer ${mustGetEnv("META_WA_ACCESS_TOKEN")}`,
+    },
+    signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) {
-    throw new Error(
-      `meta_media_download_failed ${response.status}: ${truncate(await response.text())}`,
+    throw new PipelineError(
+      "meta_media_download_failed",
+      `meta_media_download_failed ${response.status}: ${
+        truncate(await response.text())
+      }`,
+      response.status === 408 || response.status === 429 ||
+        response.status >= 500,
+      response.status,
     );
   }
   return {
@@ -520,7 +772,7 @@ async function uploadStorage(
   path: string,
   bytes: Uint8Array,
   mimeType: string,
-): Promise<void> {
+): Promise<"uploaded" | "already_exists"> {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, "/");
   const response = await fetch(
     `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${encodedPath}`,
@@ -531,67 +783,35 @@ async function uploadStorage(
         "x-upsert": "false",
       }),
       body: toArrayBuffer(bytes),
+      signal: AbortSignal.timeout(20_000),
     },
   );
   if (!response.ok) {
-    throw new Error(
-      `storage_upload_failed ${response.status}: ${truncate(await response.text())}`,
+    const responseText = await response.text();
+    if (
+      (response.status === 400 || response.status === 409) &&
+      /duplicate|already[ _-]?exists|resource[ _-]?already[ _-]?exists/i.test(
+        responseText,
+      )
+    ) {
+      return "already_exists";
+    }
+    throw new PipelineError(
+      "storage_upload_failed",
+      `storage_upload_failed ${response.status}: ${truncate(responseText)}`,
+      response.status === 408 || response.status === 429 ||
+        response.status >= 500,
+      response.status,
     );
   }
+  return "uploaded";
 }
 
-async function insertOperation(payload: JsonRecord): Promise<Record<string, any>> {
-  const rows = await supabaseJson<Record<string, any>[]>("/rest/v1/operations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify(payload),
-  });
-  if (!rows[0]?.id) throw new Error("missing_inserted_operation_id");
-  return rows[0];
-}
-
-async function insertEvent(
-  operationId: string,
-  eventType: string,
-  metadata: JsonRecord,
-  source = "whatsapp",
-): Promise<void> {
-  await supabaseJson("/rest/v1/operation_events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
-    body: JSON.stringify({ operation_id: operationId, event_type: eventType, source, metadata }),
-  });
-}
-
-async function linkUploader(
-  operationId: string,
-  message: NormalizedMessage,
-): Promise<void> {
-  if (!message.senderPhone) return;
-  try {
-    await supabaseJson("/rest/v1/operation_user_links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({
-        operation_id: operationId,
-        user_id: null,
-        phone: message.senderPhone,
-        relation_type: "uploader",
-        source: "whatsapp",
-        metadata: {
-          sender_name: message.senderName,
-          whatsapp_message_id: message.messageId,
-          whatsapp_wa_id: message.senderWaId,
-        },
-      }),
-    });
-  } catch {
-    // Convenience link failure must not invalidate the operation.
-  }
-}
-
-async function sendTextMessage(to: string, body: string): Promise<Record<string, any>> {
-  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+async function sendTextMessage(
+  to: string,
+  body: string,
+): Promise<Record<string, any>> {
+  return await graphJson(`/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -604,56 +824,9 @@ async function sendTextMessage(to: string, body: string): Promise<Record<string,
   });
 }
 
-async function sendGuidanceButtons(params: {
-  to: string;
-  body: string;
-  operationId: string;
-  publicToken: string;
-  guidanceType: "unmatched" | "analysis_failed";
-}): Promise<Record<string, any>> {
-  const prefix = params.guidanceType === "unmatched" ? "unmatched" : "analysis_failed";
-  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to: params.to,
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: { text: params.body },
-        action: {
-          buttons: [
-            {
-              type: "reply",
-              reply: {
-                id: `sanad_show_operation:${params.publicToken}`,
-                title: "عرض العملية وQR",
-              },
-            },
-            {
-              type: "reply",
-              reply: {
-                id: `sanad_business_intro:${prefix}:${params.operationId}`,
-                title: "تشغيل سند للنشاط",
-              },
-            },
-          ],
-        },
-      },
-    }),
-  });
-}
-
-function isWithinServiceWindow(timestamp: string): boolean {
-  const seconds = Number(timestamp);
-  if (!Number.isFinite(seconds) || seconds <= 0) return true;
-  const ageMs = Date.now() - seconds * 1000;
-  return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
-}
-
-async function handleGuidanceAction(message: NormalizedMessage): Promise<boolean> {
+async function handleGuidanceAction(
+  message: NormalizedMessage,
+): Promise<boolean> {
   const actionId = message.interactiveId;
   if (!actionId || !message.senderPhone) return false;
 
@@ -679,136 +852,9 @@ async function handleGuidanceAction(message: NormalizedMessage): Promise<boolean
   return false;
 }
 
-async function guidanceDeliveryClaim(params: {
-  operationId: string;
-  guidanceType: "unmatched" | "analysis_failed";
-  recipientPhone: string;
-  metadata: JsonRecord;
-}): Promise<Record<string, any>> {
-  return await supabaseJson<Record<string, any>>(
-    "/rest/v1/rpc/claim_operation_sender_guidance",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        p_operation_id: params.operationId,
-        p_guidance_type: params.guidanceType,
-        p_recipient_phone: params.recipientPhone,
-        p_metadata: params.metadata,
-      }),
-    },
-  );
-}
-
-async function guidanceDeliveryComplete(params: {
-  deliveryId: string;
-  status: "sent" | "failed" | "skipped";
-  metaMessageId?: string | null;
-  error?: string | null;
-  metadata?: JsonRecord;
-}): Promise<void> {
-  await supabaseJson("/rest/v1/rpc/complete_operation_sender_guidance", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      p_delivery_id: params.deliveryId,
-      p_status: params.status,
-      p_meta_message_id: params.metaMessageId || null,
-      p_error: params.error || null,
-      p_metadata: params.metadata || {},
-    }),
-  });
-}
-
-async function sendPostAnalysisGuidance(params: {
-  operationId: string;
-  publicToken: string;
-  message: NormalizedMessage;
-}): Promise<void> {
-  if (!params.message.senderPhone) return;
-
-  const operations = await supabaseJson<Record<string, any>[]>(
-    `/rest/v1/operations?select=id,ai_status,ai_error,financial_entity_code,receiver_name,receiver_account_normalized,amount,currency&` +
-      `id=eq.${encodeURIComponent(params.operationId)}&limit=1`,
-    { method: "GET", headers: { Accept: "application/json" } },
-  );
-  const operation = operations[0];
-  if (!operation) return;
-
-  let guidanceType: "unmatched" | "analysis_failed" | null = null;
-  const aiStatus = String(operation.ai_status || "").toLowerCase();
-  if (["failed", "error"].includes(aiStatus)) {
-    guidanceType = "analysis_failed";
-  } else if (aiStatus === "completed") {
-    const inboxRows = await supabaseJson<Record<string, any>[]>(
-      `/rest/v1/business_payment_inbox?select=id,status&operation_id=eq.${encodeURIComponent(params.operationId)}&limit=1`,
-      { method: "GET", headers: { Accept: "application/json" } },
-    );
-    if (!inboxRows.length) guidanceType = "unmatched";
-  }
-  if (!guidanceType) return;
-
-  const claim = await guidanceDeliveryClaim({
-    operationId: params.operationId,
-    guidanceType,
-    recipientPhone: params.message.senderPhone,
-    metadata: {
-      function: FUNCTION_NAME,
-      whatsapp_message_id: params.message.messageId,
-      ai_status: operation.ai_status || null,
-    },
-  });
-  if (!claim?.claimed || !claim.delivery_id) return;
-  const deliveryId = String(claim.delivery_id);
-
-  if (!isWithinServiceWindow(params.message.timestamp)) {
-    await guidanceDeliveryComplete({
-      deliveryId,
-      status: "skipped",
-      metadata: { reason: "outside_24h_service_window" },
-    });
-    return;
-  }
-
-  const body = guidanceType === "unmatched"
-    ? "تم استلام إشعارك ومعالجته وإنشاء العملية بنجاح ✅\n\nلم نتمكن من ربطها تلقائيًا بنشاط تجاري، لأننا لم نجد حسابًا ماليًا مسجلًا ومطابقًا لبيانات المستفيد داخل سند.\n\nاعرض رمز QR على الكاشير أو صاحب النشاط لفتح العملية ومراجعتها. ويمكنك تعريف النشاط بسند حتى تصل إشعاراته القادمة مباشرة إلى وارد المدفوعات الخاص به."
-    : "تم استلام إشعارك وإنشاء العملية ✅\n\nلكن لم نتمكن من قراءة بيانات الإشعار بوضوح، لذلك لم نستطع ربطه تلقائيًا بنشاط تجاري.\n\nيمكنك فتح العملية وعرض رمز QR على الكاشير ليطّلع على الملف الأصلي ويتحقق منه.";
-
-  try {
-    const response = await sendGuidanceButtons({
-      to: params.message.senderPhone,
-      body,
-      operationId: params.operationId,
-      publicToken: params.publicToken,
-      guidanceType,
-    });
-    const metaMessageId = cleanText(response?.messages?.[0]?.id);
-    await guidanceDeliveryComplete({
-      deliveryId,
-      status: "sent",
-      metaMessageId,
-      metadata: { interactive: true, button_count: 2 },
-    });
-    await insertEvent(params.operationId, "whatsapp_sender_guidance_sent", {
-      guidance_type: guidanceType,
-      recipient_phone: params.message.senderPhone,
-      meta_message_id: metaMessageId,
-      interactive: true,
-    });
-  } catch (error) {
-    const errorText = truncate(error instanceof Error ? error.message : error);
-    await guidanceDeliveryComplete({
-      deliveryId,
-      status: "failed",
-      error: errorText,
-    });
-    throw error;
-  }
-}
-
 async function sendUnsupported(to: string): Promise<void> {
   if (!SEND_UNSUPPORTED_REPLY || !to) return;
-  await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
+  await graphJson(`/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -845,152 +891,146 @@ async function uploadQrToMeta(qr: Uint8Array): Promise<string> {
     "sanad-qr.png",
   );
   const response = await fetch(
-    `${GRAPH_BASE}/${META_WA_PHONE_NUMBER_ID}/media`,
+    `${GRAPH_BASE}/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/media`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${META_WA_ACCESS_TOKEN}` },
+      headers: {
+        Authorization: `Bearer ${mustGetEnv("META_WA_ACCESS_TOKEN")}`,
+      },
       body: form,
+      signal: AbortSignal.timeout(20_000),
     },
   );
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`meta_qr_upload_failed ${response.status}: ${truncate(text)}`);
+    throw new PipelineError(
+      "meta_qr_upload_failed",
+      `meta_qr_upload_failed ${response.status}: ${truncate(text)}`,
+      response.status === 408 || response.status === 429 ||
+        response.status >= 500,
+      response.status,
+    );
   }
   const mediaId = cleanText(JSON.parse(text)?.id);
-  if (!mediaId) throw new Error("meta_qr_upload_missing_media_id");
+  if (!mediaId) {
+    throw new PipelineError(
+      "meta_qr_upload_missing_media_id",
+      "Meta accepted the QR upload without returning a media ID",
+      true,
+    );
+  }
   return mediaId;
 }
 
-async function sendQr(to: string, mediaId: string, verificationUrl: string) {
-  return await graphJson(`/${META_WA_PHONE_NUMBER_ID}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "image",
-      image: {
-        id: mediaId,
-        caption:
-          `تم رفع الإشعار المالي إلى سند ✅\n\nيمكنك عرض رمز التحقق أو مشاركة الرابط:\n${verificationUrl}\n\nسيتم تحليل الإشعار ذكيًا خلال لحظات.`,
-      },
-    }),
-  });
-}
-
-async function triggerOnboarding(): Promise<void> {
-  if (!TRIGGER_ONBOARDING) return;
-  const response = await fetch(ONBOARDING_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
+async function sendQr(
+  to: string,
+  mediaId: string,
+  verificationUrl: string,
+): Promise<MetaMessageSendResponse> {
+  return await graphJson<MetaMessageSendResponse>(
+    `/${mustGetEnv("META_WA_PHONE_NUMBER_ID")}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "image",
+        image: {
+          id: mediaId,
+          caption:
+            `تم رفع الإشعار المالي إلى سند ✅\n\nيمكنك عرض رمز التحقق أو مشاركة الرابط:\n${verificationUrl}\n\nسيتم تحليل الإشعار ذكيًا خلال لحظات.`,
+        },
+      }),
     },
-    body: JSON.stringify({ limit: 1, source: FUNCTION_NAME }),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `onboarding_trigger_rejected ${response.status}: ${truncate(await response.text())}`,
-    );
-  }
-}
-
-async function triggerAnalysis(operationId: string, publicToken: string) {
-  if (!TRIGGER_ANALYSIS) return { skipped: true };
-  const response = await fetch(ANALYZE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-sanad-internal-key": SANAD_INTERNAL_API_KEY,
-    },
-    body: JSON.stringify({
-      operation_id: operationId,
-      public_token: publicToken,
-      source: "whatsapp",
-    }),
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`analysis_trigger_rejected ${response.status}: ${truncate(text)}`);
-  }
-  try {
-    return text ? JSON.parse(text) : { ok: true };
-  } catch {
-    return { ok: true };
-  }
+  );
 }
 
 async function runQrFlow(params: {
-  operationId: string;
-  runId: string;
+  claimToken: string;
   message: NormalizedMessage;
-  publicToken: string;
   verificationUrl: string;
+  spans: PendingSpan[];
+  webhookStartedAtMs: number;
+  intakeMetadata: JsonRecord;
 }): Promise<void> {
   const startedAtMs = Date.now();
   if (!SEND_QR_REPLY) {
-    await recordSpan({
-      operationId: params.operationId,
-      runId: params.runId,
-      pipeline: "whatsapp_intake",
-      stage: "qr_delivery",
-      status: "skipped",
-      startedAtMs,
-      metadata: { reason: "SEND_QR_REPLY=false" },
+    const completedAtMs = Date.now();
+    await completeIntake({
+      messageId: params.message.messageId,
+      claimToken: params.claimToken,
+      deliveryStatus: "skipped",
+      qrMetadata: { reason: "SEND_QR_REPLY=false" },
+      spans: [
+        ...params.spans,
+        pendingSpan({
+          stage: "qr_delivery",
+          status: "skipped",
+          startedAtMs,
+          completedAtMs,
+          metadata: { reason: "SEND_QR_REPLY=false" },
+        }),
+        pendingSpan({
+          stage: "intake_total",
+          status: "success",
+          startedAtMs: params.webhookStartedAtMs,
+          completedAtMs,
+          metadata: params.intakeMetadata,
+        }),
+      ],
     });
     return;
   }
-  try {
-    const qr = await generateQr(params.verificationUrl);
-    const mediaId = await uploadQrToMeta(qr);
-    const sendResponse = await sendQr(
-      params.message.senderPhone || "",
-      mediaId,
-      params.verificationUrl,
-    );
-    await insertEvent(params.operationId, "qr_created", {
-      action: "qr_sent_to_sender",
-      generator: "internal:qrcode@1.5.4",
-      verification_url: params.verificationUrl,
-      whatsapp_send_response: sendResponse,
-    });
-    try {
-      await triggerOnboarding();
-    } catch (error) {
-      console.error(JSON.stringify({
-        function: FUNCTION_NAME,
-        event: "whatsapp_onboarding_trigger_failed",
-        error: truncate(error instanceof Error ? error.message : error),
-      }));
-    }
-    await recordSpan({
-      operationId: params.operationId,
-      runId: params.runId,
-      pipeline: "whatsapp_intake",
-      stage: "qr_delivery",
-      status: "success",
-      startedAtMs,
-      metadata: { generator: "internal:qrcode@1.5.4" },
-    });
-  } catch (error) {
-    const message = truncate(error instanceof Error ? error.message : error);
-    await insertEvent(params.operationId, "qr_created", {
-      action: "qr_send_failed",
-      generator: "internal:qrcode@1.5.4",
-      error: message,
-      verification_url: params.verificationUrl,
-    });
-    await recordSpan({
-      operationId: params.operationId,
-      runId: params.runId,
-      pipeline: "whatsapp_intake",
-      stage: "qr_delivery",
-      status: "error",
-      startedAtMs,
-      metadata: { error: message },
-    });
-  }
+
+  const qr = await generateQr(params.verificationUrl);
+  const mediaId = await uploadQrToMeta(qr);
+  const sendResponse = await sendQr(
+    params.message.senderPhone || "",
+    mediaId,
+    params.verificationUrl,
+  );
+  const externalMessageId = cleanText(sendResponse?.messages?.[0]?.id);
+  const completedAtMs = Date.now();
+  const qrMetadata = {
+    action: "qr_sent_to_sender",
+    generator: "internal:qrcode@1.5.4",
+    verification_url: params.verificationUrl,
+    meta_media_id: mediaId,
+    meta_message_id: externalMessageId,
+  };
+
+  // One durable checkpoint records Meta acceptance, the QR event, and all
+  // successful-path spans. Database-side exception isolation keeps optional
+  // telemetry from turning an accepted QR delivery into a retry.
+  await completeIntake({
+    messageId: params.message.messageId,
+    claimToken: params.claimToken,
+    deliveryStatus: "sent",
+    externalMessageId,
+    qrMetadata,
+    spans: [
+      ...params.spans,
+      pendingSpan({
+        stage: "qr_delivery",
+        status: "success",
+        startedAtMs,
+        completedAtMs,
+        metadata: {
+          generator: "internal:qrcode@1.5.4",
+          meta_message_id: externalMessageId,
+        },
+      }),
+      pendingSpan({
+        stage: "intake_total",
+        status: "success",
+        startedAtMs: params.webhookStartedAtMs,
+        completedAtMs,
+        metadata: params.intakeMetadata,
+      }),
+    ],
+  });
 }
 
 function operationPayload(params: {
@@ -1053,219 +1093,347 @@ async function processMessage(
   message: NormalizedMessage,
   webhookStartedAtMs: number,
   signature: SignatureResult,
-): Promise<void> {
-  if (!message.senderPhone) return;
+  existingClaim?: IntakeClaim,
+): Promise<{ status: number; retryAfterSeconds?: number }> {
+  if (!message.senderPhone) return { status: 200 };
 
   const supportedMedia = Boolean(
     message.mediaId &&
       ["image", "document"].includes(message.messageType) &&
       ALLOWED_MIME_TYPES.has(message.mimeType),
   );
-  const supportedAssistant =
-    message.messageType === "text" ||
+  const supportedAssistant = message.messageType === "text" ||
     message.messageType === "interactive" ||
     message.messageType === "button" ||
     (message.messageType === "audio" && Boolean(message.mediaId));
-  await registerInbound(message, supportedMedia || supportedAssistant);
-
-  if (await handleGuidanceAction(message)) return;
-
-  if (supportedAssistant) {
-    await triggerAssistant(message);
-    return;
-  }
   if (!supportedMedia) {
-    await sendUnsupported(message.senderPhone);
-    return;
-  }
-  if (await findExisting(message.messageId)) return;
-
-  const runId = crypto.randomUUID();
-  const mediaStartedAtMs = Date.now();
-  const mediaInfo = await fetchMediaInfo(message.mediaId);
-  const mediaUrl = cleanText(mediaInfo.url);
-  if (!mediaUrl) throw new Error("missing_meta_media_url");
-  const downloaded = await downloadMedia(mediaUrl);
-  const mimeType = cleanText(mediaInfo.mime_type) ||
-    cleanText(downloaded.contentType) || message.mimeType;
-  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-    await sendUnsupported(message.senderPhone);
-    return;
-  }
-
-  const extension = extensionFromMime(mimeType);
-  const fileName = cleanText(message.fileName) ||
-    `whatsapp-${Date.now()}.${extension}`;
-  const storagePath = [
-    "whatsapp",
-    message.senderPhone,
-    `${Date.now()}-${sanitizePathPart(message.messageId, crypto.randomUUID())}.${extension}`,
-  ].join("/");
-  const publicToken = crypto.randomUUID();
-  const verificationUrl = `${PUBLIC_APP_BASE_URL}/v/${publicToken}`;
-  const fileSize = Number(mediaInfo.file_size) > 0
-    ? Number(mediaInfo.file_size)
-    : downloaded.bytes.byteLength || null;
-  const fileSha256 = cleanText(mediaInfo.sha256);
-
-  const storageStartedAtMs = Date.now();
-  await uploadStorage(storagePath, downloaded.bytes, mimeType);
-  const createStartedAtMs = Date.now();
-  const operation = await insertOperation(operationPayload({
-    message,
-    mediaInfo,
-    storagePath,
-    mimeType,
-    fileName,
-    fileSize,
-    fileSha256,
-    publicToken,
-    signatureMode: signature.mode,
-    runId,
-  }));
-
-  await Promise.allSettled([
-    recordSpan({
-      operationId: operation.id,
-      runId,
-      pipeline: "whatsapp_intake",
-      stage: "media_lookup_download",
-      status: "success",
-      startedAtMs: mediaStartedAtMs,
-      metadata: { bytes: downloaded.bytes.byteLength, mime_type: mimeType },
-    }),
-    recordSpan({
-      operationId: operation.id,
-      runId,
-      pipeline: "whatsapp_intake",
-      stage: "storage_upload",
-      status: "success",
-      startedAtMs: storageStartedAtMs,
-      metadata: { bucket: STORAGE_BUCKET },
-    }),
-    recordSpan({
-      operationId: operation.id,
-      runId,
-      pipeline: "whatsapp_intake",
-      stage: "operation_create",
-      status: "success",
-      startedAtMs: createStartedAtMs,
-      metadata: { signature_mode: signature.mode },
-    }),
-  ]);
-
-  const setupStartedAtMs = Date.now();
-  await Promise.allSettled([
-    linkUploader(operation.id, message),
-    insertEvent(operation.id, "file_uploaded", {
-      source: "whatsapp",
-      upload_origin: "whatsapp",
-      message_id: message.messageId,
-      media_id: message.mediaId,
-      file_bucket: STORAGE_BUCKET,
-      file_path: storagePath,
-      file_mime_type: mimeType,
-      file_original_name: fileName,
-      attachment_type: attachmentType(mimeType, message.messageType),
-      pipeline_run_id: runId,
-      signature_mode: signature.mode,
-    }),
-  ]);
-  await recordSpan({
-    operationId: operation.id,
-    runId,
-    pipeline: "whatsapp_intake",
-    stage: "post_create_setup",
-    status: "success",
-    startedAtMs: setupStartedAtMs,
-  });
-
-  const analysisStartedAtMs = Date.now();
-  const analysisPromise = (async () => {
-    try {
-      const result = await triggerAnalysis(operation.id, publicToken);
-      await recordSpan({
-        operationId: operation.id,
-        runId,
-        pipeline: "whatsapp_intake",
-        stage: "analysis_execution",
-        status: result?.skipped ? "skipped" : "success",
-        startedAtMs: analysisStartedAtMs,
-        metadata: { analyzer_status: result?.ai_status || null },
-      });
-    } catch (error) {
-      const errorText = truncate(error instanceof Error ? error.message : error);
-      await recordSpan({
-        operationId: operation.id,
-        runId,
-        pipeline: "whatsapp_intake",
-        stage: "analysis_execution",
-        status: "error",
-        startedAtMs: analysisStartedAtMs,
-        metadata: { error: errorText },
-      });
-      throw error;
+    await registerInbound(message, supportedAssistant);
+    if (await handleGuidanceAction(message)) return { status: 200 };
+    if (supportedAssistant) {
+      await triggerAssistant(message);
+      return { status: 200 };
     }
-  })();
-
-  const qrPromise = runQrFlow({
-    operationId: operation.id,
-    runId,
-    message,
-    publicToken,
-    verificationUrl,
-  });
-
-  const results = await Promise.allSettled([analysisPromise, qrPromise]);
-  try {
-    await sendPostAnalysisGuidance({
-      operationId: operation.id,
-      publicToken,
-      message,
-    });
-  } catch (error) {
-    console.error(JSON.stringify({
-      function: FUNCTION_NAME,
-      event: "post_analysis_guidance_failed",
-      operation_id: operation.id,
-      error: truncate(error instanceof Error ? error.message : error),
-    }));
+    await sendUnsupported(message.senderPhone);
+    return { status: 200 };
   }
-  await recordSpan({
-    operationId: operation.id,
-    runId,
-    pipeline: "whatsapp_intake",
-    stage: "intake_total",
-    status: results[0].status === "rejected" ? "error" : "success",
-    startedAtMs: webhookStartedAtMs,
-    metadata: {
-      signature_mode: signature.mode,
-      analysis_result: results[0].status,
-      qr_result: results[1].status,
-      parallelized: true,
-    },
-  });
+
+  // The operations trigger is the single source for WhatsApp contact capture
+  // and onboarding dispatch. Claiming first prevents duplicate media webhooks
+  // from repeating any ancillary database work before idempotency is known.
+  const requestedRunId = crypto.randomUUID();
+  const claim = existingClaim ||
+    await claimIntake(message, requestedRunId, signature.mode);
+  if (!claim.claimed) {
+    if (claim.reason === "retry_not_due") {
+      return {
+        status: 503,
+        retryAfterSeconds: Math.max(1, Number(claim.retry_after_seconds) || 1),
+      };
+    }
+    return { status: 200 };
+  }
+
+  const claimToken = cleanText(claim.claim_token);
+  const runId = cleanText(claim.pipeline_run_id) || requestedRunId;
+  if (!claimToken) {
+    throw new PipelineError(
+      "missing_intake_claim_token",
+      "The intake claim did not return a claim token",
+      true,
+    );
+  }
+
+  let operationId = cleanText(claim.operation_id);
+  try {
+    let mediaInfo = (claim.media_metadata || {}) as Record<string, any>;
+    let storagePath = cleanText(claim.storage_path);
+    let mimeType = cleanText(claim.storage_mime_type);
+    let fileName = cleanText(claim.file_original_name);
+    let fileSize = Number(claim.file_size) > 0 ? Number(claim.file_size) : null;
+    let fileSha256 = cleanText(claim.file_sha256);
+    let mediaStartedAtMs: number | null = null;
+    let mediaCompletedAtMs: number | null = null;
+    let storageStartedAtMs: number | null = null;
+    let storageCompletedAtMs: number | null = null;
+    let downloadedByteLength = 0;
+    let storageUploadResult: "uploaded" | "already_exists" | "resumed" =
+      "resumed";
+
+    if (!storagePath) {
+      mediaStartedAtMs = Date.now();
+      mediaInfo = await fetchMediaInfo(message.mediaId);
+      const mediaUrl = cleanText(mediaInfo.url);
+      if (!mediaUrl) {
+        throw new PipelineError(
+          "missing_meta_media_url",
+          "Meta media lookup did not return a download URL",
+          true,
+        );
+      }
+      const downloaded = await downloadMedia(mediaUrl);
+      downloadedByteLength = downloaded.bytes.byteLength;
+      mediaCompletedAtMs = Date.now();
+      mimeType = (
+        cleanText(mediaInfo.mime_type) ||
+        cleanText(downloaded.contentType) ||
+        message.mimeType
+      ).split(";", 1)[0].trim().toLowerCase();
+      if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+        try {
+          await sendUnsupported(message.senderPhone);
+        } catch {
+          // The durable failure state below is the correctness boundary.
+        }
+        throw new PipelineError(
+          "unsupported_meta_media_type",
+          `Unsupported media type returned by Meta: ${mimeType}`,
+          false,
+          415,
+        );
+      }
+
+      const extension = extensionFromMime(mimeType);
+      fileName = cleanText(message.fileName) ||
+        `whatsapp-${
+          sanitizePathPart(message.messageId, "document")
+        }.${extension}`;
+      storagePath = deterministicStoragePath(
+        message.senderPhone,
+        message.messageId,
+        mimeType,
+      );
+      fileSize = Number(mediaInfo.file_size) > 0
+        ? Number(mediaInfo.file_size)
+        : downloaded.bytes.byteLength || null;
+      fileSha256 = cleanText(mediaInfo.sha256);
+
+      storageStartedAtMs = Date.now();
+      storageUploadResult = await uploadStorage(
+        storagePath,
+        downloaded.bytes,
+        mimeType,
+      );
+      storageCompletedAtMs = Date.now();
+      await recordIntakeStorage({
+        messageId: message.messageId,
+        claimToken,
+        storagePath,
+        mimeType,
+        fileName,
+        fileSize,
+        fileSha256,
+        mediaMetadata: {
+          ...mediaInfo,
+          downloaded_content_type: cleanText(downloaded.contentType),
+          downloaded_byte_length: downloaded.bytes.byteLength,
+        },
+      });
+    }
+
+    if (!storagePath || !mimeType || !fileName) {
+      throw new PipelineError(
+        "incomplete_storage_checkpoint",
+        "The intake storage checkpoint is incomplete",
+        false,
+      );
+    }
+
+    const createStartedAtMs = Date.now();
+    let publicToken = cleanText(claim.public_token) || crypto.randomUUID();
+    let finalized: FinalizedOperation;
+    if (operationId && claim.public_token) {
+      finalized = {
+        ok: true,
+        idempotent: true,
+        operation_id: operationId,
+        public_token: claim.public_token,
+        pipeline_run_id: runId,
+      };
+    } else {
+      finalized = await finalizeIntake(
+        message.messageId,
+        claimToken,
+        operationPayload({
+          message,
+          mediaInfo,
+          storagePath,
+          mimeType,
+          fileName,
+          fileSize,
+          fileSha256,
+          publicToken,
+          signatureMode: signature.mode,
+          runId,
+        }),
+      );
+    }
+    const createCompletedAtMs = Date.now();
+    operationId = finalized.operation_id;
+    publicToken = finalized.public_token;
+    if (!operationId || !publicToken) {
+      throw new PipelineError(
+        "incomplete_operation_checkpoint",
+        "The intake finalization did not return an operation and public token",
+        false,
+      );
+    }
+
+    const successSpans: PendingSpan[] = [
+      pendingSpan({
+        stage: "media_lookup_download",
+        status: mediaStartedAtMs === null ? "skipped" : "success",
+        startedAtMs: mediaStartedAtMs ?? createStartedAtMs,
+        completedAtMs: mediaCompletedAtMs ??
+          mediaStartedAtMs ?? createStartedAtMs,
+        metadata: {
+          bytes: downloadedByteLength,
+          mime_type: mimeType,
+          resumed: mediaStartedAtMs === null,
+        },
+      }),
+      pendingSpan({
+        stage: "storage_upload",
+        status: storageStartedAtMs === null ? "skipped" : "success",
+        startedAtMs: storageStartedAtMs ?? createStartedAtMs,
+        completedAtMs: storageCompletedAtMs ??
+          storageStartedAtMs ?? createStartedAtMs,
+        metadata: {
+          bucket: claim.storage_bucket || STORAGE_BUCKET,
+          upload_result: storageUploadResult,
+          resumed: storageStartedAtMs === null,
+        },
+      }),
+      pendingSpan({
+        stage: "operation_create",
+        status: finalized.idempotent ? "skipped" : "success",
+        startedAtMs: createStartedAtMs,
+        completedAtMs: createCompletedAtMs,
+        metadata: {
+          signature_mode: signature.mode,
+          idempotent: finalized.idempotent,
+          analysis_job_id: finalized.analysis_job_id || null,
+          preview_job_id: finalized.preview_job_id || null,
+        },
+      }),
+    ];
+
+    const verificationUrl = `${PUBLIC_APP_BASE_URL}/v/${publicToken}`;
+    await runQrFlow({
+      claimToken,
+      message,
+      verificationUrl,
+      spans: successSpans,
+      webhookStartedAtMs,
+      intakeMetadata: {
+        signature_mode: signature.mode,
+        analysis_execution: "durable_queue",
+        attempt_count: claim.attempt_count || 1,
+      },
+    });
+    return { status: 200 };
+  } catch (error) {
+    const pipelineError = asPipelineError(error, "whatsapp_intake_failed");
+    try {
+      const failureStatus = await failIntake({
+        messageId: message.messageId,
+        claimToken,
+        error: pipelineError,
+      });
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        event: "whatsapp_intake_attempt_failed",
+        message_id: message.messageId,
+        operation_id: operationId,
+        pipeline_run_id: runId,
+        retryable: pipelineError.retryable,
+        failure_status: failureStatus,
+        error_code: pipelineError.code,
+        error: truncate(pipelineError.message),
+      }));
+    } catch (checkpointError) {
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        event: "whatsapp_intake_failure_checkpoint_failed",
+        message_id: message.messageId,
+        pipeline_run_id: runId,
+        error: truncate(
+          checkpointError instanceof Error
+            ? checkpointError.message
+            : checkpointError,
+        ),
+      }));
+    }
+    throw pipelineError;
+  }
 }
 
 async function processWebhook(
   body: unknown,
   webhookStartedAtMs: number,
   signature: SignatureResult,
-): Promise<void> {
+): Promise<{ status: number; retryAfterSeconds?: number }> {
   const normalized = normalizeWebhook(body);
   if (!normalized.hasMessage) {
     if (normalized.isStatusEvent) {
       await processDeliveryStatuses(normalized.statuses);
     }
-    return;
+    return { status: 200 };
   }
-  await processMessage(normalized, webhookStartedAtMs, signature);
+  return await processMessage(normalized, webhookStartedAtMs, signature);
+}
+
+async function processRecovery(
+  workerToken: string,
+  startedAtMs: number,
+): Promise<{ status: number; retryAfterSeconds?: number }> {
+  const claim = await claimNextIntake(workerToken);
+  if (!claim.claimed) return { status: 200 };
+
+  const messageId = cleanText(claim.source_message_id);
+  const claimToken = cleanText(claim.claim_token);
+  if (!messageId || !claimToken) {
+    throw new PipelineError(
+      "invalid_recovery_claim",
+      "The intake recovery claim is missing its message or claim token",
+      false,
+    );
+  }
+
+  const normalized = normalizeWebhook(claim.webhook_envelope || {});
+  if (
+    !normalized.hasMessage ||
+    normalized.messageId !== messageId ||
+    !normalized.senderPhone ||
+    !normalized.mediaId
+  ) {
+    const invalidClaim = new PipelineError(
+      "invalid_recovery_webhook",
+      "The durable intake webhook cannot be normalized for recovery",
+      false,
+    );
+    try {
+      await failIntake({ messageId, claimToken, error: invalidClaim });
+    } catch {
+      // The original recovery error remains the primary signal.
+    }
+    throw invalidClaim;
+  }
+
+  const signature: SignatureResult = {
+    ok: true,
+    mode: normalizeSignatureMode(claim.signature_mode),
+  };
+  try {
+    return await processMessage(normalized, startedAtMs, signature, claim);
+  } finally {
+    await requestIntakeDrain();
+  }
 }
 
 function verifyChallenge(url: URL): Response {
-  const valid =
-    url.searchParams.get("hub.mode") === "subscribe" &&
-    url.searchParams.get("hub.verify_token") === META_VERIFY_TOKEN &&
+  const valid = url.searchParams.get("hub.mode") === "subscribe" &&
+    url.searchParams.get("hub.verify_token") ===
+      mustGetEnv("META_VERIFY_TOKEN") &&
     Boolean(url.searchParams.get("hub.challenge"));
   return valid
     ? textResponse(url.searchParams.get("hub.challenge") || "", 200)
@@ -1282,6 +1450,40 @@ Deno.serve(async (req: Request) => {
   }
 
   const webhookStartedAtMs = Date.now();
+  const workerToken = cleanText(req.headers.get("x-sanad-worker-token"));
+  if (workerToken) {
+    try {
+      const outcome = await processRecovery(workerToken, webhookStartedAtMs);
+      return textResponse(
+        outcome.status === 200 ? "RECOVERY_PROCESSED" : "RECOVERY_RETRY_LATER",
+        outcome.status,
+        outcome.retryAfterSeconds
+          ? { "Retry-After": String(outcome.retryAfterSeconds) }
+          : {},
+      );
+    } catch (error) {
+      const pipelineError = asPipelineError(error, "intake_recovery_failed");
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        event: "intake_recovery_failed",
+        error_code: pipelineError.code,
+        retryable: pipelineError.retryable,
+        error: truncate(pipelineError.message),
+      }));
+      if (
+        pipelineError.code === "supabase_request_failed" &&
+        pipelineError.httpStatus === 403
+      ) {
+        return jsonResponse({ ok: false, error: "invalid_worker_token" }, 403);
+      }
+      return textResponse(
+        pipelineError.retryable ? "RECOVERY_RETRY_LATER" : "RECOVERY_REJECTED",
+        pipelineError.retryable ? 503 : 200,
+        pipelineError.retryable ? { "Retry-After": "5" } : {},
+      );
+    }
+  }
+
   const rawBody = new Uint8Array(await req.arrayBuffer());
   const signature = await verifyMetaSignature(
     rawBody,
@@ -1313,14 +1515,28 @@ Deno.serve(async (req: Request) => {
     return textResponse("EVENT_RECEIVED", 200);
   }
 
-  const task = processWebhook(body, webhookStartedAtMs, signature).catch((error) => {
+  try {
+    const outcome = await processWebhook(body, webhookStartedAtMs, signature);
+    return textResponse(
+      outcome.status === 200 ? "EVENT_RECEIVED" : "EVENT_RETRY_LATER",
+      outcome.status,
+      outcome.retryAfterSeconds
+        ? { "Retry-After": String(outcome.retryAfterSeconds) }
+        : {},
+    );
+  } catch (error) {
+    const pipelineError = asPipelineError(error, "webhook_processing_failed");
     console.error(JSON.stringify({
       function: FUNCTION_NAME,
-      error: truncate(error instanceof Error ? error.message : error),
+      event: "webhook_processing_failed",
+      error_code: pipelineError.code,
+      retryable: pipelineError.retryable,
+      error: truncate(pipelineError.message),
     }));
-  });
-  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
-    EdgeRuntime.waitUntil(task);
+    return textResponse(
+      pipelineError.retryable ? "EVENT_RETRY_LATER" : "EVENT_RECEIVED",
+      pipelineError.retryable ? 503 : 200,
+      pipelineError.retryable ? { "Retry-After": "5" } : {},
+    );
   }
-  return textResponse("EVENT_RECEIVED", 200);
 });

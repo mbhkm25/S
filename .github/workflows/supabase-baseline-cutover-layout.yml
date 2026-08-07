@@ -37,4 +37,5 @@ jobs:
           set -euo pipefail
           test -d supabase/migrations_archive/pre_canonical_20260806
           test -f supabase/migrations/20260806150947_canonical_schema_baseline.sql
-          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')" = "1"
+          first_migration="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort | head -n 1)"
+          test "$first_migration" = "20260806150947_canonical_schema_baseline.sql"

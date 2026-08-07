@@ -11,9 +11,9 @@ type AnalysisJob = {
 
 const SUPABASE_URL = mustEnv("SUPABASE_URL");
 const SERVICE_ROLE_KEY = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
-const INTERNAL_KEY = mustEnv("SANAD_INTERNAL_API_KEY");
 const WORKER_NAME = "operation_analysis";
-const ANALYZER_URL = `${SUPABASE_URL}/functions/v1/sanad-operation-analysis-primary`;
+const ANALYZER_URL =
+  `${SUPABASE_URL}/functions/v1/sanad-operation-analysis-primary`;
 const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -27,7 +27,10 @@ function mustEnv(name: string): string {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
   });
 }
 
@@ -73,11 +76,15 @@ async function markFailed(
 async function processJob(job: AnalysisJob, workerId: string) {
   const started = Date.now();
   try {
+    // Resolve the analyzer credential only after a job has been authenticated
+    // and claimed. A missing deployment secret must not crash the worker before
+    // it can reject unauthenticated traffic or expose its health contract.
+    const internalKey = mustEnv("SANAD_INTERNAL_API_KEY");
     const response = await fetch(ANALYZER_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-sanad-internal-key": INTERNAL_KEY,
+        "x-sanad-internal-key": internalKey,
       },
       body: JSON.stringify({
         operation_id: job.operation_id,
@@ -105,7 +112,13 @@ async function processJob(job: AnalysisJob, workerId: string) {
         raw || `Analyzer returned HTTP ${response.status}`,
         response.status,
       );
-      return { job_id: job.job_id, operation_id: job.operation_id, ok: false, state, status: response.status };
+      return {
+        job_id: job.job_id,
+        operation_id: job.operation_id,
+        ok: false,
+        state,
+        status: response.status,
+      };
     }
 
     const { data: operation, error: operationError } = await sb
@@ -113,7 +126,9 @@ async function processJob(job: AnalysisJob, workerId: string) {
       .select("ai_status,analysis_completed_at,ai_error,raw_ai_json")
       .eq("id", job.operation_id)
       .maybeSingle();
-    if (operationError) throw new Error(`operation_status:${operationError.message}`);
+    if (operationError) {
+      throw new Error(`operation_status:${operationError.message}`);
+    }
 
     if (operation?.ai_status !== "completed") {
       const state = await markFailed(
@@ -121,27 +136,47 @@ async function processJob(job: AnalysisJob, workerId: string) {
         workerId,
         true,
         "analysis_not_completed",
-        String(operation?.ai_error || `Analyzer returned successfully but ai_status=${operation?.ai_status ?? "missing"}`),
+        String(
+          operation?.ai_error ||
+            `Analyzer returned successfully but ai_status=${
+              operation?.ai_status ?? "missing"
+            }`,
+        ),
         202,
       );
-      return { job_id: job.job_id, operation_id: job.operation_id, ok: false, state, status: 202 };
+      return {
+        job_id: job.job_id,
+        operation_id: job.operation_id,
+        ok: false,
+        state,
+        status: 202,
+      };
     }
 
-    const engine = (operation?.raw_ai_json as Record<string, unknown> | null)?.engine ?? "unknown";
-    const fallbackUsed = (operation?.raw_ai_json as Record<string, unknown> | null)?.fallback_used === true;
-    const { data: completed, error: completeError } = await sb.rpc("complete_operation_analysis_job", {
-      p_job_id: job.job_id,
-      p_worker_id: workerId,
-      p_result_metadata: {
-        duration_ms: Date.now() - started,
-        analyzer_status: response.status,
-        analysis_completed_at: operation.analysis_completed_at,
-        source: job.source,
-        engine,
-        fallback_used: fallbackUsed,
+    const engine =
+      (operation?.raw_ai_json as Record<string, unknown> | null)?.engine ??
+        "unknown";
+    const fallbackUsed =
+      (operation?.raw_ai_json as Record<string, unknown> | null)
+        ?.fallback_used === true;
+    const { data: completed, error: completeError } = await sb.rpc(
+      "complete_operation_analysis_job",
+      {
+        p_job_id: job.job_id,
+        p_worker_id: workerId,
+        p_result_metadata: {
+          duration_ms: Date.now() - started,
+          analyzer_status: response.status,
+          analysis_completed_at: operation.analysis_completed_at,
+          source: job.source,
+          engine,
+          fallback_used: fallbackUsed,
+        },
       },
-    });
-    if (completeError) throw new Error(`complete_job_rpc:${completeError.message}`);
+    );
+    if (completeError) {
+      throw new Error(`complete_job_rpc:${completeError.message}`);
+    }
     return {
       job_id: job.job_id,
       operation_id: job.operation_id,
@@ -154,21 +189,50 @@ async function processJob(job: AnalysisJob, workerId: string) {
     };
   } catch (error) {
     const message = safeMessage(error);
-    const retryable = error instanceof DOMException || /timeout|network|fetch|connection/i.test(message);
+    const configurationMissing = /^missing_env_/.test(message);
+    const retryable = configurationMissing || error instanceof DOMException ||
+      /timeout|network|fetch|connection/i.test(message);
     const state = await markFailed(
       job,
       workerId,
       retryable,
-      retryable ? "worker_transient_error" : "worker_error",
+      configurationMissing
+        ? "worker_configuration_missing"
+        : retryable
+        ? "worker_transient_error"
+        : "worker_error",
       message,
     );
-    return { job_id: job.job_id, operation_id: job.operation_id, ok: false, state, error: message };
+    return {
+      job_id: job.job_id,
+      operation_id: job.operation_id,
+      ok: false,
+      state,
+      error: message,
+    };
+  }
+}
+
+async function requestDrain(): Promise<void> {
+  const { error } = await sb.rpc("request_operation_analysis_dispatch", {
+    p_reason: "worker_drain",
+  });
+  if (error) {
+    console.error(JSON.stringify({
+      function: "sanad-operation-analysis-worker",
+      event: "analysis_drain_dispatch_failed",
+      error: error.message.slice(0, 1000),
+    }));
   }
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-  if (!(await validateToken(req))) return json({ ok: false, error: "unauthorized_worker" }, 401);
+  if (req.method !== "POST") {
+    return json({ ok: false, error: "method_not_allowed" }, 405);
+  }
+  if (!(await validateToken(req))) {
+    return json({ ok: false, error: "unauthorized_worker" }, 401);
+  }
 
   const body = await req.json().catch(() => ({}));
   const limit = Math.max(1, Math.min(Number(body?.limit ?? 5) || 5, 5));
@@ -179,14 +243,27 @@ Deno.serve(async (req: Request) => {
     p_limit: limit,
     p_lease_seconds: 150,
   });
-  if (error) return json({ ok: false, error: "claim_failed", details: error.message }, 500);
+  if (error) {
+    return json(
+      { ok: false, error: "claim_failed", details: error.message },
+      500,
+    );
+  }
 
   const jobs = (Array.isArray(data) ? data : []) as AnalysisJob[];
-  if (jobs.length === 0) return json({ ok: true, claimed: 0, completed: 0, results: [] });
+  if (jobs.length === 0) {
+    return json({ ok: true, claimed: 0, completed: 0, results: [] });
+  }
 
-  const results = await Promise.all(jobs.map((job) => processJob(job, workerId)));
+  const results = await Promise.all(
+    jobs.map((job) => processJob(job, workerId)),
+  );
+  await requestDrain();
   return json({
-    ok: results.every((item) => item.ok || ["retry_scheduled", "failed", "dead_letter"].includes(String(item.state))),
+    ok: results.every((item) =>
+      item.ok ||
+      ["retry_scheduled", "failed", "dead_letter"].includes(String(item.state))
+    ),
     claimed: jobs.length,
     completed: results.filter((item) => item.ok).length,
     results,

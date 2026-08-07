@@ -1,4 +1,4 @@
-name: Deploy hardened operation analyzer
+name: Validate legacy fallback analyzer
 
 on:
   pull_request:
@@ -13,11 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
 
@@ -44,21 +41,3 @@ jobs:
           deno check --config supabase/functions/deno.json supabase/functions/sanad-v3-analyze-operation/index.ts
           deno test supabase/functions/sanad-v3-analyze-operation/identifier-contract.test.ts
           npx tsc --noEmit
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Validate deployment credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${SUPABASE_ACCESS_TOKEN:-}"
-
-      - name: Deploy analyzer preserving custom authentication
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase functions deploy sanad-v3-analyze-operation \
-            --project-ref "$SUPABASE_PROJECT_REF" \
-            --no-verify-jwt

@@ -23,10 +23,31 @@ function requireText(source, needle, label) {
   }
 }
 
+function migrationVersion(filename) {
+  const match = filename.match(/^(\d{14})_.+\.sql$/);
+  if (!match) {
+    throw new Error(`Invalid active migration filename: ${filename}`);
+  }
+  return match[1];
+}
+
 async function main() {
   const migrationFiles = (await readdir(MIGRATIONS_DIR)).filter((name) => name.endsWith('.sql')).sort();
-  if (migrationFiles.length !== 1 || migrationFiles[0] !== ACTIVE_NAME) {
-    throw new Error(`Expected only ${ACTIVE_NAME} in active migrations, found ${migrationFiles.join(', ')}`);
+  if (migrationFiles.length === 0 || migrationFiles[0] !== ACTIVE_NAME) {
+    throw new Error(`Expected ${ACTIVE_NAME} to be the first active migration, found ${migrationFiles.join(', ')}`);
+  }
+
+  const seenVersions = new Set();
+  for (const filename of migrationFiles) {
+    const version = migrationVersion(filename);
+    if (seenVersions.has(version)) {
+      throw new Error(`Duplicate active migration version: ${version}`);
+    }
+    seenVersions.add(version);
+
+    if (filename !== ACTIVE_NAME && version <= VERSION) {
+      throw new Error(`Post-baseline migration must be newer than ${VERSION}: ${filename}`);
+    }
   }
 
   const active = await readFile(path.join(MIGRATIONS_DIR, ACTIVE_NAME), 'utf8');
@@ -47,6 +68,9 @@ async function main() {
   process.stdout.write(JSON.stringify({
     ok: true,
     active_migrations: migrationFiles.length,
+    post_baseline_migrations: migrationFiles.length - 1,
+    first_active_migration: migrationFiles[0],
+    last_active_migration: migrationFiles[migrationFiles.length - 1],
     archived_migrations: archiveFiles.length,
     canonical_payload_bytes: EXPECTED_PAYLOAD_BYTES,
     canonical_payload_sha256: EXPECTED_PAYLOAD_SHA256,

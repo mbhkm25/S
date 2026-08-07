@@ -9,6 +9,8 @@ export interface TransactionalMessageRule {
   template_language: string;
   parameter_keys: string[];
   max_attempts: number;
+  delivery_kind: 'template' | 'text';
+  body_template: string | null;
   updated_at: string;
 }
 
@@ -30,7 +32,7 @@ export interface TransactionalMessageItem {
 
 export interface TransactionalMessagingOverview {
   rules: TransactionalMessageRule[];
-  stats: { pending: number; processing: number; sent: number; failed: number };
+  stats: { queued: number; processing: number; completed: number; failed: number; delivered: number };
   messages: TransactionalMessageItem[];
 }
 

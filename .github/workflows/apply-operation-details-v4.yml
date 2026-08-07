@@ -8,17 +8,15 @@ on:
       - '.github/workflows/apply-operation-details-v4.yml'
       - 'src/features/operations/OperationDetailsRuntimeV2.tsx'
       - 'supabase/functions/sanad-operation-preview-worker/**'
+      - 'supabase/functions/sanad-operation-preview-access/**'
       - 'supabase/migrations/**operation_details_action_source**'
 
 permissions:
   contents: read
 
 jobs:
-  validate-and-deploy-preview:
+  validate:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - uses: actions/checkout@v4
 
@@ -44,18 +42,7 @@ jobs:
           grep -q 'content-crop-v5' supabase/functions/sanad-operation-preview-worker/index.ts
           grep -q 'operation_details_runtime_v3' supabase/migrations/20260804181500_normalize_legacy_operation_details_action_source.sql
           deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-worker/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-preview-access/index.ts
+          ! grep -q 'sanad-operation-preview-worker' supabase/functions/sanad-operation-preview-access/index.ts
           npx tsc --noEmit
           npm run build
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Deploy preview worker v5
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${SUPABASE_ACCESS_TOKEN:-}"
-          supabase functions deploy sanad-operation-preview-worker \
-            --project-ref "$SUPABASE_PROJECT_REF" \
-            --no-verify-jwt
