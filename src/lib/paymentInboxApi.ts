@@ -19,9 +19,16 @@ export interface PaymentInboxReuseNotice {
   occurrence_count?: number | null;
   canonical_inbox_id?: string | null;
   canonical_inbox_status?: string | null;
+  canonical_inbox_row_version?: number | null;
+  canonical_claimed_by_user_id?: string | null;
   canonical_claimed_by_name?: string | null;
+  canonical_completed_by_user_id?: string | null;
   canonical_completed_by_name?: string | null;
   canonical_completed_at?: string | null;
+  canonical_verified_by_user_id?: string | null;
+  canonical_verified_by_name?: string | null;
+  canonical_verified_at?: string | null;
+  can_resolve?: boolean;
   strategy?: string | null;
   confidence?: number | null;
 }
@@ -44,6 +51,11 @@ export interface PaymentInboxItem {
   transaction_datetime?: string | null;
   account_holder_name?: string | null;
   claimed_by_name?: string | null;
+  completed_by_name?: string | null;
+  completed_at?: string | null;
+  verified_by_user_id?: string | null;
+  verified_by_name?: string | null;
+  verified_at?: string | null;
   created_at?: string | null;
   action_permissions?: { can_claim?: boolean; can_complete?: boolean };
   reuse_notice?: PaymentInboxReuseNotice | null;
@@ -71,14 +83,14 @@ export async function getPaymentInboxContexts(): Promise<PaymentInboxContext[]> 
 
 export async function getPaymentInbox(businessId: string, view: PaymentInboxView, limit = 50): Promise<PaymentInboxItem[]> {
   const [inboxResult, reuseResult] = await Promise.all([
-    supabase.rpc('get_business_payment_inbox_v2', {
+    supabase.rpc('get_business_payment_inbox_v3', {
       p_business_id: businessId,
       p_view: view,
       p_limit: limit,
       p_before_created_at: null,
       p_before_id: null
     }),
-    supabase.rpc('get_business_payment_reuse_notices', { p_business_id: businessId })
+    supabase.rpc('get_business_payment_reuse_notices_v2', { p_business_id: businessId })
   ]);
 
   if (inboxResult.error) throw inboxResult.error;
@@ -112,6 +124,9 @@ function ensureActionSucceeded(data: unknown, fallback: string): void {
   if (result.ok !== false) return;
   if (result.reason === 'claim_race_lost') throw new Error('سبقك عضو آخر إلى استلام العملية.');
   if (result.reason === 'stale_item') throw new Error('تغيّرت العملية على جهاز آخر. حدّث القائمة وحاول مجددًا.');
+  if (result.reason === 'canonical_claimed_by_another') throw new Error('العملية الأصلية مستلمة حاليًا بواسطة عضو آخر في الفريق.');
+  if (result.reason === 'canonical_not_completable') throw new Error('العملية الأصلية تحتاج إلى مراجعة قبل إكمالها.');
+  if (result.reason === 'duplicate_not_resolvable') throw new Error('تم حسم هذه النسخة مسبقًا أو تغيّرت حالتها. حدّث القائمة.');
   throw new Error(fallback);
 }
 
@@ -135,4 +150,15 @@ export async function completePaymentInboxItem(item: PaymentInboxItem): Promise<
   });
   if (error) throw error;
   ensureActionSucceeded(data, 'تعذر إكمال العملية بعد تغير حالتها.');
+}
+
+export async function resolvePaymentInboxReuse(item: PaymentInboxItem): Promise<void> {
+  const { data, error } = await supabase.rpc('resolve_business_payment_reuse_v1', {
+    p_inbox_id: item.id,
+    p_expected_row_version: item.row_version,
+    p_note: null,
+    p_source: 'payment_inbox'
+  });
+  if (error) throw error;
+  ensureActionSucceeded(data, 'تعذر حسم النسخة المكررة مع العملية الأصلية.');
 }

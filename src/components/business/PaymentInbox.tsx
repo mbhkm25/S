@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, CopyCheck, Eye, FileText, Hash, Inbox, Landmark, RefreshCw, ShieldCheck, UserRoundCheck, WalletCards } from 'lucide-react';
-import { getPaymentInbox, getPaymentInboxContexts, type PaymentInboxContext, type PaymentInboxItem, type PaymentInboxView } from '../../lib/paymentInboxApi';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, CopyCheck, Eye, FileText, Hash, Inbox, Landmark, Loader2, RefreshCw, ShieldCheck, UserRoundCheck, WalletCards } from 'lucide-react';
+import {
+  completePaymentInboxItem,
+  getPaymentInbox,
+  getPaymentInboxContexts,
+  resolvePaymentInboxReuse,
+  type PaymentInboxContext,
+  type PaymentInboxItem,
+  type PaymentInboxView
+} from '../../lib/paymentInboxApi';
 import { toLatinDigits } from '../../lib/digits';
 import PaymentInboxPreview from './PaymentInboxPreview';
 
-type InboxIntent = 'claim' | 'claim_verify' | 'complete' | 'open_original';
+type InboxIntent = 'claim' | 'claim_verify' | 'open_original';
 
 const LOGOS = [
   { names: ['العمقي'], paths: ['/assets/financial-entities/alamqi-mobile.png', '/assets/financial-entities/alamqi-mobile.webp'] },
@@ -95,6 +103,8 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
   const [items, setItems] = useState<PaymentInboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const activeContext = useMemo(() => contexts.find(item => item.business_id === businessId) || null, [businessId, contexts]);
 
@@ -123,6 +133,41 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
   }, [loadContexts]);
   useEffect(() => { void loadItems(); }, [loadItems]);
 
+  const completeItem = async (item: PaymentInboxItem) => {
+    if (actingId) return;
+    setActingId(item.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await completePaymentInboxItem(item);
+      setSuccess('تم إكمال العملية ونقلها إلى «مكتملة».');
+      await loadItems();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'تعذر إكمال العملية.');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const resolveReuse = async (item: PaymentInboxItem) => {
+    if (actingId) return;
+    setActingId(item.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const canonicalWasCompleted = item.reuse_notice?.canonical_inbox_status === 'completed';
+      await resolvePaymentInboxReuse(item);
+      setSuccess(canonicalWasCompleted
+        ? 'تم إغلاق النسخة المكررة. العملية الأصلية موجودة في «مكتملة».'
+        : 'تم إكمال العملية الأصلية وإغلاق النسخة المكررة دون احتساب عملية جديدة.');
+      await loadItems();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'تعذر حسم النسخة مع العملية الأصلية.');
+    } finally {
+      setActingId(null);
+    }
+  };
+
   const tabs = admin ? ADMIN_TABS : CASHIER_TABS;
   return (
     <section className="space-y-4 font-arabic" dir="rtl">
@@ -135,11 +180,12 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
           <select value={businessId} onChange={event => setBusinessId(event.target.value)} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-900 outline-none">{contexts.map(item => <option key={item.business_id} value={item.business_id}>{item.business_name}</option>)}</select>
           {!admin && activeContext?.is_supervisor && <a href={buildInboxUrl(true, businessId)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-black text-white"><ShieldCheck className="h-4 w-4" /> إدارة وارد المدفوعات</a>}
         </div>
-        <div className={`mt-3 grid gap-2 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>{tabs.map(tab => <button key={tab.value} type="button" onClick={() => setView(tab.value)} className={`h-10 rounded-2xl px-3 text-xs font-black ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}>{tab.label}</button>)}</div>
+        <div className={`mt-3 grid gap-2 ${admin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>{tabs.map(tab => <button key={tab.value} type="button" onClick={() => { setSuccess(null); setView(tab.value); }} className={`h-10 rounded-2xl px-3 text-xs font-black ${view === tab.value ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-slate-50 text-slate-600'}`}>{tab.label}</button>)}</div>
       </header>
 
+      {success && <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span>{success}</span></div>}
       {error && <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="mt-0.5 h-4 w-4" /><span>{error}</span></div>}
-      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><RefreshCw className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">{view === 'completed' ? 'لا توجد عمليات مكتملة' : 'لا توجد عمليات في هذا القسم'}</h2><p className="mt-1 text-[10px] text-slate-400">{view === 'completed' ? 'ستظهر هنا العمليات التي أكملتها واعتمدتها لهذا النشاط.' : 'ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.'}</p></div> : (
+      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><RefreshCw className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">{view === 'completed' ? 'لا توجد عمليات مكتملة' : 'لا توجد عمليات في هذا القسم'}</h2><p className="mt-1 text-[10px] text-slate-400">{view === 'completed' ? 'ستظهر هنا العمليات التي أُغلق مسارها التشغيلي لهذا النشاط.' : 'ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.'}</p></div> : (
         <div className="space-y-5">{items.map(item => {
           const entity = item.financial_entity || 'جهة مالية أخرى';
           const accountName = item.account_holder_name || item.receiver_name || item.business_name || 'حساب غير محدد';
@@ -148,10 +194,14 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
           const reuse = item.reuse_notice;
           const canClaim = !reuse && item.action_permissions?.can_claim === true;
           const canComplete = !reuse && item.action_permissions?.can_complete === true;
+          const canResolveReuse = reuse?.can_resolve === true;
+          const originalVerifierName = reuse?.canonical_verified_by_name || item.verified_by_name;
+          const originalVerifiedAt = reuse?.canonical_verified_at || item.verified_at;
+          const isActing = actingId === item.id;
           return <article key={item.id} className={`overflow-hidden rounded-[2rem] border bg-white p-3 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.35)] ${reuse ? 'border-amber-300' : 'border-slate-200/80'}`}>
             <PaymentInboxPreview publicToken={reuse?.canonical_public_token || item.public_token} entity={entity} />
             <div className="px-1 pb-1 pt-4">
-              {reuse && <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><div className="flex items-center gap-2 text-xs font-black"><CopyCheck className="h-4 w-4 text-amber-700" /> مسجلة سابقًا في سند</div><p className="mt-1 text-[10px] leading-5 text-amber-800">هذه نسخة من عملية مالية مسجلة من قبل. لا تُستلم أو تُكمل كعملية مستقلة، ولا تُحتسب كعملية جديدة.</p><div className="mt-2 flex flex-wrap gap-2 text-[9px] font-bold text-amber-700"><span>أول تسجيل: {formatDate(reuse.first_registered_at)}</span>{Number(reuse.occurrence_count || 0) > 1 && <span>• مرات الظهور: {toLatinDigits(String(reuse.occurrence_count))}</span>}</div></div>}
+              {reuse && <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><div className="flex items-center gap-2 text-xs font-black"><CopyCheck className="h-4 w-4 text-amber-700" /> مسجلة سابقًا في سند</div><p className="mt-1 text-[10px] leading-5 text-amber-800">هذه نسخة من عملية مالية مسجلة من قبل. سند سيتعامل مع العملية الأصلية فقط، ولن تُحتسب هذه النسخة كعملية جديدة.</p><div className="mt-2 flex flex-wrap gap-2 text-[9px] font-bold text-amber-700"><span>أول تسجيل: {formatDate(reuse.first_registered_at)}</span>{Number(reuse.occurrence_count || 0) > 1 && <span>• مرات الظهور: {toLatinDigits(String(reuse.occurrence_count))}</span>}</div></div>}
 
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0"><div className="flex items-center gap-2"><EntityLogo entity={entity} /><div className="min-w-0"><h2 className="truncate text-base font-black text-slate-950">{entity}</h2><p className="truncate text-[11px] font-bold text-slate-500">{accountName}</p></div></div></div>
@@ -160,17 +210,22 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
 
               <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70"><div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-200"><CompactFact icon={<CalendarDays className="h-3 w-3" />} label="التاريخ" value={formatDate(operationDate)} /><CompactFact icon={<Clock3 className="h-3 w-3" />} label="الوقت" value={formatTime(operationDate)} /><CompactFact icon={<WalletCards className="h-3 w-3" />} label="الحساب" value={accountNumber ? toLatinDigits(accountNumber) : '—'} ltr /><CompactFact icon={<Hash className="h-3 w-3" />} label="المرجع" value={item.reference_number ? toLatinDigits(item.reference_number) : '—'} ltr /></div></div>
 
-              {admin && item.claimed_by_name && !reuse && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-700"><UserRoundCheck className="h-4 w-4" /><span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span></div>}
-              {reuse?.canonical_claimed_by_name && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] text-slate-600"><UserRoundCheck className="h-4 w-4" /><span>العملية الأصلية لدى: <b>{reuse.canonical_claimed_by_name}</b></span></div>}
-              {reuse?.canonical_completed_at && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>تم التعامل مع العملية الأصلية سابقًا {reuse.canonical_completed_by_name ? `بواسطة ${reuse.canonical_completed_by_name}` : ''}.</span></div>}
+              {originalVerifiedAt && <div className="mt-3 flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2 text-[10px] text-sky-800"><ShieldCheck className="h-4 w-4 shrink-0" /><span>{originalVerifierName ? <>اعتمدت العملية أصلًا بواسطة <b>{originalVerifierName}</b>.</> : 'العملية الأصلية معتمدة سابقًا في سند.'}</span></div>}
+              {admin && item.claimed_by_name && !reuse && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-700"><UserRoundCheck className="h-4 w-4" /><span>المسؤول التشغيلي الحالي: <b>{item.claimed_by_name}</b></span></div>}
+              {reuse?.canonical_claimed_by_name && !reuse.canonical_completed_at && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] text-slate-600"><UserRoundCheck className="h-4 w-4" /><span>العملية الأصلية لدى: <b>{reuse.canonical_claimed_by_name}</b></span></div>}
+              {reuse?.canonical_completed_at && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>أُغلق مسار العملية الأصلية سابقًا {reuse.canonical_completed_by_name ? `بواسطة ${reuse.canonical_completed_by_name}` : ''}.</span></div>}
+              {!reuse && item.status === 'completed' && item.completed_at && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>أُكملت تشغيليًا {item.completed_by_name ? `بواسطة ${item.completed_by_name}` : ''}.</span></div>}
 
               <div className="mt-4 grid grid-cols-2 gap-2">
-                {reuse ? <button type="button" onClick={() => window.location.assign(buildCanonicalUrl(item))} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-amber-600 px-3 text-[11px] font-black text-white shadow-lg shadow-amber-200"><Eye className="h-4 w-4" /> عرض العملية الأصلية</button> : <>
+                {reuse ? <>
+                  <button type="button" onClick={() => window.location.assign(buildCanonicalUrl(item))} className={`${canResolveReuse ? '' : 'col-span-2'} inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 text-[11px] font-black text-amber-800`}><Eye className="h-4 w-4" /> عرض العملية الأصلية</button>
+                  {canResolveReuse && <button type="button" disabled={Boolean(actingId)} onClick={() => void resolveReuse(item)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white shadow-lg shadow-emerald-200 disabled:cursor-wait disabled:opacity-60">{isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {reuse.canonical_inbox_status === 'completed' ? 'إغلاق النسخة — الأصل مكتمل' : 'تم الاستلام — إكمال الأصل'}</button>}
+                </> : <>
                   <button type="button" onClick={() => window.location.assign(buildOperationUrl(item))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[11px] font-black text-slate-800 shadow-sm"><Eye className="h-4 w-4" /> فتح السجل</button>
                   <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'open_original'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 text-[11px] font-black text-violet-700"><FileText className="h-4 w-4" /> الملف الأصلي</button>
                   {canClaim && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'claim'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 text-[11px] font-black text-white shadow-lg shadow-sky-200"><Inbox className="h-4 w-4" /> استلام العملية</button>}
                   {canClaim && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'claim_verify'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-3 text-[11px] font-black text-white shadow-lg shadow-indigo-200"><ShieldCheck className="h-4 w-4" /> استلام وتحقق</button>}
-                  {canComplete && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'complete'))} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white shadow-lg shadow-emerald-200"><CheckCircle2 className="h-4 w-4" /> إكمال العملية</button>}
+                  {canComplete && <button type="button" disabled={Boolean(actingId)} onClick={() => void completeItem(item)} className="col-span-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-xs font-black text-white shadow-lg shadow-emerald-200 disabled:cursor-wait disabled:opacity-60">{isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} تم الاستلام — إكمال العملية</button>}
                 </>}
               </div>
             </div>
