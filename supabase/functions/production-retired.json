@@ -15,6 +15,23 @@
     "sanad-report-retry-2f0e09db",
     "sanad-report-v2-1-visual-test",
     "sanad-shadow-batch-20260806",
-    "sanad-contract-fix-validation"
+    "sanad-contract-fix-validation",
+    "sanad-v3-whatsapp-assistant-v5-canary",
+    "sanad-v3-whatsapp-assistant-v6-canary",
+    "sanad-v3-whatsapp-assistant-v6-preview",
+    "sanad-v3-whatsapp-assistant-v6-health",
+    "sanad-v3-whatsapp-assistant-v6-state-preview",
+    "sanad-v3-whatsapp-assistant-v6-intent-preview",
+    "sanad-v3-whatsapp-assistant-v6-doc",
+    "sanad-v3-whatsapp-assistant-v6-sanity",
+    "sanad-v3-assistant-evals",
+    "sanad-v3-assistant-engine-health",
+    "sanad-v3-whatsapp-assistant-v13-shadow",
+    "sanad-v3-whatsapp-assistant-v13-shadow-health",
+    "sanad-v3-assistant-canary-monitor",
+    "sanad-v3-assistant-canary-health",
+    "sanad-v3-analyze-operation-candidate",
+    "sanad-extraction-core-recovery-candidate",
+    "sanad-extraction-core-recovery-candidate-v2"
   ]
 }
