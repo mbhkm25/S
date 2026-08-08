@@ -322,6 +322,12 @@ public class MainActivity extends BridgeActivity {
             }
 
             Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            // Prefer the rear-facing camera every time SANAD starts a payment capture.
+            // Camera apps from different Android vendors honor different extras, so send
+            // the common legacy and modern hints together while keeping camera switching available.
+            cameraIntent.putExtra("android.intent.extras.CAMERA_FACING", 0);
+            cameraIntent.putExtra("android.intent.extra.USE_FRONT_CAMERA", false);
+            cameraIntent.putExtra("android.intent.extras.LENS_FACING", 1);
             cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPaymentCaptureUri);
             cameraIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
