@@ -1,0 +1,1 @@
+Production cleanup is staged on branch `chore/production-cleanup-20260808`. Review should verify that no Core Production function is retired, the 12 newly retired endpoints are historical-only, and remaining non-core functions are classified before the cleanup gate is closed.
