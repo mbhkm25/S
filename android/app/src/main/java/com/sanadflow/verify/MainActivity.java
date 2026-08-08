@@ -2,15 +2,12 @@ package com.sanadflow.verify;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.util.Log;
@@ -26,13 +23,9 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.InputStream;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 import org.json.JSONObject;
 
@@ -46,8 +39,6 @@ public class MainActivity extends BridgeActivity {
 
     private boolean qrScanInProgress = false;
     private boolean paymentCaptureInProgress = false;
-    private Uri pendingPaymentCaptureUri = null;
-    private String pendingPaymentCaptureName = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,16 +74,30 @@ public class MainActivity extends BridgeActivity {
         if (requestCode != PAYMENT_CAMERA_REQUEST_CODE) return;
 
         paymentCaptureInProgress = false;
-        if (resultCode != Activity.RESULT_OK || pendingPaymentCaptureUri == null) {
-            removePendingPaymentCapture();
-            publishPaymentCaptureResult("cancelled", null, null, null, false, null);
+
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            String uriValue = data.getStringExtra(PaymentCameraActivity.EXTRA_CAPTURE_URI);
+            String name = data.getStringExtra(PaymentCameraActivity.EXTRA_CAPTURE_NAME);
+            if (uriValue != null && !uriValue.trim().isEmpty()) {
+                processPaymentCaptureUri(Uri.parse(uriValue), name);
+                return;
+            }
+        }
+
+        if (resultCode == Activity.RESULT_FIRST_USER && data != null) {
+            String message = data.getStringExtra(PaymentCameraActivity.EXTRA_CAPTURE_ERROR);
+            publishPaymentCaptureResult(
+                "error",
+                null,
+                null,
+                null,
+                false,
+                message == null ? "تعذر التقاط صورة الإشعار الآن." : message
+            );
             return;
         }
 
-        finalizePendingPaymentCapture();
-        processPaymentCaptureUri(pendingPaymentCaptureUri, pendingPaymentCaptureName);
-        pendingPaymentCaptureUri = null;
-        pendingPaymentCaptureName = null;
+        publishPaymentCaptureResult("cancelled", null, null, null, false, null);
     }
 
     @Override
@@ -282,96 +287,20 @@ public class MainActivity extends BridgeActivity {
 
     private void launchPaymentCapture() {
         try {
-            removePendingPaymentCapture();
-
-            pendingPaymentCaptureName = "SANAD_" + new SimpleDateFormat(
-                "yyyyMMdd_HHmmss",
-                Locale.US
-            ).format(new Date()) + ".jpg";
-
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Images.Media.DISPLAY_NAME, pendingPaymentCaptureName);
-            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                values.put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    Environment.DIRECTORY_PICTURES + File.separator + "SANAD"
-                );
-                values.put(MediaStore.Images.Media.IS_PENDING, 1);
-            } else {
-                File directory = new File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                    "SANAD"
-                );
-                if (!directory.exists() && !directory.mkdirs()) {
-                    throw new IllegalStateException("Could not create SANAD gallery directory");
-                }
-                values.put(
-                    MediaStore.Images.Media.DATA,
-                    new File(directory, pendingPaymentCaptureName).getAbsolutePath()
-                );
-            }
-
-            pendingPaymentCaptureUri = getContentResolver().insert(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                values
-            );
-            if (pendingPaymentCaptureUri == null) {
-                throw new IllegalStateException("Could not create gallery destination");
-            }
-
-            Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            // Prefer the rear-facing camera every time SANAD starts a payment capture.
-            // Camera apps from different Android vendors honor different extras, so send
-            // the common legacy and modern hints together while keeping camera switching available.
-            cameraIntent.putExtra("android.intent.extras.CAMERA_FACING", 0);
-            cameraIntent.putExtra("android.intent.extra.USE_FRONT_CAMERA", false);
-            cameraIntent.putExtra("android.intent.extras.LENS_FACING", 1);
-            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPaymentCaptureUri);
-            cameraIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-            if (cameraIntent.resolveActivity(getPackageManager()) == null) {
-                throw new IllegalStateException("No camera application available");
-            }
-
+            Intent cameraIntent = new Intent(this, PaymentCameraActivity.class);
             startActivityForResult(cameraIntent, PAYMENT_CAMERA_REQUEST_CODE);
         } catch (Exception e) {
-            Log.e(TAG, "Could not start payment capture", e);
+            Log.e(TAG, "Could not start SANAD payment camera", e);
             paymentCaptureInProgress = false;
-            removePendingPaymentCapture();
             publishPaymentCaptureResult(
                 "error",
                 null,
                 null,
                 null,
                 false,
-                "تعذر فتح الكاميرا الآن. حاول مرة أخرى."
+                "تعذر فتح كاميرا سند الآن. حاول مرة أخرى."
             );
         }
-    }
-
-    private void finalizePendingPaymentCapture() {
-        if (pendingPaymentCaptureUri == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
-        try {
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Images.Media.IS_PENDING, 0);
-            getContentResolver().update(pendingPaymentCaptureUri, values, null, null);
-        } catch (Exception e) {
-            Log.w(TAG, "Could not finalize gallery image", e);
-        }
-    }
-
-    private void removePendingPaymentCapture() {
-        if (pendingPaymentCaptureUri != null) {
-            try {
-                getContentResolver().delete(pendingPaymentCaptureUri, null, null);
-            } catch (Exception e) {
-                Log.w(TAG, "Could not remove pending payment capture", e);
-            }
-        }
-        pendingPaymentCaptureUri = null;
-        pendingPaymentCaptureName = null;
     }
 
     private void processPaymentCaptureUri(Uri uri, String name) {
