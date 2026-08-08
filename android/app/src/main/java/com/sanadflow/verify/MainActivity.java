@@ -1,9 +1,16 @@
 package com.sanadflow.verify;
 
+import android.Manifest;
+import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.util.Log;
@@ -19,14 +26,28 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "SANAD_Android";
+    private static final int PAYMENT_CAMERA_REQUEST_CODE = 9410;
+    private static final int PAYMENT_CAMERA_PERMISSION_REQUEST_CODE = 9411;
+
     private static String sharedDataJson = null;
+    private static String capturedPaymentJson = null;
+
     private boolean qrScanInProgress = false;
+    private boolean paymentCaptureInProgress = false;
+    private Uri pendingPaymentCaptureUri = null;
+    private String pendingPaymentCaptureName = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +57,7 @@ public class MainActivity extends BridgeActivity {
         if (webView != null) {
             webView.addJavascriptInterface(new AndroidShareInterface(), "AndroidShare");
             webView.addJavascriptInterface(new AndroidQrScannerInterface(), "AndroidQrScanner");
+            webView.addJavascriptInterface(new AndroidPaymentCaptureInterface(), "AndroidPaymentCapture");
             Log.d(TAG, "SANAD Android JavaScript interfaces added");
         }
 
@@ -52,6 +74,55 @@ public class MainActivity extends BridgeActivity {
         if (intent != null) {
             handleShareIntent(intent, true);
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode != PAYMENT_CAMERA_REQUEST_CODE) return;
+
+        paymentCaptureInProgress = false;
+        if (resultCode != Activity.RESULT_OK || pendingPaymentCaptureUri == null) {
+            removePendingPaymentCapture();
+            publishPaymentCaptureResult("cancelled", null, null, null, false, null);
+            return;
+        }
+
+        finalizePendingPaymentCapture();
+        processPaymentCaptureUri(pendingPaymentCaptureUri, pendingPaymentCaptureName);
+        pendingPaymentCaptureUri = null;
+        pendingPaymentCaptureName = null;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != PAYMENT_CAMERA_PERMISSION_REQUEST_CODE) return;
+
+        boolean granted = grantResults.length > 0;
+        for (int result : grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                granted = false;
+                break;
+            }
+        }
+
+        if (!granted) {
+            paymentCaptureInProgress = false;
+            publishPaymentCaptureResult(
+                "error",
+                null,
+                null,
+                null,
+                false,
+                "يحتاج سند إلى إذن الكاميرا لحفظ صورة الإشعار والتعامل معها."
+            );
+            return;
+        }
+
+        launchPaymentCapture();
     }
 
     private void handleShareIntent(Intent intent, boolean isHotStart) {
@@ -183,10 +254,211 @@ public class MainActivity extends BridgeActivity {
             });
     }
 
+    private void beginPaymentCapture() {
+        if (paymentCaptureInProgress) return;
+        paymentCaptureInProgress = true;
+
+        List<String> missingPermissions = new ArrayList<>();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(Manifest.permission.CAMERA);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+            && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            missingPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+
+        if (!missingPermissions.isEmpty()) {
+            requestPermissions(
+                missingPermissions.toArray(new String[0]),
+                PAYMENT_CAMERA_PERMISSION_REQUEST_CODE
+            );
+            return;
+        }
+
+        launchPaymentCapture();
+    }
+
+    private void launchPaymentCapture() {
+        try {
+            removePendingPaymentCapture();
+
+            pendingPaymentCaptureName = "SANAD_" + new SimpleDateFormat(
+                "yyyyMMdd_HHmmss",
+                Locale.US
+            ).format(new Date()) + ".jpg";
+
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, pendingPaymentCaptureName);
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.put(
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    Environment.DIRECTORY_PICTURES + File.separator + "SANAD"
+                );
+                values.put(MediaStore.Images.Media.IS_PENDING, 1);
+            } else {
+                File directory = new File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                    "SANAD"
+                );
+                if (!directory.exists() && !directory.mkdirs()) {
+                    throw new IllegalStateException("Could not create SANAD gallery directory");
+                }
+                values.put(
+                    MediaStore.Images.Media.DATA,
+                    new File(directory, pendingPaymentCaptureName).getAbsolutePath()
+                );
+            }
+
+            pendingPaymentCaptureUri = getContentResolver().insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                values
+            );
+            if (pendingPaymentCaptureUri == null) {
+                throw new IllegalStateException("Could not create gallery destination");
+            }
+
+            Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPaymentCaptureUri);
+            cameraIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            if (cameraIntent.resolveActivity(getPackageManager()) == null) {
+                throw new IllegalStateException("No camera application available");
+            }
+
+            startActivityForResult(cameraIntent, PAYMENT_CAMERA_REQUEST_CODE);
+        } catch (Exception e) {
+            Log.e(TAG, "Could not start payment capture", e);
+            paymentCaptureInProgress = false;
+            removePendingPaymentCapture();
+            publishPaymentCaptureResult(
+                "error",
+                null,
+                null,
+                null,
+                false,
+                "تعذر فتح الكاميرا الآن. حاول مرة أخرى."
+            );
+        }
+    }
+
+    private void finalizePendingPaymentCapture() {
+        if (pendingPaymentCaptureUri == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.IS_PENDING, 0);
+            getContentResolver().update(pendingPaymentCaptureUri, values, null, null);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not finalize gallery image", e);
+        }
+    }
+
+    private void removePendingPaymentCapture() {
+        if (pendingPaymentCaptureUri != null) {
+            try {
+                getContentResolver().delete(pendingPaymentCaptureUri, null, null);
+            } catch (Exception e) {
+                Log.w(TAG, "Could not remove pending payment capture", e);
+            }
+        }
+        pendingPaymentCaptureUri = null;
+        pendingPaymentCaptureName = null;
+    }
+
+    private void processPaymentCaptureUri(Uri uri, String name) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(uri);
+            if (inputStream == null) {
+                throw new IllegalStateException("Could not read captured payment image");
+            }
+
+            ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = inputStream.read(buffer)) != -1) {
+                byteBuffer.write(buffer, 0, len);
+            }
+            inputStream.close();
+
+            String base64Data = Base64.encodeToString(byteBuffer.toByteArray(), Base64.NO_WRAP);
+            publishPaymentCaptureResult(
+                "success",
+                name == null ? "SANAD_payment.jpg" : name,
+                "image/jpeg",
+                base64Data,
+                true,
+                null
+            );
+        } catch (Exception e) {
+            Log.e(TAG, "Captured image was saved but could not be passed to SANAD", e);
+            publishPaymentCaptureResult(
+                "error",
+                name,
+                "image/jpeg",
+                null,
+                true,
+                "تم حفظ الصورة في الاستوديو، لكن تعذر إرسالها إلى سند. أعد المحاولة من الاستوديو."
+            );
+        }
+    }
+
+    private void publishPaymentCaptureResult(
+        String status,
+        String name,
+        String mimeType,
+        String base64Data,
+        boolean gallerySaved,
+        String message
+    ) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("status", status);
+            json.put("gallerySaved", gallerySaved);
+            if (name != null) json.put("name", name);
+            if (mimeType != null) json.put("mimeType", mimeType);
+            if (base64Data != null) json.put("base64", base64Data);
+            if (message != null) json.put("message", message);
+            capturedPaymentJson = json.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "Could not serialize payment capture result", e);
+            capturedPaymentJson = null;
+        }
+
+        runOnUiThread(() -> {
+            WebView webView = bridge.getWebView();
+            if (webView != null) {
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('sanadNativePaymentCaptureReady'))",
+                    null
+                );
+            }
+        });
+    }
+
     public class AndroidQrScannerInterface {
         @JavascriptInterface
         public void startScan() {
             runOnUiThread(() -> startNativeQrScan());
+        }
+    }
+
+    public class AndroidPaymentCaptureInterface {
+        @JavascriptInterface
+        public void startCapture() {
+            runOnUiThread(() -> beginPaymentCapture());
+        }
+
+        @JavascriptInterface
+        public String getCapturedData() {
+            return capturedPaymentJson;
+        }
+
+        @JavascriptInterface
+        public void clearCapturedData() {
+            capturedPaymentJson = null;
         }
     }
 
