@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
 import {
@@ -33,6 +33,25 @@ interface UploadProps {
 
 type UploadStage = 'idle' | 'optimizing' | 'uploading' | 'creating' | 'starting-analysis';
 
+type NativePaymentCapturePayload = {
+  status?: 'success' | 'cancelled' | 'error';
+  name?: string;
+  mimeType?: string;
+  base64?: string;
+  gallerySaved?: boolean;
+  message?: string;
+};
+
+declare global {
+  interface Window {
+    AndroidPaymentCapture?: {
+      startCapture: () => void;
+      getCapturedData: () => string | null;
+      clearCapturedData: () => void;
+    };
+  }
+}
+
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const ALLOWED_PDF_TYPE = 'application/pdf';
@@ -51,6 +70,15 @@ function formatMegabytes(bytes: number): string {
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function nativeBase64ToFile(base64: string, name: string, mimeType: string): File {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new File([bytes], name, { type: mimeType, lastModified: Date.now() });
 }
 
 export default function UploadNotification({
@@ -75,12 +103,16 @@ export default function UploadNotification({
     analysisTriggerFailed?: boolean;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [gallerySavedForCurrentFile, setGallerySavedForCurrentFile] = useState(false);
 
+  const formRef = useRef<HTMLFormElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoSubmitCaptureRef = useRef(false);
   const uploading = uploadStage !== 'idle';
+  const nativePaymentCaptureAvailable = typeof window.AndroidPaymentCapture?.startCapture === 'function';
 
-  const validateAndSetFile = (selectedFile: File) => {
+  const validateAndSetFile = (selectedFile: File): boolean => {
     setErrorMessage(null);
     setProcessedSummary(null);
 
@@ -89,7 +121,7 @@ export default function UploadNotification({
 
     if (!isImage && !isPdf) {
       setErrorMessage('اختر صورة واضحة أو ملف PDF لإشعار الدفع أو إيصال ماكينة الدفع.');
-      return;
+      return false;
     }
 
     const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_PDF_BYTES;
@@ -99,16 +131,81 @@ export default function UploadNotification({
           ? 'حجم الصورة يتجاوز 15 ميجابايت. التقطها بدقة أقل أو اختر صورة أخرى.'
           : 'حجم ملف PDF يتجاوز 10 ميجابايت.',
       );
-      return;
+      return false;
     }
 
     setFile(selectedFile);
+    return true;
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
-    if (selectedFile) validateAndSetFile(selectedFile);
+    if (selectedFile) {
+      setGallerySavedForCurrentFile(false);
+      validateAndSetFile(selectedFile);
+    }
     event.target.value = '';
+  };
+
+  const handleFallbackCameraChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) {
+      setGallerySavedForCurrentFile(false);
+      if (validateAndSetFile(selectedFile)) autoSubmitCaptureRef.current = true;
+    }
+    event.target.value = '';
+  };
+
+  useEffect(() => {
+    const handleNativePaymentCapture = () => {
+      const bridge = window.AndroidPaymentCapture;
+      if (!bridge) return;
+
+      const rawPayload = bridge.getCapturedData();
+      bridge.clearCapturedData();
+      if (!rawPayload) return;
+
+      try {
+        const payload = JSON.parse(rawPayload) as NativePaymentCapturePayload;
+        if (payload.status === 'cancelled') return;
+        if (payload.status !== 'success' || !payload.base64) {
+          setGallerySavedForCurrentFile(Boolean(payload.gallerySaved));
+          setErrorMessage(payload.message || 'تعذر استلام الصورة من الكاميرا. حاول مرة أخرى.');
+          return;
+        }
+
+        const capturedFile = nativeBase64ToFile(
+          payload.base64,
+          payload.name || `SANAD_${Date.now()}.jpg`,
+          payload.mimeType || 'image/jpeg',
+        );
+        setGallerySavedForCurrentFile(Boolean(payload.gallerySaved));
+        if (validateAndSetFile(capturedFile)) autoSubmitCaptureRef.current = true;
+      } catch (error) {
+        console.warn('Native payment capture payload failed:', error);
+        setErrorMessage('تم التقاط الصورة، لكن تعذر تجهيزها داخل سند. يمكنك اختيارها من الاستوديو.');
+      }
+    };
+
+    window.addEventListener('sanadNativePaymentCaptureReady', handleNativePaymentCapture);
+    return () => window.removeEventListener('sanadNativePaymentCaptureReady', handleNativePaymentCapture);
+    // The bridge event only needs state setters and the validation policy defined for this mounted screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!file || uploading || !autoSubmitCaptureRef.current) return;
+    autoSubmitCaptureRef.current = false;
+    window.requestAnimationFrame(() => formRef.current?.requestSubmit());
+  }, [file, uploading]);
+
+  const startCameraCapture = () => {
+    setErrorMessage(null);
+    if (nativePaymentCaptureAvailable) {
+      window.AndroidPaymentCapture?.startCapture();
+      return;
+    }
+    cameraInputRef.current?.click();
   };
 
   const handleDrag = (event: React.DragEvent) => {
@@ -123,7 +220,10 @@ export default function UploadNotification({
     event.stopPropagation();
     setDragActive(false);
     const selectedFile = event.dataTransfer.files?.[0];
-    if (selectedFile) validateAndSetFile(selectedFile);
+    if (selectedFile) {
+      setGallerySavedForCurrentFile(false);
+      validateAndSetFile(selectedFile);
+    }
   };
 
   const handleUploadSubmit = async (event: React.FormEvent) => {
@@ -163,6 +263,8 @@ export default function UploadNotification({
           uploadedAt: new Date().toISOString(),
           app_upload: true,
           upload_experience: 'unified_payment_upload_v1',
+          local_gallery_saved: gallerySavedForCurrentFile,
+          capture_flow: gallerySavedForCurrentFile ? 'android_native_gallery_capture_v1' : 'standard_picker_v1',
           ...prepared.metadata,
         };
 
@@ -221,7 +323,12 @@ export default function UploadNotification({
         }
       } catch (error) {
         console.warn('Unified payment upload failed:', error);
-        setErrorMessage(error instanceof Error ? error.message : 'تعذر إنشاء العملية. حاول مرة أخرى.');
+        const baseMessage = error instanceof Error ? error.message : 'تعذر إنشاء العملية. حاول مرة أخرى.';
+        setErrorMessage(
+          gallerySavedForCurrentFile
+            ? `${baseMessage} الصورة الأصلية ما زالت محفوظة في الاستوديو.`
+            : baseMessage,
+        );
       } finally {
         setUploadStage('idle');
       }
@@ -290,6 +397,8 @@ export default function UploadNotification({
     setErrorMessage(null);
     setCopied(false);
     setShowQr(false);
+    setGallerySavedForCurrentFile(false);
+    autoSubmitCaptureRef.current = false;
   };
 
   return (
@@ -310,13 +419,13 @@ export default function UploadNotification({
       )}
 
       {!successData ? (
-        <form onSubmit={handleUploadSubmit} className="space-y-4" id="upload_form">
+        <form ref={formRef} onSubmit={handleUploadSubmit} className="space-y-4" id="upload_form">
           <input
             ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
-            onChange={handleFileChange}
+            onChange={handleFallbackCameraChange}
             className="hidden"
           />
           <input
@@ -330,7 +439,7 @@ export default function UploadNotification({
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={startCameraCapture}
               disabled={uploading}
               className="flex min-h-28 flex-col items-center justify-center rounded-[1.6rem] bg-slate-950 px-3 py-5 text-white shadow-[0_14px_35px_rgba(15,23,42,0.16)] disabled:opacity-50"
             >
@@ -338,7 +447,9 @@ export default function UploadNotification({
                 <Camera className="h-5 w-5" />
               </span>
               <strong className="text-xs">التقاط بالكاميرا</strong>
-              <span className="mt-1 text-[9px] text-white/60">إشعار أو إيصال ورقي</span>
+              <span className="mt-1 text-[9px] text-white/60">
+                {nativePaymentCaptureAvailable ? 'يحفظ في الاستوديو ويبدأ تلقائيًا' : 'إشعار أو إيصال ورقي'}
+              </span>
             </button>
 
             <button
@@ -372,15 +483,22 @@ export default function UploadNotification({
                 <div className="min-w-0 flex-1 text-right">
                   <strong className="block truncate text-xs text-slate-900" dir="auto">{toLatinDigits(file.name)}</strong>
                   <span className="mt-1 block text-[10px] text-slate-400">الحجم الأصلي: {formatMegabytes(file.size)}</span>
+                  {gallerySavedForCurrentFile && (
+                    <span className="mt-1 block text-[9px] font-bold text-emerald-700">نسخة محفوظة في الاستوديو · Pictures/SANAD</span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  disabled={uploading}
-                  className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-600"
-                >
-                  تغيير
-                </button>
+                {!uploading && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFile(null);
+                      setGallerySavedForCurrentFile(false);
+                    }}
+                    className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-600"
+                  >
+                    تغيير
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center gap-2 py-2 text-[10px] text-slate-400">
@@ -390,7 +508,7 @@ export default function UploadNotification({
             )}
           </div>
 
-          {file && (
+          {file && !uploading && (
             <div className="rounded-2xl bg-sky-50 px-4 py-3 text-[10px] leading-5 text-sky-900">
               تُحسّن الصور الكبيرة تلقائيًا إلى WebP قبل الرفع، مع الحفاظ على وضوح النصوص والأرقام. ملفات PDF تبقى كما هي.
             </div>
@@ -414,7 +532,9 @@ export default function UploadNotification({
           <div>
             <h2 className="text-base font-bold text-slate-950">تم إنشاء العملية بنجاح</h2>
             <p className="mt-1 px-2 text-[10px] leading-5 text-slate-500">
-              حُفظ المستند وبدأ تحليل بياناته. افتح التفاصيل لمراجعة النتائج ثم سجل تحققك من العملية.
+              {gallerySavedForCurrentFile
+                ? 'حُفظت نسخة من الصورة في الاستوديو، وسُجل المستند في سند وبدأ تحليل بياناته.'
+                : 'حُفظ المستند وبدأ تحليل بياناته. افتح التفاصيل لمراجعة النتائج ثم سجل تحققك من العملية.'}
             </p>
           </div>
 
