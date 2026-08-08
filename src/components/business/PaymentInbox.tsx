@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, Eye, FileText, Hash, Inbox, Landmark, Loader2, RefreshCw, ShieldCheck, UserRoundCheck, WalletCards } from 'lucide-react';
-import { getPaymentInbox, getPaymentInboxContexts, getPaymentInboxProAccess, type PaymentInboxContext, type PaymentInboxItem, type PaymentInboxView } from '../../lib/paymentInboxApi';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Clock3, CopyCheck, Eye, FileText, Hash, Inbox, Landmark, RefreshCw, ShieldCheck, UserRoundCheck, WalletCards } from 'lucide-react';
+import { getPaymentInbox, getPaymentInboxContexts, type PaymentInboxContext, type PaymentInboxItem, type PaymentInboxView } from '../../lib/paymentInboxApi';
 import { toLatinDigits } from '../../lib/digits';
-import ProUpgradeModal from '../ProUpgradeModal';
 import PaymentInboxPreview from './PaymentInboxPreview';
 
 type InboxIntent = 'claim' | 'claim_verify' | 'complete' | 'open_original';
@@ -35,28 +34,24 @@ function formatAmount(value?: number | null) {
   if (value == null || Number.isNaN(Number(value))) return '—';
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value));
 }
-
 function formatTime(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return toLatinDigits(new Intl.DateTimeFormat('ar-YE', { hour: '2-digit', minute: '2-digit' }).format(date));
 }
-
 function formatDate(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return toLatinDigits(new Intl.DateTimeFormat('ar-YE', { year: 'numeric', month: 'short', day: 'numeric' }).format(date));
 }
-
 function currencyName(currency?: string | null) {
   if (currency === 'SAR') return 'ريال سعودي';
   if (currency === 'USD') return 'دولار أمريكي';
   if (currency === 'YER') return 'ريال يمني';
   return currency || 'عملة غير محددة';
 }
-
 function currencyClass(currency?: string | null) {
   if (currency === 'SAR') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (currency === 'USD') return 'border-sky-200 bg-sky-50 text-sky-700';
@@ -71,12 +66,7 @@ function EntityLogo({ entity }: { entity: string }) {
 }
 
 function CompactFact({ icon, label, value, ltr = false }: { icon: React.ReactNode; label: string; value?: string | null; ltr?: boolean }) {
-  return (
-    <div className="min-w-0 px-2 py-2">
-      <div className="flex items-center gap-1 text-[8px] font-bold text-slate-400">{icon}<span>{label}</span></div>
-      <p dir={ltr ? 'ltr' : 'rtl'} className={`mt-1 truncate text-[10px] font-black text-slate-800 ${ltr ? 'text-left font-mono' : ''}`}>{value || '—'}</p>
-    </div>
-  );
+  return <div className="min-w-0 px-2 py-2"><div className="flex items-center gap-1 text-[8px] font-bold text-slate-400">{icon}<span>{label}</span></div><p dir={ltr ? 'ltr' : 'rtl'} className={`mt-1 truncate text-[10px] font-black text-slate-800 ${ltr ? 'text-left font-mono' : ''}`}>{value || '—'}</p></div>;
 }
 
 function buildInboxUrl(admin: boolean, businessId: string) {
@@ -84,7 +74,6 @@ function buildInboxUrl(admin: boolean, businessId: string) {
   if (businessId) params.set('business_id', businessId);
   return `/business/manage/operations?${params.toString()}`;
 }
-
 function buildOperationUrl(item: PaymentInboxItem, action?: InboxIntent) {
   const params = new URLSearchParams({ src: 'app' });
   if (action) {
@@ -95,6 +84,9 @@ function buildOperationUrl(item: PaymentInboxItem, action?: InboxIntent) {
   }
   return `/v/${item.public_token}?${params.toString()}`;
 }
+function buildCanonicalUrl(item: PaymentInboxItem) {
+  return item.reuse_notice?.canonical_public_token ? `/v/${item.reuse_notice.canonical_public_token}?src=payment-inbox-reuse` : buildOperationUrl(item);
+}
 
 export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
   const [contexts, setContexts] = useState<PaymentInboxContext[]>([]);
@@ -103,10 +95,6 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
   const [items, setItems] = useState<PaymentInboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [proUser, setProUser] = useState<unknown | null>(null);
-  const [isPro, setIsPro] = useState(false);
-  const [showProModal, setShowProModal] = useState(false);
-  const [accessChecking, setAccessChecking] = useState(false);
 
   const activeContext = useMemo(() => contexts.find(item => item.business_id === businessId) || null, [businessId, contexts]);
 
@@ -115,13 +103,6 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
     setContexts(next);
     const requested = new URL(window.location.href).searchParams.get('business_id');
     setBusinessId((next.find(item => item.business_id === requested) || next[0])?.business_id || '');
-  }, []);
-
-  const loadProAccess = useCallback(async () => {
-    const access = await getPaymentInboxProAccess();
-    setProUser(access.user);
-    setIsPro(access.isPro);
-    return access.isPro;
   }, []);
 
   const loadItems = useCallback(async () => {
@@ -135,24 +116,12 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
 
   useEffect(() => {
     setLoading(true);
-    void Promise.all([loadContexts(), loadProAccess()]).catch(cause => {
+    void loadContexts().catch(cause => {
       setError(cause instanceof Error ? cause.message : 'تعذر تجهيز وارد المدفوعات.');
       setLoading(false);
     });
-  }, [loadContexts, loadProAccess]);
+  }, [loadContexts]);
   useEffect(() => { void loadItems(); }, [loadItems]);
-
-  const openProtected = async (item: PaymentInboxItem, action?: InboxIntent) => {
-    setAccessChecking(true);
-    setError(null);
-    try {
-      const allowed = isPro || await loadProAccess();
-      if (!allowed) { setShowProModal(true); return; }
-      window.location.assign(buildOperationUrl(item, action));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'تعذر التحقق من اشتراك سند Pro.');
-    } finally { setAccessChecking(false); }
-  };
 
   const tabs = admin ? ADMIN_TABS : CASHIER_TABS;
   return (
@@ -170,46 +139,45 @@ export default function PaymentInbox({ admin = false }: { admin?: boolean }) {
       </header>
 
       {error && <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="mt-0.5 h-4 w-4" /><span>{error}</span></div>}
-      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><Loader2 className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">{view === 'completed' ? 'لا توجد عمليات مكتملة' : 'لا توجد عمليات في هذا القسم'}</h2><p className="mt-1 text-[10px] text-slate-400">{view === 'completed' ? 'ستظهر هنا العمليات التي أكملتها واعتمدتها لهذا النشاط.' : 'ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.'}</p></div> : (
+      {loading ? <div className="flex min-h-40 items-center justify-center rounded-3xl border border-slate-200 bg-white"><RefreshCw className="h-6 w-6 animate-spin text-slate-500" /></div> : items.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><Inbox className="mx-auto h-8 w-8 text-slate-300" /><h2 className="mt-3 text-sm font-black text-slate-800">{view === 'completed' ? 'لا توجد عمليات مكتملة' : 'لا توجد عمليات في هذا القسم'}</h2><p className="mt-1 text-[10px] text-slate-400">{view === 'completed' ? 'ستظهر هنا العمليات التي أكملتها واعتمدتها لهذا النشاط.' : 'ستظهر العمليات تلقائيًا عند وصولها أو تغير حالتها.'}</p></div> : (
         <div className="space-y-5">{items.map(item => {
           const entity = item.financial_entity || 'جهة مالية أخرى';
           const accountName = item.account_holder_name || item.receiver_name || item.business_name || 'حساب غير محدد';
           const accountNumber = item.merchant_point || item.receiver_account;
           const operationDate = item.transaction_datetime || item.created_at;
-          const canClaim = item.action_permissions?.can_claim === true;
-          const canComplete = item.action_permissions?.can_complete === true;
-          return <article key={item.id} className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white p-3 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.35)]">
-            <PaymentInboxPreview publicToken={item.public_token} entity={entity} />
+          const reuse = item.reuse_notice;
+          const canClaim = !reuse && item.action_permissions?.can_claim === true;
+          const canComplete = !reuse && item.action_permissions?.can_complete === true;
+          return <article key={item.id} className={`overflow-hidden rounded-[2rem] border bg-white p-3 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.35)] ${reuse ? 'border-amber-300' : 'border-slate-200/80'}`}>
+            <PaymentInboxPreview publicToken={reuse?.canonical_public_token || item.public_token} entity={entity} />
             <div className="px-1 pb-1 pt-4">
+              {reuse && <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><div className="flex items-center gap-2 text-xs font-black"><CopyCheck className="h-4 w-4 text-amber-700" /> مسجلة سابقًا في سند</div><p className="mt-1 text-[10px] leading-5 text-amber-800">هذه نسخة من عملية مالية مسجلة من قبل. لا تُستلم أو تُكمل كعملية مستقلة، ولا تُحتسب كعملية جديدة.</p><div className="mt-2 flex flex-wrap gap-2 text-[9px] font-bold text-amber-700"><span>أول تسجيل: {formatDate(reuse.first_registered_at)}</span>{Number(reuse.occurrence_count || 0) > 1 && <span>• مرات الظهور: {toLatinDigits(String(reuse.occurrence_count))}</span>}</div></div>}
+
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0"><div className="flex items-center gap-2"><EntityLogo entity={entity} /><div className="min-w-0"><h2 className="truncate text-base font-black text-slate-950">{entity}</h2><p className="truncate text-[11px] font-bold text-slate-500">{accountName}</p></div></div></div>
                 <div className="shrink-0 text-left" dir="ltr"><div className="flex items-end gap-2"><span className={`mb-1 rounded-full border px-2.5 py-1 text-[10px] font-black ${currencyClass(item.currency)}`}>{item.currency || '—'}</span><strong className="text-4xl font-black tracking-tight text-slate-950">{formatAmount(item.amount)}</strong></div><p className="mt-1 text-[10px] font-bold text-slate-400">{currencyName(item.currency)}</p></div>
               </div>
 
-              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70">
-                <div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-200">
-                  <CompactFact icon={<CalendarDays className="h-3 w-3" />} label="التاريخ" value={formatDate(operationDate)} />
-                  <CompactFact icon={<Clock3 className="h-3 w-3" />} label="الوقت" value={formatTime(operationDate)} />
-                  <CompactFact icon={<WalletCards className="h-3 w-3" />} label="الحساب" value={accountNumber ? toLatinDigits(accountNumber) : '—'} ltr />
-                  <CompactFact icon={<Hash className="h-3 w-3" />} label="المرجع" value={item.reference_number ? toLatinDigits(item.reference_number) : '—'} ltr />
-                </div>
-              </div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70"><div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-200"><CompactFact icon={<CalendarDays className="h-3 w-3" />} label="التاريخ" value={formatDate(operationDate)} /><CompactFact icon={<Clock3 className="h-3 w-3" />} label="الوقت" value={formatTime(operationDate)} /><CompactFact icon={<WalletCards className="h-3 w-3" />} label="الحساب" value={accountNumber ? toLatinDigits(accountNumber) : '—'} ltr /><CompactFact icon={<Hash className="h-3 w-3" />} label="المرجع" value={item.reference_number ? toLatinDigits(item.reference_number) : '—'} ltr /></div></div>
 
-              {admin && item.claimed_by_name && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-700"><UserRoundCheck className="h-4 w-4" /><span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span></div>}
+              {admin && item.claimed_by_name && !reuse && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-indigo-50 px-3 py-2 text-[10px] text-indigo-700"><UserRoundCheck className="h-4 w-4" /><span>المسؤول الحالي: <b>{item.claimed_by_name}</b></span></div>}
+              {reuse?.canonical_claimed_by_name && <div className="mt-3 flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-[10px] text-slate-600"><UserRoundCheck className="h-4 w-4" /><span>العملية الأصلية لدى: <b>{reuse.canonical_claimed_by_name}</b></span></div>}
+              {reuse?.canonical_completed_at && <div className="mt-2 flex items-center gap-2 rounded-2xl bg-emerald-50 px-3 py-2 text-[10px] text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>تم التعامل مع العملية الأصلية سابقًا {reuse.canonical_completed_by_name ? `بواسطة ${reuse.canonical_completed_by_name}` : ''}.</span></div>}
 
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" disabled={accessChecking} onClick={() => void openProtected(item)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[11px] font-black text-slate-800 shadow-sm disabled:opacity-60"><Eye className="h-4 w-4" /> فتح السجل</button>
-                <button type="button" disabled={accessChecking} onClick={() => void openProtected(item, 'open_original')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 text-[11px] font-black text-violet-700 disabled:opacity-60"><FileText className="h-4 w-4" /> الملف الأصلي</button>
-                {canClaim && <button type="button" disabled={accessChecking} onClick={() => void openProtected(item, 'claim')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 text-[11px] font-black text-white shadow-lg shadow-sky-200 disabled:opacity-60"><Inbox className="h-4 w-4" /> استلام العملية</button>}
-                {canClaim && <button type="button" disabled={accessChecking} onClick={() => void openProtected(item, 'claim_verify')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-3 text-[11px] font-black text-white shadow-lg shadow-indigo-200 disabled:opacity-60"><ShieldCheck className="h-4 w-4" /> استلام وتحقق</button>}
-                {canComplete && <button type="button" disabled={accessChecking} onClick={() => void openProtected(item, 'complete')} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white shadow-lg shadow-emerald-200 disabled:opacity-60"><CheckCircle2 className="h-4 w-4" /> إكمال العملية</button>}
+                {reuse ? <button type="button" onClick={() => window.location.assign(buildCanonicalUrl(item))} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-amber-600 px-3 text-[11px] font-black text-white shadow-lg shadow-amber-200"><Eye className="h-4 w-4" /> عرض العملية الأصلية</button> : <>
+                  <button type="button" onClick={() => window.location.assign(buildOperationUrl(item))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[11px] font-black text-slate-800 shadow-sm"><Eye className="h-4 w-4" /> فتح السجل</button>
+                  <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'open_original'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 text-[11px] font-black text-violet-700"><FileText className="h-4 w-4" /> الملف الأصلي</button>
+                  {canClaim && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'claim'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-sky-600 px-3 text-[11px] font-black text-white shadow-lg shadow-sky-200"><Inbox className="h-4 w-4" /> استلام العملية</button>}
+                  {canClaim && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'claim_verify'))} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-3 text-[11px] font-black text-white shadow-lg shadow-indigo-200"><ShieldCheck className="h-4 w-4" /> استلام وتحقق</button>}
+                  {canComplete && <button type="button" onClick={() => window.location.assign(buildOperationUrl(item, 'complete'))} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-3 text-[11px] font-black text-white shadow-lg shadow-emerald-200"><CheckCircle2 className="h-4 w-4" /> إكمال العملية</button>}
+                </>}
               </div>
             </div>
           </article>;
         })}</div>
       )}
       {admin && <a href={buildInboxUrl(false, businessId)} className="inline-flex items-center gap-2 text-xs font-bold text-slate-500"><ArrowLeft className="h-4 w-4" /> العودة إلى وارد الموظف</a>}
-      {showProModal && proUser && <ProUpgradeModal user={proUser as any} onClose={() => setShowProModal(false)} onSuccess={() => { setShowProModal(false); void loadProAccess(); }} />}
     </section>
   );
 }
