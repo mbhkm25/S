@@ -72,7 +72,14 @@ export async function getPaymentInboxProAccess(): Promise<PaymentInboxProAccess>
   if (usageError) throw usageError;
   const payload = usage && typeof usage === 'object' ? usage as Record<string, unknown> : null;
   const plan = payload?.plan && typeof payload.plan === 'object' ? payload.plan as Record<string, unknown> : null;
-  return { isPro: plan?.is_pro === true, user: authData.user || null, usage: payload };
+  const requiresSubscription = payload?.requires_subscription === true;
+
+  // Payment Inbox access follows the operation-access entitlement returned by
+  // get_my_operation_access_usage: free users remain allowed until their one-time
+  // quota is exhausted, while active Pro subscribers are always entitled.
+  const hasPaymentInboxAccess = plan?.is_pro === true || !requiresSubscription;
+
+  return { isPro: hasPaymentInboxAccess, user: authData.user || null, usage: payload };
 }
 
 function ensureActionSucceeded(data: unknown, fallback: string): void {
