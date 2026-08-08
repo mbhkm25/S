@@ -1,0 +1,20 @@
+{
+  "updated_at": "2026-08-08",
+  "reason": "production_cleanup",
+  "response": "410 retired_production_cleanup",
+  "verify_jwt": true,
+  "functions": [
+    "sanad-operation-600-reprocess-once",
+    "sanad-operation-600-v24-run-once",
+    "sanad-reanalyze-operation-220-once",
+    "sanad-preview-inspect-once",
+    "sanad-report-delivery-dry-run",
+    "sanad-report-delivery-fixed-dry-run",
+    "sanad-v3-process-report-v2-test",
+    "sanad-preview-v4-test-runner",
+    "sanad-report-retry-2f0e09db",
+    "sanad-report-v2-1-visual-test",
+    "sanad-shadow-batch-20260806",
+    "sanad-contract-fix-validation"
+  ]
+}
