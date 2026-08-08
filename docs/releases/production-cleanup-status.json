@@ -1,14 +1,22 @@
 {
   "date": "2026-08-08",
-  "status": "in_progress",
-  "retired_in_this_pass": 12,
+  "status": "ready_for_merge",
+  "retired_in_this_pass": 29,
   "security_gate": "closed",
-  "pilot_gate": "blocked_until_cleanup_closed",
+  "pilot_gate": "blocked_until_cleanup_merge_and_final_verification",
+  "retained_engineering_surface": [
+    "authenticated benchmark/diagnostic functions",
+    "authenticated analyzer/routing shadow tools with explicit engineering purpose"
+  ],
+  "resolved": [
+    "assistant canary/shadow/eval legacy surface retired",
+    "legacy analyzer candidate/recovery endpoints retired",
+    "completed leaked-password one-shot workflow removed",
+    "core and supporting customer-path functions preserved"
+  ],
   "remaining": [
-    "classify reusable benchmark/diagnostic functions",
-    "classify assistant canary/shadow/eval surface",
-    "reconcile temporary one-shot workflow cleanup",
-    "run final production verification and quality gates",
-    "update SANAD OS with final cleanup closure"
+    "merge PR after green quality gate",
+    "run post-merge production verification",
+    "update SANAD OS and close cleanup gate"
   ]
 }
