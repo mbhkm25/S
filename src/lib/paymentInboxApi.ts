@@ -9,6 +9,23 @@ export interface PaymentInboxContext {
   is_supervisor?: boolean;
 }
 
+export interface PaymentInboxReuseNotice {
+  operation_id: string;
+  inbox_id: string;
+  is_exact_duplicate: true;
+  canonical_operation_id: string;
+  canonical_public_token: string;
+  first_registered_at?: string | null;
+  occurrence_count?: number | null;
+  canonical_inbox_id?: string | null;
+  canonical_inbox_status?: string | null;
+  canonical_claimed_by_name?: string | null;
+  canonical_completed_by_name?: string | null;
+  canonical_completed_at?: string | null;
+  strategy?: string | null;
+  confidence?: number | null;
+}
+
 export interface PaymentInboxItem {
   id: string;
   operation_id: string;
@@ -29,6 +46,7 @@ export interface PaymentInboxItem {
   claimed_by_name?: string | null;
   created_at?: string | null;
   action_permissions?: { can_claim?: boolean; can_complete?: boolean };
+  reuse_notice?: PaymentInboxReuseNotice | null;
 }
 
 export interface PaymentInboxProAccess {
@@ -52,15 +70,26 @@ export async function getPaymentInboxContexts(): Promise<PaymentInboxContext[]> 
 }
 
 export async function getPaymentInbox(businessId: string, view: PaymentInboxView, limit = 50): Promise<PaymentInboxItem[]> {
-  const { data, error } = await supabase.rpc('get_business_payment_inbox_v2', {
-    p_business_id: businessId,
-    p_view: view,
-    p_limit: limit,
-    p_before_created_at: null,
-    p_before_id: null
-  });
-  if (error) throw error;
-  return unwrapItems<PaymentInboxItem>(data);
+  const [inboxResult, reuseResult] = await Promise.all([
+    supabase.rpc('get_business_payment_inbox_v2', {
+      p_business_id: businessId,
+      p_view: view,
+      p_limit: limit,
+      p_before_created_at: null,
+      p_before_id: null
+    }),
+    supabase.rpc('get_business_payment_reuse_notices', { p_business_id: businessId })
+  ]);
+
+  if (inboxResult.error) throw inboxResult.error;
+  if (reuseResult.error) throw reuseResult.error;
+
+  const notices = unwrapItems<PaymentInboxReuseNotice>(reuseResult.data);
+  const byInboxId = new Map(notices.map(notice => [notice.inbox_id, notice]));
+  return unwrapItems<PaymentInboxItem>(inboxResult.data).map(item => ({
+    ...item,
+    reuse_notice: byInboxId.get(item.id) || null
+  }));
 }
 
 export async function getPaymentInboxProAccess(): Promise<PaymentInboxProAccess> {
@@ -72,7 +101,9 @@ export async function getPaymentInboxProAccess(): Promise<PaymentInboxProAccess>
   if (usageError) throw usageError;
   const payload = usage && typeof usage === 'object' ? usage as Record<string, unknown> : null;
   const plan = payload?.plan && typeof payload.plan === 'object' ? payload.plan as Record<string, unknown> : null;
-  return { isPro: plan?.is_pro === true, user: authData.user || null, usage: payload };
+  const requiresSubscription = payload?.requires_subscription === true;
+  const hasPaymentInboxAccess = plan?.is_pro === true || !requiresSubscription;
+  return { isPro: hasPaymentInboxAccess, user: authData.user || null, usage: payload };
 }
 
 function ensureActionSucceeded(data: unknown, fallback: string): void {
