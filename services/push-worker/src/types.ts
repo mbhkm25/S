@@ -31,7 +31,9 @@ export interface PushDeliveryTarget {
   p256dh: string;
   auth_secret: string;
   content_encoding: 'aes128gcm' | 'aesgcm';
-  platform: 'web' | 'pwa';
+  platform: 'web' | 'pwa' | 'android';
+  provider?: 'web_push' | 'fcm';
+  provider_token?: string | null;
   failure_count: number;
 }
 
@@ -62,7 +64,7 @@ export interface SendOptions {
 export interface SendResult { statusCode: number; }
 
 export interface PushSender {
-  send(target: PushDeliveryTarget, serializedPayload: string, options: SendOptions): Promise<SendResult>;
+  send(target: PushDeliveryTarget, serializedPayload: string, options: SendOptions, built?: BuiltPushPayload): Promise<SendResult>;
 }
 
 export type PushReservationReason =

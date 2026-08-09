@@ -1,7 +1,9 @@
 import { ConfigError, loadConfig } from './config.js';
+import { createFcmSender } from './fcm.js';
 import { startHealthServer, type HealthServer } from './health.js';
 import { createLogger, safeErrorCode, type Logger } from './logger.js';
 import { createPushDatabase } from './supabase.js';
+import type { PushSender } from './types.js';
 import { createWebPushSender } from './webPush.js';
 import { PushWorker } from './worker.js';
 
@@ -14,6 +16,21 @@ function startupFailure(error: unknown): never {
   process.exit(1);
 }
 
+function createMultiProviderSender(config: ReturnType<typeof loadConfig>): PushSender {
+  const web = createWebPushSender(config);
+  const fcm = createFcmSender({
+    projectId: process.env.FIREBASE_PROJECT_ID?.trim(),
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL?.trim(),
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.trim(),
+  });
+  return {
+    async send(target, payload, options) {
+      const isFcm = target.provider === 'fcm' || target.endpoint.startsWith('https://fcm.sanadflow.invalid/');
+      return isFcm ? fcm.send(target, payload, options) : web.send(target, payload, options);
+    }
+  };
+}
+
 async function main(): Promise<void> {
   let config: ReturnType<typeof loadConfig>;
   try { config = loadConfig(); } catch (error) { startupFailure(error); }
@@ -21,7 +38,7 @@ async function main(): Promise<void> {
   const worker = new PushWorker({
     config,
     database: createPushDatabase(config),
-    sender: createWebPushSender(config),
+    sender: createMultiProviderSender(config),
     logger
   });
   let health: HealthServer;
