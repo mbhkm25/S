@@ -115,8 +115,32 @@ function currencyClass(value: unknown) {
   if (currency === "SAR") return "currency-sar";
   return "currency-other";
 }
+function operationSortValue(operation: Operation) {
+  const value = Date.parse(String(operation.created_at || ""));
+  return Number.isFinite(value) ? value : 0;
+}
+function generatedSummary(operation: Operation) {
+  const entity = safeText(operation.financial_entity || "", "", 100);
+  const amount = Number(operation.amount);
+  const currency = currencyLabel(operation.currency);
+  const beneficiary = safeText(
+    operation.resolved_business_name || operation.resolved_account_holder_name || operation.raw_receiver_name || "",
+    "",
+    120,
+  );
+  if (entity && Number.isFinite(amount) && amount > 0) {
+    const parts = [`عملية مالية بقيمة ${fmtAmountNumber(amount)} ${currency}`];
+    if (entity && entity !== "غير معروف") parts.push(`عبر ${entity}`);
+    let text = `${parts.join(" ")}.`;
+    if (beneficiary) text += ` المستفيد: ${beneficiary}.`;
+    return text;
+  }
+  return "لم يتوفر ملخص تحليلي لهذه العملية؛ راجع الإشعار الأصلي وبيانات العملية.";
+}
 function operationalSummary(operation: Operation) {
-  const base = safeText(operation.summary || "", "", 420);
+  const sourceSummary = safeText(operation.summary || "", "", 420);
+  const base = sourceSummary || generatedSummary(operation);
+  const fallback = !sourceSummary;
   const verifiedBy = safeText(operation.verified_by_name || "", "", 120);
   const status = statusLabel(operation.status);
   const stateLine = verifiedBy && String(operation.status || "") === "verified"
@@ -124,7 +148,7 @@ function operationalSummary(operation: Operation) {
     : verifiedBy
       ? `الحالة: ${status} — بواسطة: ${verifiedBy}`
       : `الحالة: ${status}`;
-  return { base, stateLine };
+  return { base, stateLine, fallback };
 }
 async function remoteImageDataUri(url: string): Promise<string | null> {
   try {
@@ -142,27 +166,38 @@ async function remoteImageDataUri(url: string): Promise<string | null> {
 }
 
 function buildOfficialPdfHtml(snapshot: any, logoDataUri: string | null) {
-  const operations: Operation[] = Array.isArray(snapshot?.payload?.operations) ? snapshot.payload.operations : [];
+  const operations: Operation[] = Array.isArray(snapshot?.payload?.operations)
+    ? [...snapshot.payload.operations].sort((a, b) => operationSortValue(b) - operationSortValue(a))
+    : [];
   const rows = operations.map((operation, index) => {
-    const timing = fmtOperationDateTime(operation.transaction_datetime || operation.created_at);
+    const transactionTiming = fmtOperationDateTime(operation.transaction_datetime);
+    const intakeTiming = fmtOperationDateTime(operation.created_at);
     const summary = operationalSummary(operation);
     const reference = safeText(operation.reference_number || "—", "—", 100);
     return `<tr class="${currencyClass(operation.currency)}">
       <td class="num">${index + 1}</td>
       <td class="date-cell">
-        <div class="date-main latin">${esc(timing.date)}</div>
-        <span class="time-badge latin">${esc(timing.time)}</span>
+        <div class="date-block">
+          <div class="date-label">وقت العملية</div>
+          <div class="date-line"><strong class="latin">${esc(transactionTiming.date)}</strong><span class="time-badge latin">${esc(transactionTiming.time)}</span></div>
+        </div>
+        <div class="date-block intake-date">
+          <div class="date-label">أضيف إلى سند</div>
+          <div class="date-line"><strong class="latin">${esc(intakeTiming.date)}</strong><span class="time-badge subtle latin">${esc(intakeTiming.time)}</span></div>
+        </div>
       </td>
       <td class="entity-cell">
         <div class="entity-name">${esc(operation.financial_entity || "—")}</div>
         <div class="entity-ref latin">${esc(reference)}</div>
       </td>
       <td class="amount-cell">
-        <span class="currency-name">${esc(currencyLabel(operation.currency))}</span>
-        <strong class="amount-number latin">${esc(fmtAmountNumber(operation.amount))}</strong>
+        <div class="amount-layout">
+          <span class="currency-name">${esc(currencyLabel(operation.currency))}</span>
+          <strong class="amount-number latin">${esc(fmtAmountNumber(operation.amount))}</strong>
+        </div>
       </td>
       <td class="summary-cell">
-        ${summary.base ? `<div class="summary-main">${esc(summary.base)}</div>` : ""}
+        <div class="summary-main${summary.fallback ? " summary-fallback" : ""}">${esc(summary.base)}</div>
         <div class="summary-state">${esc(summary.stateLine)}</div>
       </td>
     </tr>`;
@@ -188,28 +223,33 @@ function buildOfficialPdfHtml(snapshot: any, logoDataUri: string | null) {
     .card{border:1px solid #dbe2ea;border-radius:9px;padding:8px 9px;background:#fbfcfd;text-align:right}
     .card .label{font-size:10.5px;color:#66758a}
     .card .value{font-size:17px;font-weight:700;margin-top:2px;color:#111827;direction:ltr;unicode-bidi:isolate}
-    table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d7dee7;border-radius:8px;overflow:hidden}
+    table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #d7dee7}
     thead{display:table-header-group}
-    tr{break-inside:avoid;page-break-inside:avoid}
-    th,td{border-bottom:1px solid #dce3eb;border-left:1px solid #e3e8ee;padding:8px 7px;vertical-align:top;text-align:right;overflow-wrap:anywhere}
-    th:last-child,td:last-child{border-left:0}
-    tbody tr:last-child td{border-bottom:0}
+    tbody{display:table-row-group}
+    tr{display:table-row;break-inside:avoid;page-break-inside:avoid}
+    th,td{display:table-cell;border:1px solid #dce3eb;padding:8px 7px;vertical-align:top;text-align:right;overflow-wrap:anywhere}
     th{background:#edf1f5;font-weight:700;font-size:11px;color:#263244;line-height:1.35;vertical-align:middle}
     td{font-size:10.7px;color:#1f2937;background:#fff}
     th:nth-child(1){width:5%}
-    th:nth-child(2){width:17%}
-    th:nth-child(3){width:22%}
-    th:nth-child(4){width:18%}
-    th:nth-child(5){width:38%}
+    th:nth-child(2){width:21%}
+    th:nth-child(3){width:20%}
+    th:nth-child(4){width:17%}
+    th:nth-child(5){width:37%}
     .num{text-align:center;direction:ltr;font-weight:700;padding-top:10px}
-    .date-main{font-weight:700;text-align:left;white-space:nowrap;margin-bottom:5px}
-    .time-badge{display:inline-flex;width:max-content;max-width:100%;align-items:center;justify-content:center;border:1px solid #111827;border-radius:999px;padding:1px 7px;background:transparent;font-size:9.7px;line-height:1.5;white-space:nowrap}
+    .date-block{padding:0 0 6px}
+    .date-block+.date-block{border-top:1px solid rgba(100,116,139,.22);padding-top:6px}
+    .date-label{font-size:8.7px;line-height:1.35;color:#7a8798;margin-bottom:3px;font-weight:700}
+    .date-line{display:flex;align-items:center;justify-content:space-between;gap:5px;direction:rtl}
+    .date-line strong{font-size:9.7px;white-space:nowrap;color:#1f2937}
+    .time-badge{display:inline-block;border:1px solid #111827;border-radius:999px;padding:1px 6px;background:transparent;font-size:9px;line-height:1.45;white-space:nowrap}
+    .time-badge.subtle{border-color:#98a2b3;color:#475467}
     .entity-name{font-weight:700;margin-bottom:4px;color:#172033}
     .entity-ref{text-align:left;font-size:9.7px;color:#667085;overflow-wrap:anywhere}
-    .amount-cell{display:flex;align-items:flex-start;justify-content:space-between;gap:7px;direction:rtl}
+    .amount-layout{display:flex;align-items:flex-start;justify-content:space-between;gap:7px;direction:rtl;width:100%}
     .currency-name{text-align:right;font-weight:600;line-height:1.45;color:#344054}
     .amount-number{text-align:left;font-size:11.4px;font-weight:700;white-space:nowrap;color:#101828}
     .summary-main{font-size:10.6px;line-height:1.55;color:#263244}
+    .summary-fallback{color:#475467;font-style:normal}
     .summary-state{margin-top:4px;padding-top:3px;border-top:1px solid rgba(100,116,139,.20);font-size:9.5px;line-height:1.45;color:#667085;font-weight:600}
     tr.currency-yer td{background:#f3faf6}
     tr.currency-sar td{background:#fff9ed}
@@ -237,7 +277,7 @@ function buildOfficialPdfHtml(snapshot: any, logoDataUri: string | null) {
       <div class="card"><div class="label">عليها ملاحظات</div><div class="value">${Number(snapshot.operations_with_notes || 0)}</div></div>
     </div>
     <table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>الجهة المالية</th><th>المبلغ</th><th>الملخص</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="empty">لا توجد عمليات ضمن نطاق هذا التقرير.</td></tr>`}</tbody></table>
-    <div class="footer"><span>هذا تقرير لعمليات سند وسجلها التشغيلي، ولا يمثل تأكيدًا بنكيًا لوصول الأموال.</span><span class="id">Report ID: ${esc(reportId)}</span></div>
+    <div class="footer"><span>ترتيب الصفوف يعتمد على وقت إضافة العملية إلى سند، بينما يعرض العمود وقت العملية المستخرج من الإشعار ووقت الإدخال معًا.</span><span class="id">Report ID: ${esc(reportId)}</span></div>
   </body></html>`;
 }
 
@@ -361,7 +401,7 @@ async function processReport(reportId: string, dryRun: boolean) {
     verified_count: artifacts.verified_count,
     operations_with_notes: artifacts.operations_with_notes,
     delivery_format: format,
-    renderer: "official-portrait-operations-v4",
+    renderer: "official-portrait-operations-v5",
   };
 
   let pdfPath: string | null = null;
