@@ -20,7 +20,7 @@ function envAny(names: string[], fallback?: string) {
 
 const SUPABASE_URL = env("SUPABASE_URL").replace(/\/$/, "");
 const sb = createClient(SUPABASE_URL, env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-const REPORT_URL_BASE = env("INTERACTIVE_REPORT_BASE_URL", `${SUPABASE_URL}/functions/v1/sanad-interactive-report`).replace(/\/$/, "");
+const REPORT_URL_BASE = env("INTERACTIVE_REPORT_BASE_URL", "https://api.sanadflow.com/functions/v1/sanad-interactive-report").replace(/\/$/, "");
 const BUCKET = env("SUPABASE_STORAGE_BUCKET", "operation-files");
 const APP_BASE = env("PUBLIC_APP_BASE_URL", "https://app.sanadflow.com").replace(/\/$/, "");
 const WA_PHONE_ID = envAny(["WHATSAPP_PHONE_NUMBER_ID", "META_WA_PHONE_NUMBER_ID"]);
@@ -347,7 +347,16 @@ async function sendInteractiveLink(to: string, url: string, metrics: Json) {
     type: "text",
     text: {
       preview_url: true,
-      body: `تم إعداد تقرير عملياتك في سند.\n\nعدد العمليات: ${Number(metrics.operations_count || 0)}\nالموثقة: ${Number(metrics.verified_count || 0)}\nعليها ملاحظات: ${Number(metrics.operations_with_notes || 0)}\n\nاضغط لاستعراض التقرير وتصفية عملياته:\n${url}\n\nالرابط خاص بك وصالح لمدة محدودة.`,
+      body: `تم إعداد تقرير عملياتك في سند.\
+\
+عدد العمليات: ${Number(metrics.operations_count || 0)}\
+الموثقة: ${Number(metrics.verified_count || 0)}\
+عليها ملاحظات: ${Number(metrics.operations_with_notes || 0)}\
+\
+اضغط لاستعراض التقرير وتصفية عملياته:\
+${url}\
+\
+الرابط خاص بك وصالح لمدة محدودة.`,
     },
   });
 }
