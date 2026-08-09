@@ -34,7 +34,10 @@ async function accessToken(config: Required<FcmConfig>): Promise<string> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'oauth-grant-type'), assertion }),
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
   });
   const body = await response.json() as { access_token?: string; expires_in?: number };
   if (!response.ok || !body.access_token) throw Object.assign(new Error('fcm_oauth_failed'), { statusCode: response.status });
@@ -53,7 +56,10 @@ function parsePayload(serialized: string): PushPayload {
 export function createFcmSender(config: FcmConfig) {
   return {
     async send(target: PushDeliveryTarget, serializedPayload: string, options: SendOptions): Promise<SendResult> {
-      if (target.provider !== 'fcm' || !target.provider_token) throw Object.assign(new Error('invalid_fcm_target'), { statusCode: 400 });
+      const fcmToken = target.provider_token || (
+        target.endpoint.startsWith('https://fcm.sanadflow.invalid/') ? target.p256dh : null
+      );
+      if (!fcmToken) throw Object.assign(new Error('invalid_fcm_target'), { statusCode: 400 });
       if (!config.projectId || !config.clientEmail || !config.privateKey) {
         throw Object.assign(new Error('fcm_not_configured'), { statusCode: 503 });
       }
@@ -68,7 +74,7 @@ export function createFcmSender(config: FcmConfig) {
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         body: JSON.stringify({
           message: {
-            token: target.provider_token,
+            token: fcmToken,
             notification: { title: payload.title, body: payload.body },
             data: {
               sanad_notification_id: payload.notification_id,
