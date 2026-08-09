@@ -182,17 +182,58 @@ jobs:
       - name: Verify release signing continuity
         run: |
           set -euo pipefail
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
+
+          APKSIGNER="$(command -v apksigner || true)"
+          if [[ -z "$APKSIGNER" ]]; then
+            APKSIGNER="$(find "$ANDROID_HOME/build-tools" \( -type f -o -type l \) -name apksigner -perm -u+x 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if [[ -z "$APKSIGNER" || ! -x "$APKSIGNER" ]]; then
+            echo "Could not locate an executable Android apksigner. Refusing to publish." >&2
+            exit 1
+          fi
+          echo "Using apksigner: $APKSIGNER"
+
           NEW_APK="android/app/build/outputs/apk/release/app-release.apk"
-          NEW_CERT="$($APKSIGNER verify --print-certs "$NEW_APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
-          test -n "$NEW_CERT"
+          OLD_APK="/tmp/sanad-current-production.apk"
+          test -s "$NEW_APK"
 
           curl --fail --silent --show-error --location --max-time 60 \
-            --output /tmp/sanad-current-production.apk \
+            --output "$OLD_APK" \
             https://app.sanadflow.com/downloads/sanad-latest.apk
-          OLD_CERT="$($APKSIGNER verify --print-certs /tmp/sanad-current-production.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
-          test -n "$OLD_CERT"
+          test -s "$OLD_APK"
+
+          if ! NEW_CERT_OUTPUT="$($APKSIGNER verify --print-certs "$NEW_APK" 2>&1)"; then
+            echo "The newly built release APK failed apksigner verification. Refusing to publish." >&2
+            printf '%s\n' "$NEW_CERT_OUTPUT" >&2
+            exit 1
+          fi
+          if ! OLD_CERT_OUTPUT="$($APKSIGNER verify --print-certs "$OLD_APK" 2>&1)"; then
+            echo "The currently published production APK failed apksigner verification. Refusing to replace it." >&2
+            printf '%s\n' "$OLD_CERT_OUTPUT" >&2
+            exit 1
+          fi
+
+          extract_cert_digest() {
+            printf '%s\n' "$1" \
+              | awk -F': ' 'tolower($0) ~ /certificate sha-256 digest:/ {gsub(/[[:space:]]/, "", $2); print tolower($2); exit}'
+          }
+
+          NEW_CERT="$(extract_cert_digest "$NEW_CERT_OUTPUT")"
+          OLD_CERT="$(extract_cert_digest "$OLD_CERT_OUTPUT")"
+
+          if [[ ! "$NEW_CERT" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Could not extract a valid SHA-256 certificate digest from the newly built APK. Refusing to publish." >&2
+            printf '%s\n' "$NEW_CERT_OUTPUT" >&2
+            exit 1
+          fi
+          if [[ ! "$OLD_CERT" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Could not extract a valid SHA-256 certificate digest from the currently published APK. Refusing to publish." >&2
+            printf '%s\n' "$OLD_CERT_OUTPUT" >&2
+            exit 1
+          fi
+
+          echo "New release certificate SHA-256: $NEW_CERT"
+          echo "Current production certificate SHA-256: $OLD_CERT"
 
           if [[ "$NEW_CERT" != "$OLD_CERT" ]]; then
             echo "Android signing certificate changed. Refusing to publish an APK that cannot update existing SANAD installations." >&2
