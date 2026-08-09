@@ -2,9 +2,9 @@ import { createSign } from 'node:crypto';
 import type { PushDeliveryTarget, PushPayload, SendOptions, SendResult } from './types.js';
 
 export interface FcmConfig {
-  projectId?: string;
-  clientEmail?: string;
-  privateKey?: string;
+  projectId?: string | undefined;
+  clientEmail?: string | undefined;
+  privateKey?: string | undefined;
 }
 
 type CachedToken = { value: string; expiresAt: number };
