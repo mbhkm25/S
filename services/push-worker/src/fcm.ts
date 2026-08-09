@@ -7,6 +7,12 @@ export interface FcmConfig {
   privateKey?: string | undefined;
 }
 
+type ResolvedFcmConfig = {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+};
+
 type CachedToken = { value: string; expiresAt: number };
 let cachedToken: CachedToken | null = null;
 
@@ -14,7 +20,7 @@ function base64Url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
 }
 
-async function accessToken(config: Required<FcmConfig>): Promise<string> {
+async function accessToken(config: ResolvedFcmConfig): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -63,13 +69,14 @@ export function createFcmSender(config: FcmConfig) {
       if (!config.projectId || !config.clientEmail || !config.privateKey) {
         throw Object.assign(new Error('fcm_not_configured'), { statusCode: 503 });
       }
-      const payload = parsePayload(serializedPayload);
-      const token = await accessToken({
+      const resolved: ResolvedFcmConfig = {
         projectId: config.projectId,
         clientEmail: config.clientEmail,
         privateKey: config.privateKey.replace(/\\n/g, '\n'),
-      });
-      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/messages:send`, {
+      };
+      const payload = parsePayload(serializedPayload);
+      const token = await accessToken(resolved);
+      const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(resolved.projectId)}/messages:send`, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         body: JSON.stringify({
