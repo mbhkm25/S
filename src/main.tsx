@@ -10,6 +10,7 @@ import OperationDocumentPreviewEnhancer from './features/operations/OperationDoc
 import './index.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
+import { initializeAndroidNativePush } from './lib/androidNativePush';
 
 import { Capacitor } from '@capacitor/core';
 
@@ -25,6 +26,8 @@ const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNati
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
+
+if (isAndroidNative && !import.meta.env.DEV) initializeAndroidNativePush();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
