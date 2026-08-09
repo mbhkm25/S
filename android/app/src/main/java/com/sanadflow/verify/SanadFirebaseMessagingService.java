@@ -38,11 +38,11 @@ public class SanadFirebaseMessagingService extends FirebaseMessagingService {
             ? notification.getBody()
             : message.getData().getOrDefault("body", "لديك إشعار جديد في سند");
 
-        // Android itself displays notification payloads while the app is backgrounded.
-        // This service path is primarily for foreground/data-only deliveries.
+        // Android displays notification payloads itself while the app is backgrounded.
+        // This service path handles foreground and data-only deliveries.
         if (notification != null && !isAppInForeground()) return;
 
-        Intent intent = new Intent(this, MainActivity.class);
+        Intent intent = new Intent(this, PushEnabledMainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         for (Map.Entry<String, String> entry : message.getData().entrySet()) {
             intent.putExtra(entry.getKey(), entry.getValue());
