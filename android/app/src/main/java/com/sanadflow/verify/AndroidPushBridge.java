@@ -14,6 +14,7 @@ import android.webkit.WebView;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 import org.json.JSONObject;
@@ -78,23 +79,43 @@ public final class AndroidPushBridge {
         if ("granted".equals(permissionState(activity))) fetchAndPublishToken();
     }
 
+    private boolean firebaseReady() {
+        try {
+            return !FirebaseApp.getApps(activity).isEmpty();
+        } catch (Throwable error) {
+            Log.w(TAG, "Firebase availability check failed; native push disabled safely", error);
+            return false;
+        }
+    }
+
     private void fetchAndPublishToken() {
         ensureNotificationChannel(activity);
-        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
-            if (!task.isSuccessful()) {
-                Log.w(TAG, "FCM token unavailable", task.getException());
-                publish(null, permissionState(activity), "fcm_token_unavailable");
-                return;
-            }
-            String token = task.getResult();
-            if (token == null || token.trim().isEmpty()) {
-                publish(null, permissionState(activity), "fcm_token_empty");
-                return;
-            }
-            activity.getSharedPreferences("sanad_push", Context.MODE_PRIVATE)
-                .edit().putString("fcm_token", token).apply();
-            publish(token, permissionState(activity), null);
-        });
+        if (!firebaseReady()) {
+            Log.w(TAG, "Firebase is not configured; skipping FCM registration without affecting app startup");
+            publish(null, permissionState(activity), "firebase_not_configured");
+            return;
+        }
+
+        try {
+            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+                if (!task.isSuccessful()) {
+                    Log.w(TAG, "FCM token unavailable", task.getException());
+                    publish(null, permissionState(activity), "fcm_token_unavailable");
+                    return;
+                }
+                String token = task.getResult();
+                if (token == null || token.trim().isEmpty()) {
+                    publish(null, permissionState(activity), "fcm_token_empty");
+                    return;
+                }
+                activity.getSharedPreferences("sanad_push", Context.MODE_PRIVATE)
+                    .edit().putString("fcm_token", token).apply();
+                publish(token, permissionState(activity), null);
+            });
+        } catch (Throwable error) {
+            Log.e(TAG, "FCM initialization failed; native push disabled safely", error);
+            publish(null, permissionState(activity), "fcm_initialization_failed");
+        }
     }
 
     private void publish(String token, String permission, String error) {
