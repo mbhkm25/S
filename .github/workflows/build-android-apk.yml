@@ -7,6 +7,9 @@ on:
     paths:
       - 'android/**'
       - 'src/**'
+      - 'config/android-release.json'
+      - 'scripts/android-release-meta.mjs'
+      - 'scripts/android-release-meta.test.mjs'
       - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
@@ -20,6 +23,9 @@ on:
     paths:
       - 'android/**'
       - 'src/**'
+      - 'config/android-release.json'
+      - 'scripts/android-release-meta.mjs'
+      - 'scripts/android-release-meta.test.mjs'
       - 'scripts/generate-sanad-icons.py'
       - 'public/**'
       - 'index.html'
@@ -36,9 +42,6 @@ concurrency:
   group: sanad-android-apk-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  SANAD_ANDROID_VERSION: '96'
-
 jobs:
   build-field-test-apk:
     name: Build field-test APK
@@ -52,6 +55,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Read Android release metadata
+        id: release
+        run: node scripts/android-release-meta.mjs github-output >> "$GITHUB_OUTPUT"
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -62,13 +68,15 @@ jobs:
         run: python -m pip install --disable-pip-version-check Pillow
       - name: Install dependencies
         run: npm ci
-      - name: Validate application
+      - name: Validate application and release contract
         run: |
           npm run lint
           npm run check:routes
+          npm run check:android-release
+          node --test scripts/android-release-meta.test.mjs
       - name: Build Android assets
         env:
-          VITE_APP_VERSION: ${{ env.SANAD_ANDROID_VERSION }}
+          VITE_APP_VERSION: ${{ steps.release.outputs.version_code }}
         run: npm run build:android
       - name: Sync Capacitor Android project
         run: npx cap sync android
@@ -78,6 +86,8 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean assembleDebug
       - name: Prepare field-test artifact
+        env:
+          SANAD_ANDROID_VERSION: ${{ steps.release.outputs.version_code }}
         run: |
           set -euo pipefail
           mkdir -p release
@@ -86,7 +96,7 @@ jobs:
       - name: Upload field-test APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-v${{ env.SANAD_ANDROID_VERSION }}-field-test-apk
+          name: sanad-v${{ steps.release.outputs.version_code }}-field-test-apk
           path: release/
           if-no-files-found: error
           retention-days: 14
@@ -108,6 +118,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Read Android release metadata
+        id: release
+        run: node scripts/android-release-meta.mjs github-output >> "$GITHUB_OUTPUT"
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -142,13 +155,15 @@ jobs:
           test -s "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
       - name: Install dependencies
         run: npm ci
-      - name: Validate application
+      - name: Validate application and release contract
         run: |
           npm run lint
           npm run check:routes
+          npm run check:android-release
+          node --test scripts/android-release-meta.test.mjs
       - name: Build Android assets
         env:
-          VITE_APP_VERSION: ${{ env.SANAD_ANDROID_VERSION }}
+          VITE_APP_VERSION: ${{ steps.release.outputs.version_code }}
         run: npm run build:android
       - name: Sync Capacitor Android project
         run: npx cap sync android
@@ -164,36 +179,58 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean assembleRelease
           test -s app/build/outputs/apk/release/app-release.apk
+      - name: Verify release signing continuity
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          NEW_APK="android/app/build/outputs/apk/release/app-release.apk"
+          NEW_CERT="$($APKSIGNER verify --print-certs "$NEW_APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          test -n "$NEW_CERT"
+
+          curl --fail --silent --show-error --location --max-time 60 \
+            --output /tmp/sanad-current-production.apk \
+            https://app.sanadflow.com/downloads/sanad-latest.apk
+          OLD_CERT="$($APKSIGNER verify --print-certs /tmp/sanad-current-production.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          test -n "$OLD_CERT"
+
+          if [[ "$NEW_CERT" != "$OLD_CERT" ]]; then
+            echo "Android signing certificate changed. Refusing to publish an APK that cannot update existing SANAD installations." >&2
+            exit 1
+          fi
+          echo "Signing continuity verified."
       - name: Prepare stable release files
+        env:
+          SANAD_ANDROID_VERSION: ${{ steps.release.outputs.version_code }}
         run: |
           set -euo pipefail
           mkdir -p release
           APK_VERSIONED="sanad-v${SANAD_ANDROID_VERSION}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "release/$APK_VERSIONED"
           cp "release/$APK_VERSIONED" release/sanad-latest.apk
-          SHA256="$(sha256sum release/sanad-latest.apk | awk '{print $1}')"
-          SIZE_BYTES="$(stat -c '%s' release/sanad-latest.apk)"
-          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node scripts/android-release-meta.mjs manifest release/sanad-latest.apk release/sanad-latest.json "$GITHUB_SHA" >/tmp/sanad-release-sha.txt
+          SHA256="$(cat /tmp/sanad-release-sha.txt)"
           printf '%s  %s\n' "$SHA256" sanad-latest.apk > release/sanad-latest.apk.sha256
-          cat > release/sanad-latest.json <<JSON
-          {
-            "platform": "android",
-            "version": "${SANAD_ANDROID_VERSION}",
-            "version_name": "0.${SANAD_ANDROID_VERSION}.0",
-            "version_code": ${SANAD_ANDROID_VERSION},
-            "filename": "sanad-latest.apk",
-            "versioned_filename": "${APK_VERSIONED}",
-            "download_url": "/downloads/sanad-latest.apk",
-            "sha256": "${SHA256}",
-            "size_bytes": ${SIZE_BYTES},
-            "commit": "${GITHUB_SHA}",
-            "built_at": "${BUILT_AT}"
-          }
-          JSON
+      - name: Validate generated release manifest
+        env:
+          EXPECTED_VERSION: ${{ steps.release.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs=require("fs");
+            const crypto=require("crypto");
+            const m=JSON.parse(fs.readFileSync("release/sanad-latest.json","utf8"));
+            const apk=fs.readFileSync("release/sanad-latest.apk");
+            const sha=crypto.createHash("sha256").update(apk).digest("hex");
+            if (String(m.version_code)!==process.env.EXPECTED_VERSION) throw new Error("manifest version mismatch");
+            if (m.sha256!==sha) throw new Error("manifest SHA mismatch");
+            if (!Array.isArray(m.release_notes)) throw new Error("release notes missing");
+            if (!["recommended","required"].includes(m.update_policy)) throw new Error("update policy invalid");
+          '
       - name: Upload signed release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-v${{ env.SANAD_ANDROID_VERSION }}-signed-release
+          name: sanad-v${{ steps.release.outputs.version_code }}-signed-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -214,6 +251,7 @@ jobs:
           HOST: ${{ secrets.PRODUCTION_HOST }}
           PORT: ${{ secrets.PRODUCTION_PORT }}
           DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          SANAD_ANDROID_VERSION: ${{ steps.release.outputs.version_code }}
         run: |
           set -euo pipefail
           PORT="${PORT:-22}"
@@ -224,9 +262,21 @@ jobs:
             "release/sanad-v${SANAD_ANDROID_VERSION}.apk" "$DEPLOY_USER@$HOST:$REMOTE_TMP/"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
             "sudo /usr/local/sbin/sanad-publish-android-apk '$REMOTE_TMP' '$SANAD_ANDROID_VERSION'"
-      - name: Verify public APK download
+      - name: Verify public APK and manifest
+        env:
+          EXPECTED_VERSION: ${{ steps.release.outputs.version_code }}
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --location --max-time 60 --output /tmp/sanad-latest.apk https://app.sanadflow.com/downloads/sanad-latest.apk
+          curl --fail --silent --show-error --location --max-time 30 --output /tmp/sanad-latest.json https://app.sanadflow.com/downloads/sanad-latest.json
           test -s /tmp/sanad-latest.apk
-          curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/downloads/sanad-latest.json | grep -q '"version"'
+          test -s /tmp/sanad-latest.json
+          node -e '
+            const fs=require("fs");
+            const crypto=require("crypto");
+            const manifest=JSON.parse(fs.readFileSync("/tmp/sanad-latest.json","utf8"));
+            const apk=fs.readFileSync("/tmp/sanad-latest.apk");
+            const sha=crypto.createHash("sha256").update(apk).digest("hex");
+            if (String(manifest.version_code)!==process.env.EXPECTED_VERSION) throw new Error("public version mismatch");
+            if (manifest.sha256!==sha) throw new Error("public APK SHA does not match manifest");
+          '
