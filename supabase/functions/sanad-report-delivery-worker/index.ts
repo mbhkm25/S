@@ -67,7 +67,7 @@ function fmtDate(value: unknown, short = false) {
 function fmtAmount(amount: unknown, currency: unknown) {
   const number = Number(amount);
   const value = Number.isFinite(number)
-    ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(number)
+    ? new Intl.NumberFormat("en-US", { numberingSystem: "latn", maximumFractionDigits: 2 }).format(number)
     : safeText(amount);
   return `${value} ${safeText(currency || "", "")}`.trim();
 }
@@ -94,6 +94,12 @@ function transactionLabel(value: unknown) {
   const key = String(value || "");
   return labels[key] || safeText(value);
 }
+function currencyClass(value: unknown) {
+  const currency = String(value || "").trim().toUpperCase();
+  if (currency === "YER") return "currency-yer";
+  if (currency === "SAR") return "currency-sar";
+  return "currency-other";
+}
 async function remoteImageDataUri(url: string): Promise<string | null> {
   try {
     const result = await fetch(url, { headers: { accept: "image/png,image/jpeg,image/webp,image/*" } });
@@ -112,77 +118,89 @@ async function remoteImageDataUri(url: string): Promise<string | null> {
 function buildOfficialPdfHtml(snapshot: any, logoDataUri: string | null) {
   const operations: Operation[] = Array.isArray(snapshot?.payload?.operations) ? snapshot.payload.operations : [];
   const rows = operations.map((operation, index) => {
-    const verifiedBy = safeText(operation.verified_by_name || "—");
+    const verifiedBy = safeText(operation.verified_by_name || "", "");
     const status = statusLabel(operation.status);
-    return `<tr>
+    const statusDetail = verifiedBy && String(operation.status || "") === "verified"
+      ? `<span class="status-note">بواسطة: ${esc(verifiedBy)}</span>`
+      : "";
+    return `<tr class="${currencyClass(operation.currency)}">
       <td class="num">${index + 1}</td>
       <td class="date">${esc(fmtDate(operation.transaction_datetime || operation.created_at))}</td>
-      <td>${esc(operation.financial_entity || "—")}</td>
-      <td>${esc(transactionLabel(operation.transaction_type))}</td>
-      <td class="ref">${esc(operation.reference_number || "—")}</td>
+      <td class="entity">${esc(operation.financial_entity || "—")}</td>
+      <td class="type">${esc(transactionLabel(operation.transaction_type))}</td>
       <td class="amount">${esc(fmtAmount(operation.amount, operation.currency))}</td>
-      <td>${esc(status)}</td>
-      <td>${esc(verifiedBy)}</td>
+      <td class="ref">${esc(operation.reference_number || "—")}</td>
+      <td class="status-cell"><strong>${esc(status)}</strong>${statusDetail}</td>
     </tr>`;
   }).join("");
 
-  const title = safeText(snapshot.title || "كشف عمليات سند");
   const reportId = safeText(snapshot.report_request_id || "", "");
+  const period = `${fmtDate(snapshot.date_from, true)} - ${fmtDate(snapshot.date_to, true)}`;
+  const createdAt = fmtDate(new Date().toISOString());
   const css = `
-    @page{size:A4 landscape;margin:12mm 10mm 13mm}
+    @page{size:A4 portrait;margin:12mm 10mm 13mm}
     *{box-sizing:border-box}
     html,body{margin:0;padding:0}
-    body{direction:rtl;font-family:Arial,Tahoma,"Noto Sans Arabic",sans-serif;color:#111827;background:#fff;font-size:9px;line-height:1.45;font-variant-numeric:lining-nums tabular-nums}
-    .header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;border-bottom:2px solid #111827;padding-bottom:9px;margin-bottom:10px}
-    .brand{display:flex;align-items:center;gap:10px;min-width:220px}
-    .brand img{width:86px;height:46px;object-fit:contain;object-position:right center}
-    .brand-name{font-size:20px;font-weight:800;line-height:1.1}
-    .brand-sub{font-size:8px;color:#64748b;margin-top:3px}
-    .report-title{text-align:left;max-width:55%}
-    .report-title h1{font-size:16px;margin:0 0 4px;font-weight:800}
-    .report-meta{font-size:8px;color:#475569;direction:ltr;text-align:left}
-    .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:0 0 10px}
-    .card{border:1px solid #d9dee6;border-radius:7px;padding:7px 8px;background:#fafafa}
-    .card .label{font-size:7.5px;color:#64748b}
-    .card .value{font-size:12px;font-weight:800;margin-top:2px}
-    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    body{direction:rtl;font-family:"Noto Sans Arabic","Noto Sans",sans-serif;color:#172033;background:#fff;font-size:11.2px;line-height:1.62;font-variant-numeric:lining-nums tabular-nums}
+    .header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;border-bottom:2px solid #172033;padding-bottom:12px;margin-bottom:12px}
+    .brand{width:37%;display:flex;justify-content:flex-start;align-items:flex-start}
+    .brand img{width:118px;height:68px;object-fit:contain;object-position:right top}
+    .report-title{width:58%;text-align:left;direction:rtl}
+    .report-title h1{font-size:23px;line-height:1.25;margin:0 0 7px;font-weight:700;color:#111827}
+    .report-meta{display:grid;gap:3px;color:#526174;font-size:11.2px}
+    .report-meta span{display:block}
+    .latin{direction:ltr;unicode-bidi:isolate;font-variant-numeric:lining-nums tabular-nums}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 12px}
+    .card{border:1px solid #dbe2ea;border-radius:9px;padding:8px 9px;background:#fbfcfd;text-align:right}
+    .card .label{font-size:10.5px;color:#66758a}
+    .card .value{font-size:17px;font-weight:700;margin-top:2px;color:#111827;direction:ltr;unicode-bidi:isolate}
+    table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d7dee7;border-radius:8px;overflow:hidden}
     thead{display:table-header-group}
     tr{break-inside:avoid;page-break-inside:avoid}
-    th,td{border:1px solid #d8dde5;padding:4px 5px;vertical-align:middle;text-align:right;overflow-wrap:anywhere}
-    th{background:#eef1f5;font-weight:800;font-size:8px}
-    td{font-size:7.7px}
-    th:nth-child(1){width:3.5%}
-    th:nth-child(2){width:14%}
-    th:nth-child(3){width:14%}
-    th:nth-child(4){width:9%}
-    th:nth-child(5){width:17%}
-    th:nth-child(6){width:12%}
-    th:nth-child(7){width:9%}
-    th:nth-child(8){width:21.5%}
+    th,td{border-bottom:1px solid #dce3eb;border-left:1px solid #e3e8ee;padding:7px 6px;vertical-align:middle;text-align:right;overflow-wrap:anywhere}
+    th:last-child,td:last-child{border-left:0}
+    tbody tr:last-child td{border-bottom:0}
+    th{background:#edf1f5;font-weight:700;font-size:10.7px;color:#263244;line-height:1.35}
+    td{font-size:10.4px;color:#1f2937;background:#fff}
+    th:nth-child(1){width:5%}
+    th:nth-child(2){width:18%}
+    th:nth-child(3){width:16%}
+    th:nth-child(4){width:10%}
+    th:nth-child(5){width:15%}
+    th:nth-child(6){width:18%}
+    th:nth-child(7){width:18%}
     .num{text-align:center;direction:ltr}
-    .date,.ref,.amount{direction:ltr;text-align:left}
-    .amount{font-weight:800;white-space:nowrap}
-    .empty{text-align:center;padding:16px;color:#64748b}
-    .footer{margin-top:8px;border-top:1px solid #e5e7eb;padding-top:6px;display:flex;justify-content:space-between;gap:12px;color:#64748b;font-size:7px}
-    .footer .id{direction:ltr;text-align:left}
+    .date,.ref,.amount{direction:ltr;text-align:left;unicode-bidi:isolate;font-variant-numeric:lining-nums tabular-nums}
+    .amount{font-weight:700;white-space:nowrap}
+    .status-cell strong{font-weight:700}
+    .status-note{display:block;margin-top:2px;font-size:8.8px;color:#6b7280;line-height:1.4}
+    tr.currency-yer td{background:#f3faf6}
+    tr.currency-sar td{background:#fff9ed}
+    tr.currency-yer td:first-child{border-right:3px solid #7bb89a}
+    tr.currency-sar td:first-child{border-right:3px solid #d8b56a}
+    .empty{text-align:center;padding:18px;color:#64748b;background:#fff!important}
+    .footer{margin-top:9px;border-top:1px solid #e2e7ed;padding-top:7px;display:flex;justify-content:space-between;gap:12px;color:#68778a;font-size:9px;line-height:1.45}
+    .footer .id{direction:ltr;text-align:left;unicode-bidi:isolate}
   `;
 
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير عمليات سند</title><style>${css}</style></head><body>
     <div class="header">
-      <div class="brand">
-        ${logoDataUri ? `<img src="${logoDataUri}" alt="SANAD">` : ""}
-        <div><div class="brand-name">سند | SANAD</div><div class="brand-sub">سجل العمليات المالية الموثقة تشغيليًا</div></div>
+      <div class="brand">${logoDataUri ? `<img src="${logoDataUri}" alt="SANAD">` : ""}</div>
+      <div class="report-title">
+        <h1>تقرير عمليات سند</h1>
+        <div class="report-meta">
+          <span>الفترة: <b class="latin">${esc(period)}</b></span>
+          <span>تاريخ إنشاء التقرير: <b class="latin">${esc(createdAt)}</b></span>
+        </div>
       </div>
-      <div class="report-title"><h1>${esc(title)}</h1><div class="report-meta">${esc(fmtDate(snapshot.date_from, true))} — ${esc(fmtDate(snapshot.date_to, true))}</div></div>
     </div>
     <div class="summary">
       <div class="card"><div class="label">عدد العمليات</div><div class="value">${Number(snapshot.operations_count || operations.length)}</div></div>
       <div class="card"><div class="label">العمليات الموثقة</div><div class="value">${Number(snapshot.verified_count || 0)}</div></div>
       <div class="card"><div class="label">عليها ملاحظات</div><div class="value">${Number(snapshot.operations_with_notes || 0)}</div></div>
-      <div class="card"><div class="label">تاريخ إنشاء التقرير</div><div class="value" style="font-size:9px">${esc(fmtDate(new Date().toISOString()))}</div></div>
     </div>
-    <table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>الجهة المالية</th><th>النوع</th><th>المرجع</th><th>المبلغ</th><th>الحالة</th><th>تم التوثيق بواسطة</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="empty">لا توجد عمليات ضمن نطاق هذا التقرير.</td></tr>`}</tbody></table>
-    <div class="footer"><span>هذا التقرير سجل تشغيلي صادر من سند ولا يمثل تأكيدًا بنكيًا لوصول الأموال.</span><span class="id">Report ID: ${esc(reportId)}</span></div>
+    <table><thead><tr><th>#</th><th>التاريخ والوقت</th><th>الجهة المالية</th><th>النوع</th><th>المبلغ</th><th>المرجع</th><th>الحالة</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="empty">لا توجد عمليات ضمن نطاق هذا التقرير.</td></tr>`}</tbody></table>
+    <div class="footer"><span>هذا تقرير لعمليات سند وسجلها التشغيلي، ولا يمثل تأكيدًا بنكيًا لوصول الأموال.</span><span class="id">Report ID: ${esc(reportId)}</span></div>
   </body></html>`;
 }
 
@@ -194,8 +212,8 @@ function assertPdf(pdf: Uint8Array) {
 async function renderStaticPdf(html: string) {
   const form = new FormData();
   form.append("files", new Blob([html], { type: "text/html; charset=utf-8" }), "index.html");
-  form.append("paperWidth", "11.69");
-  form.append("paperHeight", "8.27");
+  form.append("paperWidth", "8.27");
+  form.append("paperHeight", "11.69");
   form.append("printBackground", "true");
   form.append("preferCssPageSize", "true");
   const controller = new AbortController();
@@ -261,7 +279,7 @@ async function sendPdfDocument(to: string, mediaId: string, filename: string) {
     messaging_product: "whatsapp",
     to,
     type: "document",
-    document: { id: mediaId, filename, caption: "كشف عمليات سند بصيغة PDF" },
+    document: { id: mediaId, filename, caption: "تقرير عمليات سند بصيغة PDF" },
   });
 }
 
@@ -306,7 +324,7 @@ async function processReport(reportId: string, dryRun: boolean) {
     verified_count: artifacts.verified_count,
     operations_with_notes: artifacts.operations_with_notes,
     delivery_format: format,
-    renderer: "official-immutable-snapshot-v2",
+    renderer: "official-portrait-operations-v3",
   };
 
   let pdfPath: string | null = null;
