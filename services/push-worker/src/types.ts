@@ -32,8 +32,8 @@ export interface PushDeliveryTarget {
   auth_secret: string;
   content_encoding: 'aes128gcm' | 'aesgcm';
   platform: 'web' | 'pwa' | 'android';
-  provider: 'web_push' | 'fcm';
-  provider_token: string | null;
+  provider?: 'web_push' | 'fcm';
+  provider_token?: string | null;
   failure_count: number;
 }
 
