@@ -14,13 +14,16 @@ import './lib/publicBusinessProfileShare';
 import { Capacitor } from '@capacitor/core';
 
 const PwaUpdatePrompt = lazy(() => import('./features/pwa/PwaUpdatePrompt'));
+const AndroidUpdatePrompt = lazy(() => import('./features/android/AndroidUpdatePrompt'));
 const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
 const PublicInteractiveReport = lazy(() => import('./features/reports/PublicInteractiveReport'));
 
 const isCapacitorNative = Capacitor.isNativePlatform() ||
                           window.location.origin.includes('capacitor') ||
                           window.location.origin.startsWith('file:');
+const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNative;
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
+const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
 
 createRoot(document.getElementById('root')!).render(
@@ -42,6 +45,11 @@ createRoot(document.getElementById('root')!).render(
         {enablePwaUpdates && (
           <Suspense fallback={null}>
             <PwaUpdatePrompt />
+          </Suspense>
+        )}
+        {enableAndroidUpdates && (
+          <Suspense fallback={null}>
+            <AndroidUpdatePrompt />
           </Suspense>
         )}
       </>
