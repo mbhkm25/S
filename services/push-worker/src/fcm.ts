@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto';
-import type { BuiltPushPayload, PushDeliveryTarget, SendOptions, SendResult } from './types.js';
+import type { PushDeliveryTarget, PushPayload, SendOptions, SendResult } from './types.js';
 
 export interface FcmConfig {
   projectId?: string;
@@ -34,7 +34,7 @@ async function accessToken(config: Required<FcmConfig>): Promise<string> {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'oauth-grant-type'), assertion }),
   });
   const body = await response.json() as { access_token?: string; expires_in?: number };
   if (!response.ok || !body.access_token) throw Object.assign(new Error('fcm_oauth_failed'), { statusCode: response.status });
@@ -42,13 +42,22 @@ async function accessToken(config: Required<FcmConfig>): Promise<string> {
   return body.access_token;
 }
 
+function parsePayload(serialized: string): PushPayload {
+  const parsed = JSON.parse(serialized) as PushPayload;
+  if (!parsed || parsed.version !== 1 || !parsed.notification_id || !parsed.title || !parsed.body) {
+    throw Object.assign(new Error('invalid_fcm_payload'), { statusCode: 400 });
+  }
+  return parsed;
+}
+
 export function createFcmSender(config: FcmConfig) {
   return {
-    async send(target: PushDeliveryTarget, built: BuiltPushPayload, options: SendOptions): Promise<SendResult> {
+    async send(target: PushDeliveryTarget, serializedPayload: string, options: SendOptions): Promise<SendResult> {
       if (target.provider !== 'fcm' || !target.provider_token) throw Object.assign(new Error('invalid_fcm_target'), { statusCode: 400 });
       if (!config.projectId || !config.clientEmail || !config.privateKey) {
         throw Object.assign(new Error('fcm_not_configured'), { statusCode: 503 });
       }
+      const payload = parsePayload(serializedPayload);
       const token = await accessToken({
         projectId: config.projectId,
         clientEmail: config.clientEmail,
@@ -60,15 +69,15 @@ export function createFcmSender(config: FcmConfig) {
         body: JSON.stringify({
           message: {
             token: target.provider_token,
-            notification: { title: built.payload.title, body: built.payload.body },
+            notification: { title: payload.title, body: payload.body },
             data: {
-              sanad_notification_id: built.payload.notification_id,
-              sanad_category: built.payload.category,
-              sanad_severity: built.payload.severity,
-              sanad_action_type: built.payload.action_type,
-              sanad_action_payload: JSON.stringify(built.payload.action_payload),
-              title: built.payload.title,
-              body: built.payload.body,
+              sanad_notification_id: payload.notification_id,
+              sanad_category: payload.category,
+              sanad_severity: payload.severity,
+              sanad_action_type: payload.action_type,
+              sanad_action_payload: JSON.stringify(payload.action_payload),
+              title: payload.title,
+              body: payload.body,
             },
             android: {
               priority: options.urgency === 'high' ? 'HIGH' : 'NORMAL',
@@ -78,7 +87,6 @@ export function createFcmSender(config: FcmConfig) {
           },
         }),
       });
-      // 404 / UNREGISTERED is classified by the worker as a gone endpoint via HTTP status.
       return { statusCode: response.status };
     },
   };
