@@ -21,7 +21,7 @@ public class PushEnabledMainActivity extends MainActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         if (androidPushBridge != null) androidPushBridge.refreshRegistration();
     }
