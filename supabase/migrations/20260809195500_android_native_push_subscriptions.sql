@@ -56,8 +56,6 @@ begin
   if p_device_label is not null and length(btrim(p_device_label)) > 160 then raise exception 'invalid_push_device_label'; end if;
   if p_app_version is not null and length(btrim(p_app_version)) > 80 then raise exception 'invalid_push_app_version'; end if;
 
-  -- Existing delivery tables use endpoint as the stable subscription identity.
-  -- Use a non-routable HTTPS identity derived from the token; the FCM sender uses provider_token.
   v_endpoint := 'https://fcm.sanadflow.invalid/subscription/' ||
     encode(extensions.digest(convert_to(v_token,'UTF8'),'sha256'),'hex');
 
@@ -104,11 +102,13 @@ begin
 end;
 $function$;
 
+-- Keep the established worker RPC shape intact. For FCM targets the internal
+-- endpoint identifies the provider and p256dh carries the token to the provider-aware sender.
 drop function if exists public.get_push_delivery_targets(uuid,text);
 create function public.get_push_delivery_targets(p_outbox_id uuid,p_worker_id text)
 returns table(
   subscription_id uuid,endpoint text,p256dh text,auth_secret text,content_encoding text,
-  platform text,provider text,provider_token text,failure_count integer
+  platform text,failure_count integer
 )
 language plpgsql
 security definer
@@ -126,7 +126,14 @@ begin
   if v_recipient_user_id is null then raise exception 'push_outbox_lock_not_owned'; end if;
 
   return query
-  select s.id,s.endpoint,s.p256dh,s.auth_secret,s.content_encoding,s.platform,s.provider,s.provider_token,s.failure_count
+  select
+    s.id,
+    s.endpoint,
+    case when s.provider='fcm' then s.provider_token else s.p256dh end,
+    s.auth_secret,
+    s.content_encoding,
+    case when s.provider='fcm' then 'pwa'::text else s.platform end,
+    s.failure_count
   from public.push_subscriptions s
   where s.user_id=v_recipient_user_id and s.is_active=true and s.permission_state='granted'
     and not exists(
