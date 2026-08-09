@@ -1,0 +1,90 @@
+name: Operation pipeline resilience SLO quality
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/operation-pipeline-resilience-slo-quality.yml'
+      - 'supabase/migrations/20260809075000_operation_pipeline_resilience_slo_v1.sql'
+      - 'supabase/tests/operation_pipeline_resilience_slo.sql'
+      - 'supabase/tests/instant_event_pipeline_integration.sql'
+      - 'supabase/tests/operation_pipeline_routing_outbox_integration.sql'
+      - 'supabase/tests/operation_pipeline_failure_recovery_integration.sql'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/operation-pipeline-resilience-slo-quality.yml'
+      - 'supabase/migrations/20260809075000_operation_pipeline_resilience_slo_v1.sql'
+      - 'supabase/tests/operation_pipeline_resilience_slo.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operation-pipeline-resilience-slo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated Supabase database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_root="${RUNNER_TEMP}/sanad-pipeline-resilience"
+          mkdir -p "${test_root}/supabase/migrations"
+          cp supabase/config.toml "${test_root}/supabase/config.toml"
+          OPENAI_API_KEY=disabled supabase start \
+            --workdir "${test_root}" \
+            -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          docker exec supabase_db_sanad pg_isready -U postgres -d postgres
+
+      - name: Apply canonical pipeline contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sql() {
+            docker exec -i supabase_db_sanad \
+              psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          }
+          run_sql < supabase/tests/operation_pipeline_contract_baseline.sql
+          run_sql < supabase/migrations/20260806151000_instant_intake_event_pipeline.sql
+          run_sql <<'SQL'
+          update private.pipeline_runtime_config
+          set environment='ci',dispatch_enabled=false,updated_at=now()
+          where singleton=true;
+          SQL
+          run_sql < supabase/migrations/20260806151100_preview_queue_immediate_dispatch.sql
+          run_sql < supabase/migrations/20260806151200_routing_inbox_single_writer_queue.sql
+          run_sql < supabase/migrations/20260806151300_unified_transactional_outbox_worker.sql
+          run_sql < supabase/migrations/20260806151400_pipeline_observability_percentiles.sql
+          run_sql < supabase/migrations/20260809075000_operation_pipeline_resilience_slo_v1.sql
+
+      - name: Execute resilience and end-to-end convergence contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sql() {
+            docker exec -i supabase_db_sanad \
+              psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          }
+          run_sql < supabase/tests/operation_pipeline_resilience_slo.sql
+          run_sql < supabase/tests/instant_event_pipeline_integration.sql
+          run_sql < supabase/tests/operation_pipeline_routing_outbox_integration.sql
+          run_sql < supabase/tests/operation_pipeline_failure_recovery_integration.sql
+
+      - name: Stop isolated Supabase services
+        if: always()
+        shell: bash
+        run: |
+          test_root="${RUNNER_TEMP}/sanad-pipeline-resilience"
+          OPENAI_API_KEY=disabled supabase stop \
+            --workdir "${test_root}" --no-backup
