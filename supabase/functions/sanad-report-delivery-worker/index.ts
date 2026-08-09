@@ -53,6 +53,18 @@ async function revokeToken(id: string | null) {
   if (!id) return;
   await sb.from("report_access_tokens").update({ status: "revoked", revoked_at: new Date().toISOString() }).eq("id", id);
 }
+function assertPdfLooksRendered(pdf: Uint8Array) {
+  const hasPdfHeader = pdf.byteLength >= 5
+    && pdf[0] === 0x25
+    && pdf[1] === 0x50
+    && pdf[2] === 0x44
+    && pdf[3] === 0x46
+    && pdf[4] === 0x2d;
+  if (!hasPdfHeader) throw new Error("rendered_pdf_invalid_signature");
+  // A blank Chromium A4 page is typically under 1 KB. A real SANAD report
+  // contains the header, metrics, and at least the report shell even with zero rows.
+  if (pdf.byteLength < 5000) throw new Error(`rendered_pdf_suspiciously_small_${pdf.byteLength}`);
+}
 async function renderPdf(url: string) {
   const form = new FormData();
   form.append("url", url);
@@ -60,13 +72,20 @@ async function renderPdf(url: string) {
   form.append("paperHeight", "11.69");
   form.append("printBackground", "true");
   form.append("preferCssPageSize", "true");
+  // The report is a React SPA. Do not print the initial empty shell: wait until
+  // the data-backed report header exists, then allow a short settle time for
+  // fonts/logos before Chromium captures the PDF.
+  form.append("waitForSelector", ".report-header");
+  form.append("waitDelay", "500ms");
   const result = await fetch(`${env("GOTENBERG_URL").replace(/\/$/, "")}/forms/chromium/convert/url`, {
     method: "POST",
     headers: { "X-Gotenberg-Token": env("GOTENBERG_TOKEN") },
     body: form,
   });
   if (!result.ok) throw new Error(`gotenberg_render_failed_${result.status}_${(await result.text()).slice(0, 180)}`);
-  return new Uint8Array(await result.arrayBuffer());
+  const pdf = new Uint8Array(await result.arrayBuffer());
+  assertPdfLooksRendered(pdf);
+  return pdf;
 }
 async function sendWhatsApp(payload: Json) {
   const apiVersion = env("WHATSAPP_API_VERSION", "v22.0");
