@@ -61,32 +61,62 @@ function assertPdfLooksRendered(pdf: Uint8Array) {
     && pdf[3] === 0x46
     && pdf[4] === 0x2d;
   if (!hasPdfHeader) throw new Error("rendered_pdf_invalid_signature");
-  // A blank Chromium A4 page is typically under 1 KB. A real SANAD report
-  // contains the header, metrics, and at least the report shell even with zero rows.
   if (pdf.byteLength < 5000) throw new Error(`rendered_pdf_suspiciously_small_${pdf.byteLength}`);
 }
-async function renderPdf(url: string) {
+
+async function renderPdfAttempt(url: string, mode: "selector" | "delay") {
   const form = new FormData();
   form.append("url", url);
   form.append("paperWidth", "8.27");
   form.append("paperHeight", "11.69");
   form.append("printBackground", "true");
   form.append("preferCssPageSize", "true");
-  // The report is a React SPA. Do not print the initial empty shell: wait until
-  // the data-backed report header exists, then allow a short settle time for
-  // fonts/logos before Chromium captures the PDF.
-  form.append("waitForSelector", ".report-header");
-  form.append("waitDelay", "500ms");
-  const result = await fetch(`${env("GOTENBERG_URL").replace(/\/$/, "")}/forms/chromium/convert/url`, {
-    method: "POST",
-    headers: { "X-Gotenberg-Token": env("GOTENBERG_TOKEN") },
-    body: form,
-  });
-  if (!result.ok) throw new Error(`gotenberg_render_failed_${result.status}_${(await result.text()).slice(0, 180)}`);
-  const pdf = new Uint8Array(await result.arrayBuffer());
-  assertPdfLooksRendered(pdf);
-  return pdf;
+  if (mode === "selector") {
+    form.append("waitForSelector", ".report-header");
+    form.append("waitDelay", "500ms");
+  } else {
+    form.append("waitDelay", "5s");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("gotenberg_timeout"), mode === "selector" ? 20000 : 25000);
+  try {
+    const result = await fetch(`${env("GOTENBERG_URL").replace(/\/$/, "")}/forms/chromium/convert/url`, {
+      method: "POST",
+      headers: { "X-Gotenberg-Token": env("GOTENBERG_TOKEN") },
+      body: form,
+      signal: controller.signal,
+    });
+    if (!result.ok) throw new Error(`gotenberg_${mode}_failed_${result.status}_${(await result.text()).slice(0, 300)}`);
+    const pdf = new Uint8Array(await result.arrayBuffer());
+    assertPdfLooksRendered(pdf);
+    return pdf;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`gotenberg_${mode}_timeout`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
+
+async function renderPdf(url: string) {
+  try {
+    return await renderPdfAttempt(url, "selector");
+  } catch (primaryError) {
+    console.warn(JSON.stringify({
+      function: "sanad-report-delivery-worker",
+      event: "selector_render_failed_using_delay_fallback",
+      error: primaryError instanceof Error ? primaryError.message : String(primaryError),
+    }));
+    try {
+      return await renderPdfAttempt(url, "delay");
+    } catch (fallbackError) {
+      const primary = primaryError instanceof Error ? primaryError.message : String(primaryError);
+      const fallback = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      throw new Error(`pdf_render_attempts_failed primary=${primary} fallback=${fallback}`);
+    }
+  }
+}
+
 async function sendWhatsApp(payload: Json) {
   const apiVersion = env("WHATSAPP_API_VERSION", "v22.0");
   const result = await fetch(`https://graph.facebook.com/${apiVersion}/${env("WHATSAPP_PHONE_NUMBER_ID")}/messages`, {
@@ -122,6 +152,7 @@ async function processReport(reportId: string, dryRun: boolean) {
   if (!dryRun) await sb.from("report_requests").update({
     status: "processing", processing_stage: "creating_snapshot",
     processing_started_at: new Date().toISOString(), last_attempt_at: new Date().toISOString(),
+    error_message: null, failed_at: null,
   }).eq("id", reportId);
 
   const { data: artifacts, error: artifactError } = await sb.rpc("create_report_delivery_artifacts", {
@@ -146,7 +177,7 @@ async function processReport(reportId: string, dryRun: boolean) {
     verified_count: artifacts.verified_count,
     operations_with_notes: artifacts.operations_with_notes,
     delivery_format: format,
-    renderer: "shared-interactive-snapshot-v1",
+    renderer: "shared-interactive-snapshot-v2-fallback",
   };
 
   let pdfPath: string | null = null;
@@ -189,7 +220,7 @@ async function processReport(reportId: string, dryRun: boolean) {
       whatsapp_message_id: messageIds[0] || null, delivery_status: "accepted",
       delivery_attempts: Number(request.delivery_attempts || 0) + 1,
       result_metrics: { ...(request.result_metrics || {}), ...metrics, pdf_bytes: pdfBytes, whatsapp_message_ids: messageIds },
-      error_message: null,
+      error_message: null, failed_at: null,
     }).eq("id", reportId);
   }
 
@@ -203,14 +234,28 @@ async function processReport(reportId: string, dryRun: boolean) {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return response({ ok: false, error: "method_not_allowed" }, 405);
+  let reportId = "";
   try {
     requireInternal(req);
     const body = await req.json().catch(() => ({}));
-    const reportId = String(body.report_request_id || "");
+    reportId = String(body.report_request_id || "");
     if (!/^[0-9a-f-]{36}$/i.test(reportId)) throw new Error("invalid_report_request_id");
     return response(await processReport(reportId, body.dry_run !== false));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return response({ ok: false, error: message }, message === "unauthorized_internal_request" ? 401 : 500);
+    if (/^[0-9a-f-]{36}$/i.test(reportId)) {
+      const now = new Date().toISOString();
+      await sb.from("report_requests").update({
+        status: "failed",
+        processing_stage: "failed",
+        pdf_status: "failed",
+        delivery_status: "failed",
+        error_message: message.slice(0, 1000),
+        failed_at: now,
+        updated_at: now,
+      }).eq("id", reportId).catch(() => undefined);
+    }
+    console.error(JSON.stringify({ function: "sanad-report-delivery-worker", event: "request_failed", report_id: reportId || null, error: message }));
+    return response({ ok: false, error: message, report_id: reportId || null }, message === "unauthorized_internal_request" ? 401 : 500);
   }
 });
