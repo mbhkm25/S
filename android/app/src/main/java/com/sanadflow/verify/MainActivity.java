@@ -62,7 +62,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         if (androidUpdaterBridge != null) {
             androidUpdaterBridge.onHostResume();
@@ -70,7 +70,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         if (androidUpdaterBridge != null) {
             androidUpdaterBridge.destroy();
             androidUpdaterBridge = null;
