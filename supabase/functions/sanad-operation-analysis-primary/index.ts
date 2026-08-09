@@ -8,7 +8,7 @@ const INTERNAL_KEY = mustEnv("SANAD_INTERNAL_API_KEY");
 const FAST_ANALYZER_URL = `${SUPABASE_URL}/functions/v1/sanad-operation-analysis-shadow`;
 const LEGACY_ANALYZER_URL = `${SUPABASE_URL}/functions/v1/sanad-v3-analyze-operation`;
 const FUNCTION_NAME = "sanad-operation-analysis-primary";
-const ENGINE_VERSION = "operational-primary-v1";
+const ENGINE_VERSION = "operational-primary-v2-summary";
 
 const headers = {
   apikey: SERVICE_ROLE_KEY,
@@ -31,6 +31,53 @@ function text(value: unknown): string | null {
 function numberOrNull(value: unknown): number | null {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function currencyLabel(value: unknown): string {
+  const code = String(value ?? "").trim().toUpperCase();
+  if (code === "YER") return "ريال يمني";
+  if (code === "SAR") return "ريال سعودي";
+  if (code === "USD") return "دولار أمريكي";
+  return code || "عملة غير محددة";
+}
+
+function formatAmount(value: unknown): string | null {
+  const numeric = numberOrNull(value);
+  if (numeric === null) return null;
+  return new Intl.NumberFormat("en-US", { numberingSystem: "latn", maximumFractionDigits: 2 }).format(numeric);
+}
+
+function buildOperationalSummary(normalized: JsonRecord, rawOutput: JsonRecord): string {
+  const rawSummary = text(rawOutput.summary) ?? text(normalized.summary);
+  if (rawSummary) return rawSummary.slice(0, 700);
+
+  const amount = formatAmount(normalized.amount);
+  const currency = currencyLabel(normalized.currency);
+  const entity = text(normalized.financialEntity);
+  const receiver = text(normalized.receiverName);
+  const reference = text(normalized.referenceNumber);
+  const transactionType = text(normalized.transactionType);
+
+  const parts: string[] = [];
+  if (transactionType && transactionType !== "unknown") {
+    const labels: Record<string, string> = {
+      deposit: "إيداع",
+      withdrawal: "سحب",
+      transfer: "تحويل",
+      payment: "دفع",
+    };
+    parts.push(labels[transactionType] ?? "عملية مالية");
+  } else {
+    parts.push("عملية مالية");
+  }
+  if (amount) parts.push(`بقيمة ${amount} ${currency}`);
+  if (entity && entity !== "unknown" && entity !== "غير معروف") parts.push(`عبر ${entity}`);
+  if (receiver) parts.push(`لصالح ${receiver}`);
+
+  let summary = parts.join(" ").trim();
+  if (summary && !/[.!؟]$/.test(summary)) summary += ".";
+  if (reference) summary += ` رقم المرجع ${reference}.`;
+  return summary || "عملية مالية مسجلة في سند.";
 }
 
 function operationIdentifierType(value: unknown): string {
@@ -110,16 +157,19 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
     ? existing.raw_ai_json as JsonRecord
     : {};
   const normalized = (run.normalized_output ?? {}) as JsonRecord;
+  const rawOutput = (run.shadow_output ?? {}) as JsonRecord;
   const routing = (run.routing_decision ?? {}) as JsonRecord;
   const semanticIdentifierType = text(normalized.receiverIdentifierType) ?? "unknown_identifier";
   const receiverIdentifierValue = text(normalized.receiverIdentifierValue);
   const confidence = numberOrNull(normalized.confidence);
   const reviewRequired = normalized.reviewRequired === true || routing.eligible !== true;
+  const summary = buildOperationalSummary(normalized, rawOutput);
 
   const structuredData = {
     ...existingStructured,
     schema_version: 3,
     analysis_engine: ENGINE_VERSION,
+    summary,
     financial_entity: text(normalized.financialEntity),
     financial_entity_code: text(normalized.financialEntityCode),
     transaction_type: text(normalized.transactionType) ?? "unknown",
@@ -147,10 +197,11 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
     prompt_version: run.prompt_version,
     pipeline_run_id: runId,
     normalized: structuredData,
-    raw_output: run.shadow_output,
+    raw_output: rawOutput,
     quality: routing,
     timings: { gemini_ms: run.latency_ms },
     fallback_used: false,
+    summary_source: text(rawOutput.summary) ? "model" : "deterministic_projection",
   };
 
   const patch = {
@@ -158,6 +209,7 @@ async function persistPrimaryResult(operationId: string, runId: string): Promise
     ai_error: null,
     ai_model: run.model,
     status: existing.status === "verified" ? "verified" : "ready",
+    summary,
     financial_entity: structuredData.financial_entity,
     financial_entity_code: structuredData.financial_entity_code,
     transaction_type: structuredData.transaction_type,
