@@ -39,6 +39,7 @@ public class MainActivity extends BridgeActivity {
 
     private boolean qrScanInProgress = false;
     private boolean paymentCaptureInProgress = false;
+    private AndroidUpdaterBridge androidUpdaterBridge;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +50,8 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new AndroidShareInterface(), "AndroidShare");
             webView.addJavascriptInterface(new AndroidQrScannerInterface(), "AndroidQrScanner");
             webView.addJavascriptInterface(new AndroidPaymentCaptureInterface(), "AndroidPaymentCapture");
+            androidUpdaterBridge = new AndroidUpdaterBridge(this, webView);
+            webView.addJavascriptInterface(androidUpdaterBridge, "AndroidUpdater");
             Log.d(TAG, "SANAD Android JavaScript interfaces added");
         }
 
@@ -56,6 +59,23 @@ public class MainActivity extends BridgeActivity {
         if (intent != null) {
             handleShareIntent(intent, false);
         }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (androidUpdaterBridge != null) {
+            androidUpdaterBridge.onHostResume();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (androidUpdaterBridge != null) {
+            androidUpdaterBridge.destroy();
+            androidUpdaterBridge = null;
+        }
+        super.onDestroy();
     }
 
     @Override

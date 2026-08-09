@@ -1,5 +1,8 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
+def androidReleaseConfig = new JsonSlurper().parse(file('../../config/android-release.json'))
 def releaseKeystorePath = System.getenv('SANAD_ANDROID_KEYSTORE_PATH')
 def releaseKeystorePassword = System.getenv('SANAD_ANDROID_KEYSTORE_PASSWORD')
 def releaseKeyAlias = System.getenv('SANAD_ANDROID_KEY_ALIAS')
@@ -10,12 +13,16 @@ android {
     namespace = "com.sanadflow.verify"
     compileSdk = rootProject.ext.compileSdkVersion
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.sanadflow.verify"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 96
-        versionName "0.96.0"
+        versionCode androidReleaseConfig.version_code as Integer
+        versionName androidReleaseConfig.version_name as String
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
