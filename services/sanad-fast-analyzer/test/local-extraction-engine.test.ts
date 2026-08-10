@@ -9,14 +9,15 @@ const fakeOcr: OcrProvider = {
     return {
       provider: "fake-ocr",
       rawText: [
+        "التاريخ: 2026-05-14 المرجع: 8-226242876",
+        "السيد: مستفيد تجريبي بط-08010070000 رقم الحساب 254070001",
+        "نود إشعاركم أننا قيدنا لحسابكم لدينا حسب التفاصيل التالية",
+        "المبلغ #600# سعودي",
+        "من حساب: مرسل تجريبي/جواز-9747000 رقم 254120001 إلى حساب: مستفيد تجريبي بط-08010070000 رقم 254070001",
+        "تجاري تسديد حساب - عبر تطبيق العمقي جوال",
+        "هذا الاشعار آلي ولا يحتاج الى ختم أو توقيع",
+        "2026-05-14 04:08PM",
         "إشعار إيداع",
-        "عبر تطبيق العمقي جوال",
-        "2026-08-10",
-        "المرجع 8-156978749",
-        "السيد: محمد عبدالله",
-        "رقم الحساب 254073867",
-        "#350# سعودي",
-        "هذا الاشعار آلي",
       ].join("\n"),
       blocks: [],
       confidence: 0.995,
@@ -47,6 +48,9 @@ Deno.test("local engine can compose OCR text with deterministic rules", async ()
 
   assert(["completed", "needs_review"].includes(result.status));
   assertEquals(result.diagnostics.ocrProvider, "fake-ocr");
+  assertEquals(result.extraction?.amount, 600);
+  assertEquals(result.extraction?.currency, "SAR");
+  assertEquals(result.extraction?.documentReference, "8-226242876");
   assert(result.source.includes("ocr"));
   assert(result.source.includes("rules"));
 });
