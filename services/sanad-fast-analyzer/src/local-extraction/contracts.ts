@@ -52,7 +52,7 @@ export interface LocalExtractionTimings {
 
 export interface LocalExtractionResult {
   engine: "sanad-local-extraction";
-  engineVersion: "0.1.0";
+  engineVersion: "0.2.0";
   status: LocalExtractionStatus;
   extraction?: CoreFinancialExtraction;
   source: LocalExtractionSource[];
@@ -63,7 +63,7 @@ export interface LocalExtractionResult {
   diagnostics: {
     mimeType: string;
     ocrProvider?: string;
-    detectedFamily?: string;
+    parser?: string;
     warnings: string[];
   };
 }
