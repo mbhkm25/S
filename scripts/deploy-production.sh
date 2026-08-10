@@ -107,8 +107,15 @@ if [[ -f "$DOWNLOADS_ROOT/sanad-latest.apk" ]]; then
   [[ "$DOWNLOAD_HTTP_CODE" =~ ^[23][0-9][0-9]$ ]] || fail "APK download health check returned HTTP $DOWNLOAD_HTTP_CODE"
 fi
 
+# The web deployment is complete at this point. Push-worker deployment has its own rollback,
+# so a worker failure must not roll the healthy web release backwards.
 DEPLOY_STARTED=0
 rm -rf "$STAGING_DIR" "$HEALTH_BODY"
+
+if [[ -f "$APP_REPO/scripts/deploy-push-worker.sh" ]]; then
+  log "Checking for staged push-worker credentials/runtime rollout"
+  /bin/bash "$APP_REPO/scripts/deploy-push-worker.sh" "$CURRENT_SHA"
+fi
 
 log "Pruning old backups; keeping $KEEP_BACKUPS"
 find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
