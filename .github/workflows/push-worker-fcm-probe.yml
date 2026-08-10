@@ -1,4 +1,4 @@
-name: Probe SANAD Push Worker Runtime
+name: Rollout SANAD Push Worker FCM
 
 on:
   push:
@@ -9,12 +9,37 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: sanad-push-worker-fcm-rollout
+  cancel-in-progress: false
+
 jobs:
-  probe:
+  rollout:
     runs-on: ubuntu-latest
     environment:
       name: production
     steps:
+      - name: Validate Firebase service-account secret without exposing it
+        shell: bash
+        env:
+          SERVICE_ACCOUNT_B64: ${{ secrets.SANAD_FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          [[ -n "$SERVICE_ACCOUNT_B64" ]]
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s' "$SERVICE_ACCOUNT_B64" | base64 --decode > "$tmp"
+          node - "$tmp" <<'NODE'
+          const fs = require('node:fs');
+          const p = process.argv[2];
+          let j;
+          try { j = JSON.parse(fs.readFileSync(p, 'utf8')); } catch { process.exit(10); }
+          if (j?.type !== 'service_account') process.exit(11);
+          if (j?.project_id !== 'sanad-prod-1786344160') process.exit(12);
+          if (j?.client_email !== 'fcm-sender@sanad-prod-1786344160.iam.gserviceaccount.com') process.exit(13);
+          if (typeof j?.private_key !== 'string' || !j.private_key.includes('-----BEGIN PRIVATE KEY-----') || !j.private_key.includes('-----END PRIVATE KEY-----')) process.exit(14);
+          NODE
+
       - name: Configure SSH
         shell: bash
         env:
@@ -28,7 +53,46 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Locate live push worker without exposing secrets
+      - name: Stage Firebase credentials securely on production host
+        shell: bash
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          PORT: ${{ secrets.PRODUCTION_PORT }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          SERVICE_ACCOUNT_B64: ${{ secrets.SANAD_FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          PORT="${PORT:-22}"
+          printf '%s' "$SERVICE_ACCOUNT_B64" | ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            'umask 077; mkdir -p "$HOME/.sanad-deploy-staging"; chmod 700 "$HOME/.sanad-deploy-staging"; cat > "$HOME/.sanad-deploy-staging/firebase-service-account.json.b64"; chmod 600 "$HOME/.sanad-deploy-staging/firebase-service-account.json.b64"'
+
+      - name: Bootstrap updated production deploy script
+        shell: bash
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          PORT: ${{ secrets.PRODUCTION_PORT }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          PORT="${PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
+
+      - name: Execute FCM push-worker rollout through approved root deploy path
+        shell: bash
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          PORT: ${{ secrets.PRODUCTION_PORT }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          PORT="${PORT:-22}"
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            "sudo /usr/local/sbin/sanad-deploy-production '$RELEASE_SHA'"
+
+      - name: Verify live worker process exists after rollout
         shell: bash
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -37,23 +101,5 @@ jobs:
         run: |
           set -euo pipefail
           PORT="${PORT:-22}"
-          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
-          set -u
-          echo '=== process candidates ==='
-          ps -eo user,pid,ppid,lstart,args --width 240 | grep -Ei 'push-worker|dist/index\.js|node .*3002|sanad.*push' | grep -v grep | head -n 80 || true
-          echo '=== port 3002 listeners ==='
-          ss -ltnp 2>/dev/null | grep -E '[:.]3002([[:space:]]|$)' || true
-          echo '=== user timers/cron names ==='
-          systemctl --user list-units --all --no-pager 2>/dev/null | grep -Ei 'push|sanad' || true
-          crontab -l 2>/dev/null | sed -E 's/(=.*)/=*** /' || true
-          echo '=== pwa lab compose structure ==='
-          if [ -r /srv/sanad-pwa-lab/docker-compose.yml ]; then
-            grep -nE '^[[:space:]]{2}[A-Za-z0-9_-]+:|^[[:space:]]+(image|build|env_file|container_name|restart|ports|volumes|command):|push|worker|3002' /srv/sanad-pwa-lab/docker-compose.yml | head -n 220 || true
-          else
-            echo 'pwa-lab-compose-not-readable'
-          fi
-          echo '=== readable push-worker paths ==='
-          find /opt /srv /home -maxdepth 6 -type d -iname '*push*worker*' -print 2>/dev/null | sort | head -n 100 || true
-          find /opt /srv /home -maxdepth 6 -type f \( -iname '*push*worker*' -o -path '*/push-worker/package.json' \) -print 2>/dev/null | sort | head -n 100 || true
-          exit 0
-          REMOTE
+          ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" \
+            "ps -eo args --width 240 | grep -E 'node dist/index\\.js' | grep -v grep >/dev/null"
