@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Probe push-worker runtime without printing secrets
+      - name: Probe runtime access without printing secrets
         shell: bash
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -38,17 +38,29 @@ jobs:
           set -euo pipefail
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          echo '=== docker candidates ==='
+          set -u
+          echo '=== identity ==='
+          id
+          echo '=== sudo policy ==='
+          sudo -n -l 2>&1 || true
+          echo '=== docker direct access ==='
           if command -v docker >/dev/null 2>&1; then
-            sudo docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -Ei 'push|sanad' || true
-            for c in $(sudo docker ps -a --format '{{.Names}}' | grep -Ei 'push|worker' || true); do
-              echo "=== compose labels for $c ==="
-              sudo docker inspect -f 'working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config_files={{index .Config.Labels "com.docker.compose.project.config_files"}} service={{index .Config.Labels "com.docker.compose.service"}}' "$c" || true
-            done
+            docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>&1 | head -n 80 || true
+          else
+            echo 'docker-not-found'
           fi
+          echo '=== readable roots ==='
+          for d in /opt /srv /var/www /home; do
+            if [ -d "$d" ]; then
+              echo "-- $d"
+              ls -la "$d" 2>&1 | head -n 60 || true
+            fi
+          done
           echo '=== systemd candidates ==='
           systemctl list-unit-files --type=service --no-pager 2>/dev/null | grep -Ei 'push|sanad' || true
-          echo '=== candidate files ==='
-          sudo find /opt /srv /etc -maxdepth 4 -type f \( -iname '*push*worker*' -o -iname 'docker-compose*.yml' -o -iname 'compose*.yml' -o -iname 'compose*.yaml' \) -print 2>/dev/null | sort | head -n 120
+          echo '=== deploy helper ==='
+          ls -l /usr/local/sbin/sanad-deploy-production 2>&1 || true
+          echo '=== readable candidate paths ==='
+          find /opt /srv /var/www -maxdepth 4 -type f \( -iname '*push*worker*' -o -iname 'docker-compose*.yml' -o -iname 'compose*.yml' -o -iname 'compose*.yaml' -o -iname '*.env' \) -print 2>/dev/null | sort | head -n 120 || true
+          exit 0
           REMOTE
