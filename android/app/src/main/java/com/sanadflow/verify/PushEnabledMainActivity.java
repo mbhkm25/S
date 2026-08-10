@@ -1,5 +1,6 @@
 package com.sanadflow.verify;
 
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
@@ -16,8 +17,16 @@ public class PushEnabledMainActivity extends MainActivity {
         if (webView != null) {
             androidPushBridge = new AndroidPushBridge(this, webView);
             webView.addJavascriptInterface(androidPushBridge, "AndroidPush");
+            androidPushBridge.capturePushIntent(getIntent());
             Log.i(TAG, "Native Android push bridge enabled");
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (androidPushBridge != null) androidPushBridge.capturePushIntent(intent);
     }
 
     @Override
