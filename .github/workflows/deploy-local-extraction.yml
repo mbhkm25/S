@@ -166,8 +166,25 @@ jobs:
             previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"
           fi
 
+          dump_candidate_diagnostics() {
+            echo "--- candidate compose status ---" >&2
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f "$release/docker-compose.local.yml" ps >&2 || true
+            echo "--- candidate OCR readiness payload ---" >&2
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready >&2 || true
+            echo >&2
+            echo "--- candidate analyzer readiness payload ---" >&2
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8090/health/ready >&2 || true
+            echo >&2
+            echo "--- candidate OCR logs ---" >&2
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f "$release/docker-compose.local.yml" logs --no-color --tail=240 sanad-local-ocr >&2 || true
+            echo "--- candidate analyzer logs ---" >&2
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f "$release/docker-compose.local.yml" logs --no-color --tail=160 sanad-local-analyzer >&2 || true
+          }
+
           rollback() {
-            echo "Deployment failed; attempting rollback" >&2
+            echo "Deployment failed; capturing candidate diagnostics before rollback" >&2
+            dump_candidate_diagnostics
+            echo "Attempting rollback" >&2
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "$previous" "$DEPLOY_ROOT/current"
               cd "$previous"
@@ -195,8 +212,6 @@ jobs:
           done
           if [ "$analyzer_ok" -ne 1 ]; then
             echo "Analyzer did not become ready" >&2
-            docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml ps >&2 || true
-            docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml logs --tail=160 >&2 || true
             exit 1
           fi
 
