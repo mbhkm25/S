@@ -1,0 +1,5 @@
+{
+  "minimumAcceptConfidence": 0.98,
+  "outputPath": "/tmp/sanad-local-extraction-report.json",
+  "cases": []
+}
