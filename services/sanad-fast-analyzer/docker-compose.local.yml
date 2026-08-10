@@ -1,10 +1,22 @@
 services:
+  sanad-local-ocr-init:
+    image: alpine:3.22
+    container_name: sanad-local-ocr-init
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /models/temp && chown -R 10001:10001 /models && chmod -R u+rwX,go-rwx /models"]
+    volumes:
+      - sanad_ocr_models:/models
+    restart: "no"
+
   sanad-local-ocr:
     build:
       context: ./ocr-runtime
       dockerfile: Dockerfile
     container_name: sanad-local-ocr
     restart: unless-stopped
+    depends_on:
+      sanad-local-ocr-init:
+        condition: service_completed_successfully
     environment:
       SANAD_OCR_LANG: ar
       SANAD_OCR_VERSION: PP-OCRv5
