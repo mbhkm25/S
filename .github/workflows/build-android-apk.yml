@@ -11,6 +11,7 @@ on:
       - 'scripts/android-release-meta.mjs'
       - 'scripts/android-release-meta.test.mjs'
       - 'scripts/generate-sanad-icons.py'
+      - 'scripts/restore-firebase-android-config.sh'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -27,6 +28,7 @@ on:
       - 'scripts/android-release-meta.mjs'
       - 'scripts/android-release-meta.test.mjs'
       - 'scripts/generate-sanad-icons.py'
+      - 'scripts/restore-firebase-android-config.sh'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -66,6 +68,11 @@ jobs:
           cache: gradle
       - name: Set up icon generator
         run: python -m pip install --disable-pip-version-check Pillow
+      - name: Restore Firebase Android config when available
+        env:
+          SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
+          SANAD_FIREBASE_REQUIRED: 'false'
+        run: bash scripts/restore-firebase-android-config.sh
       - name: Install dependencies
         run: npm ci
       - name: Validate application and release contract
@@ -135,13 +142,14 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+          FIREBASE_CONFIG_BASE64: ${{ secrets.SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
           SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
           HOST: ${{ secrets.PRODUCTION_HOST }}
           DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
           set -euo pipefail
-          for value in "$KEYSTORE_BASE64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" "$SSH_PRIVATE_KEY" "$SSH_KNOWN_HOSTS" "$HOST" "$DEPLOY_USER"; do
+          for value in "$KEYSTORE_BASE64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" "$FIREBASE_CONFIG_BASE64" "$SSH_PRIVATE_KEY" "$SSH_KNOWN_HOSTS" "$HOST" "$DEPLOY_USER"; do
             [[ -n "$value" ]]
           done
       - name: Restore release keystore
@@ -153,6 +161,11 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
           chmod 600 "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
           test -s "$RUNNER_TEMP/sanad-signing/sanad-release.jks"
+      - name: Restore and validate Firebase Android config
+        env:
+          SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
+          SANAD_FIREBASE_REQUIRED: 'true'
+        run: bash scripts/restore-firebase-android-config.sh
       - name: Install dependencies
         run: npm ci
       - name: Validate application and release contract
@@ -229,7 +242,7 @@ jobs:
             exit 1
           fi
           if [[ ! "$OLD_CERT" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "Could not extract a valid SHA-256 certificate digest from the currently published APK. Refusing to publish." >&2
+            echo "Could not extract a valid SHA-256 certificate digest from the currently published APK. Refusing to replace it." >&2
             printf '%s\n' "$OLD_CERT_OUTPUT" >&2
             exit 1
           fi
