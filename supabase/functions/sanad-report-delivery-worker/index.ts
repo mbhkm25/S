@@ -20,7 +20,19 @@ function envAny(names: string[], fallback?: string) {
 
 const SUPABASE_URL = env("SUPABASE_URL").replace(/\/$/, "");
 const sb = createClient(SUPABASE_URL, env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-const REPORT_URL_BASE = env("INTERACTIVE_REPORT_BASE_URL", "https://api.sanadflow.com/functions/v1/sanad-interactive-report").replace(/\/$/, "");
+const CANONICAL_REPORT_URL_BASE = "https://api.sanadflow.com/functions/v1/sanad-interactive-report";
+function resolvePublicReportBase() {
+  const configured = (Deno.env.get("INTERACTIVE_REPORT_BASE_URL") || CANONICAL_REPORT_URL_BASE).trim().replace(/\/$/, "");
+  try {
+    const parsed = new URL(configured);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "api.sanadflow.com") throw new Error("untrusted_report_public_host");
+    return configured;
+  } catch {
+    console.warn(JSON.stringify({ function: "sanad-report-delivery-worker", event: "invalid_public_report_base_fallback" }));
+    return CANONICAL_REPORT_URL_BASE;
+  }
+}
+const REPORT_URL_BASE = resolvePublicReportBase();
 const BUCKET = env("SUPABASE_STORAGE_BUCKET", "operation-files");
 const APP_BASE = env("PUBLIC_APP_BASE_URL", "https://app.sanadflow.com").replace(/\/$/, "");
 const WA_PHONE_ID = envAny(["WHATSAPP_PHONE_NUMBER_ID", "META_WA_PHONE_NUMBER_ID"]);
@@ -63,6 +75,32 @@ function fmtDate(value: unknown, short = false) {
     day: "2-digit",
     ...(short ? {} : { hour: "2-digit", minute: "2-digit", hour12: false }),
   }).format(date);
+}
+function reportDateStamp(value = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    numberingSystem: "latn",
+    timeZone: "Asia/Aden",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value || "00";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
+}
+function reportFilename(reportId: string) {
+  const compactId = reportId.replace(/[^0-9a-f]/gi, "");
+  const suffix = compactId.slice(-6).toUpperCase() || "REPORT";
+  return `SANAD-Report-${reportDateStamp()}-${suffix}.pdf`;
+}
+function publicInteractiveReportUrl(token: string) {
+  const url = new URL(REPORT_URL_BASE);
+  if (url.protocol !== "https:" || url.hostname !== "api.sanadflow.com") throw new Error("invalid_public_report_url_host");
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+function whatsappErrorCode(message: string) {
+  const match = message.match(/"code"\s*:\s*(\d+)/);
+  return match?.[1] || null;
 }
 function fmtOperationDateTime(value: unknown) {
   if (!value) return { date: "—", time: "—" };
@@ -347,16 +385,7 @@ async function sendInteractiveLink(to: string, url: string, metrics: Json) {
     type: "text",
     text: {
       preview_url: true,
-      body: `تم إعداد تقرير عملياتك في سند.\
-\
-عدد العمليات: ${Number(metrics.operations_count || 0)}\
-الموثقة: ${Number(metrics.verified_count || 0)}\
-عليها ملاحظات: ${Number(metrics.operations_with_notes || 0)}\
-\
-اضغط لاستعراض التقرير وتصفية عملياته:\
-${url}\
-\
-الرابط خاص بك وصالح لمدة محدودة.`,
+      body: `✅ *تقرير عمليات سند جاهز*\n\n*${Number(metrics.operations_count || 0)}* عملية\n*${Number(metrics.verified_count || 0)}* موثقة\n*${Number(metrics.operations_with_notes || 0)}* عليها ملاحظات\n\n🔗 *استعراض التقرير التفاعلي*\n${url}\n\nيمكنك البحث والتصفية واستعراض تفاصيل العمليات من الرابط أعلاه.\n🔒 الرابط خاص بهذا التقرير وصالح لمدة محدودة.`,
     },
   });
 }
@@ -365,7 +394,11 @@ async function sendPdfDocument(to: string, mediaId: string, filename: string) {
     messaging_product: "whatsapp",
     to,
     type: "document",
-    document: { id: mediaId, filename, caption: "تقرير عمليات سند بصيغة PDF" },
+    document: {
+      id: mediaId,
+      filename,
+      caption: "📄 *تقرير عمليات سند — PDF*\nنسخة ثابتة للطباعة والحفظ والمشاركة.",
+    },
   });
 }
 
@@ -399,9 +432,7 @@ async function processReport(reportId: string, dryRun: boolean) {
   const interactiveRequired = Boolean(artifacts.interactive_required);
   const pdfRequired = Boolean(artifacts.pdf_required);
   const publicToken = String(artifacts.access_token || "");
-  const interactiveUrl = interactiveRequired && publicToken
-    ? `${REPORT_URL_BASE}?token=${encodeURIComponent(publicToken)}`
-    : null;
+  const interactiveUrl = interactiveRequired && publicToken ? publicInteractiveReportUrl(publicToken) : null;
   if (interactiveRequired && !interactiveUrl) throw new Error("interactive_report_access_token_missing");
 
   const metrics: Json = {
@@ -411,13 +442,14 @@ async function processReport(reportId: string, dryRun: boolean) {
     operations_with_notes: artifacts.operations_with_notes,
     delivery_format: format,
     renderer: "official-portrait-operations-v5",
+    public_report_host: "api.sanadflow.com",
   };
 
   let pdfPath: string | null = null;
   let pdfBytes = 0;
   let pdf: Uint8Array | null = null;
   let renderMs = 0;
-  const filename = `sanad-report-${safeName(reportId)}.pdf`;
+  const filename = reportFilename(reportId);
 
   if (pdfRequired) {
     if (!dryRun) await sb.from("report_requests").update({ pdf_status: "processing", processing_stage: "rendering_pdf" }).eq("id", reportId);
@@ -438,6 +470,7 @@ async function processReport(reportId: string, dryRun: boolean) {
     metrics.pdf_bytes = pdfBytes;
     metrics.pdf_render_ms = renderMs;
     metrics.pdf_row_count = Array.isArray(snapshot?.payload?.operations) ? snapshot.payload.operations.length : 0;
+    metrics.user_filename = filename;
     if (!dryRun) {
       await sb.from("report_requests").update({
         result_bucket: BUCKET,
@@ -452,44 +485,81 @@ async function processReport(reportId: string, dryRun: boolean) {
   const destination = normalizePhone(request.destination_phone);
   const messageIds: string[] = [];
   if (!dryRun) {
-    if (pdfRequired && pdf) {
-      const mediaId = await whatsappUploadPdf(pdf, filename);
-      const sent = await sendPdfDocument(destination, mediaId, filename);
-      const id = String((sent.messages as Array<Json> | undefined)?.[0]?.id || "");
-      if (id) messageIds.push(id);
-    }
-    if (interactiveUrl) {
-      const sent = await sendInteractiveLink(destination, interactiveUrl, metrics);
-      const id = String((sent.messages as Array<Json> | undefined)?.[0]?.id || "");
-      if (id) messageIds.push(id);
-    }
+    try {
+      if (pdfRequired && pdf) {
+        const mediaId = await whatsappUploadPdf(pdf, filename);
+        const sent = await sendPdfDocument(destination, mediaId, filename);
+        const id = String((sent.messages as Array<Json> | undefined)?.[0]?.id || "");
+        if (id) messageIds.push(id);
+      }
+      if (interactiveUrl) {
+        const sent = await sendInteractiveLink(destination, interactiveUrl, metrics);
+        const id = String((sent.messages as Array<Json> | undefined)?.[0]?.id || "");
+        if (id) messageIds.push(id);
+      }
 
-    const now = new Date().toISOString();
-    await sb.from("report_requests").update({
-      status: "sent",
-      processing_stage: "completed",
-      processed_at: now,
-      sent_at: now,
-      result_bucket: pdfPath ? BUCKET : null,
-      result_path: pdfPath,
-      pdf_status: pdfRequired ? "ready" : "skipped",
-      interactive_status: interactiveRequired ? "ready" : "skipped",
-      whatsapp_message_id: messageIds[0] || null,
-      delivery_status: "accepted",
-      accepted_at: now,
-      last_delivery_event_at: now,
-      delivery_attempts: Number(request.delivery_attempts || 0) + 1,
-      result_metrics: { ...(request.result_metrics || {}), ...metrics, whatsapp_message_ids: messageIds },
-      error_message: null,
-      failed_at: null,
-      delivery_error_code: null,
-      delivery_error_message: null,
-    }).eq("id", reportId);
+      const now = new Date().toISOString();
+      await sb.from("report_requests").update({
+        status: "sent",
+        processing_stage: "completed",
+        processed_at: now,
+        sent_at: now,
+        result_bucket: pdfPath ? BUCKET : null,
+        result_path: pdfPath,
+        pdf_status: pdfRequired ? "ready" : "skipped",
+        interactive_status: interactiveRequired ? "ready" : "skipped",
+        whatsapp_message_id: messageIds[0] || null,
+        delivery_status: "accepted",
+        accepted_at: now,
+        last_delivery_event_at: now,
+        delivery_attempts: Number(request.delivery_attempts || 0) + 1,
+        result_metrics: { ...(request.result_metrics || {}), ...metrics, whatsapp_message_ids: messageIds },
+        error_message: null,
+        failed_at: null,
+        delivery_error_code: null,
+        delivery_error_message: null,
+      }).eq("id", reportId);
+    } catch (deliveryError) {
+      const message = deliveryError instanceof Error ? deliveryError.message : String(deliveryError);
+      const now = new Date().toISOString();
+      const code = whatsappErrorCode(message);
+      await sb.from("report_requests").update({
+        status: "ready",
+        processing_stage: "whatsapp_delivery_failed",
+        processed_at: now,
+        result_bucket: pdfPath ? BUCKET : null,
+        result_path: pdfPath,
+        pdf_status: pdfRequired ? "ready" : "skipped",
+        interactive_status: interactiveRequired ? "ready" : "skipped",
+        delivery_status: "failed",
+        last_delivery_event_at: now,
+        delivery_attempts: Number(request.delivery_attempts || 0) + 1,
+        result_metrics: { ...(request.result_metrics || {}), ...metrics, whatsapp_message_ids: messageIds },
+        error_message: null,
+        failed_at: null,
+        delivery_error_code: code,
+        delivery_error_message: message.slice(0, 1000),
+      }).eq("id", reportId);
+      console.warn(JSON.stringify({ function: "sanad-report-delivery-worker", event: "whatsapp_delivery_failed_after_report_ready", report_id: reportId, code }));
+      return {
+        ok: true,
+        report_id: reportId,
+        report_ready: true,
+        pdf_bytes: pdfBytes,
+        pdf_path: pdfPath,
+        pdf_render_ms: renderMs,
+        whatsapp_sent: false,
+        delivery_error_code: code,
+        message_ids: messageIds,
+        metrics,
+      };
+    }
   }
 
   return {
     ok: true,
     report_id: reportId,
+    report_ready: true,
     pdf_bytes: pdfBytes,
     pdf_path: pdfPath,
     pdf_render_ms: renderMs,
@@ -512,17 +582,20 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
     if (/^[0-9a-f-]{36}$/i.test(reportId)) {
       try {
-        const { data: current } = await sb.from("report_requests").select("pdf_status").eq("id", reportId).single();
-        const preservedPdfStatus = current?.pdf_status === "ready" || current?.pdf_status === "skipped" ? current.pdf_status : "failed";
+        const { data: current } = await sb.from("report_requests")
+          .select("pdf_status,interactive_status")
+          .eq("id", reportId)
+          .single();
+        const artifactsReady = current?.pdf_status === "ready" || current?.interactive_status === "ready";
         const now = new Date().toISOString();
         await sb.from("report_requests").update({
-          status: "failed",
-          processing_stage: "failed",
-          pdf_status: preservedPdfStatus,
-          delivery_status: "failed",
-          error_message: message.slice(0, 1000),
-          delivery_error_message: message.slice(0, 1000),
-          failed_at: now,
+          status: artifactsReady ? "ready" : "failed",
+          processing_stage: artifactsReady ? "artifact_ready_processing_failed" : "failed",
+          pdf_status: current?.pdf_status === "ready" || current?.pdf_status === "skipped" ? current.pdf_status : "failed",
+          delivery_status: artifactsReady ? "pending" : "failed",
+          error_message: artifactsReady ? null : message.slice(0, 1000),
+          delivery_error_message: artifactsReady ? null : message.slice(0, 1000),
+          failed_at: artifactsReady ? null : now,
           updated_at: now,
         }).eq("id", reportId);
       } catch {
