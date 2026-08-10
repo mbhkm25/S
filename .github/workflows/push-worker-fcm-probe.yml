@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/push-worker-fcm-probe.yml'
+      - 'services/push-worker/**'
+      - 'scripts/deploy-push-worker.sh'
+      - 'scripts/deploy-production.sh'
 
 permissions:
   contents: read
