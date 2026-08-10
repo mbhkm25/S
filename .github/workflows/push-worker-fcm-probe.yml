@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Inspect production deploy script safely
+      - name: Locate live push worker without exposing secrets
         shell: bash
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -39,19 +39,21 @@ jobs:
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
           set -u
-          echo '=== deploy-production.sh ==='
-          if [ -r /opt/sanad-app/scripts/deploy-production.sh ]; then
-            cat /opt/sanad-app/scripts/deploy-production.sh
+          echo '=== process candidates ==='
+          ps -eo user,pid,ppid,lstart,args --width 240 | grep -Ei 'push-worker|dist/index\.js|node .*3002|sanad.*push' | grep -v grep | head -n 80 || true
+          echo '=== port 3002 listeners ==='
+          ss -ltnp 2>/dev/null | grep -E '[:.]3002([[:space:]]|$)' || true
+          echo '=== user timers/cron names ==='
+          systemctl --user list-units --all --no-pager 2>/dev/null | grep -Ei 'push|sanad' || true
+          crontab -l 2>/dev/null | sed -E 's/(=.*)/=*** /' || true
+          echo '=== pwa lab compose structure ==='
+          if [ -r /srv/sanad-pwa-lab/docker-compose.yml ]; then
+            grep -nE '^[[:space:]]{2}[A-Za-z0-9_-]+:|^[[:space:]]+(image|build|env_file|container_name|restart|ports|volumes|command):|push|worker|3002' /srv/sanad-pwa-lab/docker-compose.yml | head -n 220 || true
           else
-            echo 'deploy-script-not-readable'
+            echo 'pwa-lab-compose-not-readable'
           fi
-          echo '=== /opt/sanad-app/scripts listing ==='
-          find /opt/sanad-app/scripts -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
-          echo '=== repository remotes/branch only ==='
-          if [ -d /opt/sanad-app/.git ]; then
-            git -C /opt/sanad-app remote -v 2>/dev/null | sed -E 's#(https://)[^/@]+@#\1***@#g' || true
-            git -C /opt/sanad-app branch --show-current 2>/dev/null || true
-            git -C /opt/sanad-app rev-parse HEAD 2>/dev/null || true
-          fi
+          echo '=== readable push-worker paths ==='
+          find /opt /srv /home -maxdepth 6 -type d -iname '*push*worker*' -print 2>/dev/null | sort | head -n 100 || true
+          find /opt /srv /home -maxdepth 6 -type f \( -iname '*push*worker*' -o -path '*/push-worker/package.json' \) -print 2>/dev/null | sort | head -n 100 || true
           exit 0
           REMOTE
