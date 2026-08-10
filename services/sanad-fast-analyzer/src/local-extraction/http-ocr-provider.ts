@@ -55,7 +55,6 @@ export class HttpOcrProvider implements OcrProvider {
     const timeout = setTimeout(() => controller.abort(), this.#timeoutMs);
     const headers = new Headers({
       "content-type": document.mimeType,
-      "x-sanad-filename": document.fileName ?? "document",
     });
     if (document.operationId) headers.set("x-sanad-operation-id", document.operationId);
     if (this.#token) headers.set("authorization", `Bearer ${this.#token}`);
