@@ -1,0 +1,147 @@
+name: Simulate SANAD Local Extraction Server
+
+on:
+  pull_request:
+    paths:
+      - 'services/sanad-fast-analyzer/**'
+      - '.github/workflows/simulate-local-extraction-server.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref/commit to simulate
+        required: true
+        default: feature/sanad-local-extraction-engine
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-sim-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulate:
+    name: Boot full Docker stack and exercise OCR/analyzer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Validate candidate source
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.local.yml config >/dev/null
+          python -m py_compile ocr-runtime/app.py
+
+      - name: Boot simulated server
+        id: boot
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose -p sanad-local-sim -f docker-compose.local.yml down -v --remove-orphans >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker compose -p sanad-local-sim -f docker-compose.local.yml up -d --build
+
+          echo 'Waiting for OCR readiness...'
+          ocr_ok=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready >/tmp/ocr-ready.json 2>/dev/null; then
+              ocr_ok=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "$ocr_ok" -ne 1 ]; then
+            echo 'OCR failed simulated-server readiness' >&2
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready >&2 || true
+            echo >&2
+            docker compose -p sanad-local-sim -f docker-compose.local.yml ps >&2 || true
+            docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=220 sanad-local-ocr >&2 || true
+            exit 11
+          fi
+
+          echo 'Waiting for analyzer readiness...'
+          analyzer_ok=0
+          for _ in $(seq 1 40); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8090/health/ready >/tmp/analyzer-ready.json 2>/dev/null; then
+              analyzer_ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$analyzer_ok" -ne 1 ]; then
+            echo 'Analyzer failed simulated-server readiness' >&2
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8090/health/ready >&2 || true
+            echo >&2
+            docker compose -p sanad-local-sim -f docker-compose.local.yml ps >&2 || true
+            docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=180 sanad-local-analyzer >&2 || true
+            exit 12
+          fi
+
+          python3 - <<'PY'
+          import base64, pathlib
+          # Valid tiny PNG. Startup canary already proves text inference; this exercises HTTP paths.
+          png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=')
+          pathlib.Path('/tmp/sanad-sim.png').write_bytes(png)
+          PY
+
+          curl --fail --silent --max-time 30 \
+            -H 'Content-Type: image/png' \
+            --data-binary @/tmp/sanad-sim.png \
+            http://127.0.0.1:8091/v1/ocr >/tmp/ocr-inference.json
+
+          curl --fail --silent --max-time 30 \
+            -H 'Content-Type: image/png' \
+            --data-binary @/tmp/sanad-sim.png \
+            http://127.0.0.1:8090/v1/analyze >/tmp/analyzer-inference.json
+
+          python3 - <<'PY'
+          import json
+          ocr_ready=json.load(open('/tmp/ocr-ready.json'))
+          analyzer_ready=json.load(open('/tmp/analyzer-ready.json'))
+          ocr=json.load(open('/tmp/ocr-inference.json'))
+          analyzer=json.load(open('/tmp/analyzer-inference.json'))
+          assert ocr_ready.get('ok') is True, ocr_ready
+          assert ocr_ready.get('model_loaded') is True, ocr_ready
+          assert ocr_ready.get('inference_ready') is True, ocr_ready
+          assert analyzer_ready.get('ok') is True, analyzer_ready
+          assert isinstance(ocr.get('raw_text'), str), ocr
+          assert isinstance(ocr.get('blocks'), list), ocr
+          assert isinstance(analyzer, dict), analyzer
+          print('SIMULATION_OK')
+          print('ocr_engine='+str(ocr_ready.get('engine')))
+          print('ocr_provider='+str(ocr.get('provider')))
+          print('analyzer_status='+str((analyzer.get('result') or {}).get('status')))
+          PY
+
+          docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-local-ocr sanad-local-analyzer || true
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          echo '--- compose ---'
+          docker compose -p sanad-local-sim -f docker-compose.local.yml ps || true
+          echo '--- OCR readiness ---'
+          curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
+          echo
+          echo '--- analyzer readiness ---'
+          curl --silent --show-error --max-time 3 http://127.0.0.1:8090/health/ready || true
+          echo
+          echo '--- OCR logs ---'
+          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=220 sanad-local-ocr || true
+          echo '--- analyzer logs ---'
+          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=180 sanad-local-analyzer || true
+
+      - name: Cleanup simulation
+        if: always()
+        working-directory: services/sanad-fast-analyzer
+        run: docker compose -p sanad-local-sim -f docker-compose.local.yml down -v --remove-orphans || true
