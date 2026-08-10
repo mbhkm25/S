@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Probe runtime access without printing secrets
+      - name: Inspect allowed production deploy path safely
         shell: bash
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -39,28 +39,15 @@ jobs:
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
           set -u
-          echo '=== identity ==='
-          id
-          echo '=== sudo policy ==='
-          sudo -n -l 2>&1 || true
-          echo '=== docker direct access ==='
-          if command -v docker >/dev/null 2>&1; then
-            docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>&1 | head -n 80 || true
+          echo '=== deploy helper content ==='
+          cat /usr/local/sbin/sanad-deploy-production 2>&1 || true
+          echo '=== sanitized /opt/sanad/docker-compose.yml structure ==='
+          if [ -r /opt/sanad/docker-compose.yml ]; then
+            grep -nE '^[[:space:]]{2}[A-Za-z0-9_-]+:|^[[:space:]]+(image|build|env_file|container_name|restart|ports|volumes):|push|worker' /opt/sanad/docker-compose.yml | head -n 220 || true
           else
-            echo 'docker-not-found'
+            echo 'compose-not-readable'
           fi
-          echo '=== readable roots ==='
-          for d in /opt /srv /var/www /home; do
-            if [ -d "$d" ]; then
-              echo "-- $d"
-              ls -la "$d" 2>&1 | head -n 60 || true
-            fi
-          done
-          echo '=== systemd candidates ==='
-          systemctl list-unit-files --type=service --no-pager 2>/dev/null | grep -Ei 'push|sanad' || true
-          echo '=== deploy helper ==='
-          ls -l /usr/local/sbin/sanad-deploy-production 2>&1 || true
-          echo '=== readable candidate paths ==='
-          find /opt /srv /var/www -maxdepth 4 -type f \( -iname '*push*worker*' -o -iname 'docker-compose*.yml' -o -iname 'compose*.yml' -o -iname 'compose*.yaml' -o -iname '*.env' \) -print 2>/dev/null | sort | head -n 120 || true
+          echo '=== /opt/sanad top-level structure ==='
+          find /opt/sanad -maxdepth 2 -mindepth 1 -type d -print 2>/dev/null | sort | head -n 100 || true
           exit 0
           REMOTE
