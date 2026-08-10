@@ -20,7 +20,7 @@ function envAny(names: string[], fallback?: string) {
 
 const SUPABASE_URL = env("SUPABASE_URL").replace(/\/$/, "");
 const sb = createClient(SUPABASE_URL, env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-const CANONICAL_REPORT_URL_BASE = "https://api.sanadflow.com/functions/v1/sanad-interactive-report";
+const CANONICAL_REPORT_URL_BASE = "https://api.sanadflow.com/functions/v1/r";
 function resolvePublicReportBase() {
   const configured = (Deno.env.get("INTERACTIVE_REPORT_BASE_URL") || CANONICAL_REPORT_URL_BASE).trim().replace(/\/$/, "");
   try {
