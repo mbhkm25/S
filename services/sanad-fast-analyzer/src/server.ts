@@ -1,6 +1,32 @@
 import { analyzeLocalDocument } from "./local-extraction/engine.ts";
 import { HttpOcrProvider } from "./local-extraction/http-ocr-provider.ts";
 
+class Semaphore {
+  #available: number;
+  #waiters: Array<(release: () => void) => void> = [];
+
+  constructor(capacity: number) {
+    this.#available = capacity;
+  }
+
+  acquire(): Promise<() => void> {
+    if (this.#available > 0) {
+      this.#available -= 1;
+      return Promise.resolve(() => this.release());
+    }
+    return new Promise((resolve) => this.#waiters.push(resolve));
+  }
+
+  private release(): void {
+    const waiter = this.#waiters.shift();
+    if (waiter) {
+      waiter(() => this.release());
+      return;
+    }
+    this.#available += 1;
+  }
+}
+
 const PORT = intEnv("SANAD_LOCAL_ANALYZER_PORT", 8090, 1, 65535);
 const MAX_BODY_BYTES = intEnv("SANAD_LOCAL_ANALYZER_MAX_BODY_BYTES", 12 * 1024 * 1024, 1024, 50 * 1024 * 1024);
 const CONCURRENCY = intEnv("SANAD_LOCAL_ANALYZER_CONCURRENCY", 2, 1, 16);
@@ -17,7 +43,6 @@ const ocrProvider = new HttpOcrProvider({
   token: OCR_TOKEN,
   providerName: "sanad-paddleocr-sidecar",
 });
-
 const gate = new Semaphore(CONCURRENCY);
 
 console.log(JSON.stringify({
@@ -89,7 +114,7 @@ Deno.serve({ hostname: "0.0.0.0", port: PORT }, async (request) => {
       confidence: result.confidence,
       fallbackRecommended: result.fallbackRecommended,
       fallbackReason: result.fallbackReason ?? null,
-      detectedFamily: result.diagnostics.detectedFamily ?? null,
+      parser: result.diagnostics.parser ?? null,
       totalMs: Number((performance.now() - started).toFixed(3)),
     }));
 
@@ -160,7 +185,7 @@ async function readBodyBounded(request: Request, maxBytes: number): Promise<Uint
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeout: number | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       promise,
@@ -174,7 +199,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 }
 
 function normalizeMime(value: string | null): string {
-  return (value || "application/octet-stream").split(";", 1)[0].trim().toLowerCase();
+  const first = (value || "application/octet-stream").split(";", 1)[0] ?? "application/octet-stream";
+  return first.trim().toLowerCase();
 }
 
 function sanitizeFileName(value: string | null): string | undefined {
@@ -203,30 +229,4 @@ function json(body: unknown, status = 200): Response {
       "cache-control": "no-store",
     },
   });
-}
-
-class Semaphore {
-  #available: number;
-  #waiters: Array<(release: () => void) => void> = [];
-
-  constructor(capacity: number) {
-    this.#available = capacity;
-  }
-
-  acquire(): Promise<() => void> {
-    if (this.#available > 0) {
-      this.#available -= 1;
-      return Promise.resolve(() => this.release());
-    }
-    return new Promise((resolve) => this.#waiters.push(resolve));
-  }
-
-  private release(): void {
-    const waiter = this.#waiters.shift();
-    if (waiter) {
-      waiter(() => this.release());
-      return;
-    }
-    this.#available += 1;
-  }
 }
