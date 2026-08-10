@@ -15,7 +15,7 @@ security definer
 set search_path to ''
 as $function$
 declare
-  v_status text := lower(trim(coalesce(p_status, ''));
+  v_status text := lower(trim(coalesce(p_status, '')));
   v_updated integer;
 begin
   if p_message_id is null or trim(p_message_id) = '' then return false; end if;
