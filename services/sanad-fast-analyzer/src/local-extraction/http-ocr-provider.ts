@@ -61,10 +61,11 @@ export class HttpOcrProvider implements OcrProvider {
     if (this.#token) headers.set("authorization", `Bearer ${this.#token}`);
 
     try {
+      const body = new Blob([document.bytes.slice()], { type: document.mimeType });
       const response = await fetch(`${this.#baseUrl}/v1/ocr`, {
         method: "POST",
         headers,
-        body: document.bytes,
+        body,
         signal: controller.signal,
       });
       if (!response.ok) {
