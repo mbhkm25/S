@@ -1,5 +1,6 @@
 import type { CoreFinancialExtraction } from "../contracts.ts";
 import { parseAmqiFamilyText } from "../parsers/amqi-family.ts";
+import { parseKuraimiHasebText } from "../parsers/kuraimi-haseb.ts";
 
 export interface LocalParserResult {
   parser: string;
@@ -28,7 +29,21 @@ const amqiParser: LocalTextParser = {
   },
 };
 
-const DEFAULT_PARSERS: readonly LocalTextParser[] = [amqiParser];
+const kuraimiHasebParser: LocalTextParser = {
+  name: "kuraimi-haseb-v1-candidate",
+  parse(rawText: string): LocalParserResult {
+    const result = parseKuraimiHasebText(rawText);
+    return {
+      parser: "kuraimi-haseb-v1-candidate",
+      matched: result.matched,
+      extraction: result.extraction,
+      confidence: result.extraction?.confidence ?? 0,
+      reasons: result.missing,
+    };
+  },
+};
+
+const DEFAULT_PARSERS: readonly LocalTextParser[] = [amqiParser, kuraimiHasebParser];
 
 export interface ParserRegistryOptions {
   parsers?: readonly LocalTextParser[];
