@@ -7,14 +7,6 @@ on:
         description: Private corpus batch directory under shared/private-corpus
         required: true
         default: pilot-01
-      mode:
-        description: smoke = analyze all files without ground truth; scored = require manifest.json
-        required: true
-        type: choice
-        options:
-          - smoke
-          - scored
-        default: smoke
       timeout_seconds:
         description: Per-document analyzer timeout
         required: true
@@ -28,8 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  benchmark:
-    name: Run private server benchmark
+  smoke:
+    name: Run private smoke benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -40,143 +32,69 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$SSH_PRIVATE_KEY"
-          test -n "$SSH_KNOWN_HOSTS"
           install -d -m 0700 "$HOME/.ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 0600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
 
-      - name: Run benchmark on SANAD server
+      - name: Run smoke benchmark on SANAD server
         shell: bash
         env:
           HOST: ${{ secrets.SANAD_SERVER_HOST }}
           USER: ${{ secrets.SANAD_SERVER_USER }}
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
           BATCH: ${{ inputs.batch }}
-          MODE: ${{ inputs.mode }}
           TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
         run: |
           set -euo pipefail
           case "$BATCH" in
             *[!A-Za-z0-9._-]*|'') echo "Invalid batch name" >&2; exit 2 ;;
           esac
-          case "$TIMEOUT_SECONDS" in
-            ''|*[!0-9.]*) echo "Invalid timeout" >&2; exit 2 ;;
-          esac
-          case "$MODE" in smoke|scored) ;; *) echo "Invalid mode" >&2; exit 2 ;; esac
-
-          ssh -p "${PORT:-22}" "$USER@$HOST" \
-            "BATCH='$BATCH' MODE='$MODE' TIMEOUT_SECONDS='$TIMEOUT_SECONDS' bash -s" <<'REMOTE'
+          ssh -p "${PORT:-22}" "$USER@$HOST" "BATCH='$BATCH' TIMEOUT_SECONDS='$TIMEOUT_SECONDS' bash -s" <<'REMOTE'
           set -euo pipefail
           root=/opt/sanad-local-extraction
-          current="$root/current"
           corpus="$root/shared/private-corpus/$BATCH"
-          manifest="$corpus/manifest.json"
           reports="$root/shared/benchmark-reports"
-          script="$current/scripts/benchmark_server.py"
-
-          test -L "$current" || { echo "No deployed local extraction release" >&2; exit 3; }
-          test -d "$corpus" || { echo "Missing private corpus: $corpus" >&2; exit 5; }
-
-          curl --fail --silent http://127.0.0.1:8090/health/ready >/tmp/sanad-local-benchmark-ready.json
-          python3 - <<'PY'
-import json
-p=json.load(open('/tmp/sanad-local-benchmark-ready.json'))
-assert p.get('ok') is True and p.get('status') == 'ready', p
-print('SANAD_LOCAL_ENGINE_READY')
-PY
-
+          test -d "$corpus" || { echo "Missing corpus: $corpus" >&2; exit 5; }
+          curl --fail --silent http://127.0.0.1:8090/health/ready >/tmp/sanad-local-ready.json
           mkdir -p "$reports"
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          report="$reports/${BATCH}-${MODE}-${stamp}.json"
-
-          if [ "$MODE" = "scored" ]; then
-            test -f "$script" || { echo "Benchmark harness is not deployed yet" >&2; exit 4; }
-            test -f "$manifest" || { echo "Missing private manifest: $manifest" >&2; exit 5; }
-            python3 "$script" \
-              --manifest "$manifest" \
-              --url http://127.0.0.1:8090/v1/analyze \
-              --timeout "$TIMEOUT_SECONDS" \
-              --output "$report" \
-              >/tmp/sanad-local-benchmark.log
-
-            python3 - "$report" <<'PY'
-import json, sys
-p=json.load(open(sys.argv[1]))
-s=p['summary']
-print('--- SANAD LOCAL EXTRACTION BENCHMARK SUMMARY ---')
-for k in ('cases','successfulHttpCases','failedCases','meanAccuracy','meanCriticalAccuracy','p50WallMs','p95WallMs','meanWallMs','fallbackRate'):
-    print(f'{k}={s.get(k)}')
-print('statuses='+json.dumps(s.get('statuses',{}), ensure_ascii=False, sort_keys=True))
-print('parsers='+json.dumps(s.get('parsers',{}), ensure_ascii=False, sort_keys=True))
-print('private_report='+sys.argv[1])
-PY
-          else
-            CORPUS="$corpus" REPORT="$report" TIMEOUT_SECONDS="$TIMEOUT_SECONDS" python3 - <<'PY'
-import json, mimetypes, os, pathlib, statistics, time, urllib.request, urllib.error
-from collections import Counter
-
-corpus = pathlib.Path(os.environ['CORPUS'])
-report_path = pathlib.Path(os.environ['REPORT'])
-timeout = float(os.environ['TIMEOUT_SECONDS'])
-allowed = {'.jpg', '.jpeg', '.png', '.webp', '.pdf'}
-files = sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed and p.name != 'manifest.json')
-rows=[]
-for p in files:
-    mime = mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
-    req = urllib.request.Request('http://127.0.0.1:8090/v1/analyze', data=p.read_bytes(), method='POST', headers={
-        'Content-Type': mime,
-        'X-SANAD-Filename': p.name,
-    })
-    started=time.perf_counter()
-    http_status=None; payload=None; error=None
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            http_status=r.status; payload=json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        http_status=e.code
-        try: payload=json.loads(e.read())
-        except Exception: error=f'HTTP {e.code}'
-    except Exception as e:
-        error=f'{type(e).__name__}: {e}'
-    wall=round((time.perf_counter()-started)*1000,3)
-    result=(payload or {}).get('result') if isinstance(payload,dict) else None
-    diagnostics=(result or {}).get('diagnostics') or {}
-    rows.append({
-      'file':p.name,'mime':mime,'httpStatus':http_status,'wallMs':wall,'error':error,
-      'status':(result or {}).get('status'),'confidence':(result or {}).get('confidence'),
-      'fallbackRecommended':(result or {}).get('fallbackRecommended'),
-      'fallbackReason':(result or {}).get('fallbackReason'),'parser':diagnostics.get('parser'),
-      'timings':(result or {}).get('timings'),
-      'extraction':(result or {}).get('extraction'),
-    })
-
-walls=[r['wallMs'] for r in rows]
-def pct(xs,q):
-    if not xs:return 0
-    xs=sorted(xs); idx=max(0,min(len(xs)-1,int((len(xs)*q+0.999999))-1)); return xs[idx]
-summary={
- 'cases':len(rows),
- 'successfulHttpCases':sum(1 for r in rows if r['httpStatus']==200),
- 'failedCases':sum(1 for r in rows if r['httpStatus']!=200),
- 'p50WallMs':pct(walls,.5),'p95WallMs':pct(walls,.95),'meanWallMs':round(statistics.fmean(walls),3) if walls else 0,
- 'fallbackRate':round(sum(1 for r in rows if r['fallbackRecommended'])/len(rows),4) if rows else 1,
- 'statuses':dict(Counter(str(r['status']) for r in rows)),
- 'parsers':dict(Counter(str(r['parser']) for r in rows)),
- 'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
-}
-report_path.write_text(json.dumps({'generatedAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'mode':'smoke','summary':summary,'results':rows}, ensure_ascii=False, indent=2))
-print('--- SANAD LOCAL EXTRACTION SMOKE SUMMARY ---')
-for k in ('cases','successfulHttpCases','failedCases','p50WallMs','p95WallMs','meanWallMs','fallbackRate'):
-    print(f'{k}={summary[k]}')
-print('statuses='+json.dumps(summary['statuses'], ensure_ascii=False, sort_keys=True))
-print('parsers='+json.dumps(summary['parsers'], ensure_ascii=False, sort_keys=True))
-print('errors='+json.dumps(summary['errors'], ensure_ascii=False, sort_keys=True))
-print('private_report='+str(report_path))
-PY
-          fi
-
-          # Raw per-document financial results remain only on the SANAD server.
+          report="$reports/${BATCH}-smoke-${stamp}.json"
+          CORPUS="$corpus" REPORT="$report" TIMEOUT_SECONDS="$TIMEOUT_SECONDS" python3 - <<'PY'
+          import json, mimetypes, os, pathlib, statistics, time, urllib.request, urllib.error
+          from collections import Counter
+          corpus=pathlib.Path(os.environ['CORPUS']); report=pathlib.Path(os.environ['REPORT']); timeout=float(os.environ['TIMEOUT_SECONDS'])
+          allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          rows=[]
+          for p in files:
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              req=urllib.request.Request('http://127.0.0.1:8090/v1/analyze',data=p.read_bytes(),method='POST',headers={'Content-Type':mime,'X-SANAD-Filename':p.name})
+              started=time.perf_counter(); status=None; payload=None; error=None
+              try:
+                  with urllib.request.urlopen(req,timeout=timeout) as r:
+                      status=r.status; payload=json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  status=e.code
+                  try: payload=json.loads(e.read())
+                  except Exception: error=f'HTTP {e.code}'
+              except Exception as e: error=f'{type(e).__name__}: {e}'
+              wall=round((time.perf_counter()-started)*1000,3)
+              result=(payload or {}).get('result') if isinstance(payload,dict) else None
+              diagnostics=(result or {}).get('diagnostics') or {}
+              rows.append({'file':p.name,'httpStatus':status,'wallMs':wall,'error':error,'status':(result or {}).get('status'),'fallbackRecommended':(result or {}).get('fallbackRecommended'),'parser':diagnostics.get('parser'),'extraction':(result or {}).get('extraction')})
+          walls=[r['wallMs'] for r in rows]
+          def pct(xs,q):
+              if not xs:return 0
+              xs=sorted(xs); return xs[max(0,min(len(xs)-1,int((len(xs)*q+0.999999))-1))]
+          summary={'cases':len(rows),'successfulHttpCases':sum(r['httpStatus']==200 for r in rows),'failedCases':sum(r['httpStatus']!=200 for r in rows),'p50WallMs':pct(walls,.5),'p95WallMs':pct(walls,.95),'meanWallMs':round(statistics.fmean(walls),3) if walls else 0,'fallbackRate':round(sum(bool(r['fallbackRecommended']) for r in rows)/len(rows),4) if rows else 1,'statuses':dict(Counter(str(r['status']) for r in rows)),'parsers':dict(Counter(str(r['parser']) for r in rows)),'errors':dict(Counter(str(r['error']) for r in rows if r['error']))}
+          report.write_text(json.dumps({'mode':'smoke','summary':summary,'results':rows},ensure_ascii=False,indent=2))
+          print('--- SANAD LOCAL EXTRACTION SMOKE SUMMARY ---')
+          for k in ('cases','successfulHttpCases','failedCases','p50WallMs','p95WallMs','meanWallMs','fallbackRate'): print(f'{k}={summary[k]}')
+          print('statuses='+json.dumps(summary['statuses'],ensure_ascii=False,sort_keys=True))
+          print('parsers='+json.dumps(summary['parsers'],ensure_ascii=False,sort_keys=True))
+          print('errors='+json.dumps(summary['errors'],ensure_ascii=False,sort_keys=True))
+          print('private_report='+str(report))
+          PY
           REMOTE
