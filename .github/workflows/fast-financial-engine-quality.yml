@@ -43,6 +43,12 @@ jobs:
         working-directory: services/sanad-fast-analyzer
         run: deno task test
 
+      - name: Validate OCR runtime Python syntax
+        run: python -m py_compile services/sanad-fast-analyzer/ocr-runtime/app.py
+
+      - name: Validate isolated OCR compose definition
+        run: docker compose -f services/sanad-fast-analyzer/docker-compose.local.yml config >/dev/null
+
       - name: Type-check shadow worker
         run: deno check --config supabase/functions/deno.json supabase/functions/sanad-operation-analysis-shadow/index.ts
 
