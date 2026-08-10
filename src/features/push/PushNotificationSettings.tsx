@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BellRing, CheckCircle2, Loader2, Smartphone, TriangleAlert } from 'lucide-react';
+import { BellRing, CheckCircle2, Loader2, RefreshCw, Smartphone, TriangleAlert } from 'lucide-react';
 import { getMyPushStatus } from './pushApi';
 import { reportPushError } from './pushErrors';
-import { detectPushSupport } from './pushSupport';
+import { detectPushSupport, isCapacitorNativePlatform } from './pushSupport';
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -22,6 +22,7 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const nativeAndroid = isCapacitorNativePlatform();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -31,15 +32,19 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
       if (!mountedRef.current) return;
       setSupport(nextSupport);
       if (userId) {
-        const [nextStatus, local] = await Promise.all([
-          getMyPushStatus(),
-          nextSupport.status === 'supported' || nextSupport.status === 'permission_denied'
-            ? getLocalPushSubscription().catch(() => null)
-            : Promise.resolve(null)
-        ]);
+        const nextStatus = await getMyPushStatus();
         if (!mountedRef.current) return;
         setStatus(nextStatus);
-        setLocalEnabled(!!local);
+
+        if (isCapacitorNativePlatform()) {
+          setLocalEnabled(nextStatus.devices.some(device => device.platform === 'android'));
+        } else {
+          const local = nextSupport.status === 'supported' || nextSupport.status === 'permission_denied'
+            ? await getLocalPushSubscription().catch(() => null)
+            : null;
+          if (!mountedRef.current) return;
+          setLocalEnabled(!!local);
+        }
       }
     } catch (error) {
       if (mountedRef.current) setMessage(reportPushError(error));
@@ -55,7 +60,7 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
   }, [refresh]);
 
   const runMutation = async (kind: 'enable' | 'disable') => {
-    if (busy) return;
+    if (busy || nativeAndroid) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -76,8 +81,8 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
     }
   };
 
-  const unavailableText = support?.status === 'requires_native_push'
-    ? 'إشعارات نسخة Android ستتوفر عبر نظامها الأصلي لاحقًا.'
+  const unavailableText = nativeAndroid
+    ? null
     : support?.status === 'permission_denied'
       ? 'تم حظر الإشعارات من إعدادات المتصفح. افتح إعدادات الموقع ثم اسمح بالإشعارات.'
       : support?.status === 'missing_vapid_key'
@@ -87,6 +92,8 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
           : support?.status === 'unknown'
             ? 'تعذر التحقق من خدمة الإشعارات حاليًا.'
             : null;
+
+  const nativeDevice = status?.devices.find(device => device.platform === 'android') || null;
 
   return (
     <section aria-labelledby="push-settings-title" className="rounded-3xl border border-emerald-100 bg-white p-4 shadow-2xs space-y-4">
@@ -113,12 +120,39 @@ export default function PushNotificationSettings({ userId }: PushNotificationSet
         <div className="flex min-h-12 items-center justify-center gap-2 text-xs text-slate-500" role="status">
           <Loader2 className="h-4 w-4 animate-spin" /> جاري التحقق
         </div>
+      ) : nativeAndroid ? (
+        localEnabled ? (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-right space-y-1">
+            <div className="flex items-center justify-end gap-2 text-[11px] font-bold text-emerald-800">
+              <span>الإشعارات الأصلية مفعلة على هذا الجهاز</span>
+              <Smartphone className="h-4 w-4 shrink-0" />
+            </div>
+            <p className="text-[10px] leading-relaxed text-emerald-700">
+              يستقبل سند الإشعارات عبر Android حتى عند إغلاق التطبيق أو إزالة التطبيق من التطبيقات الأخيرة.
+            </p>
+            {nativeDevice?.device_label && (
+              <p className="text-[10px] text-emerald-700/80">{nativeDevice.device_label}</p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-amber-50 p-3 text-right space-y-2 text-amber-800">
+            <div className="flex items-start justify-end gap-2 text-[11px] leading-relaxed">
+              <span>لم يكتمل تسجيل هذا الجهاز للإشعارات الأصلية بعد. تأكد من السماح بالإشعارات ثم أعد التحقق.</span>
+              <TriangleAlert className="h-4 w-4 shrink-0" />
+            </div>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-[11px] font-bold text-amber-800"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> إعادة التحقق
+            </button>
+          </div>
+        )
       ) : unavailableText ? (
         <div className="flex items-start justify-end gap-2 rounded-2xl bg-amber-50 p-3 text-right text-[11px] leading-relaxed text-amber-800">
           <span>{unavailableText}</span>
-          {support?.status === 'requires_native_push'
-            ? <Smartphone className="h-4 w-4 shrink-0" />
-            : <TriangleAlert className="h-4 w-4 shrink-0" />}
+          <TriangleAlert className="h-4 w-4 shrink-0" />
         </div>
       ) : localEnabled ? (
         <button

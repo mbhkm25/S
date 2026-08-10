@@ -13,7 +13,7 @@ function isNullableDate(value: unknown): value is string | null {
 function parseDevice(value: unknown): PushDeviceInfo {
   if (!isRecord(value)
       || typeof value.id !== 'string'
-      || (value.platform !== 'pwa' && value.platform !== 'web')
+      || (value.platform !== 'pwa' && value.platform !== 'web' && value.platform !== 'android')
       || (value.device_label !== null && typeof value.device_label !== 'string')
       || !isNullableDate(value.last_seen_at)
       || !isNullableDate(value.last_success_at)

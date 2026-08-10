@@ -19,7 +19,7 @@ export interface PushSubscriptionPayload {
 
 export interface PushDeviceInfo {
   id: string;
-  platform: 'pwa' | 'web';
+  platform: 'pwa' | 'web' | 'android';
   device_label: string | null;
   last_seen_at: string | null;
   last_success_at: string | null;
@@ -53,4 +53,3 @@ export interface SanadNotificationClickMessage {
 export interface PushRefreshRequiredMessage {
   type: 'SANAD_PUSH_SUBSCRIPTION_REFRESH_REQUIRED';
 }
-
