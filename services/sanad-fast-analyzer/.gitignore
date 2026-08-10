@@ -1,0 +1,9 @@
+# Private benchmark manifests and outputs
+*.private.json
+local-extraction-benchmark-*.json
+amqi-benchmark-*.json
+
+# Local runtime/model caches
+.ocr-models/
+__pycache__/
+*.pyc
