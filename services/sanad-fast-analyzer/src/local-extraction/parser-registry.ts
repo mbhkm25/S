@@ -1,5 +1,7 @@
 import type { CoreFinancialExtraction } from "../contracts.ts";
 import { parseAmqiFamilyText } from "../parsers/amqi-family.ts";
+import { parseBinDowalReceiptText } from "../parsers/bin-dowal-receipt.ts";
+import { parseBusairiReceiptText } from "../parsers/busairi-receipt.ts";
 import { parseKuraimiHasebText } from "../parsers/kuraimi-haseb.ts";
 
 export interface LocalParserResult {
@@ -29,6 +31,34 @@ const amqiParser: LocalTextParser = {
   },
 };
 
+const binDowalParser: LocalTextParser = {
+  name: "bin-dowal-receipt-v1",
+  parse(rawText: string): LocalParserResult {
+    const result = parseBinDowalReceiptText(rawText);
+    return {
+      parser: "bin-dowal-receipt-v1",
+      matched: result.matched,
+      extraction: result.extraction,
+      confidence: result.extraction?.confidence ?? 0,
+      reasons: result.missing,
+    };
+  },
+};
+
+const busairiParser: LocalTextParser = {
+  name: "busairi-receipt-v1",
+  parse(rawText: string): LocalParserResult {
+    const result = parseBusairiReceiptText(rawText);
+    return {
+      parser: "busairi-receipt-v1",
+      matched: result.matched,
+      extraction: result.extraction,
+      confidence: result.extraction?.confidence ?? 0,
+      reasons: result.missing,
+    };
+  },
+};
+
 const kuraimiHasebParser: LocalTextParser = {
   name: "kuraimi-haseb-v1-candidate",
   parse(rawText: string): LocalParserResult {
@@ -43,19 +73,18 @@ const kuraimiHasebParser: LocalTextParser = {
   },
 };
 
-const DEFAULT_PARSERS: readonly LocalTextParser[] = [amqiParser, kuraimiHasebParser];
+const DEFAULT_PARSERS: readonly LocalTextParser[] = [
+  amqiParser,
+  binDowalParser,
+  busairiParser,
+  kuraimiHasebParser,
+];
 
 export interface ParserRegistryOptions {
   parsers?: readonly LocalTextParser[];
   minimumMatchConfidence?: number;
 }
 
-/**
- * Runs deterministic parsers independently and selects the strongest valid match.
- * No parser can mutate another parser's input or result, which makes adding new
- * financial entities safe and benchmarkable. Ambiguous high-confidence matches
- * fail closed instead of silently picking one.
- */
 export function parseWithRegistry(
   rawText: string,
   options: ParserRegistryOptions = {},
