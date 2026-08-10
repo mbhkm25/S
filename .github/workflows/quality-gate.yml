@@ -87,6 +87,8 @@ jobs:
         run: |
           python -m py_compile services/sanad-fast-analyzer/ocr-runtime/app.py
           docker compose -f services/sanad-fast-analyzer/docker-compose.local.yml config >/dev/null
+      - name: Build Local Analyzer container
+        run: docker build -t sanad-local-analyzer:ci services/sanad-fast-analyzer
       - name: Validate migration filenames
         shell: bash
         run: |
