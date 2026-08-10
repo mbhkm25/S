@@ -14,6 +14,8 @@ services:
       SANAD_OCR_MAX_BODY_BYTES: ${SANAD_OCR_MAX_BODY_BYTES:-12582912}
       SANAD_OCR_MIN_TEXT_SCORE: ${SANAD_OCR_MIN_TEXT_SCORE:-0.35}
       SANAD_OCR_TOKEN: ${SANAD_OCR_TOKEN:-}
+    expose:
+      - "8091"
     ports:
       - "127.0.0.1:${SANAD_OCR_PORT:-8091}:8091"
     deploy:
@@ -28,6 +30,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 120s
+
+  sanad-local-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sanad-local-analyzer
+    restart: unless-stopped
+    depends_on:
+      sanad-local-ocr:
+        condition: service_healthy
+    environment:
+      SANAD_LOCAL_ANALYZER_PORT: 8090
+      SANAD_LOCAL_ANALYZER_CONCURRENCY: ${SANAD_LOCAL_ANALYZER_CONCURRENCY:-2}
+      SANAD_LOCAL_ANALYZER_MAX_BODY_BYTES: ${SANAD_LOCAL_ANALYZER_MAX_BODY_BYTES:-12582912}
+      SANAD_LOCAL_ANALYZER_TIMEOUT_MS: ${SANAD_LOCAL_ANALYZER_TIMEOUT_MS:-10000}
+      SANAD_LOCAL_ANALYZER_TOKEN: ${SANAD_LOCAL_ANALYZER_TOKEN:-}
+      SANAD_LOCAL_OCR_URL: http://sanad-local-ocr:8091
+      SANAD_LOCAL_OCR_TIMEOUT_MS: ${SANAD_LOCAL_OCR_TIMEOUT_MS:-8000}
+      SANAD_LOCAL_MIN_ACCEPT_CONFIDENCE: ${SANAD_LOCAL_MIN_ACCEPT_CONFIDENCE:-0.98}
+      SANAD_OCR_TOKEN: ${SANAD_OCR_TOKEN:-}
+    ports:
+      - "127.0.0.1:${SANAD_LOCAL_ANALYZER_PORT:-8090}:8090"
+    deploy:
+      resources:
+        limits:
+          memory: ${SANAD_LOCAL_ANALYZER_MEMORY_LIMIT:-512M}
+    healthcheck:
+      test: ["CMD", "deno", "eval", "const r=await fetch('http://127.0.0.1:8090/health/ready'); if(!r.ok) Deno.exit(1)"]
+      interval: 20s
+      timeout: 4s
+      retries: 3
+      start_period: 15s
 
 volumes:
   sanad_ocr_models:
