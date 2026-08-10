@@ -43,12 +43,13 @@ The default runtime is optimized for the common fast path:
 - Arabic PP-OCRv5
 - CPU inference
 - one warm model per container
-- MKLDNN-capable static inference configuration when supported
+- explicit `paddle_dynamic` inference after the static/oneDNN path failed the startup inference canary on the target Linux runtime
 - orientation/unwarping recovery features disabled on the first pass
 - bounded request size and concurrency
 - localhost-only Docker binding by default
 - optional bearer token
 - readiness and liveness probes
+- startup readiness requires a real OCR inference canary, not model construction alone
 
 If real corpus results show rotation or distortion materially affects accuracy, those expensive recovery passes should be activated selectively rather than paid on every operation.
 
