@@ -16,7 +16,13 @@ RUN python -m pip install --upgrade pip \
 
 COPY app.py ./app.py
 
-RUN useradd --system --create-home --uid 10001 sanad
+RUN useradd --system --create-home --uid 10001 sanad \
+    && install -d -o sanad -g sanad -m 0750 /home/sanad/.paddlex \
+    && install -d -o sanad -g sanad -m 0750 /home/sanad/.paddlex/temp
+
+ENV HOME=/home/sanad \
+    XDG_CACHE_HOME=/home/sanad/.cache
+
 USER sanad
 
 EXPOSE 8091
