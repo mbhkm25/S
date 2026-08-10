@@ -1,0 +1,227 @@
+name: Deploy SANAD Local Extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref/commit to deploy
+        required: true
+        default: feature/sanad-local-extraction-engine
+      rebuild_ocr:
+        description: Rebuild OCR image (slower; use for OCR runtime changes)
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-extraction-server
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ROOT: /opt/sanad-local-extraction
+  COMPOSE_PROJECT_NAME: sanad-local-extraction
+
+jobs:
+  validate:
+    name: Validate candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Record immutable commit
+        id: meta
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Validate extraction engine
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          deno task check
+          deno task test
+
+      - name: Validate deployment descriptors
+        run: |
+          set -euo pipefail
+          python -m py_compile services/sanad-fast-analyzer/ocr-runtime/app.py
+          docker compose -f services/sanad-fast-analyzer/docker-compose.local.yml config >/dev/null
+          docker build -f services/sanad-fast-analyzer/Dockerfile services/sanad-fast-analyzer
+
+      - name: Build deployment archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='*.private.json' \
+            --exclude='local-extraction-benchmark-*.json' \
+            --exclude='amqi-benchmark-*.json' \
+            -C services/sanad-fast-analyzer \
+            -czf /tmp/sanad-local-extraction.tgz .
+          sha256sum /tmp/sanad-local-extraction.tgz | tee /tmp/sanad-local-extraction.tgz.sha256
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-local-extraction-${{ steps.meta.outputs.sha }}
+          path: |
+            /tmp/sanad-local-extraction.tgz
+            /tmp/sanad-local-extraction.tgz.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy isolated runtime
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          fetch-depth: 1
+
+      - name: Build deployment archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude='*.private.json' \
+            --exclude='local-extraction-benchmark-*.json' \
+            --exclude='amqi-benchmark-*.json' \
+            -C services/sanad-fast-analyzer \
+            -czf /tmp/sanad-local-extraction.tgz .
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Verify isolated server access
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            'set -e; test "$(id -un)" = sanad-deploy; docker ps >/dev/null; test -w /opt/sanad-local-extraction; echo SANAD_DEPLOY_ACCESS_OK'
+
+      - name: Upload immutable release
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_SHA' '$DEPLOY_ROOT/shared'"
+          cat /tmp/sanad-local-extraction.tgz | \
+            ssh -p "${PORT:-22}" "$USER@$HOST" \
+              "tar -xzf - -C '$DEPLOY_ROOT/releases/$RELEASE_SHA'"
+
+      - name: Start candidate and health-check
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+          REBUILD_OCR: ${{ inputs.rebuild_ocr }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "DEPLOY_ROOT='$DEPLOY_ROOT' RELEASE_SHA='$RELEASE_SHA' REBUILD_OCR='$REBUILD_OCR' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' bash -s" <<'REMOTE'
+          set -euo pipefail
+          release="$DEPLOY_ROOT/releases/$RELEASE_SHA"
+          previous=""
+          if [ -L "$DEPLOY_ROOT/current" ]; then
+            previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"
+          fi
+
+          rollback() {
+            echo "Deployment failed; attempting rollback" >&2
+            if [ -n "$previous" ] && [ -d "$previous" ]; then
+              ln -sfn "$previous" "$DEPLOY_ROOT/current"
+              cd "$previous"
+              docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d --build || true
+            else
+              docker compose -p "$COMPOSE_PROJECT_NAME" -f "$release/docker-compose.local.yml" down || true
+            fi
+          }
+          trap rollback ERR
+
+          cd "$release"
+          if [ "$REBUILD_OCR" = "true" ]; then
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-local-ocr
+          fi
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-local-analyzer
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
+
+          analyzer_ok=0
+          for _ in $(seq 1 144); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8090/health/ready >/tmp/sanad-local-ready.json 2>/dev/null; then
+              analyzer_ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$analyzer_ok" -ne 1 ]; then
+            echo "Analyzer did not become ready" >&2
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml ps >&2 || true
+            docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml logs --tail=160 >&2 || true
+            exit 1
+          fi
+
+          curl --fail --silent http://127.0.0.1:8091/health/ready >/tmp/sanad-ocr-ready.json
+          cat /tmp/sanad-local-ready.json
+          echo
+          cat /tmp/sanad-ocr-ready.json
+          echo
+
+          ln -sfn "$release" "$DEPLOY_ROOT/current"
+          printf '%s\n' "$RELEASE_SHA" > "$DEPLOY_ROOT/DEPLOYED_SHA"
+          date -u +%FT%TZ > "$DEPLOY_ROOT/DEPLOYED_AT"
+          trap - ERR
+
+          cd "$DEPLOY_ROOT/releases"
+          ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf --
+          REMOTE
+
+      - name: Report runtime status
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "echo '--- deployed sha ---'; cat '$DEPLOY_ROOT/DEPLOYED_SHA' 2>/dev/null || true; echo '--- compose status ---'; cd '$DEPLOY_ROOT/current' 2>/dev/null && docker compose -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps || true; echo '--- resource snapshot ---'; docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-local-ocr sanad-local-analyzer 2>/dev/null || true"
