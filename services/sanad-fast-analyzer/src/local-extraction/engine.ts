@@ -1,16 +1,18 @@
-import { analyzeAmqiPdfBytes } from "../pipelines/amqi-pdf.ts";
-import { parseAmqiFamilyText } from "../parsers/amqi-family.ts";
+import { extractPdfTextLayer } from "../pdf-text.ts";
 import type {
   LocalExtractionDocument,
   LocalExtractionResult,
   OcrProvider,
 } from "./contracts.ts";
+import { parseWithRegistry, type LocalTextParser } from "./parser-registry.ts";
 
-const ENGINE_VERSION = "0.1.0" as const;
+const ENGINE_VERSION = "0.2.0" as const;
 
 export interface LocalExtractionEngineOptions {
   ocrProvider?: OcrProvider;
+  parsers?: readonly LocalTextParser[];
   minimumAcceptConfidence?: number;
+  minimumParserMatchConfidence?: number;
 }
 
 export async function analyzeLocalDocument(
@@ -19,48 +21,71 @@ export async function analyzeLocalDocument(
 ): Promise<LocalExtractionResult> {
   const started = performance.now();
   const minimumAcceptConfidence = clamp(options.minimumAcceptConfidence ?? 0.98, 0, 1);
+  const minimumParserMatchConfidence = clamp(options.minimumParserMatchConfidence ?? 0.5, 0, 1);
 
-  if (document.mimeType === "application/pdf") {
-    const pdfResult = await analyzeAmqiPdfBytes(document.bytes);
-    if (pdfResult.status === "completed" && pdfResult.extraction) {
-      const confidence = pdfResult.extraction.confidence;
-      const accepted = confidence >= minimumAcceptConfidence && !pdfResult.extraction.reviewRequired;
-      return result({
-        status: accepted ? "completed" : "needs_review",
-        extraction: pdfResult.extraction,
-        source: ["pdf_text", "rules"],
-        confidence,
-        fallbackRecommended: !accepted,
-        fallbackReason: accepted ? undefined : "local_confidence_below_acceptance_gate",
-        textLayerMs: pdfResult.timings.pdfTextMs,
-        rulesMs: pdfResult.timings.parseMs,
-        totalStarted: started,
-        mimeType: document.mimeType,
-        detectedFamily: "amqi",
-        warnings: pdfResult.reasons,
-      });
-    }
+  if (!document.bytes.length) {
+    return makeResult({
+      status: "failed",
+      source: [],
+      confidence: 0,
+      fallbackRecommended: true,
+      fallbackReason: "empty_document",
+      totalStarted: started,
+      mimeType: document.mimeType,
+      warnings: ["empty_document"],
+    });
+  }
 
-    if (pdfResult.status !== "needs_ocr") {
-      return result({
-        status: pdfResult.status === "needs_review" ? "needs_review" : "unsupported",
-        source: ["pdf_text", "rules"],
-        confidence: pdfResult.extraction?.confidence ?? 0,
-        fallbackRecommended: true,
-        fallbackReason: `pdf_fast_path_${pdfResult.status}`,
-        textLayerMs: pdfResult.timings.pdfTextMs,
-        rulesMs: pdfResult.timings.parseMs,
-        totalStarted: started,
-        mimeType: document.mimeType,
-        detectedFamily: pdfResult.parse?.family,
-        warnings: pdfResult.reasons,
+  // PDFs with a usable text layer are the cheapest and fastest possible path.
+  // Run them through the same parser registry used by OCR so all document types
+  // converge on one deterministic extraction contract.
+  if (document.mimeType.toLowerCase() === "application/pdf") {
+    const pdf = await extractPdfTextLayer(document.bytes);
+    if (pdf.textLayerDetected && pdf.rawText.trim()) {
+      const rulesStarted = performance.now();
+      const parsed = parseWithRegistry(pdf.rawText, {
+        parsers: options.parsers,
+        minimumMatchConfidence: minimumParserMatchConfidence,
       });
+      const rulesMs = performance.now() - rulesStarted;
+
+      if (parsed.matched && parsed.extraction) {
+        return finalizeExtraction({
+          extraction: parsed.extraction,
+          extractionConfidence: parsed.confidence,
+          minimumAcceptConfidence,
+          source: ["pdf_text", "rules"],
+          totalStarted: started,
+          mimeType: document.mimeType,
+          textLayerMs: pdf.durationMs,
+          rulesMs,
+          parser: parsed.parser,
+          warnings: [...pdf.warnings, ...parsed.reasons],
+        });
+      }
+      // Text-layer presence alone is not proof that the template is supported.
+      // Continue to OCR only if a provider exists; otherwise fail closed to Gemini.
+      if (!options.ocrProvider) {
+        return makeResult({
+          status: "unsupported",
+          source: ["pdf_text", "rules"],
+          confidence: parsed.confidence,
+          fallbackRecommended: true,
+          fallbackReason: "no_deterministic_parser_matched_pdf_text",
+          totalStarted: started,
+          textLayerMs: pdf.durationMs,
+          rulesMs,
+          mimeType: document.mimeType,
+          parser: parsed.parser,
+          warnings: [...pdf.warnings, ...parsed.reasons],
+        });
+      }
     }
   }
 
   const provider = options.ocrProvider;
   if (!provider || !provider.supports(document.mimeType)) {
-    return result({
+    return makeResult({
       status: "needs_ocr",
       source: [],
       confidence: 0,
@@ -75,14 +100,17 @@ export async function analyzeLocalDocument(
   try {
     const ocr = await provider.extract(document);
     const rulesStarted = performance.now();
-    const parsed = parseAmqiFamilyText(ocr.rawText);
+    const parsed = parseWithRegistry(ocr.rawText, {
+      parsers: options.parsers,
+      minimumMatchConfidence: minimumParserMatchConfidence,
+    });
     const rulesMs = performance.now() - rulesStarted;
 
     if (!parsed.matched || !parsed.extraction) {
-      return result({
+      return makeResult({
         status: "unsupported",
         source: ["ocr", "rules"],
-        confidence: ocr.confidence,
+        confidence: Math.min(ocr.confidence, parsed.confidence || 1),
         fallbackRecommended: true,
         fallbackReason: "no_supported_template_matched_after_ocr",
         ocrMs: ocr.durationMs,
@@ -90,29 +118,26 @@ export async function analyzeLocalDocument(
         totalStarted: started,
         mimeType: document.mimeType,
         ocrProvider: ocr.provider,
+        parser: parsed.parser,
         warnings: [...ocr.warnings, ...parsed.reasons],
       });
     }
 
-    const confidence = Math.min(parsed.extraction.confidence, ocr.confidence || 1);
-    const accepted = confidence >= minimumAcceptConfidence && !parsed.extraction.reviewRequired;
-    return result({
-      status: accepted ? "completed" : "needs_review",
+    return finalizeExtraction({
       extraction: parsed.extraction,
+      extractionConfidence: Math.min(parsed.confidence, ocr.confidence || 1),
+      minimumAcceptConfidence,
       source: ["ocr", "rules"],
-      confidence,
-      fallbackRecommended: !accepted,
-      fallbackReason: accepted ? undefined : "local_confidence_below_acceptance_gate",
-      ocrMs: ocr.durationMs,
-      rulesMs,
       totalStarted: started,
       mimeType: document.mimeType,
       ocrProvider: ocr.provider,
-      detectedFamily: parsed.family,
+      ocrMs: ocr.durationMs,
+      rulesMs,
+      parser: parsed.parser,
       warnings: [...ocr.warnings, ...parsed.reasons],
     });
   } catch (error) {
-    return result({
+    return makeResult({
       status: "failed",
       source: ["ocr"],
       confidence: 0,
@@ -126,7 +151,51 @@ export async function analyzeLocalDocument(
   }
 }
 
-function result(input: {
+function finalizeExtraction(input: {
+  extraction: NonNullable<LocalExtractionResult["extraction"]>;
+  extractionConfidence: number;
+  minimumAcceptConfidence: number;
+  source: LocalExtractionResult["source"];
+  totalStarted: number;
+  mimeType: string;
+  ocrProvider?: string;
+  textLayerMs?: number;
+  ocrMs?: number;
+  rulesMs?: number;
+  parser?: string;
+  warnings: string[];
+}): LocalExtractionResult {
+  const confidence = clamp(input.extractionConfidence, 0, 1);
+  const criticalFieldsPresent = Number.isFinite(input.extraction.amount) &&
+    Boolean(input.extraction.currency) &&
+    Boolean(input.extraction.financialEntity) &&
+    Boolean(input.extraction.documentReference || input.extraction.transferReference);
+  const accepted = confidence >= input.minimumAcceptConfidence &&
+    !input.extraction.reviewRequired && criticalFieldsPresent;
+
+  return makeResult({
+    status: accepted ? "completed" : "needs_review",
+    extraction: input.extraction,
+    source: input.source,
+    confidence,
+    fallbackRecommended: !accepted,
+    fallbackReason: accepted
+      ? undefined
+      : !criticalFieldsPresent
+      ? "local_critical_fields_incomplete"
+      : "local_confidence_below_acceptance_gate",
+    totalStarted: input.totalStarted,
+    mimeType: input.mimeType,
+    ocrProvider: input.ocrProvider,
+    textLayerMs: input.textLayerMs,
+    ocrMs: input.ocrMs,
+    rulesMs: input.rulesMs,
+    parser: input.parser,
+    warnings: input.warnings,
+  });
+}
+
+function makeResult(input: {
   status: LocalExtractionResult["status"];
   extraction?: LocalExtractionResult["extraction"];
   source: LocalExtractionResult["source"];
@@ -139,7 +208,7 @@ function result(input: {
   totalStarted: number;
   mimeType: string;
   ocrProvider?: string;
-  detectedFamily?: string;
+  parser?: string;
   warnings: string[];
 }): LocalExtractionResult {
   return {
@@ -160,7 +229,7 @@ function result(input: {
     diagnostics: {
       mimeType: input.mimeType,
       ocrProvider: input.ocrProvider,
-      detectedFamily: input.detectedFamily,
+      parser: input.parser,
       warnings: input.warnings,
     },
   };
