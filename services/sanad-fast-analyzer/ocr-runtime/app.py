@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import os
 import statistics
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -28,10 +30,15 @@ SUPPORTED_TYPES = {
     "application/pdf": ".pdf",
 }
 
-app = FastAPI(title="SANAD Local OCR", version="0.1.0", docs_url=None, redoc_url=None)
+logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
+logger = logging.getLogger("sanad-local-ocr")
+
+app = FastAPI(title="SANAD Local OCR", version="0.2.0", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
+_inference_ready = False
+_inference_error: str | None = None
 
 
 class BBox(BaseModel):
@@ -83,29 +90,60 @@ def _load_model() -> Any:
         try:
             _ocr = PaddleOCR(**kwargs)
         except TypeError:
+            # Compatibility path for older PaddleOCR releases that do not yet
+            # understand the unified engine arguments.
             kwargs.pop("engine", None)
             kwargs.pop("engine_config", None)
             _ocr = PaddleOCR(**kwargs)
         _model_error = None
         return _ocr
-    except Exception as exc:  # pragma: no cover - depends on runtime/model availability
-        _model_error = f"{type(exc).__name__}: {exc}"
+    except Exception as exc:  # pragma: no cover - runtime/model dependent
+        _model_error = _safe_error(exc)
+        logger.exception("paddleocr_model_load_failed")
         raise
 
 
 def _as_json(result: Any) -> dict[str, Any]:
+    """Normalize PaddleX/PaddleOCR Result objects without relying on one private shape."""
     value = getattr(result, "json", None)
     if callable(value):
         value = value()
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
     if isinstance(value, dict):
         return value
-    if isinstance(result, dict):
-        return result
-    raise RuntimeError("paddleocr_result_has_no_json_contract")
+    if isinstance(result, Mapping):
+        return dict(result)
+
+    # Result.json is not part of the documented public API in all 3.x builds.
+    # save_to_json() is documented, so use it as a compatibility fallback.
+    saver = getattr(result, "save_to_json", None)
+    if callable(saver):
+        with tempfile.TemporaryDirectory(prefix="sanad-ocr-json-") as directory:
+            target = Path(directory) / "result.json"
+            saver(str(target))
+            if target.exists():
+                parsed = json.loads(target.read_text(encoding="utf-8"))
+                if isinstance(parsed, dict):
+                    return parsed
+            candidates = sorted(Path(directory).glob("*.json"))
+            if candidates:
+                parsed = json.loads(candidates[0].read_text(encoding="utf-8"))
+                if isinstance(parsed, dict):
+                    return parsed
+
+    raise RuntimeError("paddleocr_result_has_no_supported_json_contract")
 
 
 def _normalize_page(payload: dict[str, Any], page_index: int) -> tuple[list[OcrBlock], list[str]]:
     data = payload.get("res", payload)
+    if not isinstance(data, dict):
+        raise RuntimeError("paddleocr_result_res_is_not_object")
     texts = list(data.get("rec_texts") or [])
     scores = list(data.get("rec_scores") or [])
     boxes = list(data.get("rec_boxes") or [])
@@ -154,32 +192,62 @@ def _finite_float(value: Any) -> float:
 
 
 def _infer_sync(path: str) -> OcrResponse:
+    global _inference_ready, _inference_error
     started = time.perf_counter()
     model = _load_model()
-    prediction = model.predict(path)
-    all_blocks: list[OcrBlock] = []
-    warnings: list[str] = []
+    try:
+        prediction = model.predict(input=path)
+        all_blocks: list[OcrBlock] = []
+        warnings: list[str] = []
 
-    for page_index, result in enumerate(prediction):
-        payload = _as_json(result)
-        blocks, page_warnings = _normalize_page(payload, page_index)
-        all_blocks.extend(blocks)
-        warnings.extend(page_warnings)
+        for page_index, result in enumerate(prediction):
+            payload = _as_json(result)
+            blocks, page_warnings = _normalize_page(payload, page_index)
+            all_blocks.extend(blocks)
+            warnings.extend(page_warnings)
 
-    raw_text = "\n".join(block.text for block in all_blocks)
-    scores = [block.confidence for block in all_blocks]
-    confidence = statistics.fmean(scores) if scores else 0.0
-    if not all_blocks:
-        warnings.append("ocr_returned_no_text")
+        raw_text = "\n".join(block.text for block in all_blocks)
+        scores = [block.confidence for block in all_blocks]
+        confidence = statistics.fmean(scores) if scores else 0.0
+        if not all_blocks:
+            warnings.append("ocr_returned_no_text")
 
-    return OcrResponse(
-        provider=f"paddleocr:{OCR_VERSION}:{LANG}:{ENGINE or 'default'}",
-        raw_text=raw_text,
-        confidence=min(1.0, max(0.0, confidence)),
-        duration_ms=round((time.perf_counter() - started) * 1000, 3),
-        blocks=all_blocks,
-        warnings=sorted(set(warnings)),
-    )
+        _inference_ready = True
+        _inference_error = None
+        return OcrResponse(
+            provider=f"paddleocr:{OCR_VERSION}:{LANG}:{ENGINE or 'default'}",
+            raw_text=raw_text,
+            confidence=min(1.0, max(0.0, confidence)),
+            duration_ms=round((time.perf_counter() - started) * 1000, 3),
+            blocks=all_blocks,
+            warnings=sorted(set(warnings)),
+        )
+    except Exception as exc:
+        _inference_ready = False
+        _inference_error = _safe_error(exc)
+        logger.exception("paddleocr_inference_failed")
+        raise
+
+
+def _run_canary_sync() -> None:
+    """Exercise an actual inference at startup; model construction alone is insufficient."""
+    from PIL import Image, ImageDraw
+
+    with tempfile.NamedTemporaryFile(prefix="sanad-ocr-canary-", suffix=".png", delete=False) as handle:
+        path = handle.name
+    try:
+        image = Image.new("RGB", (320, 96), "white")
+        draw = ImageDraw.Draw(image)
+        draw.text((16, 28), "SANAD 12345", fill="black")
+        image.save(path, format="PNG")
+        _infer_sync(path)
+    finally:
+        Path(path).unlink(missing_ok=True)
+
+
+def _safe_error(exc: BaseException) -> str:
+    message = " ".join(str(exc).replace("\n", " ").split())
+    return f"{type(exc).__name__}: {message[:240]}"
 
 
 def _authorize(authorization: str | None) -> None:
@@ -191,10 +259,15 @@ def _authorize(authorization: str | None) -> None:
 
 @app.on_event("startup")
 async def warm_model() -> None:
+    global _inference_ready, _inference_error
     try:
         await asyncio.to_thread(_load_model)
-    except Exception:
-        pass
+        await asyncio.to_thread(_run_canary_sync)
+        logger.info("paddleocr_startup_canary_ok")
+    except Exception as exc:
+        _inference_ready = False
+        _inference_error = _safe_error(exc)
+        logger.exception("paddleocr_startup_canary_failed")
 
 
 @app.get("/health/live")
@@ -204,17 +277,20 @@ async def live() -> dict[str, Any]:
 
 @app.get("/health/ready")
 async def ready() -> JSONResponse:
+    ready_state = _ocr is not None and _model_error is None and _inference_ready and _inference_error is None
     payload = {
-        "ok": _ocr is not None and _model_error is None,
+        "ok": ready_state,
         "model_loaded": _ocr is not None,
         "model_error": _model_error,
+        "inference_ready": _inference_ready,
+        "inference_error": _inference_error,
         "ocr_version": OCR_VERSION,
         "lang": LANG,
         "engine": ENGINE,
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
     }
-    return JSONResponse(status_code=200 if payload["ok"] else 503, content=payload)
+    return JSONResponse(status_code=200 if ready_state else 503, content=payload)
 
 
 @app.post("/v1/ocr", response_model=OcrResponse)
@@ -245,6 +321,7 @@ async def ocr(
         try:
             return await asyncio.to_thread(_infer_sync, path)
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"ocr_inference_failed:{type(exc).__name__}") from exc
+            detail = _safe_error(exc)
+            raise HTTPException(status_code=503, detail=f"ocr_inference_failed:{detail}") from exc
         finally:
             Path(path).unlink(missing_ok=True)
