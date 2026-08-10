@@ -7,43 +7,23 @@ export interface FcmConfig {
   privateKey?: string | undefined;
 }
 
-type ResolvedFcmConfig = {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-};
-
+type ResolvedFcmConfig = { projectId: string; clientEmail: string; privateKey: string };
 type CachedToken = { value: string; expiresAt: number };
 let cachedToken: CachedToken | null = null;
 
-function base64Url(value: string | Buffer): string {
-  return Buffer.from(value).toString('base64url');
-}
+function base64Url(value: string | Buffer): string { return Buffer.from(value).toString('base64url'); }
 
 async function accessToken(config: ResolvedFcmConfig): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claim = base64Url(JSON.stringify({
-    iss: config.clientEmail,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  }));
+  const claim = base64Url(JSON.stringify({ iss: config.clientEmail, scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 }));
   const unsigned = `${header}.${claim}`;
-  const signer = createSign('RSA-SHA256');
-  signer.update(unsigned);
-  signer.end();
-  const signature = signer.sign(config.privateKey).toString('base64url');
-  const assertion = `${unsigned}.${signature}`;
+  const signer = createSign('RSA-SHA256'); signer.update(unsigned); signer.end();
+  const assertion = `${unsigned}.${signer.sign(config.privateKey).toString('base64url')}`;
   const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion,
-    }),
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
   });
   const body = await response.json() as { access_token?: string; expires_in?: number };
   if (!response.ok || !body.access_token) throw Object.assign(new Error('fcm_oauth_failed'), { statusCode: response.status });
@@ -53,36 +33,27 @@ async function accessToken(config: ResolvedFcmConfig): Promise<string> {
 
 function parsePayload(serialized: string): PushPayload {
   const parsed = JSON.parse(serialized) as PushPayload;
-  if (!parsed || parsed.version !== 1 || !parsed.notification_id || !parsed.title || !parsed.body) {
-    throw Object.assign(new Error('invalid_fcm_payload'), { statusCode: 400 });
-  }
+  if (!parsed || parsed.version !== 1 || !parsed.notification_id || !parsed.title || !parsed.body) throw Object.assign(new Error('invalid_fcm_payload'), { statusCode: 400 });
   return parsed;
 }
 
 export function createFcmSender(config: FcmConfig) {
   return {
     async send(target: PushDeliveryTarget, serializedPayload: string, options: SendOptions): Promise<SendResult> {
-      const fcmToken = target.provider_token || (
-        target.endpoint.startsWith('https://fcm.sanadflow.invalid/') ? target.p256dh : null
-      );
+      const fcmToken = target.provider_token || (target.endpoint.startsWith('https://fcm.sanadflow.invalid/') ? target.p256dh : null);
       if (!fcmToken) throw Object.assign(new Error('invalid_fcm_target'), { statusCode: 400 });
-      if (!config.projectId || !config.clientEmail || !config.privateKey) {
-        throw Object.assign(new Error('fcm_not_configured'), { statusCode: 503 });
-      }
-      const resolved: ResolvedFcmConfig = {
-        projectId: config.projectId,
-        clientEmail: config.clientEmail,
-        privateKey: config.privateKey.replace(/\\n/g, '\n'),
-      };
+      if (!config.projectId || !config.clientEmail || !config.privateKey) throw Object.assign(new Error('fcm_not_configured'), { statusCode: 503 });
+      const resolved: ResolvedFcmConfig = { projectId: config.projectId, clientEmail: config.clientEmail, privateKey: config.privateKey.replace(/\\n/g, '\n') };
       const payload = parsePayload(serializedPayload);
       const token = await accessToken(resolved);
       const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(resolved.projectId)}/messages:send`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         body: JSON.stringify({
           message: {
             token: fcmToken,
-            notification: { title: payload.title, body: payload.body },
+            // Android is intentionally data-only. SANAD's FirebaseMessagingService must
+            // render every notification so the PendingIntent always carries routing data,
+            // including while the app is backgrounded, killed, or removed from Recents.
             data: {
               sanad_notification_id: payload.notification_id,
               sanad_category: payload.category,
@@ -93,9 +64,8 @@ export function createFcmSender(config: FcmConfig) {
               body: payload.body,
             },
             android: {
-              priority: options.urgency === 'high' ? 'HIGH' : 'NORMAL',
+              priority: 'HIGH',
               ttl: `${Math.max(0, options.TTL)}s`,
-              notification: { channel_id: 'sanad_operations', sound: 'default' },
             },
           },
         }),
