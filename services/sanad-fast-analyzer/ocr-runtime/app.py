@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 MAX_BODY_BYTES = int(os.getenv("SANAD_OCR_MAX_BODY_BYTES", str(12 * 1024 * 1024)))
@@ -71,8 +72,6 @@ def _load_model() -> Any:
             "use_textline_orientation": False,
             "device": "cpu",
         }
-        # PaddleOCR 3.5+ accepts explicit inference engines. Keep a compatibility
-        # fallback so older 3.x builds still start instead of breaking the service.
         if ENGINE:
             kwargs["engine"] = ENGINE
             if ENGINE == "paddle_static":
@@ -167,8 +166,6 @@ def _infer_sync(path: str) -> OcrResponse:
         all_blocks.extend(blocks)
         warnings.extend(page_warnings)
 
-    # Reading order supplied by PaddleOCR is preserved. This matters for existing
-    # deterministic SANAD parsers, particularly RTL notices with labels and values.
     raw_text = "\n".join(block.text for block in all_blocks)
     scores = [block.confidence for block in all_blocks]
     confidence = statistics.fmean(scores) if scores else 0.0
@@ -194,12 +191,9 @@ def _authorize(authorization: str | None) -> None:
 
 @app.on_event("startup")
 async def warm_model() -> None:
-    # Warm once at startup so first customer request does not pay model load latency.
     try:
         await asyncio.to_thread(_load_model)
     except Exception:
-        # Readiness will expose failure. Keep the process alive for observability and
-        # container restart policies rather than crashing without diagnostics.
         pass
 
 
@@ -209,8 +203,8 @@ async def live() -> dict[str, Any]:
 
 
 @app.get("/health/ready")
-async def ready() -> dict[str, Any]:
-    return {
+async def ready() -> JSONResponse:
+    payload = {
         "ok": _ocr is not None and _model_error is None,
         "model_loaded": _ocr is not None,
         "model_error": _model_error,
@@ -220,6 +214,7 @@ async def ready() -> dict[str, Any]:
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
     }
+    return JSONResponse(status_code=200 if payload["ok"] else 503, content=payload)
 
 
 @app.post("/v1/ocr", response_model=OcrResponse)
