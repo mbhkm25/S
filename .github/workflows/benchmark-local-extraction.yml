@@ -1,0 +1,105 @@
+name: Benchmark SANAD Local Extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: Private corpus batch directory under shared/private-corpus
+        required: true
+        default: pilot-01
+      timeout_seconds:
+        description: Per-document analyzer timeout
+        required: true
+        default: "30"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-extraction-benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: Run private server benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Run benchmark on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          BATCH: ${{ inputs.batch }}
+          TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        run: |
+          set -euo pipefail
+          case "$BATCH" in
+            *[!A-Za-z0-9._-]*|'') echo "Invalid batch name" >&2; exit 2 ;;
+          esac
+          case "$TIMEOUT_SECONDS" in
+            ''|*[!0-9.]*) echo "Invalid timeout" >&2; exit 2 ;;
+          esac
+
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "BATCH='$BATCH' TIMEOUT_SECONDS='$TIMEOUT_SECONDS' bash -s" <<'REMOTE'
+          set -euo pipefail
+          root=/opt/sanad-local-extraction
+          current="$root/current"
+          corpus="$root/shared/private-corpus/$BATCH"
+          manifest="$corpus/manifest.json"
+          reports="$root/shared/benchmark-reports"
+          script="$current/scripts/benchmark_server.py"
+
+          test -L "$current" || { echo "No deployed local extraction release" >&2; exit 3; }
+          test -f "$script" || { echo "Benchmark harness is not deployed yet" >&2; exit 4; }
+          test -f "$manifest" || { echo "Missing private manifest: $manifest" >&2; exit 5; }
+
+          curl --fail --silent http://127.0.0.1:8090/health/ready >/tmp/sanad-local-benchmark-ready.json
+          python3 - <<'PY'
+import json
+p=json.load(open('/tmp/sanad-local-benchmark-ready.json'))
+assert p.get('ok') is True and p.get('status') == 'ready', p
+print('SANAD_LOCAL_ENGINE_READY')
+PY
+
+          mkdir -p "$reports"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          report="$reports/${BATCH}-${stamp}.json"
+          python3 "$script" \
+            --manifest "$manifest" \
+            --url http://127.0.0.1:8090/v1/analyze \
+            --timeout "$TIMEOUT_SECONDS" \
+            --output "$report" \
+            >/tmp/sanad-local-benchmark.log
+
+          python3 - "$report" <<'PY'
+import json, sys
+p=json.load(open(sys.argv[1]))
+s=p['summary']
+print('--- SANAD LOCAL EXTRACTION BENCHMARK SUMMARY ---')
+for k in ('cases','successfulHttpCases','failedCases','meanAccuracy','meanCriticalAccuracy','p50WallMs','p95WallMs','meanWallMs','fallbackRate'):
+    print(f'{k}={s.get(k)}')
+print('statuses='+json.dumps(s.get('statuses',{}), ensure_ascii=False, sort_keys=True))
+print('parsers='+json.dumps(s.get('parsers',{}), ensure_ascii=False, sort_keys=True))
+print('private_report='+sys.argv[1])
+PY
+
+          # Do not upload or print raw per-document results: they may contain financial data.
+          REMOTE
