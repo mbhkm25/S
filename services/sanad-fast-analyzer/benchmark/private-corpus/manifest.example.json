@@ -1,0 +1,15 @@
+{
+  "cases": [
+    {
+      "id": "amqi-example-001",
+      "file": "amqi-example-001.jpg",
+      "mimeType": "image/jpeg",
+      "expected": {
+        "financialEntity": "العمقي موبايل",
+        "amount": 10000,
+        "currency": "YER",
+        "documentReference": "8-000000000"
+      }
+    }
+  ]
+}
