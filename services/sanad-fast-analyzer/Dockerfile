@@ -1,0 +1,22 @@
+FROM denoland/deno:2.9.5
+
+WORKDIR /app
+
+COPY deno.json ./deno.json
+COPY src ./src
+
+RUN deno cache --no-lock src/server.ts
+
+ENV SANAD_LOCAL_ANALYZER_PORT=8090
+ENV SANAD_LOCAL_ANALYZER_CONCURRENCY=2
+ENV SANAD_LOCAL_ANALYZER_MAX_BODY_BYTES=12582912
+ENV SANAD_LOCAL_ANALYZER_TIMEOUT_MS=10000
+ENV SANAD_LOCAL_OCR_TIMEOUT_MS=8000
+ENV SANAD_LOCAL_MIN_ACCEPT_CONFIDENCE=0.98
+ENV SANAD_LOCAL_OCR_URL=http://sanad-local-ocr:8091
+
+EXPOSE 8090
+
+USER deno
+
+CMD ["run", "--allow-net", "--allow-env", "--no-lock", "src/server.ts"]
