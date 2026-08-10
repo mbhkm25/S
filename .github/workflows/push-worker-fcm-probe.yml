@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Inspect allowed production deploy path safely
+      - name: Inspect production deploy script safely
         shell: bash
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -39,15 +39,19 @@ jobs:
           PORT="${PORT:-22}"
           ssh -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$HOST" 'bash -s' <<'REMOTE'
           set -u
-          echo '=== deploy helper content ==='
-          cat /usr/local/sbin/sanad-deploy-production 2>&1 || true
-          echo '=== sanitized /opt/sanad/docker-compose.yml structure ==='
-          if [ -r /opt/sanad/docker-compose.yml ]; then
-            grep -nE '^[[:space:]]{2}[A-Za-z0-9_-]+:|^[[:space:]]+(image|build|env_file|container_name|restart|ports|volumes):|push|worker' /opt/sanad/docker-compose.yml | head -n 220 || true
+          echo '=== deploy-production.sh ==='
+          if [ -r /opt/sanad-app/scripts/deploy-production.sh ]; then
+            cat /opt/sanad-app/scripts/deploy-production.sh
           else
-            echo 'compose-not-readable'
+            echo 'deploy-script-not-readable'
           fi
-          echo '=== /opt/sanad top-level structure ==='
-          find /opt/sanad -maxdepth 2 -mindepth 1 -type d -print 2>/dev/null | sort | head -n 100 || true
+          echo '=== /opt/sanad-app/scripts listing ==='
+          find /opt/sanad-app/scripts -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          echo '=== repository remotes/branch only ==='
+          if [ -d /opt/sanad-app/.git ]; then
+            git -C /opt/sanad-app remote -v 2>/dev/null | sed -E 's#(https://)[^/@]+@#\1***@#g' || true
+            git -C /opt/sanad-app branch --show-current 2>/dev/null || true
+            git -C /opt/sanad-app rev-parse HEAD 2>/dev/null || true
+          fi
           exit 0
           REMOTE
