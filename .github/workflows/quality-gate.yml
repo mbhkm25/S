@@ -78,6 +78,15 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Validate SANAD Local Extraction engine
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          deno task check
+          deno task test
+      - name: Validate Local OCR runtime syntax and compose
+        run: |
+          python -m py_compile services/sanad-fast-analyzer/ocr-runtime/app.py
+          docker compose -f services/sanad-fast-analyzer/docker-compose.local.yml config >/dev/null
       - name: Validate migration filenames
         shell: bash
         run: |
