@@ -77,7 +77,7 @@ Optional runtime configuration:
 - `SANAD_OCR_TOKEN`
 - `SANAD_LOCAL_OCR_TIMEOUT_MS`
 
-The report compares the local engine against a recorded Gemini baseline and measures field accuracy, critical-field accuracy, review/fallback behavior, and latency.
+The report compares the local engine against a recorded Gemini baseline and measures field accuracy, critical-field accuracy, review/fallback behavior, and latency. The current production-data distribution shows the first meaningful corpus should prioritize Kuraimi Haseb images, Al-Amqi PDF/JPEG/WebP, Bin Dowal images, then Al-Busaery/Bin Dowal Pay, while deliberately retaining unknown documents as negative fallback cases. See `docs/benchmark-corpus-plan.md`.
 
 ## Acceptance philosophy
 
