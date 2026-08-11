@@ -36,13 +36,14 @@ jobs:
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
         run: |
           set -euo pipefail
-          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
+          if ! ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
           set -euo pipefail
           corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
           test -d "$corpus"
-          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | head -n 1)"
+          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | sed -n '1p')"
           test -n "$file"
-          case "${file##*.}" in
+          ext="${file##*.}"
+          case "$ext" in
             jpg|JPG|jpeg|JPEG) mime=image/jpeg ;;
             png|PNG) mime=image/png ;;
             webp|WEBP) mime=image/webp ;;
@@ -53,6 +54,22 @@ jobs:
             --data-binary "@$file" \
             http://127.0.0.1:8091/v1/ocr
           REMOTE
+          then
+            echo 'OCR_SAMPLE_REQUEST_FAILED'
+            ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
+            set +e
+            echo '--- deployed sha ---'
+            cat /opt/sanad-local-extraction/DEPLOYED_SHA 2>/dev/null || true
+            echo '--- OCR readiness ---'
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
+            echo
+            echo '--- OCR container status ---'
+            docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
+            echo '--- OCR recent logs (safe diagnostic tail) ---'
+            docker logs --tail 100 sanad-local-ocr 2>&1 || true
+            REMOTE
+            exit 1
+          fi
 
           python3 - <<'PY'
           import json
