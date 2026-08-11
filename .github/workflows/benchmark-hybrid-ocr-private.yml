@@ -1,0 +1,214 @@
+name: Benchmark SANAD Hybrid OCR Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-hybrid-ocr-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-hybrid-ocr-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire short-lived GitHub OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build isolated fast OCR on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/sanad-fast-ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/hybrid-ocr/$SHA'"
+          cat /tmp/sanad-fast-ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "tar -xzf - -C '/opt/sanad-local-extraction/experiments/hybrid-ocr/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "cd '/opt/sanad-local-extraction/experiments/hybrid-ocr/$SHA' && docker build -t 'sanad-hybrid-fast-ocr:$SHA' ."
+
+      - name: Run selective hybrid benchmark
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          name="sanad-hybrid-fast-ocr-${RUN_ID}"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+
+          docker run -d --name "$name" \
+            --memory=768m --cpus=4 \
+            -p 127.0.0.1::8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 \
+            -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            -e SANAD_FAST_OCR_PDF_DPI=150 \
+            "sanad-hybrid-fast-ocr:$SHA" >/dev/null
+
+          port="$(docker port "$name" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          test -n "$port"
+          fast_url="http://127.0.0.1:${port}"
+          for _ in $(seq 1 30); do
+            curl --fail --silent --max-time 2 "$fast_url/health/ready" >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl --fail --silent "$fast_url/health/ready"
+          curl --fail --silent http://127.0.0.1:8091/health/ready >/tmp/paddle-ready.json
+          cat /tmp/paddle-ready.json
+
+          FAST_URL="$fast_url" OIDC_TOKEN="$OIDC_TOKEN" RUN_ID="$RUN_ID" python3 - <<'PY'
+          import json, mimetypes, os, pathlib, statistics, time, urllib.error, urllib.request
+          from collections import Counter
+
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          fast=os.environ['FAST_URL']
+          oidc=os.environ['OIDC_TOKEN']
+          run_id=os.environ['RUN_ID']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          paddle='http://127.0.0.1:8091/v1/ocr'
+          allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          rows=[]
+
+          def post(url,data,mime,timeout,extra=None):
+              headers={'Content-Type':mime}
+              if extra: headers.update(extra)
+              req=urllib.request.Request(url,data=data,method='POST',headers=headers)
+              with urllib.request.urlopen(req,timeout=timeout) as r:
+                  return r.status,json.loads(r.read())
+
+          for i,p in enumerate(files,1):
+              data=p.read_bytes()
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              started=time.perf_counter()
+              fast_status,fd=post(fast+'/v1/ocr',data,mime,12)
+              fast_ms=float(fd.get('duration_ms') or 0)
+              fast_conf=float(fd.get('confidence') or 0)
+              chosen=fd
+              provider='fast'
+              refine_ms=0.0
+              refine_reason=None
+              if fast_conf < 0.80 or len(str(fd.get('raw_text') or '')) < 120:
+                  refine_reason='low_fast_ocr_confidence_or_text'
+                  rst=time.perf_counter()
+                  try:
+                      _,pd=post(paddle,data,mime,25)
+                      refine_ms=round((time.perf_counter()-rst)*1000,1)
+                      if str(pd.get('raw_text') or '').strip():
+                          chosen=pd
+                          provider='paddle'
+                  except Exception as e:
+                      refine_ms=round((time.perf_counter()-rst)*1000,1)
+                      refine_reason='paddle_failed:'+type(e).__name__
+
+              raw=str(chosen.get('raw_text') or '').strip()
+              body=json.dumps({
+                  'source_label':f'fast-ocr-{run_id}-case-{i}',
+                  'ocr_provider':'hybrid:'+provider,
+                  'ocr_duration_ms':fast_ms+refine_ms,
+                  'ocr_confidence':chosen.get('confidence'),
+                  'ocr_text':raw,
+              },ensure_ascii=False).encode('utf-8')
+              sreq=urllib.request.Request(semantic,data=body,method='POST',headers={
+                  'Content-Type':'application/json',
+                  'Authorization':'Bearer '+oidc,
+              })
+              semantic_payload={}
+              sst=time.perf_counter()
+              try:
+                  with urllib.request.urlopen(sreq,timeout=12) as sr:
+                      semantic_payload=json.loads(sr.read())
+              except urllib.error.HTTPError as e:
+                  semantic_payload={'ok':False,'http':e.code}
+              except Exception as e:
+                  semantic_payload={'ok':False,'error':type(e).__name__}
+              semantic_wall=round((time.perf_counter()-sst)*1000,1)
+              wall=round((time.perf_counter()-started)*1000,1)
+              row={
+                  'case':i,
+                  'provider':provider,
+                  'fast_conf':round(fast_conf,4),
+                  'chosen_conf':round(float(chosen.get('confidence') or 0),4),
+                  'fast_ms':round(fast_ms,1),
+                  'refine_ms':round(refine_ms,1),
+                  'gemini_ms':semantic_payload.get('gemini_latency_ms'),
+                  'pipeline_ms':semantic_payload.get('total_pipeline_ms'),
+                  'wall_ms':wall,
+                  'gemini_ok':semantic_payload.get('ok'),
+                  'gemini_cost_usd':semantic_payload.get('estimated_gemini_cost_usd'),
+                  'refine_reason':refine_reason,
+              }
+              rows.append(row)
+              print('HYBRID_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+
+          walls=[r['wall_ms'] for r in rows]
+          refined=[r for r in rows if r['provider']=='paddle']
+          costs=[float(r['gemini_cost_usd']) for r in rows if isinstance(r['gemini_cost_usd'],(int,float))]
+          def pct(xs,q):
+              if not xs:return None
+              xs=sorted(xs)
+              return round(xs[max(0,min(len(xs)-1,int((len(xs)-1)*q)))],1)
+          summary={
+              'cases':len(rows),
+              'gemini_success':sum(r['gemini_ok'] is True for r in rows),
+              'refined_cases':len(refined),
+              'providers':dict(Counter(r['provider'] for r in rows)),
+              'mean_wall_ms':round(statistics.fmean(walls),1) if walls else None,
+              'p50_wall_ms':pct(walls,.5),
+              'p95_wall_ms':pct(walls,.95),
+              'mean_refine_ms':round(statistics.fmean([r['refine_ms'] for r in refined]),1) if refined else 0,
+              'total_gemini_cost_usd':round(sum(costs),8),
+          }
+          print('HYBRID_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
