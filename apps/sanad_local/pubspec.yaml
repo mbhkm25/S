@@ -20,7 +20,7 @@ dependencies:
   intl: ^0.20.2
   pdf: ^3.13.0
   printing: ^5.15.0
-  flutter_tesseract_ocr: ^0.4.31
+  tesseract_ocr: ^0.5.0
   supabase_flutter: ^2.16.0
   shared_preferences: ^2.5.3
 
