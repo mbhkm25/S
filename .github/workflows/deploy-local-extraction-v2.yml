@@ -116,6 +116,7 @@ jobs:
           if [ -L "$DEPLOY_ROOT/current" ]; then previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"; fi
           rollback(){
             echo 'V2 isolated deployment failed; rolling back' >&2
+            docker logs --tail 120 sanad-secure-ocr-bridge 2>&1 || true
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "$previous" "$DEPLOY_ROOT/current"
               cd "$previous"
@@ -137,7 +138,7 @@ jobs:
             return 1
           }
           wait_ready http://127.0.0.1:8092/health/ready fast-ocr 40 2
-          wait_ready https://127.0.0.1:8443/health/ready secure-bridge 40 2 "--cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem"
+          wait_ready https://sanadflow.com:8443/health/ready secure-bridge 40 2 "--cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem --resolve sanadflow.com:8443:127.0.0.1"
           wait_ready http://127.0.0.1:8091/health/ready paddle-ocr 144 5
           wait_ready http://127.0.0.1:8090/health/ready analyzer 60 2
           cat /tmp/fast-ocr-ready.json; echo
@@ -146,7 +147,7 @@ jobs:
           cat /tmp/analyzer-ready.json; echo
 
           # Prove the externally reachable OCR endpoint rejects unsigned traffic.
-          unsigned_status="$(curl --silent --output /tmp/bridge-unsigned.json --write-out '%{http_code}' --max-time 10 --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem -H 'content-type: image/png' --data-binary 'not-an-image' https://127.0.0.1:8443/v1/ocr || true)"
+          unsigned_status="$(curl --silent --output /tmp/bridge-unsigned.json --write-out '%{http_code}' --max-time 10 --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem --resolve sanadflow.com:8443:127.0.0.1 -H 'content-type: image/png' --data-binary 'not-an-image' https://sanadflow.com:8443/v1/ocr || true)"
           test "$unsigned_status" = "401"
 
           ln -sfn "$release" "$DEPLOY_ROOT/current"
@@ -169,7 +170,7 @@ jobs:
           ssh -p "${PORT:-22}" "$USER@$HOST" \
             "test \"\$(cat '$DEPLOY_ROOT/DEPLOYED_SHA')\" = '$RELEASE_SHA'; \
              curl --fail --silent http://127.0.0.1:8092/health/ready; echo; \
-             curl --fail --silent --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem https://127.0.0.1:8443/health/ready; echo; \
+             curl --fail --silent --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem --resolve sanadflow.com:8443:127.0.0.1 https://sanadflow.com:8443/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8091/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8090/health/ready; echo; \
              cd '$DEPLOY_ROOT/current' && docker compose --env-file '$DEPLOY_ROOT/shared/bridge.env' -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps; \
