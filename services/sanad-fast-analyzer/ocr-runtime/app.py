@@ -21,6 +21,7 @@ LANG = os.getenv("SANAD_OCR_LANG", "ar")
 OCR_VERSION = os.getenv("SANAD_OCR_VERSION", "PP-OCRv5")
 ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_dynamic")
 TEXT_DETECTION_MODEL = os.getenv("SANAD_OCR_TEXT_DETECTION_MODEL", "PP-OCRv5_mobile_det")
+TEXT_RECOGNITION_MODEL = os.getenv("SANAD_OCR_TEXT_RECOGNITION_MODEL", "arabic_PP-OCRv5_mobile_rec")
 BEARER_TOKEN = os.getenv("SANAD_OCR_TOKEN", "").strip()
 MIN_TEXT_SCORE = min(1.0, max(0.0, float(os.getenv("SANAD_OCR_MIN_TEXT_SCORE", "0.35"))))
 
@@ -34,7 +35,7 @@ SUPPORTED_TYPES = {
 logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("sanad-local-ocr")
 
-app = FastAPI(title="SANAD Local OCR", version="0.3.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Local OCR", version="0.3.1", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
@@ -76,6 +77,7 @@ def _load_model() -> Any:
             "lang": LANG,
             "ocr_version": OCR_VERSION,
             "text_detection_model_name": TEXT_DETECTION_MODEL,
+            "text_recognition_model_name": TEXT_RECOGNITION_MODEL,
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
@@ -212,7 +214,7 @@ def _infer_sync(path: str) -> OcrResponse:
         _inference_ready = True
         _inference_error = None
         return OcrResponse(
-            provider=f"paddleocr:{OCR_VERSION}:{LANG}:{TEXT_DETECTION_MODEL}:{ENGINE or 'default'}",
+            provider=f"paddleocr:{OCR_VERSION}:{LANG}:{TEXT_DETECTION_MODEL}:{TEXT_RECOGNITION_MODEL}:{ENGINE or 'default'}",
             raw_text=raw_text,
             confidence=min(1.0, max(0.0, confidence)),
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
@@ -284,6 +286,7 @@ async def ready() -> JSONResponse:
         "lang": LANG,
         "engine": ENGINE,
         "text_detection_model": TEXT_DETECTION_MODEL,
+        "text_recognition_model": TEXT_RECOGNITION_MODEL,
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
     }
