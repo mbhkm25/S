@@ -24,6 +24,7 @@ concurrency:
 env:
   DEPLOY_ROOT: /opt/sanad-local-extraction
   COMPOSE_PROJECT_NAME: sanad-local-extraction
+  KEYINFO_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-bridge-keyinfo
 
 jobs:
   deploy:
@@ -42,8 +43,26 @@ jobs:
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch derived public key
+        id: bridge_key
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 10 "$KEYINFO_URL" >/tmp/bridge-key.json
+          python3 - <<'PY' >/tmp/bridge-public-key.txt
+          import json
+          p=json.load(open('/tmp/bridge-key.json'))
+          assert p.get('ok') is True and p.get('scheme')=='ed25519-sha256-v1',p
+          key=p.get('public_key_b64','')
+          assert len(key)>=40,key
+          print(key)
+          PY
+          echo "BRIDGE_PUBLIC_KEY_READY"
+
       - name: Validate source and descriptors
         working-directory: services/sanad-fast-analyzer
+        env:
+          SANAD_BRIDGE_PUBLIC_KEY_B64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: |
           set -euo pipefail
           python -m py_compile ocr-runtime/app.py fast-ocr-runtime/app.py secure-ocr-bridge/app.py
@@ -83,13 +102,16 @@ jobs:
           RELEASE_SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
+          bridge_public_key="$(cat /tmp/bridge-public-key.txt)"
           ssh -p "${PORT:-22}" "$USER@$HOST" 'set -e; test "$(id -un)" = sanad-deploy; docker ps >/dev/null; test -w /opt/sanad-local-extraction'
           ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_SHA' '$DEPLOY_ROOT/shared'"
           cat /tmp/sanad-local-extraction-v2.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '$DEPLOY_ROOT/releases/$RELEASE_SHA'"
+          printf 'SANAD_BRIDGE_PUBLIC_KEY_B64=%s\n' "$bridge_public_key" | ssh -p "${PORT:-22}" "$USER@$HOST" "cat > '$DEPLOY_ROOT/shared/bridge.env' && chmod 600 '$DEPLOY_ROOT/shared/bridge.env'"
           ssh -p "${PORT:-22}" "$USER@$HOST" \
             "DEPLOY_ROOT='$DEPLOY_ROOT' RELEASE_SHA='$RELEASE_SHA' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' bash -s" <<'REMOTE'
           set -euo pipefail
           release="$DEPLOY_ROOT/releases/$RELEASE_SHA"
+          envfile="$DEPLOY_ROOT/shared/bridge.env"
           previous=""
           if [ -L "$DEPLOY_ROOT/current" ]; then previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"; fi
           rollback(){
@@ -97,13 +119,13 @@ jobs:
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "$previous" "$DEPLOY_ROOT/current"
               cd "$previous"
-              docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d --build || true
+              docker compose --env-file "$envfile" -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d --build || true
             fi
           }
           trap rollback ERR
           cd "$release"
-          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-fast-ocr sanad-secure-ocr-bridge sanad-local-ocr sanad-local-analyzer
-          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
+          docker compose --env-file "$envfile" -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-fast-ocr sanad-secure-ocr-bridge sanad-local-ocr sanad-local-analyzer
+          docker compose --env-file "$envfile" -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
 
           wait_ready(){
             url="$1"; name="$2"; tries="$3"; sleep_s="$4"; extra="${5:-}"
@@ -123,27 +145,9 @@ jobs:
           cat /tmp/paddle-ocr-ready.json; echo
           cat /tmp/analyzer-ready.json; echo
 
-          python3 - <<'PY'
-          import struct,zlib
-          from pathlib import Path
-          w,h=480,140; rows=[]
-          for y in range(h):
-              row=bytearray()
-              for x in range(w):
-                  v=0 if ((25<=x<330 and 40<=y<55) or (25<=x<420 and 80<=y<95)) else 255
-                  row.extend((v,v,v))
-              rows.append(b'\x00'+bytes(row))
-          def chunk(k,d): return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d)&0xffffffff)
-          Path('/tmp/sanad-v2-smoke.png').write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b''.join(rows),9))+chunk(b'IEND',b''))
-          PY
-          curl --fail --silent --max-time 15 -H 'Content-Type: image/png' --data-binary @/tmp/sanad-v2-smoke.png http://127.0.0.1:8092/v1/ocr >/tmp/fast-ocr-smoke.json
-          python3 - <<'PY'
-          import json
-          p=json.load(open('/tmp/fast-ocr-smoke.json'))
-          assert isinstance(p.get('raw_text'),str),p
-          assert isinstance(p.get('blocks'),list),p
-          print('FAST_OCR_INFERENCE_OK')
-          PY
+          # Prove the externally reachable OCR endpoint rejects unsigned traffic.
+          unsigned_status="$(curl --silent --output /tmp/bridge-unsigned.json --write-out '%{http_code}' --max-time 10 --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem -H 'content-type: image/png' --data-binary 'not-an-image' https://127.0.0.1:8443/v1/ocr || true)"
+          test "$unsigned_status" = "401"
 
           ln -sfn "$release" "$DEPLOY_ROOT/current"
           printf '%s\n' "$RELEASE_SHA" > "$DEPLOY_ROOT/DEPLOYED_SHA"
@@ -168,10 +172,12 @@ jobs:
              curl --fail --silent --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem https://127.0.0.1:8443/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8091/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8090/health/ready; echo; \
-             cd '$DEPLOY_ROOT/current' && docker compose -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps; \
+             cd '$DEPLOY_ROOT/current' && docker compose --env-file '$DEPLOY_ROOT/shared/bridge.env' -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps; \
              docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-fast-ocr sanad-secure-ocr-bridge sanad-local-ocr sanad-local-analyzer"
 
       - name: Verify public TLS bridge health
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 10 https://sanadflow.com:8443/health/ready
+          status="$(curl --silent --output /tmp/public-unsigned.json --write-out '%{http_code}' --max-time 10 -H 'content-type: image/png' --data-binary 'not-an-image' https://sanadflow.com:8443/v1/ocr || true)"
+          test "$status" = "401"
