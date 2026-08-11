@@ -14,17 +14,19 @@ export function parseBinDowalReceiptText(rawText: string): BinDowalParseResult {
 
   const reference = first(text, [
     /(?:رقم\s*(?:السند|الإشعار)|السند|الإشعار)\s*[:#-]?\s*([0-9]{5,12})/u,
+    /(?:20\d{2}[-/]\d{2}[-/]\d{2})\s+([0-9]{5,8})(?![0-9])/u,
     /\b([0-9]{5,12})\b(?=[^0-9]{0,40}(?:سند\s*تحويل|إشعار\s*دائن))/u,
   ]);
   const date = first(text, [/(20\d{2}[-/]\d{2}[-/]\d{2})/u]);
   const amountRaw = first(text, [
     /(?:مبلغ(?:ه|\s*وقدره)?|مبلغ\s*الحساب)\s*[:#-]?\s*#?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/u,
     /#\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*#/u,
+    /([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?=ريال\s*(?:يمني|سعودي)|(?:YER|SAR)(?:\s|$))/iu,
   ]);
   const amount = amountRaw ? parseAmountText(amountRaw) : undefined;
-  const currency = /(?:ريال\s*سعودي|SAR)\b/iu.test(text)
+  const currency = /ريال\s*سعودي/iu.test(text) || /(?:^|\s)SAR(?:\s|$)/iu.test(text)
     ? "SAR" as const
-    : /(?:ريال\s*يمني|YER)\b/iu.test(text)
+    : /ريال\s*يمني/iu.test(text) || /(?:^|\s)YER(?:\s|$)/iu.test(text)
     ? "YER" as const
     : undefined;
   const receiverAccount = first(text, [
