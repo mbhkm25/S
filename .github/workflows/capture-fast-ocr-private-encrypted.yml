@@ -102,13 +102,13 @@ jobs:
 
           cat > "$work/public.pem" <<'PEM'
           -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAveNqWlPZMpTGPxMgz6hU
-          2s8zN1hBuLbTZv2gONWjZVZ9PBEnuikpyonlGPlVhf8DCmmNxD8e0tha9pjCkkXM
-          ajJmTamqqxvAYG4AEHM9fKn5CwYrOd2S7rpx4NDnkv0j4gljnAW0ODHZ8BhD9NQv
-          +PqkHmVR9Pi9Z2/ffnfRIUf6tyGhDOwbQkwEtOFpruput6a9j3JbIH0Q0HCNw2Gx
-          B514GoVbIhwbg5+TlWhMNtSyxDEAdJrZocqfEPsDo/KB5YP/oxq9sTkzvn3KqXGc
-          zookL6TVcyw50pMKjfKyUIbY37Vdc/2GjXfL885fjUmxVzLEWBL+6NDAiTDOUVFJ
-          zQIDAQAB
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv+T37EicMZicDL6OkG4B
+          wvlYlCWVWwpbniRMaxqu1WXe7IjSa1UMBsQj/46i5XPq+E2+zxGxz7UDYsIyvUBB
+          lN+82UIqsJNivikvd2AeFoIB+aXdnTzZF5mFVrpFXbDkOMOGBrgqgojY4M1qrYZl
+          JrR07mpauHrN1FB8FBGUvaId+hgzD6L9TMJvXyzdQ7RUQ5EAc4RJKgZ3RioEQN1i
+          SbRjBhOHvjAdtmZcca9+wUjnPH8WJDLAjBh2h2mGxfyOHx6nnTYNZ+tolPKwyxf/
+          hiDld83JBnQ2VBD66LOhxYsQuL/hfe6Oe+rhs+R1ys91qMGZRtfZ8S0mRi1jHCIT
+          OQIDAQAB
           -----END PUBLIC KEY-----
           PEM
           keyhex="$(openssl rand -hex 32)"
