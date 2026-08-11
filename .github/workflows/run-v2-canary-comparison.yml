@@ -27,7 +27,7 @@ jobs:
           curl --fail --silent --show-error --max-time 600 \
             -H "Authorization: Bearer ${oidc}" \
             -H 'content-type: application/json' \
-            --data '{"limit":8,"attempt":21}' \
+            --data '{"limit":8,"attempt":9}' \
             "$RUNNER_URL" | tee /tmp/v2-comparison.json
           python3 - <<'PY'
           import json
