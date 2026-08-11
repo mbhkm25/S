@@ -83,8 +83,6 @@ jobs:
           }
           trap cleanup EXIT
           cleanup
-          mkdir -p /tmp/sanad-rec-lab-host
-          rm -rf /tmp/sanad-rec-lab-host/*
           docker run -d --name "$name" --memory=768m --cpus=4 -p 127.0.0.1::8092 \
             -e SANAD_FAST_OCR_CONCURRENCY=1 -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
             -e SANAD_FAST_OCR_PSM=6 -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
@@ -94,7 +92,7 @@ jobs:
           for _ in $(seq 1 30); do curl --fail --silent --max-time 2 "$base/health/ready" >/dev/null 2>&1 && break; sleep 1; done
           curl --fail --silent http://127.0.0.1:8091/health/ready >/dev/null
 
-          BASE="$base" NAME="$name" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          BASE="$base" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
           import json,mimetypes,os,pathlib,subprocess,time,urllib.request,urllib.error
           files=sorted(p for p in pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01').iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
           targets={5:files[4],6:files[5]}
@@ -105,19 +103,19 @@ jobs:
               req=urllib.request.Request(base+'/v1/ocr',data=data,method='POST',headers={'Content-Type':mime})
               with urllib.request.urlopen(req,timeout=12) as r: fast=json.loads(r.read())
               blocks=fast.get('blocks') or []
-              # Copy the private image into the isolated OCR container without printing its name or contents.
               tmp=f'/tmp/sanad-rec-case-{case}{p.suffix.lower()}'
               pathlib.Path(tmp).write_bytes(data)
               subprocess.run(['docker','exec','sanad-local-ocr','mkdir','-p','/tmp/sanad-rec-lab'],check=True,capture_output=True)
               subprocess.run(['docker','cp',tmp,f'sanad-local-ocr:/tmp/sanad-rec-lab/source-{case}{p.suffix.lower()}'],check=True,capture_output=True)
               pathlib.Path(tmp).unlink(missing_ok=True)
               payload=json.dumps({'case':case,'suffix':p.suffix.lower(),'blocks':blocks})
-              script='''import json,sys,time,pathlib\nfrom PIL import Image,ImageOps\nfrom paddleocr import TextRecognition\ncfg=json.loads(sys.argv[1]); case=cfg["case"]; suffix=cfg["suffix"]; blocks=cfg["blocks"]\np=f"/tmp/sanad-rec-lab/source-{case}{suffix}"\nim=ImageOps.exif_transpose(Image.open(p)).convert("RGB")\nw,h=im.size\nscale=min(1.0,1600/max(w,h))\nif scale<1: im=im.resize((round(w*scale),round(h*scale)),Image.Resampling.LANCZOS)\n# Group Tesseract word boxes into horizontal text lines.\nys=[]\nfor b in blocks:\n bb=b.get("bbox") if isinstance(b,dict) else None\n if not isinstance(bb,dict): continue\n y=float(bb.get("y",0)); hh=float(bb.get("height",0))\n if hh<=0: continue\n yc=y+hh/2\n placed=False\n for g in ys:\n  if abs(g[0]-yc)<=max(8,hh*.6): g[1].append(bb); g[0]=(g[0]*(len(g[1])-1)+yc)/len(g[1]); placed=True; break\n if not placed: ys.append([yc,[bb]])\nys.sort(key=lambda g:g[0])\npaths=[]\nfor i,(_,bbs) in enumerate(ys):\n y0=max(0,int(min(float(b["y"]) for b in bbs)-4)); y1=min(im.height,int(max(float(b["y"])+float(b["height"]) for b in bbs)+4))\n if y1-y0<6: continue\n crop=im.crop((0,y0,im.width,y1))\n fn=f"/tmp/sanad-rec-lab/line-{case}-{i}.png"; crop.save(fn); paths.append(fn)\nst=time.perf_counter()\nmodel=TextRecognition(model_name="arabic_PP-OCRv5_mobile_rec",device="cpu",engine="paddle_dynamic",enable_hpi=True,cpu_threads=8)\nload_ms=(time.perf_counter()-st)*1000\nst=time.perf_counter(); out=model.predict(input=paths,batch_size=min(16,max(1,len(paths)))); infer_ms=(time.perf_counter()-st)*1000\nrows=[]\nfor r in out:\n j=r.json if hasattr(r,"json") else {}\n if callable(j): j=j()\n if isinstance(j,str): j=json.loads(j)\n d=j.get("res",j) if isinstance(j,dict) else {}\n t=str(d.get("rec_text") or "").strip(); s=float(d.get("rec_score") or 0)\n if t: rows.append({"text":t,"score":s})\npathlib.Path(f"/tmp/sanad-rec-lab/result-{case}.json").write_text(json.dumps({"rows":rows,"load_ms":load_ms,"infer_ms":infer_ms,"lines":len(paths)},ensure_ascii=False))'''
+              script='''import json,sys,time,pathlib\nfrom PIL import Image,ImageOps\nfrom paddleocr import TextRecognition\ncfg=json.loads(sys.argv[1]); case=cfg["case"]; suffix=cfg["suffix"]; blocks=cfg["blocks"]\np=f"/tmp/sanad-rec-lab/source-{case}{suffix}"\nim=ImageOps.exif_transpose(Image.open(p)).convert("RGB")\nw,h=im.size\nscale=min(1.0,1600/max(w,h))\nif scale<1: im=im.resize((round(w*scale),round(h*scale)),Image.Resampling.LANCZOS)\nys=[]\nfor b in blocks:\n bb=b.get("bbox") if isinstance(b,dict) else None\n if not isinstance(bb,dict): continue\n y=float(bb.get("y",0)); hh=float(bb.get("height",0))\n if hh<=0: continue\n yc=y+hh/2\n placed=False\n for g in ys:\n  if abs(g[0]-yc)<=max(8,hh*.6): g[1].append(bb); g[0]=(g[0]*(len(g[1])-1)+yc)/len(g[1]); placed=True; break\n if not placed: ys.append([yc,[bb]])\nys.sort(key=lambda g:g[0])\npaths=[]\nfor i,(_,bbs) in enumerate(ys):\n y0=max(0,int(min(float(b["y"]) for b in bbs)-4)); y1=min(im.height,int(max(float(b["y"])+float(b["height"]) for b in bbs)+4))\n if y1-y0<6: continue\n crop=im.crop((0,y0,im.width,y1))\n fn=f"/tmp/sanad-rec-lab/line-{case}-{i}.png"; crop.save(fn); paths.append(fn)\nst=time.perf_counter()\nmodel=TextRecognition(model_name="arabic_PP-OCRv5_mobile_rec",device="cpu",enable_hpi=True,cpu_threads=8)\nload_ms=(time.perf_counter()-st)*1000\nst=time.perf_counter(); out=model.predict(input=paths,batch_size=min(16,max(1,len(paths)))); infer_ms=(time.perf_counter()-st)*1000\nrows=[]\nfor r in out:\n j=r.json if hasattr(r,"json") else {}\n if callable(j): j=j()\n if isinstance(j,str): j=json.loads(j)\n d=j.get("res",j) if isinstance(j,dict) else {}\n t=str(d.get("rec_text") or "").strip(); s=float(d.get("rec_score") or 0)\n if t: rows.append({"text":t,"score":s})\npathlib.Path(f"/tmp/sanad-rec-lab/result-{case}.json").write_text(json.dumps({"rows":rows,"load_ms":load_ms,"infer_ms":infer_ms,"lines":len(paths)},ensure_ascii=False))'''
               rst=time.perf_counter()
               proc=subprocess.run(['docker','exec','sanad-local-ocr','python','-c',script,payload],capture_output=True,text=True,timeout=30)
               rec_wall=round((time.perf_counter()-rst)*1000,1)
               if proc.returncode!=0:
-                  print('REC_ONLY_CASE='+json.dumps({'case':case,'ok':False,'stage':'recognition','error':'recognizer_failed'},separators=(',',':')))
+                  err=(proc.stderr or proc.stdout or '').strip().splitlines()[-1:]
+                  print('REC_ONLY_CASE='+json.dumps({'case':case,'ok':False,'stage':'recognition','error_type':'recognizer_failed','detail':err[0][:180] if err else None},separators=(',',':')))
                   continue
               rawj=subprocess.check_output(['docker','exec','sanad-local-ocr','cat',f'/tmp/sanad-rec-lab/result-{case}.json'],text=True)
               rec=json.loads(rawj); good=[r['text'] for r in rec.get('rows',[]) if float(r.get('score',0))>=0.35]
