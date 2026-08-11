@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: sanad-fast-ocr-private-capture
-  cancel-in-progress: true
+  group: sanad-local-extraction-runtime
+  cancel-in-progress: false
 
 jobs:
   capture:
