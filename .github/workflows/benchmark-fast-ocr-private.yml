@@ -13,6 +13,9 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  SANAD_SEMANTIC_LAB_REVISION: v3
+
 concurrency:
   group: sanad-fast-ocr-private-benchmark
   cancel-in-progress: true
