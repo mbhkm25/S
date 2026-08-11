@@ -1,0 +1,98 @@
+name: Benchmark SANAD Paddle ROI Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-paddle-roi-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-paddle-roi-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Run selective Paddle ROI benchmark
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          docker inspect sanad-local-ocr >/dev/null
+          curl --fail --silent http://127.0.0.1:8091/health/ready >/dev/null
+
+          RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import io,json,mimetypes,os,pathlib,subprocess,tempfile,time,urllib.request,urllib.error
+          files=sorted(p for p in pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01').iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          targets={5:files[4],6:files[5]}
+          rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          paddle='http://127.0.0.1:8091/v1/ocr'
+
+          for case,p in targets.items():
+              # Crop only the financial-data region in an isolated helper container.
+              helper='python:3.11-slim'
+              script=f'''from PIL import Image,ImageOps\nimport io,sys\nim=ImageOps.exif_transpose(Image.open(sys.stdin.buffer)).convert("RGB")\nw,h=im.size\n# Upper 72% contains reference/date/account/amount for these formal receipts.\nim=im.crop((0,0,w,int(h*.72)))\nif max(im.size)>1500:\n im.thumbnail((1500,1500),Image.Resampling.LANCZOS)\nb=io.BytesIO(); im.save(b,format="JPEG",quality=92); sys.stdout.buffer.write(b.getvalue())'''
+              # Use the already-built fast OCR image because Pillow is pinned there.
+              image=subprocess.check_output(['docker','images','--format','{{.Repository}}:{{.Tag}}'],text=True)
+              candidate=next((x for x in image.splitlines() if x.startswith('sanad-tess-roi:')),None) or next((x for x in image.splitlines() if x.startswith('sanad-fast-ocr:')),None)
+              if not candidate: raise RuntimeError('pillow_helper_image_missing')
+              cp=subprocess.run(['docker','run','--rm','-i','--entrypoint','python',candidate,'-c',script],input=p.read_bytes(),capture_output=True,timeout=10,check=True)
+              crop=cp.stdout
+              st=time.perf_counter()
+              req=urllib.request.Request(paddle,data=crop,method='POST',headers={'Content-Type':'image/jpeg'})
+              with urllib.request.urlopen(req,timeout=20) as r: o=json.loads(r.read())
+              paddle_wall=round((time.perf_counter()-st)*1000,1)
+              raw=str(o.get('raw_text') or '')
+              body=json.dumps({'source_label':f'fast-ocr-{rid}-case-{case}','ocr_provider':'paddle_roi','ocr_duration_ms':paddle_wall,'ocr_confidence':o.get('confidence'),'ocr_text':raw},ensure_ascii=False).encode()
+              sreq=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              try:
+                  with urllib.request.urlopen(sreq,timeout=12) as sr: sem=json.loads(sr.read())
+              except urllib.error.HTTPError as e: sem={'ok':False,'http':e.code}
+              row={'case':case,'crop_bytes':len(crop),'paddle_wall_ms':paddle_wall,'paddle_reported_ms':o.get('duration_ms'),'confidence':o.get('confidence'),'chars':len(raw),'gemini_ok':sem.get('ok'),'gemini_ms':sem.get('gemini_latency_ms'),'pipeline_ms':sem.get('total_pipeline_ms')}
+              print('PADDLE_ROI_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
