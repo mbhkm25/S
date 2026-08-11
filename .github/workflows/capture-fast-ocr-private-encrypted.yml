@@ -1,0 +1,134 @@
+name: Capture SANAD Fast OCR Private Corpus Encrypted
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/capture-fast-ocr-private-encrypted.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-fast-ocr-private-capture
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Build and capture private fast OCR output encrypted on server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/sanad-fast-ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA'"
+          cat /tmp/sanad-fast-ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "tar -xzf - -C '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA' && docker build -t 'sanad-fast-ocr:$SHA' . >/dev/null"
+
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+          name=sanad-fast-ocr-private-capture
+          work=/tmp/sanad-fast-ocr-private-capture
+          rm -rf "$work"; mkdir -p "$work"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; rm -f "$work/raw.json" "$work/keyiv.bin" "$work/public.pem"; }
+          trap cleanup EXIT
+          docker rm -f "$name" >/dev/null 2>&1 || true
+          docker run -d --name "$name" --memory=768m --cpus=4 \
+            -p 127.0.0.1:8092:8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 \
+            -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            -e SANAD_FAST_OCR_PDF_DPI=150 \
+            "sanad-fast-ocr:$SHA" >/dev/null
+          ok=0
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:8092/health/ready >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          test "$ok" -eq 1
+
+          python3 - <<'PY'
+          import json, mimetypes, pathlib, time, urllib.request, urllib.error
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          rows=[]
+          for i,p in enumerate(files,1):
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              req=urllib.request.Request('http://127.0.0.1:8092/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
+              st=time.perf_counter(); payload=None; http=None; error=None
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as r:
+                      http=r.status; payload=json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  http=e.code
+                  try: payload=json.loads(e.read())
+                  except Exception: error='http_error'
+              except Exception as e:
+                  error=type(e).__name__
+              rows.append({'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':round((time.perf_counter()-st)*1000,3),'error':error,'ocr':payload})
+          pathlib.Path('/tmp/sanad-fast-ocr-private-capture/raw.json').write_text(json.dumps({'schema':1,'rows':rows},ensure_ascii=False),encoding='utf-8')
+          PY
+
+          cat > "$work/public.pem" <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAveNqWlPZMpTGPxMgz6hU
+          2s8zN1hBuLbTZv2gONWjZVZ9PBEnuikpyonlGPlVhf8DCmmNxD8e0tha9pjCkkXM
+          ajJmTamqqxvAYG4AEHM9fKn5CwYrOd2S7rpx4NDnkv0j4gljnAW0ODHZ8BhD9NQv
+          +PqkHmVR9Pi9Z2/ffnfRIUf6tyGhDOwbQkwEtOFpruput6a9j3JbIH0Q0HCNw2Gx
+          B514GoVbIhwbg5+TlWhMNtSyxDEAdJrZocqfEPsDo/KB5YP/oxq9sTkzvn3KqXGc
+          zookL6TVcyw50pMKjfKyUIbY37Vdc/2GjXfL885fjUmxVzLEWBL+6NDAiTDOUVFJ
+          zQIDAQAB
+          -----END PUBLIC KEY-----
+          PEM
+          keyhex="$(openssl rand -hex 32)"
+          ivhex="$(openssl rand -hex 16)"
+          printf '%s%s' "$keyhex" "$ivhex" | xxd -r -p > "$work/keyiv.bin"
+          openssl pkeyutl -encrypt -pubin -inkey "$work/public.pem" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$work/keyiv.bin" -out "$work/keyiv.enc"
+          openssl enc -aes-256-cbc -K "$keyhex" -iv "$ivhex" \
+            -in "$work/raw.json" -out "$work/payload.enc"
+          chmod 0600 "$work/keyiv.enc" "$work/payload.enc"
+          REMOTE
+
+          scp -P "${PORT:-22}" "$USER@$HOST:/tmp/sanad-fast-ocr-private-capture/keyiv.enc" /tmp/keyiv.enc
+          scp -P "${PORT:-22}" "$USER@$HOST:/tmp/sanad-fast-ocr-private-capture/payload.enc" /tmp/payload.enc
+
+      - name: Upload encrypted private artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-fast-ocr-private-encrypted
+          path: |
+            /tmp/keyiv.enc
+            /tmp/payload.enc
+          retention-days: 1
+          if-no-files-found: error
