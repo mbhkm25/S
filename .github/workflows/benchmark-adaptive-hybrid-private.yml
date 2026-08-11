@@ -12,6 +12,9 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  SANAD_SEMANTIC_LAB_REVISION: v8
+
 concurrency:
   group: sanad-adaptive-hybrid-private-benchmark
   cancel-in-progress: true
