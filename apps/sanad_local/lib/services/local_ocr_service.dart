@@ -1,5 +1,4 @@
-import 'package:tesseract_ocr/ocr_engine_config.dart';
-import 'package:tesseract_ocr/tesseract_ocr.dart';
+import 'package:flutter/services.dart';
 
 class LocalOcrResult {
   const LocalOcrResult({
@@ -21,26 +20,19 @@ abstract interface class LocalOcrEngine {
 
 class TesseractArabicOcrEngine implements LocalOcrEngine {
   const TesseractArabicOcrEngine();
+  static const _channel = MethodChannel('sanad.local/ocr');
 
   @override
   Future<LocalOcrResult> recognize(String imagePath) async {
     final watch = Stopwatch()..start();
-    final config = OCRConfig(
-      language: 'ara+eng',
-      engine: OCREngine.tesseract,
-      options: const {
-        'tessedit_pageseg_mode': '6',
-        'preserve_interword_spaces': '1',
-      },
-    );
-    final raw = await TesseractOcr.extractText(imagePath, config: config);
+    final raw = await _channel.invokeMethod<String>('recognize', {'imagePath': imagePath}) ?? '';
     watch.stop();
     final normalized = normalizeOcrText(raw);
     if (normalized.trim().isEmpty) throw StateError('ocr_text_empty');
     return LocalOcrResult(
       text: normalized,
       confidence: heuristicConfidence(normalized),
-      provider: 'tesseract_ocr:ara+eng:psm6',
+      provider: 'tesseract4android:5.5.1:ara+eng',
       durationMs: watch.elapsedMilliseconds,
     );
   }
