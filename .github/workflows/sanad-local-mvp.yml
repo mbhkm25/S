@@ -103,9 +103,19 @@ jobs:
               text += '\n\ndependencies {\n    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")\n}\n'
           gradle.write_text(text)
 
+          jitpack = 'maven { url = uri("https://jitpack.io") }'
+
+          root_gradle = Path('android/build.gradle.kts')
+          root_text = root_gradle.read_text()
+          if jitpack not in root_text:
+              allprojects = root_text.index('allprojects {')
+              anchor = root_text.index('repositories {', allprojects)
+              insert_at = anchor + len('repositories {')
+              root_text = root_text[:insert_at] + '\n        ' + jitpack + root_text[insert_at:]
+          root_gradle.write_text(root_text)
+
           settings = Path('android/settings.gradle.kts')
           s = settings.read_text()
-          jitpack = 'maven { url = uri("https://jitpack.io") }'
           if jitpack not in s:
               if 'dependencyResolutionManagement {' in s:
                   anchor = s.index('repositories {', s.index('dependencyResolutionManagement {'))
