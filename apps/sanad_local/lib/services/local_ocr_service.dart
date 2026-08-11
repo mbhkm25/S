@@ -45,7 +45,7 @@ class TesseractArabicOcrEngine implements LocalOcrEngine {
 }
 
 String normalizeOcrText(String input) {
-  var value = input
+  final value = input
       .replaceAllMapped(RegExp('[٠-٩]'), (m) => '٠١٢٣٤٥٦٧٨٩'.indexOf(m[0]!).toString())
       .replaceAllMapped(RegExp('[۰-۹]'), (m) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(m[0]!).toString())
       .replaceAll('\u200f', '')
