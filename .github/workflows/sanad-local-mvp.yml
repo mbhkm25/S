@@ -86,7 +86,7 @@ jobs:
           cache: true
       - name: Install fixture dependency
         run: python3 -m pip install --user pillow
-      - name: Create Android platform without touching SANAD production app
+      - name: Create Android platform with native OCR bridge
         working-directory: apps/sanad_local
         shell: bash
         run: |
@@ -94,19 +94,36 @@ jobs:
           flutter create --platforms=android --org com.sanadflow --project-name sanad_local .
           python3 - <<'PY'
           from pathlib import Path
-          gradle=Path('android/app/build.gradle.kts')
-          text=gradle.read_text()
-          text=text.replace('applicationId = "com.sanadflow.sanad_local"','applicationId = "com.sanadflow.local"')
-          text=text.replace('minSdk = flutter.minSdkVersion','minSdk = 26')
+
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text()
+          text = text.replace('applicationId = "com.sanadflow.sanad_local"', 'applicationId = "com.sanadflow.local"')
+          text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 26')
+          if 'cz.adaptech.tesseract4android:tesseract4android:4.9.0' not in text:
+              text += '\n\ndependencies {\n    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")\n}\n'
           gradle.write_text(text)
-          manifest=Path('android/app/src/main/AndroidManifest.xml')
-          m=manifest.read_text()
-          marker='<application'
-          perms='    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n'
+
+          settings = Path('android/settings.gradle.kts')
+          s = settings.read_text()
+          jitpack = 'maven { url = uri("https://jitpack.io") }'
+          if jitpack not in s:
+              if 'dependencyResolutionManagement {' in s:
+                  anchor = s.index('repositories {', s.index('dependencyResolutionManagement {'))
+                  insert_at = anchor + len('repositories {')
+                  s = s[:insert_at] + '\n        ' + jitpack + s[insert_at:]
+              else:
+                  s += '\n\ndependencyResolutionManagement {\n    repositories {\n        google()\n        mavenCentral()\n        ' + jitpack + '\n    }\n}\n'
+          settings.write_text(s)
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          m = manifest.read_text()
+          marker = '<application'
+          perms = '    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n'
           if 'android.permission.CAMERA' not in m:
-              m=m.replace(marker, perms+marker, 1)
+              m = m.replace(marker, perms + marker, 1)
           manifest.write_text(m)
           PY
+          cp tool/android/MainActivity.kt android/app/src/main/kotlin/com/sanadflow/sanad_local/MainActivity.kt
       - name: Prepare fully offline runtime assets
         working-directory: apps/sanad_local
         run: bash tool/prepare_assets.sh
