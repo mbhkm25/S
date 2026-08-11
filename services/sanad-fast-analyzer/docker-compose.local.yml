@@ -8,6 +8,30 @@ services:
       - sanad_ocr_models:/models
     restart: "no"
 
+  sanad-fast-ocr:
+    build:
+      context: ./fast-ocr-runtime
+      dockerfile: Dockerfile
+    container_name: sanad-fast-ocr
+    restart: unless-stopped
+    environment:
+      SANAD_FAST_OCR_CONCURRENCY: ${SANAD_FAST_OCR_CONCURRENCY:-2}
+      SANAD_FAST_OCR_TIMEOUT_SECONDS: ${SANAD_FAST_OCR_TIMEOUT_SECONDS:-8}
+      SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE: ${SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE:-1600}
+      SANAD_FAST_OCR_PDF_DPI: ${SANAD_FAST_OCR_PDF_DPI:-150}
+    ports:
+      - "127.0.0.1:${SANAD_FAST_OCR_PORT:-8092}:8092"
+    deploy:
+      resources:
+        limits:
+          memory: ${SANAD_FAST_OCR_MEMORY_LIMIT:-768M}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8092/health/ready"]
+      interval: 20s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+
   sanad-local-ocr:
     build:
       context: ./ocr-runtime
@@ -59,6 +83,8 @@ services:
     restart: unless-stopped
     depends_on:
       sanad-local-ocr:
+        condition: service_healthy
+      sanad-fast-ocr:
         condition: service_healthy
     environment:
       SANAD_LOCAL_ANALYZER_PORT: 8090
