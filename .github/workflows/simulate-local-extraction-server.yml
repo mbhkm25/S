@@ -80,16 +80,41 @@ jobs:
             exit 12
           fi
 
-          # Create a realistic, decodable image using Pillow already installed inside
-          # the OCR container. A 1x1 blank image is not a valid OCR smoke test.
-          docker exec sanad-local-ocr python - <<'PY'
-          from PIL import Image, ImageDraw
-          img = Image.new('RGB', (640, 180), 'white')
-          draw = ImageDraw.Draw(img)
-          draw.text((32, 55), 'SANAD 12345 500 SAR', fill='black')
-          img.save('/tmp/sanad-sim.png', format='PNG')
+          # Generate a deterministic, valid PNG on the runner using only Python stdlib.
+          # This avoids docker-exec stdin quirks and external image-tool dependencies.
+          python3 - <<'PY'
+          import struct, zlib
+          from pathlib import Path
+
+          width, height = 640, 180
+          rows = []
+          for y in range(height):
+              row = bytearray()
+              for x in range(width):
+                  # White background with several black bars so OCR receives a realistic
+                  # non-empty raster while the smoke test remains deterministic.
+                  black = (
+                      32 <= x < 250 and 48 <= y < 62
+                      or 32 <= x < 420 and 78 <= y < 92
+                      or 32 <= x < 330 and 108 <= y < 122
+                  )
+                  v = 0 if black else 255
+                  row.extend((v, v, v))
+              rows.append(b'\x00' + bytes(row))
+
+          def chunk(kind, data):
+              return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+
+          raw = b''.join(rows)
+          png = (
+              b'\x89PNG\r\n\x1a\n'
+              + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+              + chunk(b'IDAT', zlib.compress(raw, 9))
+              + chunk(b'IEND', b'')
+          )
+          Path('/tmp/sanad-sim.png').write_bytes(png)
+          print(f'smoke_png_bytes={len(png)}')
           PY
-          docker cp sanad-local-ocr:/tmp/sanad-sim.png /tmp/sanad-sim.png
 
           set +e
           ocr_http=$(curl --silent --show-error --max-time 30 \
