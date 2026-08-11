@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: sanad-local-extraction-runtime
+  cancel-in-progress: false
+
 env:
   DEPLOY_ROOT: /opt/sanad-local-extraction
   COMPOSE_PROJECT_NAME: sanad-local-extraction
