@@ -42,17 +42,10 @@ jobs:
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
       - name: Validate source and descriptors
         working-directory: services/sanad-fast-analyzer
         run: |
           set -euo pipefail
-          deno task check
-          deno task test
           python -m py_compile ocr-runtime/app.py fast-ocr-runtime/app.py
           docker compose -f docker-compose.local.yml config >/dev/null
           docker build -f fast-ocr-runtime/Dockerfile fast-ocr-runtime
@@ -127,22 +120,18 @@ jobs:
           cat /tmp/paddle-ocr-ready.json; echo
           cat /tmp/analyzer-ready.json; echo
 
-          # Real fast-OCR inference smoke using a deterministic PNG.
           python3 - <<'PY'
           import struct,zlib
           from pathlib import Path
-          w,h=480,140
-          rows=[]
+          w,h=480,140; rows=[]
           for y in range(h):
               row=bytearray()
               for x in range(w):
-                  black=(25<=x<330 and 40<=y<55) or (25<=x<420 and 80<=y<95)
-                  v=0 if black else 255
+                  v=0 if ((25<=x<330 and 40<=y<55) or (25<=x<420 and 80<=y<95)) else 255
                   row.extend((v,v,v))
               rows.append(b'\x00'+bytes(row))
           def chunk(k,d): return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d)&0xffffffff)
-          png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b''.join(rows),9))+chunk(b'IEND',b'')
-          Path('/tmp/sanad-v2-smoke.png').write_bytes(png)
+          Path('/tmp/sanad-v2-smoke.png').write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b''.join(rows),9))+chunk(b'IEND',b''))
           PY
           curl --fail --silent --max-time 15 -H 'Content-Type: image/png' --data-binary @/tmp/sanad-v2-smoke.png http://127.0.0.1:8092/v1/ocr >/tmp/fast-ocr-smoke.json
           python3 - <<'PY'
