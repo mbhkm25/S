@@ -12,12 +12,11 @@ const sanadSupabaseUrl = String.fromEnvironment(
 // override it at build time using --dart-define=SANAD_SUPABASE_KEY=...
 const sanadSupabaseKey = String.fromEnvironment(
   'SANAD_SUPABASE_KEY',
-  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdjbGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag',
+  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag',
 );
 
 Future<void> initializeSanadCloud() async {
-  if (Supabase.instance.isInitialized) return;
-  await Supabase.initialize(url: sanadSupabaseUrl, publishableKey: sanadSupabaseKey);
+  await Supabase.initialize(url: sanadSupabaseUrl, anonKey: sanadSupabaseKey);
 }
 
 class SemanticAnalysisResult {
