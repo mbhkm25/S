@@ -217,11 +217,13 @@ class LocalDatabase {
   Future<void> markJobRetry(int id, int attempts, Object error) async {
     final db = await database;
     final delayMinutes = attempts <= 1 ? 1 : attempts <= 3 ? 3 : 10;
+    final message = error.toString();
+    final safeMessage = message.length <= 500 ? message : message.substring(0, 500);
     await db.update('local_jobs', {
       'status': 'retry_wait',
       'attempt_count': attempts,
       'next_attempt_at': DateTime.now().add(Duration(minutes: delayMinutes)).toUtc().toIso8601String(),
-      'last_error': error.toString().substring(0, error.toString().length.clamp(0, 500)),
+      'last_error': safeMessage,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }, where: 'id = ?', whereArgs: [id]);
   }
