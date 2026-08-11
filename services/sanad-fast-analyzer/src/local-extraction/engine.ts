@@ -6,7 +6,7 @@ import type {
 } from "./contracts.ts";
 import { parseWithRegistry, type LocalTextParser } from "./parser-registry.ts";
 
-const ENGINE_VERSION = "0.2.0" as const;
+const ENGINE_VERSION = "0.2.1" as const;
 
 export interface LocalExtractionEngineOptions {
   ocrProvider?: OcrProvider;
@@ -22,6 +22,7 @@ export async function analyzeLocalDocument(
   const started = performance.now();
   const minimumAcceptConfidence = clamp(options.minimumAcceptConfidence ?? 0.98, 0, 1);
   const minimumParserMatchConfidence = clamp(options.minimumParserMatchConfidence ?? 0.5, 0, 1);
+  const preOcrWarnings: string[] = [];
 
   if (!document.bytes.length) {
     return makeResult({
@@ -37,49 +38,55 @@ export async function analyzeLocalDocument(
   }
 
   // PDFs with a usable text layer are the cheapest and fastest possible path.
-  // Run them through the same parser registry used by OCR so all document types
-  // converge on one deterministic extraction contract.
+  // A PDF text-layer failure must never poison the OCR fallback path: malformed,
+  // scanned, or library-incompatible PDFs are still valid OCR candidates.
   if (document.mimeType.toLowerCase() === "application/pdf") {
-    const pdf = await extractPdfTextLayer(document.bytes);
-    if (pdf.textLayerDetected && pdf.rawText.trim()) {
-      const rulesStarted = performance.now();
-      const parsed = parseWithRegistry(pdf.rawText, {
-        parsers: options.parsers,
-        minimumMatchConfidence: minimumParserMatchConfidence,
-      });
-      const rulesMs = performance.now() - rulesStarted;
+    try {
+      const pdf = await extractPdfTextLayer(document.bytes);
+      if (pdf.textLayerDetected && pdf.rawText.trim()) {
+        const rulesStarted = performance.now();
+        const parsed = parseWithRegistry(pdf.rawText, {
+          parsers: options.parsers,
+          minimumMatchConfidence: minimumParserMatchConfidence,
+        });
+        const rulesMs = performance.now() - rulesStarted;
 
-      if (parsed.matched && parsed.extraction) {
-        return finalizeExtraction({
-          extraction: parsed.extraction,
-          extractionConfidence: parsed.confidence,
-          minimumAcceptConfidence,
-          source: ["pdf_text", "rules"],
-          totalStarted: started,
-          mimeType: document.mimeType,
-          textLayerMs: pdf.durationMs,
-          rulesMs,
-          parser: parsed.parser,
-          warnings: [...pdf.warnings, ...parsed.reasons],
-        });
+        if (parsed.matched && parsed.extraction) {
+          return finalizeExtraction({
+            extraction: parsed.extraction,
+            extractionConfidence: parsed.confidence,
+            minimumAcceptConfidence,
+            source: ["pdf_text", "rules"],
+            totalStarted: started,
+            mimeType: document.mimeType,
+            textLayerMs: pdf.durationMs,
+            rulesMs,
+            parser: parsed.parser,
+            warnings: [...pdf.warnings, ...parsed.reasons],
+          });
+        }
+        if (!options.ocrProvider) {
+          return makeResult({
+            status: "unsupported",
+            source: ["pdf_text", "rules"],
+            confidence: parsed.confidence,
+            fallbackRecommended: true,
+            fallbackReason: "no_deterministic_parser_matched_pdf_text",
+            totalStarted: started,
+            textLayerMs: pdf.durationMs,
+            rulesMs,
+            mimeType: document.mimeType,
+            parser: parsed.parser,
+            warnings: [...pdf.warnings, ...parsed.reasons],
+          });
+        }
+        preOcrWarnings.push(...pdf.warnings, ...parsed.reasons);
+      } else {
+        preOcrWarnings.push(...pdf.warnings);
       }
-      // Text-layer presence alone is not proof that the template is supported.
-      // Continue to OCR only if a provider exists; otherwise fail closed to Gemini.
-      if (!options.ocrProvider) {
-        return makeResult({
-          status: "unsupported",
-          source: ["pdf_text", "rules"],
-          confidence: parsed.confidence,
-          fallbackRecommended: true,
-          fallbackReason: "no_deterministic_parser_matched_pdf_text",
-          totalStarted: started,
-          textLayerMs: pdf.durationMs,
-          rulesMs,
-          mimeType: document.mimeType,
-          parser: parsed.parser,
-          warnings: [...pdf.warnings, ...parsed.reasons],
-        });
-      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      preOcrWarnings.push(`pdf_text_extraction_failed:${detail}`);
     }
   }
 
@@ -93,7 +100,7 @@ export async function analyzeLocalDocument(
       fallbackReason: provider ? "ocr_provider_does_not_support_mime" : "ocr_provider_not_configured",
       totalStarted: started,
       mimeType: document.mimeType,
-      warnings: [],
+      warnings: preOcrWarnings,
     });
   }
 
@@ -119,7 +126,7 @@ export async function analyzeLocalDocument(
         mimeType: document.mimeType,
         ocrProvider: ocr.provider,
         parser: parsed.parser,
-        warnings: [...ocr.warnings, ...parsed.reasons],
+        warnings: [...preOcrWarnings, ...ocr.warnings, ...parsed.reasons],
       });
     }
 
@@ -134,7 +141,7 @@ export async function analyzeLocalDocument(
       ocrMs: ocr.durationMs,
       rulesMs,
       parser: parsed.parser,
-      warnings: [...ocr.warnings, ...parsed.reasons],
+      warnings: [...preOcrWarnings, ...ocr.warnings, ...parsed.reasons],
     });
   } catch (error) {
     return makeResult({
@@ -146,7 +153,7 @@ export async function analyzeLocalDocument(
       totalStarted: started,
       mimeType: document.mimeType,
       ocrProvider: provider.name,
-      warnings: [error instanceof Error ? error.message : String(error)],
+      warnings: [...preOcrWarnings, error instanceof Error ? error.message : String(error)],
     });
   }
 }
