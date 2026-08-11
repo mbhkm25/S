@@ -1,0 +1,134 @@
+name: Benchmark SANAD Tesseract Refinement Grid
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-tesseract-refinement-grid.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-tesseract-refinement-grid
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build image on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/tesseract-grid/$SHA'"
+          cat /tmp/ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '/opt/sanad-local-extraction/experiments/tesseract-grid/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/tesseract-grid/$SHA' && docker build -t 'sanad-tess-grid:$SHA' ."
+
+      - name: Run hard-case refinement grid
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          names=()
+          cleanup() { for n in "${names[@]}"; do docker rm -f "$n" >/dev/null 2>&1 || true; done; }
+          trap cleanup EXIT
+
+          declare -A CFG
+          CFG[a]='6 2200 200 20'
+          CFG[b]='6 2800 240 15'
+          CFG[c]='4 2800 240 15'
+          CFG[d]='12 2800 240 15'
+
+          for v in a b c d; do
+            read -r psm side dpi minconf <<<"${CFG[$v]}"
+            n="sanad-tess-grid-${RUN_ID}-${v}"
+            names+=("$n")
+            docker run -d --name "$n" --memory=768m --cpus=4 -p 127.0.0.1::8092 \
+              -e SANAD_FAST_OCR_CONCURRENCY=1 \
+              -e SANAD_FAST_OCR_TIMEOUT_SECONDS=12 \
+              -e SANAD_FAST_OCR_PSM="$psm" \
+              -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE="$side" \
+              -e SANAD_FAST_OCR_PDF_DPI="$dpi" \
+              -e SANAD_FAST_OCR_MIN_WORD_CONFIDENCE="$minconf" \
+              "sanad-tess-grid:$SHA" >/dev/null
+          done
+
+          RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import json,mimetypes,os,pathlib,time,urllib.request,urllib.error,subprocess
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          targets={5:files[4],6:files[5]}
+          rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          variants={'a':'6/2200/200','b':'6/2800/240','c':'4/2800/240','d':'12/2800/240'}
+          for vi,v in enumerate(('a','b','c','d'),1):
+              name=f'sanad-tess-grid-{rid}-{v}'
+              port=subprocess.check_output(['docker','port',name,'8092/tcp'],text=True).strip().rsplit(':',1)[-1]
+              url=f'http://127.0.0.1:{port}'
+              for _ in range(30):
+                  try:
+                      urllib.request.urlopen(url+'/health/ready',timeout=2).read(); break
+                  except Exception: time.sleep(1)
+              for case,p in targets.items():
+                  data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or 'application/octet-stream'
+                  st=time.perf_counter()
+                  req=urllib.request.Request(url+'/v1/ocr',data=data,method='POST',headers={'Content-Type':mime})
+                  with urllib.request.urlopen(req,timeout=15) as r: o=json.loads(r.read())
+                  ocr_wall=round((time.perf_counter()-st)*1000,1)
+                  raw=str(o.get('raw_text') or '')
+                  pseudo=f'{rid}{vi}'
+                  body=json.dumps({'source_label':f'fast-ocr-{pseudo}-case-{case}','ocr_provider':f'tess_grid:{v}','ocr_duration_ms':o.get('duration_ms'),'ocr_confidence':o.get('confidence'),'ocr_text':raw},ensure_ascii=False).encode()
+                  sreq=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+                  try:
+                      with urllib.request.urlopen(sreq,timeout=12) as sr: sem=json.loads(sr.read())
+                  except urllib.error.HTTPError as e: sem={'ok':False,'http':e.code}
+                  row={'variant':v,'config':variants[v],'case':case,'ocr_ms':o.get('duration_ms'),'ocr_wall_ms':ocr_wall,'confidence':o.get('confidence'),'chars':len(raw),'gemini_ok':sem.get('ok'),'gemini_ms':sem.get('gemini_latency_ms'),'pipeline_ms':sem.get('total_pipeline_ms'),'pseudo_run':pseudo}
+                  print('GRID_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
