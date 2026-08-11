@@ -1,0 +1,179 @@
+name: Deploy SANAD Local Extraction V2
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - services/sanad-fast-analyzer/**
+      - .github/workflows/deploy-local-extraction-v2.yml
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref/commit to deploy
+        required: true
+        default: feature/sanad-local-extraction-engine
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-extraction-v2-server
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ROOT: /opt/sanad-local-extraction
+  COMPOSE_PROJECT_NAME: sanad-local-extraction
+
+jobs:
+  deploy:
+    name: Validate and deploy isolated V2 runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          fetch-depth: 1
+
+      - name: Record candidate SHA
+        id: meta
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Validate source and descriptors
+        working-directory: services/sanad-fast-analyzer
+        run: |
+          set -euo pipefail
+          deno task check
+          deno task test
+          python -m py_compile ocr-runtime/app.py fast-ocr-runtime/app.py
+          docker compose -f docker-compose.local.yml config >/dev/null
+          docker build -f fast-ocr-runtime/Dockerfile fast-ocr-runtime
+          docker build -f Dockerfile .
+
+      - name: Build deployment archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude='*.private.json' --exclude='local-extraction-benchmark-*.json' --exclude='amqi-benchmark-*.json' \
+            -C services/sanad-fast-analyzer -czf /tmp/sanad-local-extraction-v2.tgz .
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload and activate immutable isolated release
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RELEASE_SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'set -e; test "$(id -un)" = sanad-deploy; docker ps >/dev/null; test -w /opt/sanad-local-extraction'
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_SHA' '$DEPLOY_ROOT/shared'"
+          cat /tmp/sanad-local-extraction-v2.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '$DEPLOY_ROOT/releases/$RELEASE_SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "DEPLOY_ROOT='$DEPLOY_ROOT' RELEASE_SHA='$RELEASE_SHA' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' bash -s" <<'REMOTE'
+          set -euo pipefail
+          release="$DEPLOY_ROOT/releases/$RELEASE_SHA"
+          previous=""
+          if [ -L "$DEPLOY_ROOT/current" ]; then previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"; fi
+          rollback(){
+            echo 'V2 isolated deployment failed; rolling back' >&2
+            if [ -n "$previous" ] && [ -d "$previous" ]; then
+              ln -sfn "$previous" "$DEPLOY_ROOT/current"
+              cd "$previous"
+              docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d --build || true
+            fi
+          }
+          trap rollback ERR
+          cd "$release"
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-fast-ocr sanad-local-ocr sanad-local-analyzer
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
+
+          wait_ready(){
+            url="$1"; name="$2"; tries="$3"; sleep_s="$4"
+            for _ in $(seq 1 "$tries"); do
+              if curl --fail --silent --max-time 3 "$url" >/tmp/${name}-ready.json 2>/dev/null; then return 0; fi
+              sleep "$sleep_s"
+            done
+            echo "$name failed readiness" >&2
+            return 1
+          }
+          wait_ready http://127.0.0.1:8092/health/ready fast-ocr 40 2
+          wait_ready http://127.0.0.1:8091/health/ready paddle-ocr 144 5
+          wait_ready http://127.0.0.1:8090/health/ready analyzer 60 2
+          cat /tmp/fast-ocr-ready.json; echo
+          cat /tmp/paddle-ocr-ready.json; echo
+          cat /tmp/analyzer-ready.json; echo
+
+          # Real fast-OCR inference smoke using a deterministic PNG.
+          python3 - <<'PY'
+          import struct,zlib
+          from pathlib import Path
+          w,h=480,140
+          rows=[]
+          for y in range(h):
+              row=bytearray()
+              for x in range(w):
+                  black=(25<=x<330 and 40<=y<55) or (25<=x<420 and 80<=y<95)
+                  v=0 if black else 255
+                  row.extend((v,v,v))
+              rows.append(b'\x00'+bytes(row))
+          def chunk(k,d): return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d)&0xffffffff)
+          png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b''.join(rows),9))+chunk(b'IEND',b'')
+          Path('/tmp/sanad-v2-smoke.png').write_bytes(png)
+          PY
+          curl --fail --silent --max-time 15 -H 'Content-Type: image/png' --data-binary @/tmp/sanad-v2-smoke.png http://127.0.0.1:8092/v1/ocr >/tmp/fast-ocr-smoke.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/fast-ocr-smoke.json'))
+          assert isinstance(p.get('raw_text'),str),p
+          assert isinstance(p.get('blocks'),list),p
+          print('FAST_OCR_INFERENCE_OK')
+          PY
+
+          ln -sfn "$release" "$DEPLOY_ROOT/current"
+          printf '%s\n' "$RELEASE_SHA" > "$DEPLOY_ROOT/DEPLOYED_SHA"
+          date -u +%FT%TZ > "$DEPLOY_ROOT/DEPLOYED_AT"
+          trap - ERR
+          cd "$DEPLOY_ROOT/releases"
+          ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf --
+          REMOTE
+
+      - name: Verify deployed isolated runtime
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RELEASE_SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "test \"\$(cat '$DEPLOY_ROOT/DEPLOYED_SHA')\" = '$RELEASE_SHA'; \
+             curl --fail --silent http://127.0.0.1:8092/health/ready; echo; \
+             curl --fail --silent http://127.0.0.1:8091/health/ready; echo; \
+             curl --fail --silent http://127.0.0.1:8090/health/ready; echo; \
+             cd '$DEPLOY_ROOT/current' && docker compose -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps; \
+             docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-fast-ocr sanad-local-ocr sanad-local-analyzer"
