@@ -46,9 +46,10 @@ jobs:
         working-directory: services/sanad-fast-analyzer
         run: |
           set -euo pipefail
-          python -m py_compile ocr-runtime/app.py fast-ocr-runtime/app.py
+          python -m py_compile ocr-runtime/app.py fast-ocr-runtime/app.py secure-ocr-bridge/app.py
           docker compose -f docker-compose.local.yml config >/dev/null
           docker build -f fast-ocr-runtime/Dockerfile fast-ocr-runtime
+          docker build -f secure-ocr-bridge/Dockerfile secure-ocr-bridge
           docker build -f Dockerfile .
 
       - name: Build deployment archive
@@ -101,22 +102,24 @@ jobs:
           }
           trap rollback ERR
           cd "$release"
-          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-fast-ocr sanad-local-ocr sanad-local-analyzer
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-fast-ocr sanad-secure-ocr-bridge sanad-local-ocr sanad-local-analyzer
           docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
 
           wait_ready(){
-            url="$1"; name="$2"; tries="$3"; sleep_s="$4"
+            url="$1"; name="$2"; tries="$3"; sleep_s="$4"; extra="${5:-}"
             for _ in $(seq 1 "$tries"); do
-              if curl --fail --silent --max-time 3 "$url" >/tmp/${name}-ready.json 2>/dev/null; then return 0; fi
+              if curl --fail --silent --max-time 3 $extra "$url" >/tmp/${name}-ready.json 2>/dev/null; then return 0; fi
               sleep "$sleep_s"
             done
             echo "$name failed readiness" >&2
             return 1
           }
           wait_ready http://127.0.0.1:8092/health/ready fast-ocr 40 2
+          wait_ready https://127.0.0.1:8443/health/ready secure-bridge 40 2 "--cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem"
           wait_ready http://127.0.0.1:8091/health/ready paddle-ocr 144 5
           wait_ready http://127.0.0.1:8090/health/ready analyzer 60 2
           cat /tmp/fast-ocr-ready.json; echo
+          cat /tmp/secure-bridge-ready.json; echo
           cat /tmp/paddle-ocr-ready.json; echo
           cat /tmp/analyzer-ready.json; echo
 
@@ -162,7 +165,13 @@ jobs:
           ssh -p "${PORT:-22}" "$USER@$HOST" \
             "test \"\$(cat '$DEPLOY_ROOT/DEPLOYED_SHA')\" = '$RELEASE_SHA'; \
              curl --fail --silent http://127.0.0.1:8092/health/ready; echo; \
+             curl --fail --silent --cacert /etc/letsencrypt/live/sanadflow.com/fullchain.pem https://127.0.0.1:8443/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8091/health/ready; echo; \
              curl --fail --silent http://127.0.0.1:8090/health/ready; echo; \
              cd '$DEPLOY_ROOT/current' && docker compose -p '$COMPOSE_PROJECT_NAME' -f docker-compose.local.yml ps; \
-             docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-fast-ocr sanad-local-ocr sanad-local-analyzer"
+             docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' sanad-fast-ocr sanad-secure-ocr-bridge sanad-local-ocr sanad-local-analyzer"
+
+      - name: Verify public TLS bridge health
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 10 https://sanadflow.com:8443/health/ready
