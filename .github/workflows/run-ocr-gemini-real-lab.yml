@@ -1,0 +1,94 @@
+name: Run SANAD Real OCR Lab Sample
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/run-ocr-gemini-real-lab.yml
+
+permissions:
+  contents: read
+
+jobs:
+  real-ocr-sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Run one private corpus image through PaddleOCR
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          test -d "$corpus"
+          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | head -n 1)"
+          test -n "$file"
+          case "${file##*.}" in
+            jpg|JPG|jpeg|JPEG) mime=image/jpeg ;;
+            png|PNG) mime=image/png ;;
+            webp|WEBP) mime=image/webp ;;
+            *) exit 9 ;;
+          esac
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Content-Type: $mime" \
+            --data-binary "@$file" \
+            http://127.0.0.1:8091/v1/ocr
+          REMOTE
+
+          python3 - <<'PY'
+          import json
+          p='/tmp/sanad-real-ocr.json'
+          d=json.load(open(p,encoding='utf-8'))
+          print('OCR_SAMPLE_OK')
+          print('ocr_provider='+str(d.get('provider')))
+          print('ocr_duration_ms='+str(d.get('duration_ms')))
+          print('ocr_confidence='+str(d.get('confidence')))
+          print('ocr_chars='+str(len(str(d.get('raw_text') or ''))))
+          print('ocr_blocks='+str(len(d.get('blocks') or [])))
+          PY
+
+      - name: Encrypt OCR payload for private inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/sanad-lab-public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxOBEUZpwcnTQXgiERbGy
+          8kP7cl3eCf2AQdYe2Qs6SB7q7syzwsumlzAjENKYXNWWvZ4OyYXRIJwtu70kjsCZ
+          SrkkyZp7TYWFvQU6N4aaIaZiS+VoX8VLocHTLEuwpeQkoE6UsFepg7IYVyGBGp1L
+          ShGXnffcIpvZQAVoyaaOiukbbYP8alVQzUJIZf3nT6FiPe1Y+dNdxEl/WEnV7Pps
+          95VyDo1a2QeHAyrgOB/71tddA8z5ooojXqJYZf4zkCZgGjoePsOkCgXgYH8ohCBw
+          HEqrlflvfxrPQkDSpSBkdmS7vLDvaV4pDbkCk8XEH/uEWJn2aOWbmQkkTMf940my
+          5QIDAQAB
+          -----END PUBLIC KEY-----
+          PEM
+          keyhex="$(openssl rand -hex 32)"
+          ivhex="$(openssl rand -hex 16)"
+          printf '%s%s' "$keyhex" "$ivhex" | xxd -r -p > /tmp/sanad-keyiv.bin
+          openssl pkeyutl -encrypt -pubin -inkey /tmp/sanad-lab-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in /tmp/sanad-keyiv.bin -out /tmp/sanad-keyiv.enc
+          openssl enc -aes-256-cbc -K "$keyhex" -iv "$ivhex" \
+            -in /tmp/sanad-real-ocr.json -out /tmp/sanad-ocr.enc
+          echo "SANAD_ENCRYPTED_KEYIV=$(base64 -w0 /tmp/sanad-keyiv.enc)"
+          echo "SANAD_ENCRYPTED_OCR=$(base64 -w0 /tmp/sanad-ocr.enc)"
+          rm -f /tmp/sanad-real-ocr.json /tmp/sanad-keyiv.bin /tmp/sanad-keyiv.enc /tmp/sanad-ocr.enc /tmp/sanad-lab-public.pem
