@@ -61,42 +61,47 @@ jobs:
           USER: ${{ secrets.SANAD_SERVER_USER }}
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
           SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' bash -s" <<'REMOTE'
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' RUN_ID='$RUN_ID' bash -s" <<'REMOTE'
           set -euo pipefail
-          name=sanad-fast-ocr-experiment
+          name="sanad-fast-ocr-${RUN_ID}"
           cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           cleanup
           docker run -d --name "$name" \
             --memory=768m --cpus=4 \
-            -p 127.0.0.1:8092:8092 \
+            -p 127.0.0.1::8092 \
             -e SANAD_FAST_OCR_CONCURRENCY=1 \
             -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
             -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
             -e SANAD_FAST_OCR_PDF_DPI=150 \
             "sanad-fast-ocr:$SHA" >/dev/null
+          host_port="$(docker port "$name" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          test -n "$host_port"
+          base_url="http://127.0.0.1:${host_port}"
           ok=0
           for _ in $(seq 1 30); do
-            if curl --fail --silent --max-time 2 http://127.0.0.1:8092/health/ready >/tmp/fast-ocr-ready.json 2>/dev/null; then ok=1; break; fi
+            if curl --fail --silent --max-time 2 "$base_url/health/ready" >/tmp/fast-ocr-ready.json 2>/dev/null; then ok=1; break; fi
             sleep 1
           done
           test "$ok" -eq 1
           cat /tmp/fast-ocr-ready.json
           docker inspect sanad-local-analyzer >/dev/null
 
-          python3 - <<'PY'
-          import json, mimetypes, pathlib, statistics, subprocess, time, urllib.request, urllib.error
+          FAST_OCR_URL="$base_url" python3 - <<'PY'
+          import json, mimetypes, os, pathlib, statistics, subprocess, time, urllib.request, urllib.error
           from collections import Counter
           corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          base=os.environ['FAST_OCR_URL']
           allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
           files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
           parser_code='''import { parseWithRegistry } from "/app/src/local-extraction/parser-registry.ts"; const t=await new Response(Deno.stdin.readable).text(); const r=parseWithRegistry(t); const e=r.extraction; console.log(JSON.stringify({parser:r.parser,matched:r.matched,confidence:r.confidence,reasons:r.reasons,critical:{entity:!!e?.financialEntityCode,amount:Number.isFinite(e?.amount),currency:!!e?.currency,reference:!!(e?.documentReference||e?.transferReference),datetime:!!e?.transactionDatetime},review:!!e?.reviewRequired,parties:Array.isArray(e?.parties)?e.parties.length:0,identifiers:Array.isArray(e?.parties)?e.parties.reduce((n,p)=>n+(Array.isArray(p.identifiers)?p.identifiers.length:0),0):0}));'''
           rows=[]
           for i,p in enumerate(files,1):
               mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
-              req=urllib.request.Request('http://127.0.0.1:8092/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
+              req=urllib.request.Request(base+'/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
               st=time.perf_counter(); http=None; payload=None; error=None
               try:
                   with urllib.request.urlopen(req,timeout=12) as r:
