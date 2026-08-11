@@ -22,11 +22,13 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                     return@setMethodCallHandler
                 }
+
                 val imagePath = call.argument<String>("imagePath")
                 if (imagePath.isNullOrBlank()) {
                     result.error("ocr_invalid_argument", "imagePath is required", null)
                     return@setMethodCallHandler
                 }
+
                 executor.execute {
                     try {
                         val text = recognize(imagePath)
@@ -41,6 +43,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun recognize(imagePath: String): String {
+        val image = File(imagePath)
+        if (!image.isFile || image.length() == 0L) {
+            throw IllegalArgumentException("ocr_image_missing")
+        }
+
         val root = File(filesDir, "tesseract")
         prepareLanguageData(root)
         val tess = TessBaseAPI()
@@ -48,7 +55,7 @@ class MainActivity : FlutterActivity() {
             if (!tess.init(root.absolutePath, "ara+eng")) {
                 throw IllegalStateException("tesseract_init_failed")
             }
-            tess.setImage(File(imagePath))
+            tess.setImage(image)
             return tess.getUTF8Text() ?: ""
         } finally {
             tess.recycle()
@@ -60,11 +67,17 @@ class MainActivity : FlutterActivity() {
         if (!dataDir.exists() && !dataDir.mkdirs()) {
             throw IllegalStateException("tessdata_directory_failed")
         }
+
         listOf("ara", "eng").forEach { language ->
             val target = File(dataDir, "$language.traineddata")
-            if (target.exists() && target.length() > 0) return@forEach
+            if (target.exists() && target.length() > 0L) return@forEach
+
             assets.open("flutter_assets/assets/tessdata/$language.traineddata").use { input ->
                 FileOutputStream(target).use { output -> input.copyTo(output) }
+            }
+
+            if (!target.isFile || target.length() == 0L) {
+                throw IllegalStateException("tessdata_copy_failed_$language")
             }
         }
     }
