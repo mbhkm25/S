@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sanad_local/app.dart';
 import 'package:sanad_local/services/sanad_cloud.dart';
 
@@ -7,6 +8,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
     SharedPreferences.setMockInitialValues(const {});
     await initializeSanadCloud();
   });
