@@ -14,15 +14,25 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 MAX_BODY_BYTES = int(os.getenv("SANAD_OCR_MAX_BODY_BYTES", str(12 * 1024 * 1024)))
 CONCURRENCY = max(1, int(os.getenv("SANAD_OCR_CONCURRENCY", "1")))
-CPU_THREADS = max(1, int(os.getenv("SANAD_OCR_CPU_THREADS", "4")))
+CPU_THREADS = max(1, int(os.getenv("SANAD_OCR_CPU_THREADS", "8")))
 MAX_IMAGE_LONG_SIDE = max(768, int(os.getenv("SANAD_OCR_MAX_IMAGE_LONG_SIDE", "1800")))
 LANG = os.getenv("SANAD_OCR_LANG", "ar")
 OCR_VERSION = os.getenv("SANAD_OCR_VERSION", "PP-OCRv5")
 ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_dynamic")
 TEXT_DETECTION_MODEL = os.getenv("SANAD_OCR_TEXT_DETECTION_MODEL", "PP-OCRv5_mobile_det")
 TEXT_RECOGNITION_MODEL = os.getenv("SANAD_OCR_TEXT_RECOGNITION_MODEL", "arabic_PP-OCRv5_mobile_rec")
+ENABLE_HPI = _env_bool("SANAD_OCR_ENABLE_HPI", True)
+ENABLE_MKLDNN = _env_bool("SANAD_OCR_ENABLE_MKLDNN", True)
 BEARER_TOKEN = os.getenv("SANAD_OCR_TOKEN", "").strip()
 MIN_TEXT_SCORE = min(1.0, max(0.0, float(os.getenv("SANAD_OCR_MIN_TEXT_SCORE", "0.35"))))
 
@@ -36,7 +46,7 @@ SUPPORTED_TYPES = {
 logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("sanad-local-ocr")
 
-app = FastAPI(title="SANAD Local OCR", version="0.3.2", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Local OCR", version="0.4.0", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
@@ -83,6 +93,9 @@ def _load_model() -> Any:
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
             "device": "cpu",
+            "enable_hpi": ENABLE_HPI,
+            "enable_mkldnn": ENABLE_MKLDNN,
+            "cpu_threads": CPU_THREADS,
         }
         if ENGINE:
             kwargs["engine"] = ENGINE
@@ -90,14 +103,22 @@ def _load_model() -> Any:
                 kwargs["engine_config"] = {
                     "device_type": "cpu",
                     "cpu_threads": CPU_THREADS,
-                    "run_mode": "mkldnn",
+                    "run_mode": "mkldnn" if ENABLE_MKLDNN else "paddle",
                 }
         try:
             _ocr = PaddleOCR(**kwargs)
         except TypeError:
-            kwargs.pop("engine", None)
-            kwargs.pop("engine_config", None)
-            _ocr = PaddleOCR(**kwargs)
+            logger.warning("paddleocr_hpi_kwargs_unsupported_falling_back")
+            kwargs.pop("enable_hpi", None)
+            kwargs.pop("enable_mkldnn", None)
+            kwargs.pop("cpu_threads", None)
+            try:
+                _ocr = PaddleOCR(**kwargs)
+            except TypeError:
+                logger.warning("paddleocr_engine_kwargs_unsupported_falling_back")
+                kwargs.pop("engine", None)
+                kwargs.pop("engine_config", None)
+                _ocr = PaddleOCR(**kwargs)
         _model_error = None
         return _ocr
     except Exception as exc:
@@ -323,6 +344,8 @@ async def ready() -> JSONResponse:
         "engine": ENGINE,
         "text_detection_model": TEXT_DETECTION_MODEL,
         "text_recognition_model": TEXT_RECOGNITION_MODEL,
+        "enable_hpi": ENABLE_HPI,
+        "enable_mkldnn": ENABLE_MKLDNN,
         "max_image_long_side": MAX_IMAGE_LONG_SIDE,
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
