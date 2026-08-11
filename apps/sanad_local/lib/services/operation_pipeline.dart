@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/local_database.dart';
+import '../data/local_database_queue_extensions.dart';
 import '../domain/local_operation.dart';
 import 'local_file_store.dart';
 import 'local_ocr_service.dart';
@@ -32,7 +33,12 @@ class OperationPipeline {
   bool _running = false;
   bool get signedIn => _semantic.hasSession;
 
-  Future<void> signIn(String email, String password) => _semantic.signIn(email: email, password: password);
+  Future<void> signIn(String email, String password) async {
+    await _semantic.signIn(email: email, password: password);
+    await _db.resumeWaitingAuthJobs();
+    await processQueue();
+  }
+
   Future<void> signOut() => _semantic.signOut();
 
   Future<LocalOperation?> capture(ImageSource source) async {
@@ -77,7 +83,11 @@ class OperationPipeline {
           await _process(operationId);
           await _db.markJobDone(jobId);
         } catch (error) {
-          await _db.markJobRetry(jobId, attempts + 1, error);
+          if (error.toString().contains('sanad_auth_required')) {
+            await _db.markJobWaitingAuth(jobId);
+          } else {
+            await _db.markJobRetry(jobId, attempts + 1, error);
+          }
           break;
         }
       }
