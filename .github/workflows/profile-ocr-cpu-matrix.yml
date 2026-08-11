@@ -1,0 +1,111 @@
+name: Profile SANAD OCR CPU Matrix
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/profile-ocr-cpu-matrix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-ocr-cpu-profile
+  cancel-in-progress: false
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Benchmark OCR profiles on one private receipt
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/sanad-local-extraction
+          release="$(readlink -f "$root/current")"
+          corpus="$root/shared/private-corpus/pilot-01"
+          test -d "$release"
+          test -d "$corpus"
+          cd "$release"
+          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | sed -n '1p')"
+          test -n "$file"
+          ext="${file##*.}"
+          case "$ext" in
+            jpg|JPG|jpeg|JPEG) mime=image/jpeg ;;
+            png|PNG) mime=image/png ;;
+            webp|WEBP) mime=image/webp ;;
+            *) exit 9 ;;
+          esac
+
+          restore() {
+            SANAD_OCR_MAX_IMAGE_LONG_SIDE=900 \
+            SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN=768 \
+            SANAD_OCR_TEXT_RECOGNITION_BATCH_SIZE=2 \
+            SANAD_OCR_CPU_THREADS=8 \
+            SANAD_OCR_ENABLE_HPI=true \
+            SANAD_OCR_ENABLE_MKLDNN=true \
+            docker compose -p sanad-local-extraction -f docker-compose.local.yml up -d --force-recreate sanad-local-ocr >/dev/null 2>&1 || true
+          }
+          trap restore EXIT
+
+          run_profile() {
+            label="$1"; maxside="$2"; detside="$3"; batch="$4"; threads="$5"
+            echo "PROFILE_START=$label maxside=$maxside detside=$detside batch=$batch threads=$threads"
+            SANAD_OCR_MAX_IMAGE_LONG_SIDE="$maxside" \
+            SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN="$detside" \
+            SANAD_OCR_TEXT_RECOGNITION_BATCH_SIZE="$batch" \
+            SANAD_OCR_CPU_THREADS="$threads" \
+            SANAD_OCR_ENABLE_HPI=true \
+            SANAD_OCR_ENABLE_MKLDNN=true \
+            docker compose -p sanad-local-extraction -f docker-compose.local.yml up -d --force-recreate sanad-local-ocr >/dev/null
+            ok=0
+            for _ in $(seq 1 48); do
+              if curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready >/tmp/ocr-ready.json 2>/dev/null; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" -eq 1
+            out="/tmp/ocr-${label}.json"
+            curl --fail --silent --show-error --max-time 35 -H "Content-Type: $mime" --data-binary "@$file" http://127.0.0.1:8091/v1/ocr > "$out"
+            LABEL="$label" OUT="$out" python3 - <<'PY'
+          import json, os
+          d=json.load(open(os.environ['OUT'],encoding='utf-8'))
+          print('PROFILE_RESULT='+json.dumps({
+            'label':os.environ['LABEL'],
+            'duration_ms':d.get('duration_ms'),
+            'confidence':d.get('confidence'),
+            'chars':len(str(d.get('raw_text') or '')),
+            'blocks':len(d.get('blocks') or []),
+            'warnings':d.get('warnings') or [],
+          },sort_keys=True))
+          PY
+            rm -f "$out"
+          }
+
+          run_profile p640 640 512 2 8
+          run_profile p720 720 640 2 8
+          run_profile p768 768 640 2 8
+          run_profile p900 900 768 2 8
+          run_profile p1200 1200 960 2 8
+          REMOTE
