@@ -1,0 +1,79 @@
+name: Benchmark SANAD Document OCR Evidence
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-document-ocr-v04.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Benchmark deployed document evidence layer
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'python3 -' <<'PY'
+          import json, mimetypes, pathlib, statistics, urllib.request
+          from collections import Counter
+
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          rows=[]
+          for idx,p in enumerate(files,1):
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              req=urllib.request.Request('http://127.0.0.1:8092/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
+              with urllib.request.urlopen(req,timeout=25) as r:
+                  d=json.loads(r.read())
+              c=d.get('field_candidates') or {}; e=d.get('evidence') or {}
+              row={
+                  'case':idx,'mime':mime,'provider':d.get('provider'),'mode':d.get('document_mode'),
+                  'ocr_ms':d.get('duration_ms'),'confidence':d.get('confidence'),'evidence_score':e.get('score'),
+                  'passes':len(d.get('passes') or []),'refinement':bool(d.get('refinement_recommended')),
+                  'amount_candidates':len(c.get('amounts') or []),'currency_candidates':len(c.get('currencies') or []),
+                  'reference_candidates':len(c.get('references') or []),'date_candidates':len(c.get('dates') or []),
+                  'identifier_candidates':len(c.get('identifiers') or []),'entity_hints':len(c.get('entity_hints') or []),
+              }
+              rows.append(row)
+              print('DOC_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+          ms=[float(r['ocr_ms']) for r in rows if isinstance(r['ocr_ms'],(int,float))]
+          summary={
+              'cases':len(rows),'mean_ocr_ms':round(statistics.fmean(ms),1),'median_ocr_ms':round(statistics.median(ms),1),
+              'native_pdf':sum(r['mode']=='native_pdf_text' for r in rows),'adaptive':sum('adaptive' in str(r['provider']) for r in rows),
+              'refinement_recommended':sum(r['refinement'] for r in rows),
+              'with_amount_candidate':sum(r['amount_candidates']>0 for r in rows),
+              'with_currency_candidate':sum(r['currency_candidates']>0 for r in rows),
+              'with_reference_candidate':sum(r['reference_candidates']>0 for r in rows),
+              'with_date_candidate':sum(r['date_candidates']>0 for r in rows),
+              'with_identifier_candidate':sum(r['identifier_candidates']>0 for r in rows),
+              'with_entity_hint':sum(r['entity_hints']>0 for r in rows),
+              'evidence_score_distribution':dict(Counter(str(r['evidence_score']) for r in rows)),
+          }
+          print('DOC_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          assert len(rows)==10
+          assert all(r['provider'] for r in rows)
+          PY
