@@ -1,0 +1,214 @@
+name: Benchmark SANAD Dual Tesseract Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-dual-tesseract-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-dual-tesseract-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire short-lived GitHub OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build fast OCR image on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/sanad-fast-ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/dual-tesseract/$SHA'"
+          cat /tmp/sanad-fast-ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "tar -xzf - -C '/opt/sanad-local-extraction/experiments/dual-tesseract/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "cd '/opt/sanad-local-extraction/experiments/dual-tesseract/$SHA' && docker build -t 'sanad-dual-tesseract:$SHA' ."
+
+      - name: Run selective dual-pass benchmark
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          primary="sanad-dual-primary-${RUN_ID}"
+          refine="sanad-dual-refine-${RUN_ID}"
+          cleanup() { docker rm -f "$primary" "$refine" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+
+          docker run -d --name "$primary" \
+            --memory=768m --cpus=4 -p 127.0.0.1::8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 \
+            -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_PSM=6 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            -e SANAD_FAST_OCR_PDF_DPI=150 \
+            "sanad-dual-tesseract:$SHA" >/dev/null
+
+          docker run -d --name "$refine" \
+            --memory=768m --cpus=4 -p 127.0.0.1::8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 \
+            -e SANAD_FAST_OCR_TIMEOUT_SECONDS=12 \
+            -e SANAD_FAST_OCR_PSM=11 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=2800 \
+            -e SANAD_FAST_OCR_PDF_DPI=240 \
+            -e SANAD_FAST_OCR_MIN_WORD_CONFIDENCE=15 \
+            "sanad-dual-tesseract:$SHA" >/dev/null
+
+          pport="$(docker port "$primary" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          rport="$(docker port "$refine" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          test -n "$pport"; test -n "$rport"
+          purl="http://127.0.0.1:${pport}"
+          rurl="http://127.0.0.1:${rport}"
+          for url in "$purl" "$rurl"; do
+            ok=0
+            for _ in $(seq 1 30); do
+              if curl --fail --silent --max-time 2 "$url/health/ready" >/dev/null 2>&1; then ok=1; break; fi
+              sleep 1
+            done
+            test "$ok" -eq 1
+          done
+
+          PRIMARY_URL="$purl" REFINE_URL="$rurl" OIDC_TOKEN="$OIDC_TOKEN" RUN_ID="$RUN_ID" python3 - <<'PY'
+          import json, mimetypes, os, pathlib, statistics, time, urllib.error, urllib.request
+          from collections import Counter
+
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          primary=os.environ['PRIMARY_URL']
+          refine=os.environ['REFINE_URL']
+          oidc=os.environ['OIDC_TOKEN']
+          run_id=os.environ['RUN_ID']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          rows=[]
+
+          def post(url,data,mime,timeout,headers=None):
+              h={'Content-Type':mime}
+              if headers: h.update(headers)
+              req=urllib.request.Request(url,data=data,method='POST',headers=h)
+              with urllib.request.urlopen(req,timeout=timeout) as r:
+                  return json.loads(r.read())
+
+          def text_quality(payload):
+              text=str(payload.get('raw_text') or '')
+              conf=float(payload.get('confidence') or 0)
+              digits=sum(c.isdigit() for c in text)
+              anchors=sum(1 for a in ('رقم','الحساب','التاريخ','ريال','SAR','YER','FT','إشعار','سند') if a in text)
+              return conf + min(digits,80)/800 + min(anchors,8)/80
+
+          for i,p in enumerate(files,1):
+              data=p.read_bytes()
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              start=time.perf_counter()
+              first=post(primary+'/v1/ocr',data,mime,12)
+              first_conf=float(first.get('confidence') or 0)
+              first_ms=float(first.get('duration_ms') or 0)
+              chosen=first
+              provider='primary'
+              refine_ms=0.0
+              second_conf=None
+              if first_conf < 0.80 or len(str(first.get('raw_text') or '')) < 120:
+                  rs=time.perf_counter()
+                  second=post(refine+'/v1/ocr',data,mime,16)
+                  refine_ms=round((time.perf_counter()-rs)*1000,1)
+                  second_conf=float(second.get('confidence') or 0)
+                  if text_quality(second) >= text_quality(first):
+                      chosen=second
+                      provider='refine'
+
+              raw=str(chosen.get('raw_text') or '').strip()
+              ocr_ms=first_ms+refine_ms
+              body=json.dumps({
+                  'source_label':f'fast-ocr-{run_id}-case-{i}',
+                  'ocr_provider':'dual_tesseract:'+provider,
+                  'ocr_duration_ms':ocr_ms,
+                  'ocr_confidence':chosen.get('confidence'),
+                  'ocr_text':raw,
+              },ensure_ascii=False).encode('utf-8')
+              sreq=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              try:
+                  with urllib.request.urlopen(sreq,timeout=12) as sr:
+                      sem=json.loads(sr.read())
+              except urllib.error.HTTPError as e:
+                  sem={'ok':False,'http':e.code}
+              except Exception as e:
+                  sem={'ok':False,'error':type(e).__name__}
+              wall=round((time.perf_counter()-start)*1000,1)
+              row={
+                  'case':i,'provider':provider,'first_conf':round(first_conf,4),
+                  'second_conf':round(second_conf,4) if second_conf is not None else None,
+                  'chosen_conf':round(float(chosen.get('confidence') or 0),4),
+                  'first_ms':round(first_ms,1),'refine_ms':round(refine_ms,1),
+                  'gemini_ms':sem.get('gemini_latency_ms'),'pipeline_ms':sem.get('total_pipeline_ms'),
+                  'wall_ms':wall,'gemini_ok':sem.get('ok'),'gemini_cost_usd':sem.get('estimated_gemini_cost_usd')
+              }
+              rows.append(row)
+              print('DUAL_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+
+          walls=[r['wall_ms'] for r in rows]
+          refined=[r for r in rows if r['refine_ms']>0]
+          costs=[float(r['gemini_cost_usd']) for r in rows if isinstance(r['gemini_cost_usd'],(int,float))]
+          def pct(xs,q):
+              if not xs:return None
+              xs=sorted(xs); return round(xs[max(0,min(len(xs)-1,int((len(xs)-1)*q)))],1)
+          summary={
+              'cases':len(rows),'gemini_success':sum(r['gemini_ok'] is True for r in rows),
+              'refined_cases':len(refined),'providers':dict(Counter(r['provider'] for r in rows)),
+              'mean_wall_ms':round(statistics.fmean(walls),1),'p50_wall_ms':pct(walls,.5),'p95_wall_ms':pct(walls,.95),
+              'mean_refine_ms':round(statistics.fmean([r['refine_ms'] for r in refined]),1) if refined else 0,
+              'total_gemini_cost_usd':round(sum(costs),8)
+          }
+          print('DUAL_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
