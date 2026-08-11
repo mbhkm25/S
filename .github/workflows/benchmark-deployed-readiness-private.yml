@@ -1,0 +1,98 @@
+name: Benchmark SANAD Deployed V2 Readiness
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-deployed-readiness-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Exercise exact deployed runtime and private corpus
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          deployed="$(cat /opt/sanad-local-extraction/DEPLOYED_SHA)"
+          echo "DEPLOYED_SHA=$deployed"
+          curl --fail --silent http://127.0.0.1:8092/health/ready
+          echo
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import base64,json,mimetypes,os,pathlib,statistics,time,urllib.request
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          fast='http://127.0.0.1:8092/v1/ocr'
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          vision='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-vision-safety-lab'
+          def raw(url,data,mime,timeout):
+              req=urllib.request.Request(url,data=data,method='POST',headers={'Content-Type':mime})
+              with urllib.request.urlopen(req,timeout=timeout) as r:return json.loads(r.read())
+          def js(url,payload,timeout):
+              req=urllib.request.Request(url,data=json.dumps(payload,ensure_ascii=False).encode(),method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              with urllib.request.urlopen(req,timeout=timeout) as r:return json.loads(r.read())
+          rows=[]
+          for i,p in enumerate(files,1):
+              st=time.perf_counter(); data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              fo=raw(fast,data,mime,12)
+              label=f'fast-ocr-{rid}-case-{i}'
+              sem=js(semantic,{'source_label':label,'ocr_provider':'deployed_v2:fast_text','ocr_duration_ms':fo.get('duration_ms'),'ocr_confidence':fo.get('confidence'),'ocr_text':str(fo.get('raw_text') or '')},15)
+              q=sem.get('quality') if isinstance(sem.get('quality'),dict) else {}
+              fallback=bool(q.get('reviewRequired')) or not bool(q.get('criticalComplete'))
+              final=sem; provider='fast_text'
+              if fallback:
+                  final=js(vision,{'source_label':label,'mime_type':mime,'data_base64':base64.b64encode(data).decode()},20)
+                  provider='vision_safety'
+              fq=final.get('quality') if isinstance(final.get('quality'),dict) else {}
+              wall=round((time.perf_counter()-st)*1000,1)
+              row={'case':i,'provider':provider,'fallback':fallback,'review':fq.get('reviewRequired'),'wall_ms':wall,'fast_ms':fo.get('duration_ms'),'cost':final.get('estimated_gemini_cost_usd')}
+              rows.append(row); print('DEPLOYED_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+          walls=[r['wall_ms'] for r in rows]
+          print('DEPLOYED_SUMMARY='+json.dumps({'cases':len(rows),'fallback_cases':sum(r['fallback'] for r in rows),'review_cases':sum(r['review'] is True for r in rows),'mean_wall_ms':round(statistics.fmean(walls),1),'p50_wall_ms':round(statistics.median(walls),1),'p95_wall_ms':round(sorted(walls)[max(0,int((len(walls)-1)*.95))],1)},separators=(',',':'),sort_keys=True))
+          if len(rows)!=10 or any(r['review'] is True for r in rows): raise SystemExit('deployed_runtime_quality_gate_failed')
+          PY
+          REMOTE
