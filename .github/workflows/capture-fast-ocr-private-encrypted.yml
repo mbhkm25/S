@@ -56,13 +56,14 @@ jobs:
           ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' bash -s" <<'REMOTE'
           set -euo pipefail
           name=sanad-fast-ocr-private-capture
+          port=18092
           work=/tmp/sanad-fast-ocr-private-capture
           rm -rf "$work"; mkdir -p "$work"
           cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; rm -f "$work/raw.json" "$work/keyiv.bin" "$work/public.pem"; }
           trap cleanup EXIT
           docker rm -f "$name" >/dev/null 2>&1 || true
           docker run -d --name "$name" --memory=768m --cpus=4 \
-            -p 127.0.0.1:8092:8092 \
+            -p 127.0.0.1:${port}:8092 \
             -e SANAD_FAST_OCR_CONCURRENCY=1 \
             -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
             -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
@@ -70,20 +71,21 @@ jobs:
             "sanad-fast-ocr:$SHA" >/dev/null
           ok=0
           for _ in $(seq 1 30); do
-            if curl --fail --silent --max-time 2 http://127.0.0.1:8092/health/ready >/dev/null 2>&1; then ok=1; break; fi
+            if curl --fail --silent --max-time 2 "http://127.0.0.1:${port}/health/ready" >/dev/null 2>&1; then ok=1; break; fi
             sleep 1
           done
           test "$ok" -eq 1
 
-          python3 - <<'PY'
-          import json, mimetypes, pathlib, time, urllib.request, urllib.error
+          SANAD_CAPTURE_PORT="$port" python3 - <<'PY'
+          import json, mimetypes, os, pathlib, time, urllib.request, urllib.error
           corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          port=os.environ['SANAD_CAPTURE_PORT']
           allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
           files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
           rows=[]
           for i,p in enumerate(files,1):
               mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
-              req=urllib.request.Request('http://127.0.0.1:8092/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
+              req=urllib.request.Request(f'http://127.0.0.1:{port}/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
               st=time.perf_counter(); payload=None; http=None; error=None
               try:
                   with urllib.request.urlopen(req,timeout=12) as r:
@@ -94,7 +96,7 @@ jobs:
                   except Exception: error='http_error'
               except Exception as e:
                   error=type(e).__name__
-              rows.append({'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':round((time.perf_counter()-st)*1000,3),'error':error,'ocr':payload})
+              rows.append({'case':i,'name':p.name,'kind':p.suffix.lower(),'http':http,'wall_ms':round((time.perf_counter()-st)*1000,3),'error':error,'ocr':payload})
           pathlib.Path('/tmp/sanad-fast-ocr-private-capture/raw.json').write_text(json.dumps({'schema':1,'rows':rows},ensure_ascii=False),encoding='utf-8')
           PY
 
