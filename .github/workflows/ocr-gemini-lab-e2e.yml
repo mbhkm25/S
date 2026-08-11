@@ -1,0 +1,105 @@
+name: SANAD OCR Gemini Lab E2E
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/ocr-gemini-lab-e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-ocr-gemini-lab-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Run real Paddle OCR to Gemini text parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Execute private E2E on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          LAB_TOKEN: JhzcOBJz1lLTh2UqJTO6QksChc5dM_SPdDXs9_U5iTU
+          LAB_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "LAB_TOKEN='$LAB_TOKEN' LAB_URL='$LAB_URL' bash -s" <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          test -d "$corpus"
+          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) -print | sort | head -n 1)"
+          test -n "$file"
+          case "${file##*.}" in
+            jpg|JPG|jpeg|JPEG) mime=image/jpeg ;;
+            png|PNG) mime=image/png ;;
+            webp|WEBP) mime=image/webp ;;
+            *) echo unsupported_sample >&2; exit 3 ;;
+          esac
+
+          started_ns="$(date +%s%N)"
+          http="$(curl --silent --show-error --output /tmp/sanad-ocr-lab.json --write-out '%{http_code}' \
+            --max-time 30 -H "Content-Type: $mime" --data-binary "@$file" http://127.0.0.1:8091/v1/ocr)"
+          ended_ns="$(date +%s%N)"
+          test "$http" = 200 || { echo "OCR_HTTP_STATUS=$http" >&2; exit 4; }
+          OCR_WALL_MS="$(( (ended_ns-started_ns)/1000000 ))" FILE_PATH="$file" LAB_TOKEN="$LAB_TOKEN" LAB_URL="$LAB_URL" python3 - <<'PY'
+          import json, os, pathlib, urllib.request, urllib.error
+          payload=json.loads(pathlib.Path('/tmp/sanad-ocr-lab.json').read_text())
+          raw=(payload.get('raw_text') or '').strip()
+          if not raw:
+              raise SystemExit('OCR_EMPTY_TEXT')
+          body={
+              'source_label': pathlib.Path(os.environ['FILE_PATH']).name,
+              'ocr_provider': payload.get('provider'),
+              'ocr_duration_ms': payload.get('duration_ms'),
+              'ocr_confidence': payload.get('confidence'),
+              'ocr_text': raw,
+          }
+          req=urllib.request.Request(
+              os.environ['LAB_URL'],
+              data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
+              method='POST',
+              headers={'content-type':'application/json','x-sanad-lab-token':os.environ['LAB_TOKEN']},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  out=json.loads(r.read())
+          except urllib.error.HTTPError as e:
+              detail=e.read().decode('utf-8','replace')[:600]
+              raise SystemExit(f'LAB_HTTP_{e.code}:{detail}')
+          if not out.get('ok'):
+              raise SystemExit('LAB_NOT_OK')
+          # Deliberately print metrics only. Private OCR text and structured financial data stay in Supabase.
+          print('E2E_OK=true')
+          print('RUN_ID='+str(out.get('run_id')))
+          print('OCR_CHARS='+str(out.get('ocr_chars')))
+          print('OCR_DURATION_MS='+str(out.get('ocr_duration_ms')))
+          print('GEMINI_LATENCY_MS='+str(out.get('gemini_latency_ms')))
+          print('TOTAL_PIPELINE_MS='+str(out.get('total_pipeline_ms')))
+          print('PROMPT_TOKENS='+str((out.get('usage') or {}).get('prompt_tokens')))
+          print('CANDIDATE_TOKENS='+str((out.get('usage') or {}).get('candidate_tokens')))
+          print('THOUGHTS_TOKENS='+str((out.get('usage') or {}).get('thoughts_tokens')))
+          print('GEMINI_COST_USD='+str(out.get('estimated_gemini_cost_usd')))
+          PY
+          REMOTE
