@@ -51,7 +51,14 @@ export function assessPdfTextLayer(rawText: string, totalPages: number): Omit<Pd
 
 export async function extractPdfTextLayer(pdfBytes: Uint8Array): Promise<PdfTextExtractionResult> {
   const started = performance.now();
-  const { totalPages, text } = await extractText(pdfBytes, { mergePages: true });
+
+  // unpdf/pdf.js may transfer the backing ArrayBuffer to a worker and detach it.
+  // The local engine must preserve the original document bytes because a PDF
+  // with an insufficient text layer is subsequently sent to the OCR sidecar.
+  // Always give the PDF extractor an owned copy so the caller's Uint8Array
+  // remains valid for the OCR fallback path.
+  const extractionBytes = new Uint8Array(pdfBytes);
+  const { totalPages, text } = await extractText(extractionBytes, { mergePages: true });
   const assessed = assessPdfTextLayer(text, totalPages);
   return {
     ...assessed,
