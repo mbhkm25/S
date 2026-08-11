@@ -1,0 +1,147 @@
+name: SANAD Local MVP
+
+on:
+  pull_request:
+    paths:
+      - 'apps/sanad_local/**'
+      - 'supabase/functions/sanad-local-text-analysis/**'
+      - '.github/workflows/sanad-local-mvp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-local-mvp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-contract:
+    name: Live semantic backend contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check isolated Edge Function
+        run: deno check supabase/functions/sanad-local-text-analysis/index.ts
+      - name: Prove anonymous callers are rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          status="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+            --request POST --header 'content-type: application/json' --data '{}' \
+            https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-local-text-analysis)"
+          cat "$body"
+          test "$status" = "401"
+      - name: Get signed GitHub OIDC test identity
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-local-ci")"
+          token="$(jq -r '.value' <<<"$response")"
+          test -n "$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+      - name: Exercise live OCR-text to Gemini contract
+        env:
+          CI_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload='{"local_operation_id":"ci-local-001","analysis_revision":1,"ocr_provider":"ci_fixture","ocr_confidence":0.99,"ocr_text":"العمقي موبايل\nالمبلغ 500 SAR\nرقم العملية 8-342038458\nالتاريخ 2026-08-11"}'
+          response="$(curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $CI_TOKEN" \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-local-text-analysis)"
+          jq . <<<"$response"
+          test "$(jq -r '.ok' <<<"$response")" = "true"
+          test "$(jq -r '.principal' <<<"$response")" = "github_ci"
+          test "$(jq -r '.structured.financialEntityCode' <<<"$response")" = "alomqi"
+          test "$(jq -r '.structured.amount' <<<"$response")" = "500"
+          test "$(jq -r '.structured.currency' <<<"$response")" = "SAR"
+          test "$(jq -r '.structured.documentReference' <<<"$response")" = "8-342038458"
+
+  android-mvp:
+    name: Flutter + Android emulator + release APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install fixture dependency
+        run: python3 -m pip install --user pillow
+      - name: Create Android platform without touching SANAD production app
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.sanadflow --project-name sanad_local .
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle=Path('android/app/build.gradle.kts')
+          text=gradle.read_text()
+          text=text.replace('applicationId = "com.sanadflow.sanad_local"','applicationId = "com.sanadflow.local"')
+          text=text.replace('minSdk = flutter.minSdkVersion','minSdk = 26')
+          gradle.write_text(text)
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          m=manifest.read_text()
+          marker='<application'
+          perms='    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n'
+          if 'android.permission.CAMERA' not in m:
+              m=m.replace(marker, perms+marker, 1)
+          manifest.write_text(m)
+          PY
+      - name: Prepare fully offline runtime assets
+        working-directory: apps/sanad_local
+        run: bash tool/prepare_assets.sh
+      - name: Resolve dependencies
+        working-directory: apps/sanad_local
+        run: flutter pub get
+      - name: Static analysis
+        working-directory: apps/sanad_local
+        run: flutter analyze --fatal-infos
+      - name: Unit tests
+        working-directory: apps/sanad_local
+        run: flutter test --no-pub test
+      - name: Build release APK
+        working-directory: apps/sanad_local
+        run: flutter build apk --release --no-pub --dart-define=SANAD_SUPABASE_URL=https://api.sanadflow.com
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-local-mvp-apk
+          path: apps/sanad_local/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real Android runtime gates
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          working-directory: apps/sanad_local
+          script: flutter test integration_test/mvp_integration_test.dart -d emulator-5554 --no-pub
