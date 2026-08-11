@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 MAX_BODY_BYTES = int(os.getenv("SANAD_OCR_MAX_BODY_BYTES", str(12 * 1024 * 1024)))
 CONCURRENCY = max(1, int(os.getenv("SANAD_OCR_CONCURRENCY", "1")))
 CPU_THREADS = max(1, int(os.getenv("SANAD_OCR_CPU_THREADS", "4")))
+MAX_IMAGE_LONG_SIDE = max(768, int(os.getenv("SANAD_OCR_MAX_IMAGE_LONG_SIDE", "1800")))
 LANG = os.getenv("SANAD_OCR_LANG", "ar")
 OCR_VERSION = os.getenv("SANAD_OCR_VERSION", "PP-OCRv5")
 ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_dynamic")
@@ -35,7 +36,7 @@ SUPPORTED_TYPES = {
 logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("sanad-local-ocr")
 
-app = FastAPI(title="SANAD Local OCR", version="0.3.1", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Local OCR", version="0.3.2", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
@@ -190,12 +191,42 @@ def _finite_float(value: Any) -> float:
     return 0.0
 
 
+def _prepare_image(path: str) -> tuple[str, str | None, str | None]:
+    source = Path(path)
+    if source.suffix.lower() == ".pdf":
+        return path, None, None
+
+    from PIL import Image, ImageOps
+
+    with Image.open(path) as opened:
+        image = ImageOps.exif_transpose(opened)
+        original = image.size
+        if max(original) <= MAX_IMAGE_LONG_SIDE:
+            return path, None, f"{original[0]}x{original[1]}"
+
+        copy = image.convert("RGB")
+        copy.thumbnail((MAX_IMAGE_LONG_SIDE, MAX_IMAGE_LONG_SIDE), Image.Resampling.LANCZOS)
+        resized = copy.size
+        with tempfile.NamedTemporaryFile(prefix="sanad-ocr-scaled-", suffix=".jpg", delete=False) as handle:
+            target = handle.name
+        copy.save(target, format="JPEG", quality=92, optimize=False)
+        logger.info(
+            "ocr_image_downscaled original=%sx%s resized=%sx%s max_long_side=%s",
+            original[0], original[1], resized[0], resized[1], MAX_IMAGE_LONG_SIDE,
+        )
+        return target, target, f"{original[0]}x{original[1]}->{resized[0]}x{resized[1]}"
+
+
 def _infer_sync(path: str) -> OcrResponse:
     global _inference_ready, _inference_error
     started = time.perf_counter()
     model = _load_model()
+    prepared_path = path
+    cleanup_path: str | None = None
+    resize_note: str | None = None
     try:
-        prediction = model.predict(input=path)
+        prepared_path, cleanup_path, resize_note = _prepare_image(path)
+        prediction = model.predict(input=prepared_path)
         all_blocks: list[OcrBlock] = []
         warnings: list[str] = []
 
@@ -210,6 +241,8 @@ def _infer_sync(path: str) -> OcrResponse:
         confidence = statistics.fmean(scores) if scores else 0.0
         if not all_blocks:
             warnings.append("ocr_returned_no_text")
+        if resize_note and "->" in resize_note:
+            warnings.append("ocr_image_downscaled")
 
         _inference_ready = True
         _inference_error = None
@@ -224,8 +257,11 @@ def _infer_sync(path: str) -> OcrResponse:
     except Exception as exc:
         _inference_ready = False
         _inference_error = _safe_error(exc)
-        logger.exception("paddleocr_inference_failed")
+        logger.exception("paddleocr_inference_failed resize=%s", resize_note)
         raise
+    finally:
+        if cleanup_path:
+            Path(cleanup_path).unlink(missing_ok=True)
 
 
 def _run_canary_sync() -> None:
@@ -287,6 +323,7 @@ async def ready() -> JSONResponse:
         "engine": ENGINE,
         "text_detection_model": TEXT_DETECTION_MODEL,
         "text_recognition_model": TEXT_RECOGNITION_MODEL,
+        "max_image_long_side": MAX_IMAGE_LONG_SIDE,
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
     }
