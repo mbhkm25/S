@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: sanad-local-extraction-private-profile
-  cancel-in-progress: true
+  group: sanad-local-extraction-runtime
+  cancel-in-progress: false
 
 jobs:
   profile:
