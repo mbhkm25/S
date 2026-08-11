@@ -48,7 +48,7 @@ void main() {
     }
     final recent = await db.recentOperations(limit: 1000);
     expect(recent.length, greaterThanOrEqualTo(1000));
-    final found = await db.searchOperations('REF$stamp999');
+    final found = await db.searchOperations('REF${stamp}999');
     expect(found.any((o) => o.id == 'stress-$stamp-999'), isTrue);
   });
 
