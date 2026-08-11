@@ -40,8 +40,8 @@ jobs:
           HOST: ${{ secrets.SANAD_SERVER_HOST }}
           USER: ${{ secrets.SANAD_SERVER_USER }}
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
-          LAB_TOKEN: JhzcOBJz1lLTh2UqJTO6QksChc5dM_SPdDXs9_U5iTU
-          LAB_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab
+          LAB_TOKEN: vpLPARl9C5_mIVd1ei2PiDNTDyho6Pkgd8044ry7D3M
+          LAB_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2
         run: |
           set -euo pipefail
           ssh -p "${PORT:-22}" "$USER@$HOST" \
@@ -59,10 +59,25 @@ jobs:
           esac
 
           started_ns="$(date +%s%N)"
+          set +e
           http="$(curl --silent --show-error --output /tmp/sanad-ocr-lab.json --write-out '%{http_code}' \
             --max-time 30 -H "Content-Type: $mime" --data-binary "@$file" http://127.0.0.1:8091/v1/ocr)"
+          curl_exit=$?
+          set -e
           ended_ns="$(date +%s%N)"
-          test "$http" = 200 || { echo "OCR_HTTP_STATUS=$http" >&2; exit 4; }
+          if [ "$curl_exit" -ne 0 ] || [ "$http" != 200 ]; then
+            echo "OCR_CURL_EXIT=$curl_exit"
+            echo "OCR_HTTP_STATUS=${http:-none}"
+            echo '--- OCR readiness after failure ---'
+            curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
+            echo
+            echo '--- OCR container status ---'
+            docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
+            echo '--- OCR logs tail ---'
+            docker logs --tail 220 sanad-local-ocr 2>&1 || true
+            exit 4
+          fi
+
           OCR_WALL_MS="$(( (ended_ns-started_ns)/1000000 ))" FILE_PATH="$file" LAB_TOKEN="$LAB_TOKEN" LAB_URL="$LAB_URL" python3 - <<'PY'
           import json, os, pathlib, urllib.request, urllib.error
           payload=json.loads(pathlib.Path('/tmp/sanad-ocr-lab.json').read_text())
@@ -90,7 +105,6 @@ jobs:
               raise SystemExit(f'LAB_HTTP_{e.code}:{detail}')
           if not out.get('ok'):
               raise SystemExit('LAB_NOT_OK')
-          # Deliberately print metrics only. Private OCR text and structured financial data stay in Supabase.
           print('E2E_OK=true')
           print('RUN_ID='+str(out.get('run_id')))
           print('OCR_CHARS='+str(out.get('ocr_chars')))
