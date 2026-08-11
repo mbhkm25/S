@@ -1,0 +1,137 @@
+name: Benchmark SANAD Final Readiness Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-final-readiness-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-final-readiness-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build fast OCR on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/final-fast.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/final-readiness/$SHA'"
+          cat /tmp/final-fast.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '/opt/sanad-local-extraction/experiments/final-readiness/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/final-readiness/$SHA' && docker build -t 'sanad-final-fast:$SHA' ."
+
+      - name: Run final readiness pipeline
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          name="sanad-final-fast-${RUN_ID}"
+          cleanup(){ docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+          docker run -d --name "$name" --memory=768m --cpus=4 -p 127.0.0.1::8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 -e SANAD_FAST_OCR_PDF_DPI=150 \
+            "sanad-final-fast:$SHA" >/dev/null
+          port="$(docker port "$name" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          base="http://127.0.0.1:${port}"
+          for _ in $(seq 1 30); do curl --fail --silent --max-time 2 "$base/health/ready" >/dev/null 2>&1 && break; sleep 1; done
+          curl --fail --silent "$base/health/ready" >/dev/null
+
+          BASE="$base" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import base64,json,mimetypes,os,pathlib,statistics,time,urllib.request
+          from collections import Counter
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          base=os.environ['BASE']; rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          vision='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-vision-safety-lab'
+
+          def post_json(url,payload,timeout):
+              body=json.dumps(payload,ensure_ascii=False).encode('utf-8')
+              req=urllib.request.Request(url,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read())
+
+          def post_raw(url,data,mime,timeout):
+              req=urllib.request.Request(url,data=data,method='POST',headers={'Content-Type':mime})
+              with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read())
+
+          rows=[]
+          for i,p in enumerate(files,1):
+              started=time.perf_counter(); data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              fast=post_raw(base+'/v1/ocr',data,mime,12)
+              label=f'fast-ocr-{rid}-case-{i}'
+              sem=post_json(semantic,{
+                  'source_label':label,'ocr_provider':'final:fast:text','ocr_duration_ms':fast.get('duration_ms'),
+                  'ocr_confidence':fast.get('confidence'),'ocr_text':str(fast.get('raw_text') or '')
+              },15)
+              q=sem.get('quality') if isinstance(sem.get('quality'),dict) else {}
+              use_vision=bool(q.get('reviewRequired')) or not bool(q.get('criticalComplete'))
+              final=sem; provider='fast_text'; vision_ms=0
+              if use_vision:
+                  vis=post_json(vision,{
+                      'source_label':label,'mime_type':mime,'data_base64':base64.b64encode(data).decode('ascii')
+                  },20)
+                  final=vis; provider='vision_safety'; vision_ms=int(vis.get('vision_latency_ms') or 0)
+              fq=final.get('quality') if isinstance(final.get('quality'),dict) else {}
+              wall=round((time.perf_counter()-started)*1000,1)
+              row={'case':i,'provider':provider,'vision_fallback':use_vision,'fast_ocr_ms':fast.get('duration_ms'),'fast_conf':round(float(fast.get('confidence') or 0),4),'final_review':fq.get('reviewRequired'),'sender_ids':fq.get('senderRoutingIdentifierCount'),'receiver_ids':fq.get('receiverRoutingIdentifierCount'),'semantic_ms':sem.get('gemini_latency_ms'),'vision_ms':vision_ms,'wall_ms':wall,'cost_usd':final.get('estimated_gemini_cost_usd')}
+              rows.append(row); print('FINAL_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
+          walls=[r['wall_ms'] for r in rows]; costs=[float(r['cost_usd']) for r in rows if isinstance(r.get('cost_usd'),(int,float))]
+          summary={'cases':len(rows),'vision_fallback_cases':sum(r['vision_fallback'] for r in rows),'providers':dict(Counter(r['provider'] for r in rows)),'final_review_cases':sum(r['final_review'] is True for r in rows),'mean_wall_ms':round(statistics.fmean(walls),1),'p50_wall_ms':round(statistics.median(walls),1),'p95_wall_ms':round(sorted(walls)[max(0,int((len(walls)-1)*.95))],1),'total_final_gemini_cost_usd':round(sum(costs),8)}
+          print('FINAL_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          if len(rows)!=10 or any(r['final_review'] is True for r in rows):
+              raise SystemExit('final_readiness_quality_gate_failed')
+          PY
+          REMOTE
