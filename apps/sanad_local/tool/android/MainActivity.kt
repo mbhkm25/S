@@ -49,7 +49,7 @@ class MainActivity : FlutterActivity() {
                 throw IllegalStateException("tesseract_init_failed")
             }
             tess.setImage(File(imagePath))
-            return tess.utF8Text ?: ""
+            return tess.getUTF8Text() ?: ""
         } finally {
             tess.recycle()
         }
