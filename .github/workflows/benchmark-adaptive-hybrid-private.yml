@@ -91,23 +91,20 @@ jobs:
           curl --fail --silent http://127.0.0.1:8091/health/ready >/dev/null
 
           BASE="$base" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
-          import json,mimetypes,os,pathlib,statistics,time,urllib.request,urllib.error
+          import json,mimetypes,os,pathlib,statistics,time,urllib.request
           from collections import Counter
           corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
           files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
           base=os.environ['BASE']; rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
           semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
           paddle='http://127.0.0.1:8091/v1/ocr'
-
           def post_raw(url,data,mime,timeout):
               req=urllib.request.Request(url,data=data,method='POST',headers={'Content-Type':mime})
               with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read())
-
           def parse_semantic(label,ocr,provider):
               body=json.dumps({'source_label':label,'ocr_provider':provider,'ocr_duration_ms':ocr.get('duration_ms'),'ocr_confidence':ocr.get('confidence'),'ocr_text':str(ocr.get('raw_text') or '')},ensure_ascii=False).encode()
               req=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
               with urllib.request.urlopen(req,timeout=15) as r: return json.loads(r.read())
-
           rows=[]
           for i,p in enumerate(files,1):
               started=time.perf_counter(); data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
@@ -119,15 +116,19 @@ jobs:
               if refine:
                   st=time.perf_counter()
                   try:
-                      candidate=post_raw(paddle,data,mime,30)
-                      paddle_ms=round((time.perf_counter()-st)*1000,1)
-                      if str(candidate.get('raw_text') or '').strip(): chosen=candidate; provider='paddle'
+                      candidate=post_raw(paddle,data,mime,30); paddle_ms=round((time.perf_counter()-st)*1000,1)
+                      if str(candidate.get('raw_text') or '').strip():
+                          chosen=dict(candidate)
+                          chosen['raw_text']=str(fast.get('raw_text') or '').strip()+'\n---HIGH_QUALITY_OCR---\n'+str(candidate.get('raw_text') or '').strip()
+                          chosen['duration_ms']=float(fast.get('duration_ms') or 0)+paddle_ms
+                          chosen['confidence']=max(float(fast.get('confidence') or 0),float(candidate.get('confidence') or 0))
+                          provider='paddle_fused'
                   except Exception:
                       paddle_ms=round((time.perf_counter()-st)*1000,1)
               final=parse_semantic(f'fast-ocr-{rid}-case-{i}',chosen,f'adaptive:{provider}:final')
               fq=final.get('quality') if isinstance(final.get('quality'),dict) else {}
               wall=round((time.perf_counter()-started)*1000,1)
-              row={'case':i,'provider':provider,'refined':refine,'fast_conf':round(float(fast.get('confidence') or 0),4),'paddle_ms':paddle_ms,'probe_review':q.get('reviewRequired'),'final_review':fq.get('reviewRequired'),'critical_complete':fq.get('criticalComplete'),'routing_ids':fq.get('routingIdentifierCount'),'probe_gemini_ms':probe.get('gemini_latency_ms'),'final_gemini_ms':final.get('gemini_latency_ms'),'final_pipeline_ms':final.get('total_pipeline_ms'),'wall_ms':wall,'final_cost_usd':final.get('estimated_gemini_cost_usd')}
+              row={'case':i,'provider':provider,'refined':refine,'fast_conf':round(float(fast.get('confidence') or 0),4),'paddle_ms':paddle_ms,'probe_review':q.get('reviewRequired'),'final_review':fq.get('reviewRequired'),'critical_complete':fq.get('criticalComplete'),'sender_ids':fq.get('senderRoutingIdentifierCount'),'receiver_ids':fq.get('receiverRoutingIdentifierCount'),'routing_ids':fq.get('routingIdentifierCount'),'probe_gemini_ms':probe.get('gemini_latency_ms'),'final_gemini_ms':final.get('gemini_latency_ms'),'final_pipeline_ms':final.get('total_pipeline_ms'),'wall_ms':wall,'final_cost_usd':final.get('estimated_gemini_cost_usd')}
               rows.append(row); print('ADAPTIVE_CASE='+json.dumps(row,separators=(',',':'),sort_keys=True))
           walls=[r['wall_ms'] for r in rows]
           summary={'cases':len(rows),'refined_cases':sum(r['refined'] for r in rows),'providers':dict(Counter(r['provider'] for r in rows)),'final_review_cases':sum(r['final_review'] is True for r in rows),'critical_complete_cases':sum(r['critical_complete'] is True for r in rows),'routing_id_total':sum(int(r['routing_ids'] or 0) for r in rows),'mean_wall_ms':round(statistics.fmean(walls),1),'p95_wall_ms':round(sorted(walls)[max(0,int((len(walls)-1)*.95))],1)}
