@@ -1,0 +1,58 @@
+name: Inspect SANAD Local OCR Ingress
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/inspect-local-ocr-ingress.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+      - name: Inspect listeners and nginx without mutation
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '===IDENTITY==='
+          id
+          echo '===LISTENERS==='
+          ss -lnt 2>/dev/null | sed -n '1,120p' || true
+          echo '===SUDO==='
+          if sudo -n true 2>/dev/null; then echo SUDO_NONINTERACTIVE=yes; else echo SUDO_NONINTERACTIVE=no; fi
+          echo '===NGINX_VERSION==='
+          nginx -v 2>&1 || true
+          echo '===NGINX_CONFIG_HINTS==='
+          if sudo -n nginx -T >/tmp/sanad-nginx.txt 2>/tmp/sanad-nginx.err; then
+            grep -nE 'server_name|listen 443|proxy_pass|sanadflow|location ' /tmp/sanad-nginx.txt | sed -n '1,220p' || true
+          else
+            cat /tmp/sanad-nginx.err || true
+            find /etc/nginx -maxdepth 2 -type f -readable -print 2>/dev/null | sed -n '1,80p' || true
+          fi
+          echo '===LOCAL_HEALTH==='
+          curl --fail --silent --max-time 3 http://127.0.0.1:8092/health/ready || true; echo
+          curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready || true; echo
+          curl --fail --silent --max-time 3 http://127.0.0.1:8090/health/ready || true; echo
+          REMOTE
