@@ -48,11 +48,6 @@ jobs:
         working-directory: services/sanad-fast-analyzer
         run: |
           set -euo pipefail
-          cleanup() {
-            docker compose -p sanad-local-sim -f docker-compose.local.yml down -v --remove-orphans >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
           docker compose -p sanad-local-sim -f docker-compose.local.yml up -d --build
 
           echo 'Waiting for OCR readiness...'
@@ -67,9 +62,6 @@ jobs:
           if [ "$ocr_ok" -ne 1 ]; then
             echo 'OCR failed simulated-server readiness' >&2
             curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready >&2 || true
-            echo >&2
-            docker compose -p sanad-local-sim -f docker-compose.local.yml ps >&2 || true
-            docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=220 sanad-local-ocr >&2 || true
             exit 11
           fi
 
@@ -85,27 +77,55 @@ jobs:
           if [ "$analyzer_ok" -ne 1 ]; then
             echo 'Analyzer failed simulated-server readiness' >&2
             curl --silent --show-error --max-time 3 http://127.0.0.1:8090/health/ready >&2 || true
-            echo >&2
-            docker compose -p sanad-local-sim -f docker-compose.local.yml ps >&2 || true
-            docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=180 sanad-local-analyzer >&2 || true
             exit 12
           fi
 
-          python3 - <<'PY'
-          import base64, pathlib
-          png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=')
-          pathlib.Path('/tmp/sanad-sim.png').write_bytes(png)
+          # Create a realistic, decodable image using Pillow already installed inside
+          # the OCR container. A 1x1 blank image is not a valid OCR smoke test.
+          docker exec sanad-local-ocr python - <<'PY'
+          from PIL import Image, ImageDraw
+          img = Image.new('RGB', (640, 180), 'white')
+          draw = ImageDraw.Draw(img)
+          draw.text((32, 55), 'SANAD 12345 500 SAR', fill='black')
+          img.save('/tmp/sanad-sim.png', format='PNG')
           PY
+          docker cp sanad-local-ocr:/tmp/sanad-sim.png /tmp/sanad-sim.png
 
-          curl --fail --silent --max-time 30 \
+          set +e
+          ocr_http=$(curl --silent --show-error --max-time 30 \
+            -o /tmp/ocr-inference.json -w '%{http_code}' \
             -H 'Content-Type: image/png' \
             --data-binary @/tmp/sanad-sim.png \
-            http://127.0.0.1:8091/v1/ocr >/tmp/ocr-inference.json
+            http://127.0.0.1:8091/v1/ocr)
+          ocr_curl=$?
 
-          curl --fail --silent --max-time 30 \
+          analyzer_http=$(curl --silent --show-error --max-time 30 \
+            -o /tmp/analyzer-inference.json -w '%{http_code}' \
             -H 'Content-Type: image/png' \
             --data-binary @/tmp/sanad-sim.png \
-            http://127.0.0.1:8090/v1/analyze >/tmp/analyzer-inference.json
+            http://127.0.0.1:8090/v1/analyze)
+          analyzer_curl=$?
+          set -e
+
+          echo "OCR_HTTP_STATUS=$ocr_http OCR_CURL_EXIT=$ocr_curl"
+          echo 'OCR_RESPONSE_BEGIN'
+          cat /tmp/ocr-inference.json 2>/dev/null || true
+          echo
+          echo 'OCR_RESPONSE_END'
+          echo "ANALYZER_HTTP_STATUS=$analyzer_http ANALYZER_CURL_EXIT=$analyzer_curl"
+          echo 'ANALYZER_RESPONSE_BEGIN'
+          cat /tmp/analyzer-inference.json 2>/dev/null || true
+          echo
+          echo 'ANALYZER_RESPONSE_END'
+
+          if [ "$ocr_curl" -ne 0 ] || [ "$ocr_http" != "200" ]; then
+            echo 'OCR HTTP smoke request failed' >&2
+            exit 21
+          fi
+          if [ "$analyzer_curl" -ne 0 ] || [ "$analyzer_http" != "200" ]; then
+            echo 'Analyzer HTTP smoke request failed' >&2
+            exit 22
+          fi
 
           python3 - <<'PY'
           import json
@@ -123,6 +143,7 @@ jobs:
           print('SIMULATION_OK')
           print('ocr_engine='+str(ocr_ready.get('engine')))
           print('ocr_provider='+str(ocr.get('provider')))
+          print('ocr_text_chars='+str(len(ocr.get('raw_text') or '')))
           print('analyzer_status='+str((analyzer.get('result') or {}).get('status')))
           PY
 
@@ -133,17 +154,23 @@ jobs:
         working-directory: services/sanad-fast-analyzer
         run: |
           echo '--- compose ---'
-          docker compose -p sanad-local-sim -f docker-compose.local.yml ps || true
+          docker compose -p sanad-local-sim -f docker-compose.local.yml ps -a || true
           echo '--- OCR readiness ---'
           curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
           echo
           echo '--- analyzer readiness ---'
           curl --silent --show-error --max-time 3 http://127.0.0.1:8090/health/ready || true
           echo
+          echo '--- captured OCR response ---'
+          cat /tmp/ocr-inference.json 2>/dev/null || true
+          echo
+          echo '--- captured analyzer response ---'
+          cat /tmp/analyzer-inference.json 2>/dev/null || true
+          echo
           echo '--- OCR logs ---'
-          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=220 sanad-local-ocr || true
+          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=260 sanad-local-ocr || true
           echo '--- analyzer logs ---'
-          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=180 sanad-local-analyzer || true
+          docker compose -p sanad-local-sim -f docker-compose.local.yml logs --no-color --tail=220 sanad-local-analyzer || true
 
       - name: Cleanup simulation
         if: always()
