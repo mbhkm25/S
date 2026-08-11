@@ -1,0 +1,117 @@
+name: Profile SANAD OCR HPI Auto Backend
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/profile-ocr-hpi-auto.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-extraction-runtime
+  cancel-in-progress: false
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Build isolated HPI image and benchmark one private receipt
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/sanad-local-extraction
+          corpus="$root/shared/private-corpus/pilot-01"
+          test -d "$corpus"
+          test -n "$(docker images -q sanad-local-extraction-sanad-local-ocr:latest 2>/dev/null)"
+
+          cleanup() {
+            docker rm -f sanad-local-ocr-hpi-test >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          cleanup
+
+          cat >/tmp/Dockerfile.sanad-hpi <<'DOCKER'
+          FROM sanad-local-extraction-sanad-local-ocr:latest
+          USER root
+          RUN paddleocr install_hpi_deps cpu
+          USER sanad
+          DOCKER
+          docker build -t sanad-local-ocr-hpi-test:latest -f /tmp/Dockerfile.sanad-hpi /tmp
+
+          docker run -d --name sanad-local-ocr-hpi-test \
+            -p 127.0.0.1:8092:8091 \
+            -v sanad-local-extraction_sanad_ocr_models:/home/sanad/.paddlex \
+            -e SANAD_OCR_ENGINE= \
+            -e SANAD_OCR_ENABLE_HPI=true \
+            -e SANAD_OCR_ENABLE_MKLDNN=true \
+            -e SANAD_OCR_MAX_IMAGE_LONG_SIDE=900 \
+            -e SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN=768 \
+            -e SANAD_OCR_TEXT_RECOGNITION_BATCH_SIZE=1 \
+            -e SANAD_OCR_CPU_THREADS=4 \
+            --memory=4g \
+            sanad-local-ocr-hpi-test:latest >/dev/null
+
+          ok=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8092/health/ready >/tmp/sanad-hpi-ready.json 2>/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo 'HPI_RESULT={"error":"not_ready"}'
+            docker logs --tail 160 sanad-local-ocr-hpi-test 2>&1 | grep -E 'Creating model|engine|backend|ERROR|Traceback|failed' || true
+            exit 1
+          fi
+          echo "HPI_READY=$(cat /tmp/sanad-hpi-ready.json)"
+
+          file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | sed -n '1p')"
+          test -n "$file"
+          ext="${file##*.}"
+          case "$ext" in
+            jpg|JPG|jpeg|JPEG) mime=image/jpeg ;;
+            png|PNG) mime=image/png ;;
+            webp|WEBP) mime=image/webp ;;
+            *) exit 9 ;;
+          esac
+
+          curl --fail --silent --show-error --max-time 45 \
+            -H "Content-Type: $mime" --data-binary "@$file" \
+            http://127.0.0.1:8092/v1/ocr >/tmp/sanad-hpi-result.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/sanad-hpi-result.json',encoding='utf-8'))
+          print('HPI_RESULT='+json.dumps({
+            'duration_ms':d.get('duration_ms'),
+            'confidence':d.get('confidence'),
+            'chars':len(str(d.get('raw_text') or '')),
+            'blocks':len(d.get('blocks') or []),
+            'provider':d.get('provider'),
+            'warnings':d.get('warnings') or [],
+          },sort_keys=True))
+          PY
+          echo '--- HPI backend diagnostics ---'
+          docker logs sanad-local-ocr-hpi-test 2>&1 | grep -E 'Creating model|engine|backend|onnx|openvino|Inference|HPI|high.performance' | tail -n 120 || true
+          REMOTE
