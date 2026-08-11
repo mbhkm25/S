@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: sanad-ocr-cpu-profile
+  group: sanad-local-extraction-runtime
   cancel-in-progress: false
 
 jobs:
