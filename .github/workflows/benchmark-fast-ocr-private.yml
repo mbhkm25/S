@@ -84,13 +84,15 @@ jobs:
           done
           test "$ok" -eq 1
           cat /tmp/fast-ocr-ready.json
+          docker inspect sanad-local-analyzer >/dev/null
 
           python3 - <<'PY'
-          import json, mimetypes, pathlib, statistics, time, urllib.request, urllib.error
+          import json, mimetypes, pathlib, statistics, subprocess, time, urllib.request, urllib.error
           from collections import Counter
           corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
           allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
           files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          parser_code='''import { parseWithRegistry } from "/app/src/local-extraction/parser-registry.ts"; const t=await new Response(Deno.stdin.readable).text(); const r=parseWithRegistry(t); const e=r.extraction; console.log(JSON.stringify({parser:r.parser,matched:r.matched,confidence:r.confidence,reasons:r.reasons,critical:{entity:!!e?.financialEntityCode,amount:Number.isFinite(e?.amount),currency:!!e?.currency,reference:!!(e?.documentReference||e?.transferReference),datetime:!!e?.transactionDatetime},review:!!e?.reviewRequired,parties:Array.isArray(e?.parties)?e.parties.length:0,identifiers:Array.isArray(e?.parties)?e.parties.reduce((n,p)=>n+(Array.isArray(p.identifiers)?p.identifiers.length:0),0):0}));'''
           rows=[]
           for i,p in enumerate(files,1):
               mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
@@ -107,11 +109,24 @@ jobs:
                   error=type(e).__name__
               wall=round((time.perf_counter()-st)*1000,1)
               d=payload if isinstance(payload,dict) else {}
+              raw=str(d.get('raw_text') or '')
+              parser={}
+              if http==200 and raw:
+                  try:
+                      pr=subprocess.run(['docker','exec','-i','sanad-local-analyzer','deno','eval','--no-lock',parser_code],input=raw,text=True,capture_output=True,timeout=5,check=True)
+                      parser=json.loads(pr.stdout.strip().splitlines()[-1])
+                  except Exception as e:
+                      parser={'parser_error':type(e).__name__}
+              critical=parser.get('critical') if isinstance(parser.get('critical'),dict) else {}
+              complete=all(bool(critical.get(k)) for k in ('entity','amount','currency','reference'))
               row={
                   'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,
-                  'ocr_ms':d.get('duration_ms'),'confidence':d.get('confidence'),
-                  'chars':len(str(d.get('raw_text') or '')),'blocks':len(d.get('blocks') or []),
-                  'warnings':d.get('warnings') or [],
+                  'ocr_ms':d.get('duration_ms'),'ocr_confidence':d.get('confidence'),
+                  'chars':len(raw),'blocks':len(d.get('blocks') or []),
+                  'parser':parser.get('parser'),'matched':parser.get('matched'),
+                  'parser_confidence':parser.get('confidence'),'critical_complete':complete,
+                  'review':parser.get('review'),'parties':parser.get('parties'),'identifiers':parser.get('identifiers'),
+                  'parser_reasons':parser.get('reasons') or [],
               }
               rows.append(row); print('FAST_CASE='+json.dumps(row,separators=(',',':'),ensure_ascii=True))
           okrows=[r for r in rows if r['http']==200]
@@ -128,6 +143,9 @@ jobs:
               'p50_ocr_ms':pct(ocr,.5),'p95_ocr_ms':pct(ocr,.95),
               'mean_chars':round(statistics.fmean([r['chars'] for r in okrows]),1) if okrows else 0,
               'zero_text':sum(r['chars']==0 for r in okrows),
+              'parser_matches':sum(bool(r['matched']) for r in rows),
+              'critical_complete':sum(bool(r['critical_complete']) for r in rows),
+              'parsers':dict(Counter(str(r['parser']) for r in rows)),
               'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
           }
           print('FAST_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
