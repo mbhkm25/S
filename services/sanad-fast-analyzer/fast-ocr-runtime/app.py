@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,7 @@ SUPPORTED_TYPES = {
     "application/pdf": ".pdf",
 }
 
-app = FastAPI(title="SANAD Fast OCR", version="0.1.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Fast OCR", version="0.2.0", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 
 
@@ -89,31 +90,33 @@ def _render_pdf(path: str) -> tuple[list[str], list[str]]:
     directory = tempfile.mkdtemp(prefix="sanad-fast-ocr-pdf-")
     prefix = str(Path(directory) / "page")
     warnings: list[str] = ["fast_ocr_pdf_rasterized"]
-    try:
-        _safe_run([
-            "pdftoppm", "-f", "1", "-l", str(MAX_PDF_PAGES), "-r", str(PDF_DPI),
-            "-png", "-singlefile" if MAX_PDF_PAGES == 1 else "-progress", path, prefix,
-        ], TIMEOUT_SECONDS)
-    except subprocess.CalledProcessError:
-        # pdftoppm's -singlefile cannot be mixed with multi-page mode; use a clean retry.
-        args = ["pdftoppm", "-f", "1", "-l", str(MAX_PDF_PAGES), "-r", str(PDF_DPI), "-png"]
-        if MAX_PDF_PAGES == 1:
-            args.append("-singlefile")
-        args.extend([path, prefix])
-        _safe_run(args, TIMEOUT_SECONDS)
+    args = ["pdftoppm", "-f", "1", "-l", str(MAX_PDF_PAGES), "-r", str(PDF_DPI), "-png"]
+    if MAX_PDF_PAGES == 1:
+        args.append("-singlefile")
+    args.extend([path, prefix])
+    _safe_run(args, TIMEOUT_SECONDS)
     pages = sorted(str(p) for p in Path(directory).glob("page*.png"))
     if not pages:
         raise RuntimeError("fast_ocr_pdf_render_no_pages")
     return pages, warnings
 
 
-def _tesseract_page(path: str, page: int) -> tuple[list[OcrBlock], list[str]]:
+def _int_field(row: dict[str, str | None], name: str) -> int:
+    try:
+        return int(row.get(name) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _tesseract_page(path: str, page: int) -> tuple[list[OcrBlock], list[str], list[str]]:
     proc = _safe_run([
         "tesseract", path, "stdout", "-l", LANG, "--oem", "1", "--psm", PSM, "tsv"
     ], TIMEOUT_SECONDS)
     reader = csv.DictReader(io.StringIO(proc.stdout), delimiter="\t")
     blocks: list[OcrBlock] = []
     warnings: list[str] = []
+    line_words: OrderedDict[tuple[int, int, int, int], list[str]] = OrderedDict()
+
     for row in reader:
         text = str(row.get("text") or "").strip()
         if not text:
@@ -124,6 +127,15 @@ def _tesseract_page(path: str, page: int) -> tuple[list[OcrBlock], list[str]]:
             conf = -1
         if conf < MIN_WORD_CONFIDENCE:
             continue
+
+        line_key = (
+            page,
+            _int_field(row, "block_num"),
+            _int_field(row, "par_num"),
+            _int_field(row, "line_num"),
+        )
+        line_words.setdefault(line_key, []).append(text)
+
         try:
             left = float(row.get("left") or 0)
             top = float(row.get("top") or 0)
@@ -133,9 +145,13 @@ def _tesseract_page(path: str, page: int) -> tuple[list[OcrBlock], list[str]]:
         except ValueError:
             bbox = None
         blocks.append(OcrBlock(text=text, confidence=max(0.0, min(1.0, conf / 100.0)), page=page, bbox=bbox))
+
+    lines = [" ".join(words).strip() for words in line_words.values() if words]
     if not blocks:
         warnings.append("fast_ocr_returned_no_text")
-    return blocks, warnings
+    if blocks and not lines:
+        warnings.append("fast_ocr_line_reconstruction_empty")
+    return blocks, lines, warnings
 
 
 def _infer_sync(path: str, content_type: str) -> OcrResponse:
@@ -157,15 +173,19 @@ def _infer_sync(path: str, content_type: str) -> OcrResponse:
                 cleanup_files.append(cleanup)
 
         blocks: list[OcrBlock] = []
+        logical_lines: list[str] = []
         for index, page_path in enumerate(pages):
-            page_blocks, page_warnings = _tesseract_page(page_path, index)
+            page_blocks, page_lines, page_warnings = _tesseract_page(page_path, index)
             blocks.extend(page_blocks)
+            logical_lines.extend(page_lines)
             warnings.extend(page_warnings)
 
-        raw_text = "\n".join(block.text for block in blocks)
+        # Parser- and LLM-facing text must preserve phrase/label context. Joining every
+        # TSV word with a newline destroys anchors such as "رقم السند" and "ريال يمني".
+        raw_text = "\n".join(logical_lines)
         confidence = sum(block.confidence for block in blocks) / len(blocks) if blocks else 0.0
         return OcrResponse(
-            provider=f"tesseract:{LANG}:psm{PSM}",
+            provider=f"tesseract:{LANG}:psm{PSM}:logical-lines",
             raw_text=raw_text,
             confidence=max(0.0, min(1.0, confidence)),
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
@@ -202,6 +222,7 @@ async def ready() -> JSONResponse:
             "pdf_dpi": PDF_DPI,
             "max_image_long_side": MAX_IMAGE_LONG_SIDE,
             "concurrency": CONCURRENCY,
+            "text_layout": "logical_lines",
         }
         return JSONResponse(status_code=200 if ok else 503, content=payload)
     except Exception as exc:
