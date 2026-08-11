@@ -1,0 +1,113 @@
+name: Benchmark SANAD Numeric ROI Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-numeric-roi-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-numeric-roi-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build image on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/numeric-roi/$SHA'"
+          cat /tmp/ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '/opt/sanad-local-extraction/experiments/numeric-roi/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/numeric-roi/$SHA' && docker build -t 'sanad-numeric-roi:$SHA' ."
+
+      - name: Run numeric ROI fusion benchmark
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          name="sanad-numeric-roi-${RUN_ID}"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+          docker run -d --name "$name" --memory=768m --cpus=4 -p 127.0.0.1::8092 -v "$corpus:/corpus:ro" \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_PSM=6 -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            "sanad-numeric-roi:$SHA" >/dev/null
+          port="$(docker port "$name" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          base="http://127.0.0.1:${port}"
+          for _ in $(seq 1 30); do curl --fail --silent --max-time 2 "$base/health/ready" >/dev/null 2>&1 && break; sleep 1; done
+
+          BASE="$base" NAME="$name" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import json,mimetypes,os,pathlib,subprocess,time,urllib.request,urllib.error
+          files=sorted(p for p in pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01').iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          targets={5:files[4],6:files[5]}
+          base=os.environ['BASE']; name=os.environ['NAME']; rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          for case,p in targets.items():
+              data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or 'application/octet-stream'; started=time.perf_counter()
+              req=urllib.request.Request(base+'/v1/ocr',data=data,method='POST',headers={'Content-Type':mime})
+              with urllib.request.urlopen(req,timeout=12) as r: full=json.loads(r.read())
+              script=f'''from PIL import Image,ImageOps,ImageEnhance\nimport pathlib,subprocess\nfs=sorted(p for p in pathlib.Path("/corpus").iterdir() if p.is_file() and p.suffix.lower() in {{".jpg",".jpeg",".png",".webp"}})\np=fs[{case-1}]\nim=ImageOps.exif_transpose(Image.open(p)).convert("L")\nw,h=im.size\nbands=[(.12,.38),(.30,.57),(.48,.76)]\nout=[]\nfor idx,(a,b) in enumerate(bands):\n c=ImageOps.autocontrast(im.crop((0,int(h*a),w,int(h*b))))\n c=ImageEnhance.Sharpness(c).enhance(1.6)\n if c.width<1800:\n  s=1800/c.width; c=c.resize((1800,int(c.height*s)),Image.Resampling.LANCZOS)\n fn=f"/tmp/num-{case}-{{idx}}.png"; c.save(fn)\n r=subprocess.run(["tesseract",fn,"stdout","-l","eng","--oem","1","--psm","6","-c","tessedit_char_whitelist=0123456789/-:,.#"],capture_output=True,text=True,timeout=5)\n if r.stdout.strip(): out.append(f"BAND{{idx+1}}: "+r.stdout.strip())\nprint("\\n".join(out))'''
+              rs=time.perf_counter(); cp=subprocess.run(['docker','exec',name,'python','-c',script],capture_output=True,text=True,timeout=15,check=True); roi_ms=round((time.perf_counter()-rs)*1000,1)
+              numeric=cp.stdout.strip()
+              fused=str(full.get('raw_text') or '').strip()+"\n---NUMERIC-ROI-CANDIDATES---\n"+numeric
+              body=json.dumps({'source_label':f'fast-ocr-{rid}-case-{case}','ocr_provider':'tesseract_numeric_roi','ocr_duration_ms':float(full.get('duration_ms') or 0)+roi_ms,'ocr_confidence':full.get('confidence'),'ocr_text':fused},ensure_ascii=False).encode()
+              sreq=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              try:
+                  with urllib.request.urlopen(sreq,timeout=12) as sr: sem=json.loads(sr.read())
+              except urllib.error.HTTPError as e: sem={'ok':False,'http':e.code}
+              wall=round((time.perf_counter()-started)*1000,1)
+              print('NUMERIC_ROI_CASE='+json.dumps({'case':case,'full_ocr_ms':full.get('duration_ms'),'roi_ms':roi_ms,'candidate_chars':len(numeric),'gemini_ok':sem.get('ok'),'gemini_ms':sem.get('gemini_latency_ms'),'pipeline_ms':sem.get('total_pipeline_ms'),'wall_ms':wall},separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
