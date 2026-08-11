@@ -27,7 +27,7 @@ jobs:
           chmod 0600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
-      - name: Inspect listeners and nginx without mutation
+      - name: Inspect safe integration prerequisites
         env:
           HOST: ${{ secrets.SANAD_SERVER_HOST }}
           USER: ${{ secrets.SANAD_SERVER_USER }}
@@ -37,12 +37,13 @@ jobs:
           ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           echo '===IDENTITY==='; id
-          echo '===LISTENERS==='; ss -lnt 2>/dev/null | sed -n '1,120p' || true
-          echo '===SUDO==='; if sudo -n true 2>/dev/null; then echo SUDO_NONINTERACTIVE=yes; else echo SUDO_NONINTERACTIVE=no; fi
-          echo '===NGINX_VERSION==='; nginx -v 2>&1 || true
-          echo '===SITE_PERMS==='; stat -c '%A %U:%G %n' /etc/nginx/sites-available/sanadflow.com /etc/nginx/sites-available/app.sanadflow.com /etc/nginx/sites-available/n8n 2>/dev/null || true; ls -l /etc/nginx/sites-enabled 2>/dev/null || true
-          echo '===SANADFLOW_SITE==='; sed -n '1,260p' /etc/nginx/sites-available/sanadflow.com 2>/dev/null || true
-          echo '===APP_SITE==='; sed -n '1,220p' /etc/nginx/sites-available/app.sanadflow.com 2>/dev/null || true
-          echo '===N8N_SITE==='; sed -n '1,220p' /etc/nginx/sites-available/n8n 2>/dev/null || true
           echo '===LOCAL_HEALTH==='; curl --fail --silent --max-time 3 http://127.0.0.1:8092/health/ready || true; echo; curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready || true; echo; curl --fail --silent --max-time 3 http://127.0.0.1:8090/health/ready || true; echo
+          echo '===INTERNAL_KEY_PREREQUISITE===' 
+          found=no
+          for f in /opt/sanad/.env /opt/sanad/.env.production /opt/sanad/docker-compose.yml /opt/sanad/docker-compose.yaml; do
+            if [ -r "$f" ] && grep -qE '^[[:space:]]*SANAD_INTERNAL_API_KEY=' "$f" 2>/dev/null; then found=yes; break; fi
+          done
+          echo "READABLE_INTERNAL_KEY_PRESENT=$found"
+          echo '===PUBLIC_8443===' 
+          curl --fail --silent --show-error --max-time 5 https://sanadflow.com:8443/health/ready || true; echo
           REMOTE
