@@ -6,6 +6,8 @@ on:
       - feature/sanad-local-extraction-engine
     paths:
       - .github/workflows/run-ocr-gemini-real-lab.yml
+      - services/sanad-fast-analyzer/ocr-runtime/**
+      - services/sanad-fast-analyzer/docker-compose.local.yml
 
 permissions:
   contents: read
@@ -122,6 +124,8 @@ jobs:
           echo
           echo '--- OCR container status ---'
           docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
+          echo '--- OCR restart/oom state ---'
+          docker inspect sanad-local-ocr --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' 2>/dev/null || true
           echo '--- OCR recent logs (safe diagnostic tail) ---'
           docker logs --tail 120 sanad-local-ocr 2>&1 || true
           REMOTE
