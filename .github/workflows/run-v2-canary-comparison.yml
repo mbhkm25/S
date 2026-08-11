@@ -1,0 +1,43 @@
+name: Run SANAD V2 Canary Comparison
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/run-v2-canary-comparison.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Request GitHub OIDC token and run isolated comparison
+        env:
+          RUNNER_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-operation-analysis-v2-benchmark-runner
+        run: |
+          set -euo pipefail
+          token_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab"
+          oidc="$(curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$token_url" | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
+          curl --fail --silent --show-error --max-time 600 \
+            -H "Authorization: Bearer ${oidc}" \
+            -H 'content-type: application/json' \
+            --data '{"limit":8,"attempt":21}' \
+            "$RUNNER_URL" | tee /tmp/v2-comparison.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/v2-comparison.json'))
+          assert p.get('ok') is True,p
+          print('V2_CANARY_COMPARISON_COMPLETED')
+          print('selected=',p.get('selected'),'completed=',p.get('completed'),'failed=',p.get('failed'))
+          print('fallback_rate=',p.get('fallback_rate'),'eligible_rate=',p.get('eligible_rate'))
+          print('mean_agreement=',p.get('mean_agreement'),'mean_total_ms=',p.get('mean_total_ms'))
+          for r in p.get('results',[]):
+              c=r.get('comparison') or {}
+              print('CASE',r.get('mime'),r.get('production_entity'),'http=',r.get('http_status'),'ok=',r.get('ok'),'fallback=',r.get('fallback_used'),'eligible=',r.get('routing_eligible'),'agreement=',c.get('agreement'),'total_ms=',r.get('total_ms'),'error=',r.get('error') or r.get('detail'))
+          PY
