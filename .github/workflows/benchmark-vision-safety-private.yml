@@ -1,0 +1,72 @@
+name: Benchmark SANAD Vision Safety Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-vision-safety-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-vision-safety-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Run residual vision safety checks
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' python3 -" <<'PY'
+          import base64,json,mimetypes,os,pathlib,time,urllib.request
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          run=os.environ['RUN_ID']; token=os.environ['OIDC_TOKEN']
+          url='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-vision-safety-lab'
+          for case in (4,8):
+              p=files[case-1]; data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              label=f'fast-ocr-{run}-case-{case}' if case==4 else f'vision-inspect-{run}-case-{case}'
+              body=json.dumps({'source_label':label,'mime_type':mime,'data_base64':base64.b64encode(data).decode('ascii')}).encode()
+              req=urllib.request.Request(url,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+token})
+              st=time.perf_counter()
+              with urllib.request.urlopen(req,timeout=30) as r: out=json.loads(r.read())
+              q=out.get('quality') if isinstance(out.get('quality'),dict) else {}
+              s=out.get('structured') if isinstance(out.get('structured'),dict) else {}
+              print('VISION_CASE='+json.dumps({'case':case,'ok':out.get('ok'),'latency_ms':out.get('vision_latency_ms'),'cost_usd':out.get('estimated_gemini_cost_usd'),'review':q.get('reviewRequired'),'sender_ids':q.get('senderRoutingIdentifierCount'),'receiver_ids':q.get('receiverRoutingIdentifierCount'),'entity':s.get('financialEntityCode'),'has_amount':isinstance(s.get('amount'),(int,float)),'has_reference':bool(s.get('documentReference') or s.get('transferReference')),'wall_ms':round((time.perf_counter()-st)*1000,1)},separators=(',',':'),sort_keys=True))
+          PY
