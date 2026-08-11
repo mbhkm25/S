@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -17,9 +18,9 @@ class LocalReportService {
       return d.year == now.year && d.month == now.month && d.day == now.day;
     }).toList();
 
+    final fontData = await rootBundle.load('assets/fonts/NotoSansArabic.ttf');
+    final arabic = pw.Font.ttf(fontData);
     final document = pw.Document();
-    final arabic = await PdfGoogleFonts.notoSansArabicRegular();
-    final arabicBold = await PdfGoogleFonts.notoSansArabicBold();
     final totals = <String, double>{};
     for (final operation in today) {
       final currency = operation.currency ?? 'غير محدد';
@@ -31,15 +32,15 @@ class LocalReportService {
         pageTheme: pw.PageTheme(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(28),
-          theme: pw.ThemeData.withFont(base: arabic, bold: arabicBold),
+          theme: pw.ThemeData.withFont(base: arabic, bold: arabic),
           textDirection: pw.TextDirection.rtl,
         ),
         build: (context) => [
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('SANAD Local', style: pw.TextStyle(font: arabicBold, fontSize: 16)),
-              pw.Text('تقرير عمليات اليوم', style: pw.TextStyle(font: arabicBold, fontSize: 18)),
+              pw.Text('SANAD Local', style: pw.TextStyle(font: arabic, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Text('تقرير عمليات اليوم', style: pw.TextStyle(font: arabic, fontSize: 18, fontWeight: pw.FontWeight.bold)),
             ],
           ),
           pw.SizedBox(height: 8),
@@ -49,7 +50,7 @@ class LocalReportService {
             spacing: 12,
             runSpacing: 8,
             children: [
-              pw.Text('عدد العمليات: ${today.length}', style: pw.TextStyle(font: arabicBold)),
+              pw.Text('عدد العمليات: ${today.length}', style: pw.TextStyle(font: arabic, fontWeight: pw.FontWeight.bold)),
               ...totals.entries.map((e) => pw.Text('${e.key}: ${NumberFormat('#,##0.##', 'en').format(e.value)}')),
             ],
           ),
@@ -68,7 +69,7 @@ class LocalReportService {
                   today[i].needsReview ? 'مراجعة' : today[i].isAnalyzed ? 'محلل' : 'محلي',
                 ],
             ],
-            headerStyle: pw.TextStyle(font: arabicBold, fontSize: 9),
+            headerStyle: pw.TextStyle(font: arabic, fontSize: 9, fontWeight: pw.FontWeight.bold),
             cellStyle: pw.TextStyle(font: arabic, fontSize: 8),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             cellAlignment: pw.Alignment.centerRight,
@@ -77,7 +78,7 @@ class LocalReportService {
           pw.SizedBox(height: 12),
           pw.Text(
             'هذا التقرير أُنشئ محليًا من جهاز المستخدم. الصور الأصلية لا تُرفق ولا تُرفع إلى السحابة تلقائيًا.',
-            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+            style: pw.TextStyle(font: arabic, fontSize: 8, color: PdfColors.grey700),
           ),
         ],
       ),
