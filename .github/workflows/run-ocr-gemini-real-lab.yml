@@ -10,11 +10,20 @@ on:
 permissions:
   contents: read
 
+env:
+  DEPLOY_ROOT: /opt/sanad-local-extraction
+  COMPOSE_PROJECT_NAME: sanad-local-extraction
+
 jobs:
   real-ocr-sample:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Configure SSH
         shell: bash
         env:
@@ -27,6 +36,51 @@ jobs:
           chmod 0600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy isolated OCR candidate
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer -czf /tmp/sanad-local-extraction.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_SHA' '$DEPLOY_ROOT/shared'"
+          cat /tmp/sanad-local-extraction.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "tar -xzf - -C '$DEPLOY_ROOT/releases/$RELEASE_SHA'"
+
+          ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "DEPLOY_ROOT='$DEPLOY_ROOT' RELEASE_SHA='$RELEASE_SHA' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' bash -s" <<'REMOTE'
+          set -euo pipefail
+          release="$DEPLOY_ROOT/releases/$RELEASE_SHA"
+          previous=""
+          if [ -L "$DEPLOY_ROOT/current" ]; then previous="$(readlink -f "$DEPLOY_ROOT/current" || true)"; fi
+          rollback() {
+            echo 'CANDIDATE_DEPLOY_FAILED_ROLLBACK' >&2
+            if [ -n "$previous" ] && [ -d "$previous" ]; then
+              ln -sfn "$previous" "$DEPLOY_ROOT/current"
+              cd "$previous"
+              docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d --build || true
+            fi
+          }
+          trap rollback ERR
+          cd "$release"
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml build sanad-local-ocr
+          docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.local.yml up -d
+          ok=0
+          for _ in $(seq 1 72); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready >/tmp/sanad-ocr-ready.json 2>/dev/null; then ok=1; break; fi
+            sleep 5
+          done
+          test "$ok" -eq 1
+          cat /tmp/sanad-ocr-ready.json
+          ln -sfn "$release" "$DEPLOY_ROOT/current"
+          printf '%s\n' "$RELEASE_SHA" > "$DEPLOY_ROOT/DEPLOYED_SHA"
+          date -u +%FT%TZ > "$DEPLOY_ROOT/DEPLOYED_AT"
+          trap - ERR
+          REMOTE
 
       - name: Run one private corpus image through PaddleOCR
         shell: bash
@@ -69,15 +123,14 @@ jobs:
           echo '--- OCR container status ---'
           docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
           echo '--- OCR recent logs (safe diagnostic tail) ---'
-          docker logs --tail 100 sanad-local-ocr 2>&1 || true
+          docker logs --tail 120 sanad-local-ocr 2>&1 || true
           REMOTE
             exit "$rc"
           fi
 
           python3 - <<'PY'
           import json
-          p='/tmp/sanad-real-ocr.json'
-          d=json.load(open(p,encoding='utf-8'))
+          d=json.load(open('/tmp/sanad-real-ocr.json',encoding='utf-8'))
           print('OCR_SAMPLE_OK')
           print('ocr_provider='+str(d.get('provider')))
           print('ocr_duration_ms='+str(d.get('duration_ms')))
