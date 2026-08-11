@@ -1,0 +1,110 @@
+name: Profile SANAD Local Extraction Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/profile-local-extraction-private-corpus.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-extraction-private-profile
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Profile deployed isolated runtime on private corpus
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/sanad-local-extraction
+          corpus="$root/shared/private-corpus/pilot-01"
+          test -d "$corpus"
+          echo "deployed_sha=$(cat "$root/DEPLOYED_SHA" 2>/dev/null || echo unknown)"
+          curl --fail --silent --max-time 5 http://127.0.0.1:8090/health/ready >/tmp/sanad-profile-ready.json
+          python3 - <<'PY'
+          import json, mimetypes, pathlib, statistics, time, urllib.request, urllib.error
+          from collections import Counter
+
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          rows=[]
+          for i,p in enumerate(files,1):
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              req=urllib.request.Request(
+                  'http://127.0.0.1:8090/v1/analyze',
+                  data=p.read_bytes(), method='POST',
+                  headers={'Content-Type':mime,'X-SANAD-Filename':'private-sample'+p.suffix.lower()},
+              )
+              started=time.perf_counter(); http=None; payload=None; error=None
+              try:
+                  with urllib.request.urlopen(req,timeout=45) as r:
+                      http=r.status; payload=json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  http=e.code
+                  try: payload=json.loads(e.read())
+                  except Exception: error='http_error'
+              except Exception as e:
+                  error=type(e).__name__
+              wall=round((time.perf_counter()-started)*1000,1)
+              result=(payload or {}).get('result') if isinstance(payload,dict) else None
+              result=result if isinstance(result,dict) else {}
+              timings=result.get('timings') if isinstance(result.get('timings'),dict) else {}
+              diagnostics=result.get('diagnostics') if isinstance(result.get('diagnostics'),dict) else {}
+              extraction=result.get('extraction') if isinstance(result.get('extraction'),dict) else {}
+              rows.append({
+                  'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,
+                  'status':result.get('status'),'fallback':bool(result.get('fallbackRecommended')),
+                  'fallback_reason':result.get('fallbackReason'),'parser':diagnostics.get('parser'),
+                  'ocr_ms':timings.get('ocrMs'),'parse_ms':timings.get('parseMs'),
+                  'confidence':extraction.get('confidence') if extraction else None,
+                  'review':extraction.get('reviewRequired') if extraction else None,
+              })
+              print('CASE='+json.dumps(rows[-1],separators=(',',':'),ensure_ascii=True))
+
+          walls=[r['wall_ms'] for r in rows]
+          ocr=[float(r['ocr_ms']) for r in rows if isinstance(r['ocr_ms'],(int,float))]
+          def pct(xs,q):
+              if not xs:return None
+              xs=sorted(xs); idx=max(0,min(len(xs)-1,int((len(xs)-1)*q))); return round(xs[idx],1)
+          summary={
+              'cases':len(rows),
+              'http_200':sum(r['http']==200 for r in rows),
+              'mean_wall_ms':round(statistics.fmean(walls),1) if walls else None,
+              'p50_wall_ms':pct(walls,.50),'p95_wall_ms':pct(walls,.95),
+              'mean_ocr_ms':round(statistics.fmean(ocr),1) if ocr else None,
+              'p50_ocr_ms':pct(ocr,.50),'p95_ocr_ms':pct(ocr,.95),
+              'fallback_rate':round(sum(r['fallback'] for r in rows)/len(rows),3) if rows else 1,
+              'statuses':dict(Counter(str(r['status']) for r in rows)),
+              'parsers':dict(Counter(str(r['parser']) for r in rows)),
+              'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
+          }
+          print('PROFILE_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
