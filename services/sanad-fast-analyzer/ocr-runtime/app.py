@@ -19,7 +19,8 @@ CONCURRENCY = max(1, int(os.getenv("SANAD_OCR_CONCURRENCY", "1")))
 CPU_THREADS = max(1, int(os.getenv("SANAD_OCR_CPU_THREADS", "4")))
 LANG = os.getenv("SANAD_OCR_LANG", "ar")
 OCR_VERSION = os.getenv("SANAD_OCR_VERSION", "PP-OCRv5")
-ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_static")
+ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_dynamic")
+TEXT_DETECTION_MODEL = os.getenv("SANAD_OCR_TEXT_DETECTION_MODEL", "PP-OCRv5_mobile_det")
 BEARER_TOKEN = os.getenv("SANAD_OCR_TOKEN", "").strip()
 MIN_TEXT_SCORE = min(1.0, max(0.0, float(os.getenv("SANAD_OCR_MIN_TEXT_SCORE", "0.35"))))
 
@@ -33,7 +34,7 @@ SUPPORTED_TYPES = {
 logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("sanad-local-ocr")
 
-app = FastAPI(title="SANAD Local OCR", version="0.2.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Local OCR", version="0.3.0", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
@@ -74,6 +75,7 @@ def _load_model() -> Any:
         kwargs: dict[str, Any] = {
             "lang": LANG,
             "ocr_version": OCR_VERSION,
+            "text_detection_model_name": TEXT_DETECTION_MODEL,
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
@@ -90,21 +92,18 @@ def _load_model() -> Any:
         try:
             _ocr = PaddleOCR(**kwargs)
         except TypeError:
-            # Compatibility path for older PaddleOCR releases that do not yet
-            # understand the unified engine arguments.
             kwargs.pop("engine", None)
             kwargs.pop("engine_config", None)
             _ocr = PaddleOCR(**kwargs)
         _model_error = None
         return _ocr
-    except Exception as exc:  # pragma: no cover - runtime/model dependent
+    except Exception as exc:
         _model_error = _safe_error(exc)
         logger.exception("paddleocr_model_load_failed")
         raise
 
 
 def _as_json(result: Any) -> dict[str, Any]:
-    """Normalize PaddleX/PaddleOCR Result objects without relying on one private shape."""
     value = getattr(result, "json", None)
     if callable(value):
         value = value()
@@ -120,8 +119,6 @@ def _as_json(result: Any) -> dict[str, Any]:
     if isinstance(result, Mapping):
         return dict(result)
 
-    # Result.json is not part of the documented public API in all 3.x builds.
-    # save_to_json() is documented, so use it as a compatibility fallback.
     saver = getattr(result, "save_to_json", None)
     if callable(saver):
         with tempfile.TemporaryDirectory(prefix="sanad-ocr-json-") as directory:
@@ -215,7 +212,7 @@ def _infer_sync(path: str) -> OcrResponse:
         _inference_ready = True
         _inference_error = None
         return OcrResponse(
-            provider=f"paddleocr:{OCR_VERSION}:{LANG}:{ENGINE or 'default'}",
+            provider=f"paddleocr:{OCR_VERSION}:{LANG}:{TEXT_DETECTION_MODEL}:{ENGINE or 'default'}",
             raw_text=raw_text,
             confidence=min(1.0, max(0.0, confidence)),
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
@@ -230,7 +227,6 @@ def _infer_sync(path: str) -> OcrResponse:
 
 
 def _run_canary_sync() -> None:
-    """Exercise an actual inference at startup; model construction alone is insufficient."""
     from PIL import Image, ImageDraw
 
     with tempfile.NamedTemporaryFile(prefix="sanad-ocr-canary-", suffix=".png", delete=False) as handle:
@@ -287,6 +283,7 @@ async def ready() -> JSONResponse:
         "ocr_version": OCR_VERSION,
         "lang": LANG,
         "engine": ENGINE,
+        "text_detection_model": TEXT_DETECTION_MODEL,
         "cpu_threads": CPU_THREADS,
         "concurrency": CONCURRENCY,
     }
@@ -294,10 +291,7 @@ async def ready() -> JSONResponse:
 
 
 @app.post("/v1/ocr", response_model=OcrResponse)
-async def ocr(
-    request: Request,
-    authorization: str | None = Header(default=None),
-) -> OcrResponse:
+async def ocr(request: Request, authorization: str | None = Header(default=None)) -> OcrResponse:
     _authorize(authorization)
     content_type = (request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
     suffix = SUPPORTED_TYPES.get(content_type)
