@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 env:
-  SANAD_SEMANTIC_LAB_REVISION: v3
+  SANAD_SEMANTIC_LAB_REVISION: v4
 
 concurrency:
   group: sanad-fast-ocr-private-benchmark
@@ -112,11 +112,8 @@ jobs:
           FAST_OCR_URL="$base_url" OIDC_TOKEN="$OIDC_TOKEN" RUN_ID="$RUN_ID" python3 - <<'PY'
           import json, mimetypes, os, pathlib, statistics, subprocess, time, urllib.request, urllib.error
           from collections import Counter
-
           corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
-          base=os.environ['FAST_OCR_URL']
-          oidc=os.environ['OIDC_TOKEN']
-          run_id=os.environ['RUN_ID']
+          base=os.environ['FAST_OCR_URL']; oidc=os.environ['OIDC_TOKEN']; run_id=os.environ['RUN_ID']
           semantic_url='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
           allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
           files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
@@ -127,96 +124,34 @@ jobs:
               req=urllib.request.Request(base+'/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
               st=time.perf_counter(); http=None; payload=None; error=None
               try:
-                  with urllib.request.urlopen(req,timeout=12) as r:
-                      http=r.status; payload=json.loads(r.read())
+                  with urllib.request.urlopen(req,timeout=12) as r: http=r.status; payload=json.loads(r.read())
               except urllib.error.HTTPError as e:
                   http=e.code
                   try: payload=json.loads(e.read())
                   except Exception: error='http_error'
-              except Exception as e:
-                  error=type(e).__name__
-              wall=round((time.perf_counter()-st)*1000,1)
-              d=payload if isinstance(payload,dict) else {}
-              raw=str(d.get('raw_text') or '')
+              except Exception as e: error=type(e).__name__
+              wall=round((time.perf_counter()-st)*1000,1); d=payload if isinstance(payload,dict) else {}; raw=str(d.get('raw_text') or '')
               parser={}
               if http==200 and raw:
                   try:
-                      pr=subprocess.run(['docker','exec','-i','sanad-local-analyzer','deno','eval','--no-lock',parser_code],input=raw,text=True,capture_output=True,timeout=5,check=True)
-                      parser=json.loads(pr.stdout.strip().splitlines()[-1])
-                  except Exception as e:
-                      parser={'parser_error':type(e).__name__}
-              critical=parser.get('critical') if isinstance(parser.get('critical'),dict) else {}
-              complete=all(bool(critical.get(k)) for k in ('entity','amount','currency','reference'))
-
+                      pr=subprocess.run(['docker','exec','-i','sanad-local-analyzer','deno','eval','--no-lock',parser_code],input=raw,text=True,capture_output=True,timeout=5,check=True); parser=json.loads(pr.stdout.strip().splitlines()[-1])
+                  except Exception as e: parser={'parser_error':type(e).__name__}
+              critical=parser.get('critical') if isinstance(parser.get('critical'),dict) else {}; complete=all(bool(critical.get(k)) for k in ('entity','amount','currency','reference'))
               semantic={}
               if http==200 and raw:
-                  body=json.dumps({
-                      'source_label':f'fast-ocr-{run_id}-case-{i}',
-                      'ocr_provider':d.get('provider'),
-                      'ocr_duration_ms':d.get('duration_ms'),
-                      'ocr_confidence':d.get('confidence'),
-                      'ocr_text':raw,
-                  },ensure_ascii=False).encode('utf-8')
-                  sreq=urllib.request.Request(semantic_url,data=body,method='POST',headers={
-                      'Content-Type':'application/json',
-                      'Authorization':'Bearer '+oidc,
-                  })
-                  sst=time.perf_counter()
+                  body=json.dumps({'source_label':f'fast-ocr-{run_id}-case-{i}','ocr_provider':d.get('provider'),'ocr_duration_ms':d.get('duration_ms'),'ocr_confidence':d.get('confidence'),'ocr_text':raw},ensure_ascii=False).encode('utf-8')
+                  sreq=urllib.request.Request(semantic_url,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
                   try:
-                      with urllib.request.urlopen(sreq,timeout=12) as sr:
-                          semantic=json.loads(sr.read())
-                  except urllib.error.HTTPError as e:
-                      semantic={'ok':False,'http':e.code}
-                  except Exception as e:
-                      semantic={'ok':False,'error':type(e).__name__}
-                  semantic['wall_ms']=round((time.perf_counter()-sst)*1000,1)
-
-              row={
-                  'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,
-                  'ocr_ms':d.get('duration_ms'),'ocr_confidence':d.get('confidence'),
-                  'chars':len(raw),'blocks':len(d.get('blocks') or []),
-                  'parser':parser.get('parser'),'matched':parser.get('matched'),
-                  'parser_confidence':parser.get('confidence'),'critical_complete':complete,
-                  'review':parser.get('review'),'parties':parser.get('parties'),'identifiers':parser.get('identifiers'),
-                  'parser_reasons':parser.get('reasons') or [],
-                  'gemini_ok':semantic.get('ok'),
-                  'gemini_ms':semantic.get('gemini_latency_ms'),
-                  'pipeline_ms':semantic.get('total_pipeline_ms'),
-                  'gemini_cost_usd':semantic.get('estimated_gemini_cost_usd'),
-                  'prompt_tokens':(semantic.get('usage') or {}).get('prompt_tokens') if isinstance(semantic.get('usage'),dict) else None,
-                  'candidate_tokens':(semantic.get('usage') or {}).get('candidate_tokens') if isinstance(semantic.get('usage'),dict) else None,
-              }
+                      with urllib.request.urlopen(sreq,timeout=12) as sr: semantic=json.loads(sr.read())
+                  except urllib.error.HTTPError as e: semantic={'ok':False,'http':e.code}
+                  except Exception as e: semantic={'ok':False,'error':type(e).__name__}
+              row={'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,'ocr_ms':d.get('duration_ms'),'ocr_confidence':d.get('confidence'),'chars':len(raw),'blocks':len(d.get('blocks') or []),'parser':parser.get('parser'),'matched':parser.get('matched'),'parser_confidence':parser.get('confidence'),'critical_complete':complete,'review':parser.get('review'),'parties':parser.get('parties'),'identifiers':parser.get('identifiers'),'parser_reasons':parser.get('reasons') or [],'gemini_ok':semantic.get('ok'),'gemini_ms':semantic.get('gemini_latency_ms'),'pipeline_ms':semantic.get('total_pipeline_ms'),'gemini_cost_usd':semantic.get('estimated_gemini_cost_usd'),'prompt_tokens':(semantic.get('usage') or {}).get('prompt_tokens') if isinstance(semantic.get('usage'),dict) else None,'candidate_tokens':(semantic.get('usage') or {}).get('candidate_tokens') if isinstance(semantic.get('usage'),dict) else None}
               rows.append(row); print('FAST_CASE='+json.dumps(row,separators=(',',':'),ensure_ascii=True))
-
-          okrows=[r for r in rows if r['http']==200]
-          walls=[r['wall_ms'] for r in okrows]
-          ocr=[float(r['ocr_ms']) for r in okrows if isinstance(r['ocr_ms'],(int,float))]
-          gemini=[float(r['gemini_ms']) for r in rows if isinstance(r['gemini_ms'],(int,float))]
-          pipeline=[float(r['pipeline_ms']) for r in rows if isinstance(r['pipeline_ms'],(int,float))]
-          costs=[float(r['gemini_cost_usd']) for r in rows if isinstance(r['gemini_cost_usd'],(int,float))]
+          okrows=[r for r in rows if r['http']==200]; walls=[r['wall_ms'] for r in okrows]; ocr=[float(r['ocr_ms']) for r in okrows if isinstance(r['ocr_ms'],(int,float))]; gemini=[float(r['gemini_ms']) for r in rows if isinstance(r['gemini_ms'],(int,float))]; pipeline=[float(r['pipeline_ms']) for r in rows if isinstance(r['pipeline_ms'],(int,float))]; costs=[float(r['gemini_cost_usd']) for r in rows if isinstance(r['gemini_cost_usd'],(int,float))]
           def pct(xs,q):
               if not xs:return None
               xs=sorted(xs); return round(xs[max(0,min(len(xs)-1,int((len(xs)-1)*q)))],1)
-          summary={
-              'cases':len(rows),'http_200':len(okrows),'failed':len(rows)-len(okrows),
-              'mean_wall_ms':round(statistics.fmean(walls),1) if walls else None,
-              'p50_wall_ms':pct(walls,.5),'p95_wall_ms':pct(walls,.95),
-              'mean_ocr_ms':round(statistics.fmean(ocr),1) if ocr else None,
-              'p50_ocr_ms':pct(ocr,.5),'p95_ocr_ms':pct(ocr,.95),
-              'mean_chars':round(statistics.fmean([r['chars'] for r in okrows]),1) if okrows else 0,
-              'zero_text':sum(r['chars']==0 for r in okrows),
-              'parser_matches':sum(bool(r['matched']) for r in rows),
-              'critical_complete':sum(bool(r['critical_complete']) for r in rows),
-              'parsers':dict(Counter(str(r['parser']) for r in rows)),
-              'gemini_success':sum(r['gemini_ok'] is True for r in rows),
-              'mean_gemini_ms':round(statistics.fmean(gemini),1) if gemini else None,
-              'p95_gemini_ms':pct(gemini,.95),
-              'mean_pipeline_ms':round(statistics.fmean(pipeline),1) if pipeline else None,
-              'p95_pipeline_ms':pct(pipeline,.95),
-              'total_gemini_cost_usd':round(sum(costs),8),
-              'mean_gemini_cost_usd':round(statistics.fmean(costs),8) if costs else None,
-              'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
-          }
+          summary={'cases':len(rows),'http_200':len(okrows),'failed':len(rows)-len(okrows),'mean_wall_ms':round(statistics.fmean(walls),1) if walls else None,'p50_wall_ms':pct(walls,.5),'p95_wall_ms':pct(walls,.95),'mean_ocr_ms':round(statistics.fmean(ocr),1) if ocr else None,'p50_ocr_ms':pct(ocr,.5),'p95_ocr_ms':pct(ocr,.95),'mean_chars':round(statistics.fmean([r['chars'] for r in okrows]),1) if okrows else 0,'zero_text':sum(r['chars']==0 for r in okrows),'parser_matches':sum(bool(r['matched']) for r in rows),'critical_complete':sum(bool(r['critical_complete']) for r in rows),'parsers':dict(Counter(str(r['parser']) for r in rows)),'gemini_success':sum(r['gemini_ok'] is True for r in rows),'mean_gemini_ms':round(statistics.fmean(gemini),1) if gemini else None,'p95_gemini_ms':pct(gemini,.95),'mean_pipeline_ms':round(statistics.fmean(pipeline),1) if pipeline else None,'p95_pipeline_ms':pct(pipeline,.95),'total_gemini_cost_usd':round(sum(costs),8),'mean_gemini_cost_usd':round(statistics.fmean(costs),8) if costs else None,'errors':dict(Counter(str(r['error']) for r in rows if r['error']))}
           print('FAST_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
           PY
           echo 'FAST_RUNTIME_STATE'
