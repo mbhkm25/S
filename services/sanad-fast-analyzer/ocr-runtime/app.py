@@ -25,7 +25,10 @@ def _env_bool(name: str, default: bool) -> bool:
 MAX_BODY_BYTES = int(os.getenv("SANAD_OCR_MAX_BODY_BYTES", str(12 * 1024 * 1024)))
 CONCURRENCY = max(1, int(os.getenv("SANAD_OCR_CONCURRENCY", "1")))
 CPU_THREADS = max(1, int(os.getenv("SANAD_OCR_CPU_THREADS", "8")))
-MAX_IMAGE_LONG_SIDE = max(768, int(os.getenv("SANAD_OCR_MAX_IMAGE_LONG_SIDE", "1800")))
+MAX_IMAGE_LONG_SIDE = max(768, int(os.getenv("SANAD_OCR_MAX_IMAGE_LONG_SIDE", "1200")))
+TEXT_DET_LIMIT_SIDE_LEN = max(320, int(os.getenv("SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN", "960")))
+TEXT_DET_LIMIT_TYPE = os.getenv("SANAD_OCR_TEXT_DET_LIMIT_TYPE", "max").strip().lower()
+TEXT_RECOGNITION_BATCH_SIZE = max(1, int(os.getenv("SANAD_OCR_TEXT_RECOGNITION_BATCH_SIZE", "8")))
 LANG = os.getenv("SANAD_OCR_LANG", "ar")
 OCR_VERSION = os.getenv("SANAD_OCR_VERSION", "PP-OCRv5")
 ENGINE = os.getenv("SANAD_OCR_ENGINE", "paddle_dynamic")
@@ -46,7 +49,7 @@ SUPPORTED_TYPES = {
 logging.basicConfig(level=os.getenv("SANAD_OCR_LOG_LEVEL", "INFO"))
 logger = logging.getLogger("sanad-local-ocr")
 
-app = FastAPI(title="SANAD Local OCR", version="0.4.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="SANAD Local OCR", version="0.5.0", docs_url=None, redoc_url=None)
 _semaphore = asyncio.Semaphore(CONCURRENCY)
 _ocr: Any | None = None
 _model_error: str | None = None
@@ -89,6 +92,9 @@ def _load_model() -> Any:
             "ocr_version": OCR_VERSION,
             "text_detection_model_name": TEXT_DETECTION_MODEL,
             "text_recognition_model_name": TEXT_RECOGNITION_MODEL,
+            "text_recognition_batch_size": TEXT_RECOGNITION_BATCH_SIZE,
+            "text_det_limit_side_len": TEXT_DET_LIMIT_SIDE_LEN,
+            "text_det_limit_type": TEXT_DET_LIMIT_TYPE,
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
@@ -108,17 +114,24 @@ def _load_model() -> Any:
         try:
             _ocr = PaddleOCR(**kwargs)
         except TypeError:
-            logger.warning("paddleocr_hpi_kwargs_unsupported_falling_back")
+            logger.warning("paddleocr_acceleration_kwargs_unsupported_falling_back")
             kwargs.pop("enable_hpi", None)
             kwargs.pop("enable_mkldnn", None)
             kwargs.pop("cpu_threads", None)
             try:
                 _ocr = PaddleOCR(**kwargs)
             except TypeError:
-                logger.warning("paddleocr_engine_kwargs_unsupported_falling_back")
-                kwargs.pop("engine", None)
-                kwargs.pop("engine_config", None)
-                _ocr = PaddleOCR(**kwargs)
+                logger.warning("paddleocr_tuning_kwargs_unsupported_falling_back")
+                kwargs.pop("text_recognition_batch_size", None)
+                kwargs.pop("text_det_limit_side_len", None)
+                kwargs.pop("text_det_limit_type", None)
+                try:
+                    _ocr = PaddleOCR(**kwargs)
+                except TypeError:
+                    logger.warning("paddleocr_engine_kwargs_unsupported_falling_back")
+                    kwargs.pop("engine", None)
+                    kwargs.pop("engine_config", None)
+                    _ocr = PaddleOCR(**kwargs)
         _model_error = None
         return _ocr
     except Exception as exc:
@@ -344,6 +357,9 @@ async def ready() -> JSONResponse:
         "engine": ENGINE,
         "text_detection_model": TEXT_DETECTION_MODEL,
         "text_recognition_model": TEXT_RECOGNITION_MODEL,
+        "text_recognition_batch_size": TEXT_RECOGNITION_BATCH_SIZE,
+        "text_det_limit_side_len": TEXT_DET_LIMIT_SIDE_LEN,
+        "text_det_limit_type": TEXT_DET_LIMIT_TYPE,
         "enable_hpi": ENABLE_HPI,
         "enable_mkldnn": ENABLE_MKLDNN,
         "max_image_long_side": MAX_IMAGE_LONG_SIDE,
