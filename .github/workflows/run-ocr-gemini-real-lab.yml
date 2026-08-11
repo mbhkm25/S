@@ -35,8 +35,8 @@ jobs:
           USER: ${{ secrets.SANAD_SERVER_USER }}
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
         run: |
-          set -euo pipefail
-          if ! ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
+          set -uo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
           set -euo pipefail
           corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
           test -d "$corpus"
@@ -54,22 +54,24 @@ jobs:
             --data-binary "@$file" \
             http://127.0.0.1:8091/v1/ocr
           REMOTE
-          then
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
             echo 'OCR_SAMPLE_REQUEST_FAILED'
             ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
-            set +e
-            echo '--- deployed sha ---'
-            cat /opt/sanad-local-extraction/DEPLOYED_SHA 2>/dev/null || true
-            echo '--- OCR readiness ---'
-            curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
-            echo
-            echo '--- OCR container status ---'
-            docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
-            echo '--- OCR recent logs (safe diagnostic tail) ---'
-            docker logs --tail 100 sanad-local-ocr 2>&1 || true
-            REMOTE
-            exit 1
+          set +e
+          echo '--- deployed sha ---'
+          cat /opt/sanad-local-extraction/DEPLOYED_SHA 2>/dev/null || true
+          echo '--- OCR readiness ---'
+          curl --silent --show-error --max-time 3 http://127.0.0.1:8091/health/ready || true
+          echo
+          echo '--- OCR container status ---'
+          docker ps -a --filter name=sanad-local-ocr --format 'table {{.Names}}\t{{.Status}}' || true
+          echo '--- OCR recent logs (safe diagnostic tail) ---'
+          docker logs --tail 100 sanad-local-ocr 2>&1 || true
+          REMOTE
+            exit "$rc"
           fi
+          set -e
 
           python3 - <<'PY'
           import json
