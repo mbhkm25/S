@@ -10,20 +10,22 @@ export interface KuraimiHasebParseResult {
 const TEMPLATE_CODE = "kuraimi_haseb_transaction_card_v1";
 
 /**
- * Conservative candidate parser for Kuraimi Haseb payment cards.
- * It intentionally keeps reviewRequired=true until the private corpus
- * demonstrates promotion-grade accuracy. This allows full shadow benchmarking
- * without creating an accidental automatic local production path.
+ * Conservative candidate parser for Kuraimi/Haseb mobile transaction cards.
+ * It intentionally keeps reviewRequired=true until private-corpus scoring proves
+ * promotion-grade accuracy. Both merchant-payment and account-transfer variants
+ * are recognized because OCR commonly drops the logo/header while preserving
+ * their distinctive transaction labels and FT reference.
  */
 export function parseKuraimiHasebText(rawText: string): KuraimiHasebParseResult {
   const text = normalizeArabicFinancialText(rawText);
   const compact = text.replace(/\s+/g, " ").trim();
 
-  const hasHasebPayment = /Haseb\s+Payment/i.test(rawText);
-  const hasAmountLabel = /المبلغ/u.test(text);
-  const hasReferenceLabel = /رقم\s*المرجع/u.test(text) || /المرجع/u.test(text);
-  const hasTypeLabel = /نوع\s*العملية/u.test(text) || /مشترياتك\s+من/u.test(text);
-  const matched = hasHasebPayment && hasAmountLabel && hasReferenceLabel && hasTypeLabel;
+  const hasHasebPayment = /Haseb\s+Payment/i.test(rawText) || /مشترياتك\s+من/u.test(text);
+  const hasFundTransfer = /Fund\s*Transfer\s*-?\s*Other/i.test(rawText) || /تحويل\s+من\s+حساب/u.test(text);
+  const hasAmount = /([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(YER|SAR|USD)\b/i.test(compact);
+  const hasFtReference = /\bFT[A-Z0-9]{4,}\b/i.test(rawText);
+  const hasTransactionLabels = /المبلغ/u.test(text) && (/(?:رقم\s*)?المرجع/u.test(text) || hasFtReference);
+  const matched = (hasHasebPayment && hasTransactionLabels) || (hasFundTransfer && hasAmount && hasFtReference);
   if (!matched) return { matched: false, missing: ["kuraimi_haseb_required_anchors_missing"] };
 
   const amountMatch = compact.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(YER|SAR|USD)\b/i);
@@ -42,15 +44,15 @@ export function parseKuraimiHasebText(rawText: string): KuraimiHasebParseResult 
 
   if (amount === undefined) missing.push("amount");
   if (!currency) missing.push("currency");
-  if (!reference) missing.push("document_reference");
+  if (!reference) missing.push("transfer_reference");
   if (!transactionDatetime) missing.push("transaction_datetime");
 
   const completeCritical = amount !== undefined && currency !== undefined && reference !== undefined;
-  const confidence = completeCritical ? 0.96 : 0.78;
+  const confidence = completeCritical ? 0.97 : 0.78;
   const fieldConfidence: Record<string, number> = {};
   if (amount !== undefined) fieldConfidence.amount = 0.99;
   if (currency) fieldConfidence.currency = 0.99;
-  if (reference) fieldConfidence.documentReference = 0.99;
+  if (reference) fieldConfidence.transferReference = 0.99;
   if (transactionDatetime) fieldConfidence.transactionDatetime = 0.96;
   if (merchantPoint) fieldConfidence.merchantPoint = 0.96;
   if (merchantName) fieldConfidence.merchantName = 0.92;
@@ -62,15 +64,15 @@ export function parseKuraimiHasebText(rawText: string): KuraimiHasebParseResult 
 
   const extraction: CoreFinancialExtraction = {
     schemaVersion: 2,
-    templateCode: TEMPLATE_CODE,
+    templateCode: hasFundTransfer ? "kuraimi_haseb_account_transfer_v1" : TEMPLATE_CODE,
     templateVersion: 1,
     financialEntity: "الكريمي حاسب",
     financialEntityCode: "kuraimi_haseb",
-    transactionType: "payment",
+    transactionType: hasFundTransfer ? "transfer" : "payment",
     transactionDirection: "outgoing",
     amount,
     currency,
-    documentReference: reference,
+    transferReference: reference,
     transactionDatetime,
     merchantName,
     merchantPoint,
