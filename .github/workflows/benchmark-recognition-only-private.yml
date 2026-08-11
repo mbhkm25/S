@@ -1,0 +1,133 @@
+name: Benchmark SANAD Recognition-Only Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - .github/workflows/benchmark-recognition-only-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sanad-recognition-only-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Acquire OIDC credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sanad-ocr-lab")"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "SANAD_GITHUB_OIDC_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Build fast OCR image on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/rec-only/$SHA'"
+          cat /tmp/ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" "tar -xzf - -C '/opt/sanad-local-extraction/experiments/rec-only/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/rec-only/$SHA' && docker build -t 'sanad-rec-fast:$SHA' ."
+
+      - name: Run recognition-only refinement
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN: ${{ env.SANAD_GITHUB_OIDC_TOKEN }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' RUN_ID='$RUN_ID' OIDC_TOKEN='$OIDC_TOKEN' bash -s" <<'REMOTE'
+          set -euo pipefail
+          corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
+          name="sanad-rec-fast-${RUN_ID}"
+          cleanup() {
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            docker exec sanad-local-ocr rm -rf /tmp/sanad-rec-lab >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          cleanup
+          mkdir -p /tmp/sanad-rec-lab-host
+          rm -rf /tmp/sanad-rec-lab-host/*
+          docker run -d --name "$name" --memory=768m --cpus=4 -p 127.0.0.1::8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_PSM=6 -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            "sanad-rec-fast:$SHA" >/dev/null
+          port="$(docker port "$name" 8092/tcp | sed -E 's/.*:([0-9]+)$/\1/' | head -n1)"
+          base="http://127.0.0.1:${port}"
+          for _ in $(seq 1 30); do curl --fail --silent --max-time 2 "$base/health/ready" >/dev/null 2>&1 && break; sleep 1; done
+          curl --fail --silent http://127.0.0.1:8091/health/ready >/dev/null
+
+          BASE="$base" NAME="$name" RUN_ID="$RUN_ID" OIDC_TOKEN="$OIDC_TOKEN" python3 - <<'PY'
+          import json,mimetypes,os,pathlib,subprocess,time,urllib.request,urllib.error
+          files=sorted(p for p in pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01').iterdir() if p.is_file() and p.suffix.lower() in {'.jpg','.jpeg','.png','.webp','.pdf'})
+          targets={5:files[4],6:files[5]}
+          base=os.environ['BASE']; rid=os.environ['RUN_ID']; oidc=os.environ['OIDC_TOKEN']
+          semantic='https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ocr-gemini-lab-v2'
+          for case,p in targets.items():
+              started=time.perf_counter(); data=p.read_bytes(); mime=mimetypes.guess_type(p.name)[0] or 'application/octet-stream'
+              req=urllib.request.Request(base+'/v1/ocr',data=data,method='POST',headers={'Content-Type':mime})
+              with urllib.request.urlopen(req,timeout=12) as r: fast=json.loads(r.read())
+              blocks=fast.get('blocks') or []
+              # Copy the private image into the isolated OCR container without printing its name or contents.
+              tmp=f'/tmp/sanad-rec-case-{case}{p.suffix.lower()}'
+              pathlib.Path(tmp).write_bytes(data)
+              subprocess.run(['docker','exec','sanad-local-ocr','mkdir','-p','/tmp/sanad-rec-lab'],check=True,capture_output=True)
+              subprocess.run(['docker','cp',tmp,f'sanad-local-ocr:/tmp/sanad-rec-lab/source-{case}{p.suffix.lower()}'],check=True,capture_output=True)
+              pathlib.Path(tmp).unlink(missing_ok=True)
+              payload=json.dumps({'case':case,'suffix':p.suffix.lower(),'blocks':blocks})
+              script='''import json,sys,time,pathlib\nfrom PIL import Image,ImageOps\nfrom paddleocr import TextRecognition\ncfg=json.loads(sys.argv[1]); case=cfg["case"]; suffix=cfg["suffix"]; blocks=cfg["blocks"]\np=f"/tmp/sanad-rec-lab/source-{case}{suffix}"\nim=ImageOps.exif_transpose(Image.open(p)).convert("RGB")\nw,h=im.size\nscale=min(1.0,1600/max(w,h))\nif scale<1: im=im.resize((round(w*scale),round(h*scale)),Image.Resampling.LANCZOS)\n# Group Tesseract word boxes into horizontal text lines.\nys=[]\nfor b in blocks:\n bb=b.get("bbox") if isinstance(b,dict) else None\n if not isinstance(bb,dict): continue\n y=float(bb.get("y",0)); hh=float(bb.get("height",0))\n if hh<=0: continue\n yc=y+hh/2\n placed=False\n for g in ys:\n  if abs(g[0]-yc)<=max(8,hh*.6): g[1].append(bb); g[0]=(g[0]*(len(g[1])-1)+yc)/len(g[1]); placed=True; break\n if not placed: ys.append([yc,[bb]])\nys.sort(key=lambda g:g[0])\npaths=[]\nfor i,(_,bbs) in enumerate(ys):\n y0=max(0,int(min(float(b["y"]) for b in bbs)-4)); y1=min(im.height,int(max(float(b["y"])+float(b["height"]) for b in bbs)+4))\n if y1-y0<6: continue\n crop=im.crop((0,y0,im.width,y1))\n fn=f"/tmp/sanad-rec-lab/line-{case}-{i}.png"; crop.save(fn); paths.append(fn)\nst=time.perf_counter()\nmodel=TextRecognition(model_name="arabic_PP-OCRv5_mobile_rec",device="cpu",engine="paddle_dynamic",enable_hpi=True,cpu_threads=8)\nload_ms=(time.perf_counter()-st)*1000\nst=time.perf_counter(); out=model.predict(input=paths,batch_size=min(16,max(1,len(paths)))); infer_ms=(time.perf_counter()-st)*1000\nrows=[]\nfor r in out:\n j=r.json if hasattr(r,"json") else {}\n if callable(j): j=j()\n if isinstance(j,str): j=json.loads(j)\n d=j.get("res",j) if isinstance(j,dict) else {}\n t=str(d.get("rec_text") or "").strip(); s=float(d.get("rec_score") or 0)\n if t: rows.append({"text":t,"score":s})\npathlib.Path(f"/tmp/sanad-rec-lab/result-{case}.json").write_text(json.dumps({"rows":rows,"load_ms":load_ms,"infer_ms":infer_ms,"lines":len(paths)},ensure_ascii=False))'''
+              rst=time.perf_counter()
+              proc=subprocess.run(['docker','exec','sanad-local-ocr','python','-c',script,payload],capture_output=True,text=True,timeout=30)
+              rec_wall=round((time.perf_counter()-rst)*1000,1)
+              if proc.returncode!=0:
+                  print('REC_ONLY_CASE='+json.dumps({'case':case,'ok':False,'stage':'recognition','error':'recognizer_failed'},separators=(',',':')))
+                  continue
+              rawj=subprocess.check_output(['docker','exec','sanad-local-ocr','cat',f'/tmp/sanad-rec-lab/result-{case}.json'],text=True)
+              rec=json.loads(rawj); good=[r['text'] for r in rec.get('rows',[]) if float(r.get('score',0))>=0.35]
+              fused=str(fast.get('raw_text') or '').strip()+"\n---ARABIC-RECOGNITION-LINES---\n"+"\n".join(good)
+              body=json.dumps({'source_label':f'fast-ocr-{rid}-case-{case}','ocr_provider':'tesseract_plus_recognition_only','ocr_duration_ms':float(fast.get('duration_ms') or 0)+rec_wall,'ocr_confidence':fast.get('confidence'),'ocr_text':fused},ensure_ascii=False).encode()
+              sreq=urllib.request.Request(semantic,data=body,method='POST',headers={'Content-Type':'application/json','Authorization':'Bearer '+oidc})
+              try:
+                  with urllib.request.urlopen(sreq,timeout=12) as sr: sem=json.loads(sr.read())
+              except urllib.error.HTTPError as e: sem={'ok':False,'http':e.code}
+              wall=round((time.perf_counter()-started)*1000,1)
+              print('REC_ONLY_CASE='+json.dumps({'case':case,'ok':True,'fast_ms':fast.get('duration_ms'),'rec_wall_ms':rec_wall,'model_load_ms':round(rec.get('load_ms',0),1),'rec_infer_ms':round(rec.get('infer_ms',0),1),'lines':rec.get('lines'),'accepted_lines':len(good),'gemini_ok':sem.get('ok'),'gemini_ms':sem.get('gemini_latency_ms'),'pipeline_ms':sem.get('total_pipeline_ms'),'wall_ms':wall},separators=(',',':'),sort_keys=True))
+          PY
+          REMOTE
