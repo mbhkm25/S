@@ -33,7 +33,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
 
-      - name: Benchmark OCR profiles on one private receipt
+      - name: Benchmark OCR batch and CPU profiles on one private receipt
         shell: bash
         env:
           HOST: ${{ secrets.SANAD_SERVER_HOST }}
@@ -46,9 +46,7 @@ jobs:
           root=/opt/sanad-local-extraction
           release="$(readlink -f "$root/current")"
           corpus="$root/shared/private-corpus/pilot-01"
-          test -d "$release"
-          test -d "$corpus"
-          cd "$release"
+          test -d "$release"; test -d "$corpus"; cd "$release"
           file="$(find "$corpus" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | sort | sed -n '1p')"
           test -n "$file"
           ext="${file##*.}"
@@ -71,41 +69,51 @@ jobs:
           trap restore EXIT
 
           run_profile() {
-            label="$1"; maxside="$2"; detside="$3"; batch="$4"; threads="$5"
-            echo "PROFILE_START=$label maxside=$maxside detside=$detside batch=$batch threads=$threads"
-            SANAD_OCR_MAX_IMAGE_LONG_SIDE="$maxside" \
-            SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN="$detside" \
+            label="$1"; batch="$2"; threads="$3"
+            echo "PROFILE_START=$label batch=$batch threads=$threads"
+            SANAD_OCR_MAX_IMAGE_LONG_SIDE=900 \
+            SANAD_OCR_TEXT_DET_LIMIT_SIDE_LEN=768 \
             SANAD_OCR_TEXT_RECOGNITION_BATCH_SIZE="$batch" \
             SANAD_OCR_CPU_THREADS="$threads" \
             SANAD_OCR_ENABLE_HPI=true \
             SANAD_OCR_ENABLE_MKLDNN=true \
             docker compose -p sanad-local-extraction -f docker-compose.local.yml up -d --force-recreate sanad-local-ocr >/dev/null
             ok=0
-            for _ in $(seq 1 48); do
-              if curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready >/tmp/ocr-ready.json 2>/dev/null; then ok=1; break; fi
+            for _ in $(seq 1 60); do
+              if curl --fail --silent --max-time 3 http://127.0.0.1:8091/health/ready >/dev/null 2>&1; then ok=1; break; fi
               sleep 2
             done
-            test "$ok" -eq 1
+            if [ "$ok" -ne 1 ]; then
+              echo "PROFILE_RESULT={\"label\":\"$label\",\"error\":\"not_ready\"}"
+              return 0
+            fi
             out="/tmp/ocr-${label}.json"
-            curl --fail --silent --show-error --max-time 35 -H "Content-Type: $mime" --data-binary "@$file" http://127.0.0.1:8091/v1/ocr > "$out"
-            LABEL="$label" OUT="$out" python3 - <<'PY'
+            if ! curl --fail --silent --show-error --max-time 40 -H "Content-Type: $mime" --data-binary "@$file" http://127.0.0.1:8091/v1/ocr > "$out"; then
+              state="$(docker inspect sanad-local-ocr --format 'oom={{.State.OOMKilled}} restarts={{.RestartCount}} status={{.State.Status}}' 2>/dev/null || true)"
+              echo "PROFILE_RESULT={\"label\":\"$label\",\"error\":\"request_failed\",\"state\":\"$state\"}"
+              rm -f "$out"
+              return 0
+            fi
+            LABEL="$label" BATCH="$batch" THREADS="$threads" OUT="$out" python3 - <<'PY'
           import json, os
           d=json.load(open(os.environ['OUT'],encoding='utf-8'))
           print('PROFILE_RESULT='+json.dumps({
             'label':os.environ['LABEL'],
+            'batch':int(os.environ['BATCH']),
+            'threads':int(os.environ['THREADS']),
             'duration_ms':d.get('duration_ms'),
             'confidence':d.get('confidence'),
             'chars':len(str(d.get('raw_text') or '')),
             'blocks':len(d.get('blocks') or []),
-            'warnings':d.get('warnings') or [],
           },sort_keys=True))
           PY
             rm -f "$out"
           }
 
-          run_profile p640 640 512 2 8
-          run_profile p720 720 640 2 8
-          run_profile p768 768 640 2 8
-          run_profile p900 900 768 2 8
-          run_profile p1200 1200 960 2 8
+          run_profile b1t4 1 4
+          run_profile b1t8 1 8
+          run_profile b2t4 2 4
+          run_profile b2t8 2 8
+          run_profile b4t4 4 4
+          run_profile b4t8 4 8
           REMOTE
