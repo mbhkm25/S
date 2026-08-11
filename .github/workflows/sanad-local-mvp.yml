@@ -146,6 +146,23 @@ jobs:
       - name: Unit tests
         working-directory: apps/sanad_local
         run: flutter test --no-pub test
+      - name: Prepare production-only dependency graph
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp pubspec.yaml pubspec.testing.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('pubspec.yaml')
+          text = path.read_text()
+          block = '  integration_test:\n    sdk: flutter\n'
+          if block not in text:
+              raise SystemExit('integration_test dev dependency block not found')
+          path.write_text(text.replace(block, '', 1))
+          PY
+          flutter clean
+          flutter pub get
       - name: Build release APK
         working-directory: apps/sanad_local
         run: flutter build apk --release --no-pub --dart-define=SANAD_SUPABASE_URL=https://api.sanadflow.com
@@ -156,6 +173,13 @@ jobs:
           path: apps/sanad_local/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Restore integration-test dependency graph
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv pubspec.testing.yaml pubspec.yaml
+          flutter pub get
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
