@@ -36,6 +36,7 @@ jobs:
           PORT: ${{ secrets.SANAD_SERVER_PORT }}
         run: |
           set -uo pipefail
+          set +e
           ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' > /tmp/sanad-real-ocr.json <<'REMOTE'
           set -euo pipefail
           corpus=/opt/sanad-local-extraction/shared/private-corpus/pilot-01
@@ -55,6 +56,7 @@ jobs:
             http://127.0.0.1:8091/v1/ocr
           REMOTE
           rc=$?
+          set -e
           if [ "$rc" -ne 0 ]; then
             echo 'OCR_SAMPLE_REQUEST_FAILED'
             ssh -p "${PORT:-22}" "$USER@$HOST" 'bash -s' <<'REMOTE'
@@ -71,7 +73,6 @@ jobs:
           REMOTE
             exit "$rc"
           fi
-          set -e
 
           python3 - <<'PY'
           import json
