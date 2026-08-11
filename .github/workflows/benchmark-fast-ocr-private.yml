@@ -1,0 +1,137 @@
+name: Benchmark SANAD Fast OCR Private Corpus
+
+on:
+  push:
+    branches:
+      - feature/sanad-local-extraction-engine
+    paths:
+      - services/sanad-fast-analyzer/fast-ocr-runtime/**
+      - .github/workflows/benchmark-fast-ocr-private.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-fast-ocr-private-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SANAD_SERVER_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SANAD_SERVER_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 0600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Build isolated fast OCR on SANAD server
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tar -C services/sanad-fast-analyzer/fast-ocr-runtime -czf /tmp/sanad-fast-ocr.tgz .
+          ssh -p "${PORT:-22}" "$USER@$HOST" "mkdir -p '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA'"
+          cat /tmp/sanad-fast-ocr.tgz | ssh -p "${PORT:-22}" "$USER@$HOST" \
+            "tar -xzf - -C '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA'"
+          ssh -p "${PORT:-22}" "$USER@$HOST" "cd '/opt/sanad-local-extraction/experiments/fast-ocr/$SHA' && docker build -t 'sanad-fast-ocr:$SHA' ."
+
+      - name: Run private corpus benchmark
+        shell: bash
+        env:
+          HOST: ${{ secrets.SANAD_SERVER_HOST }}
+          USER: ${{ secrets.SANAD_SERVER_USER }}
+          PORT: ${{ secrets.SANAD_SERVER_PORT }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -p "${PORT:-22}" "$USER@$HOST" "SHA='$SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+          name=sanad-fast-ocr-experiment
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+          docker run -d --name "$name" \
+            --memory=768m --cpus=4 \
+            -p 127.0.0.1:8092:8092 \
+            -e SANAD_FAST_OCR_CONCURRENCY=1 \
+            -e SANAD_FAST_OCR_TIMEOUT_SECONDS=8 \
+            -e SANAD_FAST_OCR_MAX_IMAGE_LONG_SIDE=1600 \
+            -e SANAD_FAST_OCR_PDF_DPI=150 \
+            "sanad-fast-ocr:$SHA" >/dev/null
+          ok=0
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:8092/health/ready >/tmp/fast-ocr-ready.json 2>/dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          test "$ok" -eq 1
+          cat /tmp/fast-ocr-ready.json
+
+          python3 - <<'PY'
+          import json, mimetypes, pathlib, statistics, time, urllib.request, urllib.error
+          from collections import Counter
+          corpus=pathlib.Path('/opt/sanad-local-extraction/shared/private-corpus/pilot-01')
+          allowed={'.jpg','.jpeg','.png','.webp','.pdf'}
+          files=sorted(p for p in corpus.iterdir() if p.is_file() and p.suffix.lower() in allowed)
+          rows=[]
+          for i,p in enumerate(files,1):
+              mime=mimetypes.guess_type(p.name)[0] or ('application/pdf' if p.suffix.lower()=='.pdf' else 'application/octet-stream')
+              req=urllib.request.Request('http://127.0.0.1:8092/v1/ocr',data=p.read_bytes(),method='POST',headers={'Content-Type':mime})
+              st=time.perf_counter(); http=None; payload=None; error=None
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as r:
+                      http=r.status; payload=json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  http=e.code
+                  try: payload=json.loads(e.read())
+                  except Exception: error='http_error'
+              except Exception as e:
+                  error=type(e).__name__
+              wall=round((time.perf_counter()-st)*1000,1)
+              d=payload if isinstance(payload,dict) else {}
+              row={
+                  'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,
+                  'ocr_ms':d.get('duration_ms'),'confidence':d.get('confidence'),
+                  'chars':len(str(d.get('raw_text') or '')),'blocks':len(d.get('blocks') or []),
+                  'warnings':d.get('warnings') or [],
+              }
+              rows.append(row); print('FAST_CASE='+json.dumps(row,separators=(',',':'),ensure_ascii=True))
+          okrows=[r for r in rows if r['http']==200]
+          walls=[r['wall_ms'] for r in okrows]
+          ocr=[float(r['ocr_ms']) for r in okrows if isinstance(r['ocr_ms'],(int,float))]
+          def pct(xs,q):
+              if not xs:return None
+              xs=sorted(xs); return round(xs[max(0,min(len(xs)-1,int((len(xs)-1)*q)))],1)
+          summary={
+              'cases':len(rows),'http_200':len(okrows),'failed':len(rows)-len(okrows),
+              'mean_wall_ms':round(statistics.fmean(walls),1) if walls else None,
+              'p50_wall_ms':pct(walls,.5),'p95_wall_ms':pct(walls,.95),
+              'mean_ocr_ms':round(statistics.fmean(ocr),1) if ocr else None,
+              'p50_ocr_ms':pct(ocr,.5),'p95_ocr_ms':pct(ocr,.95),
+              'mean_chars':round(statistics.fmean([r['chars'] for r in okrows]),1) if okrows else 0,
+              'zero_text':sum(r['chars']==0 for r in okrows),
+              'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
+          }
+          print('FAST_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
+          PY
+          echo 'FAST_RUNTIME_STATE'
+          docker stats --no-stream "$name" --format 'cpu={{.CPUPerc}} mem={{.MemUsage}}'
+          REMOTE
