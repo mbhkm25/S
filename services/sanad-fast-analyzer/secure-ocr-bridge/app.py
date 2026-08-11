@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 MAX_BODY = int(os.getenv("SANAD_BRIDGE_MAX_BODY_BYTES", "12582912"))
 UPSTREAM = os.getenv("SANAD_FAST_OCR_UPSTREAM", "http://sanad-fast-ocr:8092/v1/ocr")
+UPSTREAM_TIMEOUT = max(5.0, float(os.getenv("SANAD_BRIDGE_UPSTREAM_TIMEOUT_SECONDS", "20")))
 MAX_SKEW = int(os.getenv("SANAD_BRIDGE_MAX_SKEW_SECONDS", "90"))
 PUBLIC_KEY_B64 = os.getenv("SANAD_BRIDGE_PUBLIC_KEY_B64", "").strip()
 if not PUBLIC_KEY_B64:
@@ -21,7 +22,8 @@ async def ready():
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
             r = await client.get("http://sanad-fast-ocr:8092/health/ready")
-        return JSONResponse({"ok": r.status_code == 200, "service": "sanad-secure-ocr-bridge", "scheme": "ed25519-sha256-v1", "upstream": r.status_code}, status_code=200 if r.status_code == 200 else 503)
+        payload = {"ok": r.status_code == 200, "service": "sanad-secure-ocr-bridge", "scheme": "ed25519-sha256-v1", "upstream": r.status_code, "upstream_timeout_seconds": UPSTREAM_TIMEOUT}
+        return JSONResponse(payload, status_code=200 if r.status_code == 200 else 503)
     except Exception as exc:
         return JSONResponse({"ok": False, "service": "sanad-secure-ocr-bridge", "error": type(exc).__name__}, status_code=503)
 
@@ -45,7 +47,7 @@ async def ocr(request: Request):
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
     content_type = request.headers.get("content-type", "application/octet-stream")
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
             upstream = await client.post(UPSTREAM, content=body, headers={"content-type": content_type})
         return Response(content=upstream.content, status_code=upstream.status_code, media_type=upstream.headers.get("content-type", "application/json"))
     except httpx.TimeoutException:
