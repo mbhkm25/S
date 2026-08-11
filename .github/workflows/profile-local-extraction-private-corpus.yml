@@ -78,10 +78,13 @@ jobs:
               timings=result.get('timings') if isinstance(result.get('timings'),dict) else {}
               diagnostics=result.get('diagnostics') if isinstance(result.get('diagnostics'),dict) else {}
               extraction=result.get('extraction') if isinstance(result.get('extraction'),dict) else {}
+              warnings=diagnostics.get('warnings') if isinstance(diagnostics.get('warnings'),list) else []
+              warning_categories=[str(w).split(':',1)[0] for w in warnings]
               rows.append({
                   'case':i,'kind':p.suffix.lower(),'http':http,'wall_ms':wall,'error':error,
                   'status':result.get('status'),'fallback':bool(result.get('fallbackRecommended')),
                   'fallback_reason':result.get('fallbackReason'),'parser':diagnostics.get('parser'),
+                  'warning_categories':warning_categories,
                   'ocr_ms':timings.get('ocrMs'),'parse_ms':timings.get('parseMs'),
                   'confidence':extraction.get('confidence') if extraction else None,
                   'review':extraction.get('reviewRequired') if extraction else None,
@@ -103,8 +106,14 @@ jobs:
               'fallback_rate':round(sum(r['fallback'] for r in rows)/len(rows),3) if rows else 1,
               'statuses':dict(Counter(str(r['status']) for r in rows)),
               'parsers':dict(Counter(str(r['parser']) for r in rows)),
+              'warning_categories':dict(Counter(w for r in rows for w in r['warning_categories'])),
               'errors':dict(Counter(str(r['error']) for r in rows if r['error'])),
           }
           print('PROFILE_SUMMARY='+json.dumps(summary,separators=(',',':'),sort_keys=True))
           PY
+
+          echo '--- OCR runtime state after profile ---'
+          docker inspect sanad-local-ocr --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{end}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restarts={{.RestartCount}}' || true
+          echo '--- OCR safe failure diagnostics ---'
+          docker logs sanad-local-ocr 2>&1 | grep -E 'paddleocr_(inference_failed|model_load_failed|startup_canary_failed)|ERROR|Traceback|Killed|OOM' | tail -n 120 || true
           REMOTE
