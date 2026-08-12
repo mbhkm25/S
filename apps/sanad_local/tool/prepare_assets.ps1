@@ -29,11 +29,13 @@ if (Get-Command py -ErrorAction SilentlyContinue) {
     $PythonExe = 'python3'
     $PythonPrefix = @()
 } else {
-    throw 'Python 3 is not installed or not available in PATH.'
+    $PythonExe = $null
+    $PythonPrefix = @()
 }
 
 $Notice = Join-Path $TestDir 'notice.png'
-$Code = @'
+if ($PythonExe) {
+    $Code = @'
 import sys
 from PIL import Image, ImageDraw, ImageFont
 out=sys.argv[1]
@@ -50,15 +52,19 @@ for line in lines:
     y+=120
 img.save(out)
 '@
-
-$TempPy = Join-Path $env:TEMP 'sanad-local-make-notice.py'
-Set-Content -Path $TempPy -Value $Code -Encoding UTF8
-try {
-    $Args = @($PythonPrefix) + @($TempPy, $Notice)
-    & $PythonExe @Args
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to create OCR test fixture.' }
-} finally {
-    Remove-Item $TempPy -Force -ErrorAction SilentlyContinue
+    $TempPy = Join-Path $env:TEMP 'sanad-local-make-notice.py'
+    Set-Content -Path $TempPy -Value $Code -Encoding UTF8
+    try {
+        $PythonArgs = @($PythonPrefix) + @($TempPy, $Notice)
+        & $PythonExe @PythonArgs
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning 'OCR test fixture could not be generated on this Windows machine; development can continue.'
+        }
+    } finally {
+        Remove-Item $TempPy -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Warning 'Python 3 is unavailable; skipping the optional OCR test fixture.'
 }
 
 Write-Host 'SANAD Local assets prepared for Windows.'
