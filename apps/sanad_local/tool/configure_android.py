@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import re
 
 
 gradle = Path('android/app/build.gradle.kts')
@@ -45,6 +46,16 @@ root_gradle.write_text(root_text)
 
 settings = Path('android/settings.gradle.kts')
 settings_text = settings.read_text()
+settings_text = re.sub(
+    r'id\("com\.android\.application"\) version "[^"]+"',
+    'id("com.android.application") version "8.11.2"',
+    settings_text,
+)
+settings_text = re.sub(
+    r'id\("org\.jetbrains\.kotlin\.android"\) version "[^"]+"',
+    'id("org.jetbrains.kotlin.android") version "2.2.20"',
+    settings_text,
+)
 if jitpack not in settings_text:
     if 'dependencyResolutionManagement {' in settings_text:
         anchor = settings_text.index(
@@ -64,6 +75,15 @@ if jitpack not in settings_text:
             '}\n'
         )
 settings.write_text(settings_text)
+
+wrapper = Path('android/gradle/wrapper/gradle-wrapper.properties')
+wrapper_text = wrapper.read_text()
+wrapper_text = re.sub(
+    r'gradle-[0-9.]+-(all|bin)\.zip',
+    r'gradle-8.14.3-\1.zip',
+    wrapper_text,
+)
+wrapper.write_text(wrapper_text)
 
 manifest = Path('android/app/src/main/AndroidManifest.xml')
 manifest_text = manifest.read_text()
