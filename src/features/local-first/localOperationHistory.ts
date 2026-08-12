@@ -24,13 +24,14 @@ export async function listLocalOperationHistory(): Promise<LocalOperationHistory
   const db = await openLocalFirstDatabase();
   try {
     const tx = db.transaction(['operations', 'files'], 'readonly');
-    const operations = await requestResult(
-      tx.objectStore('operations').getAll() as IDBRequest<LocalStoredOperation[]>,
-    );
-    const files = await requestResult(
-      tx.objectStore('files').getAll() as IDBRequest<LocalStoredFile[]>,
-    );
-    await transactionDone(tx);
+    const done = transactionDone(tx);
+    const operationsRequest = tx.objectStore('operations').getAll() as IDBRequest<LocalStoredOperation[]>;
+    const filesRequest = tx.objectStore('files').getAll() as IDBRequest<LocalStoredFile[]>;
+    const [operations, files] = await Promise.all([
+      requestResult(operationsRequest),
+      requestResult(filesRequest),
+    ]);
+    await done;
 
     const fileById = new Map(files.map((file) => [file.id, file]));
     return operations
