@@ -854,6 +854,7 @@ class _DetailRow extends StatelessWidget {
           ],
         ),
       );
+}
 
 String statusText(LocalOperationStatus status) {
   switch (status) {
