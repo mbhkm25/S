@@ -8,6 +8,7 @@ const CURRENCY_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
 ];
 
 const REFERENCE_LABEL = /(?:رقم\s*(?:العملية|الحوالة|المرجع)|مرجع|reference|ref|transaction\s*id)\s*[:：#-]?\s*([A-Z0-9][A-Z0-9\-_/]{3,})/i;
+const AMOUNT_LABEL = /(?:المبلغ|amount|إجمالي|اجمالي|total)\s*[:：-]?\s*(\d{1,3}(?:[,\s]\d{3})+(?:\.\d{1,2})?|\d{1,12}(?:\.\d{1,2})?)/i;
 const DATE_PATTERN = /\b(20\d{2}[\-/]\d{1,2}[\-/]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}[\-/]\d{1,2}[\-/]20\d{2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\b/g;
 const LONG_IDENTIFIER_PATTERN = /\b\d{6,24}\b/g;
 const AMOUNT_PATTERN = /(?:^|\s)(\d{1,3}(?:[,\s]\d{3})+(?:\.\d{1,2})?|\d{4,12}(?:\.\d{1,2})?)(?=\s|$|[.,،])/g;
@@ -20,6 +21,11 @@ function uniqueCandidates(items: EvidenceCandidate[]): EvidenceCandidate[] {
     seen.add(key);
     return true;
   });
+}
+
+function compactAmount(value: string): string | null {
+  const compact = value.replace(/[\s,]/g, '');
+  return /^\d+(?:\.\d{1,2})?$/.test(compact) ? compact : null;
 }
 
 export function extractFinancialCandidates(rawText: string): FinancialFieldCandidates {
@@ -37,6 +43,10 @@ export function extractFinancialCandidates(rawText: string): FinancialFieldCandi
       if (currency.pattern.test(line)) currencies.push({ value: currency.code, line, kind: 'currency', score: 1 });
     }
 
+    const labeledAmount = line.match(AMOUNT_LABEL)?.[1];
+    const labeledCompact = labeledAmount ? compactAmount(labeledAmount) : null;
+    if (labeledCompact) amounts.push({ value: labeledCompact, line, kind: 'labeled_amount', score: 1 });
+
     const reference = line.match(REFERENCE_LABEL)?.[1];
     if (reference) references.push({ value: normalizeCandidateToken(reference), line, kind: 'labeled_reference', score: 1 });
 
@@ -49,8 +59,8 @@ export function extractFinancialCandidates(rawText: string): FinancialFieldCandi
     }
 
     for (const match of line.matchAll(AMOUNT_PATTERN)) {
-      const compact = match[1].replace(/[\s,]/g, '');
-      if (/^\d+(?:\.\d{1,2})?$/.test(compact)) amounts.push({ value: compact, line, kind: 'amount_like', score: 0.6 });
+      const compact = compactAmount(match[1]);
+      if (compact) amounts.push({ value: compact, line, kind: 'amount_like', score: 0.6 });
     }
 
     const lower = line.toLowerCase();
