@@ -19,13 +19,15 @@ Download-File 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/mai
 Download-File 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata' (Join-Path $TessDir 'eng.traineddata')
 Download-File 'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf' (Join-Path $FontsDir 'NotoSansArabic.ttf')
 
-$Python = $null
 if (Get-Command py -ErrorAction SilentlyContinue) {
-    $Python = @('py', '-3')
+    $PythonExe = 'py'
+    $PythonPrefix = @('-3')
 } elseif (Get-Command python -ErrorAction SilentlyContinue) {
-    $Python = @('python')
+    $PythonExe = 'python'
+    $PythonPrefix = @()
 } elseif (Get-Command python3 -ErrorAction SilentlyContinue) {
-    $Python = @('python3')
+    $PythonExe = 'python3'
+    $PythonPrefix = @()
 } else {
     throw 'Python 3 is not installed or not available in PATH.'
 }
@@ -52,7 +54,8 @@ img.save(out)
 $TempPy = Join-Path $env:TEMP 'sanad-local-make-notice.py'
 Set-Content -Path $TempPy -Value $Code -Encoding UTF8
 try {
-    & $Python[0] $Python[1..($Python.Count - 1)] $TempPy $Notice
+    $Args = @($PythonPrefix) + @($TempPy, $Notice)
+    & $PythonExe @Args
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create OCR test fixture.' }
 } finally {
     Remove-Item $TempPy -Force -ErrorAction SilentlyContinue
