@@ -29,6 +29,7 @@ public class AndroidLocalRuntimeBridge {
     static final String PREFS = SanadLocalRecoveryWorker.PREFS;
     static final String KEY_NOTIFICATION_JSON = "latest_financial_notification";
     static final String KEY_MONITORED_PACKAGES = "monitored_packages";
+    static final String KEY_SEEN_NOTIFICATION_APPS = "seen_notification_apps";
 
     private final Activity activity;
     private final WebView webView;
@@ -124,6 +125,22 @@ public class AndroidLocalRuntimeBridge {
             // Fail closed: invalid configuration means no package is monitored.
             prefs.edit().putStringSet(KEY_MONITORED_PACKAGES, new HashSet<>()).apply();
         }
+    }
+
+    @JavascriptInterface
+    public String getMonitoredPackages() {
+        Set<String> packages = prefs.getStringSet(KEY_MONITORED_PACKAGES, new HashSet<>());
+        return new JSONArray(packages == null ? new HashSet<>() : packages).toString();
+    }
+
+    @JavascriptInterface
+    public String getSeenNotificationApps() {
+        return prefs.getString(KEY_SEEN_NOTIFICATION_APPS, "{}");
+    }
+
+    @JavascriptInterface
+    public void clearSeenNotificationApps() {
+        prefs.edit().remove(KEY_SEEN_NOTIFICATION_APPS).apply();
     }
 
     public void dispatchPendingSignals() {
