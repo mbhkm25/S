@@ -14,6 +14,14 @@ function safeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9.-]/g, '_') || 'payment-document';
 }
 
+function toCloudSource(source: CreateOperationInput['source']): 'pwa_upload' | 'share_target' {
+  return source === 'share_intake' ? 'share_target' : 'pwa_upload';
+}
+
+function toUploadOrigin(source: CreateOperationInput['source']): 'pwa' | 'share' {
+  return source === 'share_intake' ? 'share' : 'pwa';
+}
+
 async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -51,12 +59,12 @@ export class CloudOperationRepository implements OperationRepository {
       }
       uploaded = true;
 
-      const uploadOrigin = input.source === 'share_intake' ? 'share' : 'pwa';
+      const cloudSource = toCloudSource(input.source);
       const { data, error } = await supabase
         .from('operations')
         .insert({
-          source: input.source === 'camera' || input.source === 'file' ? 'pwa_upload' : input.source,
-          upload_origin: uploadOrigin,
+          source: cloudSource,
+          upload_origin: toUploadOrigin(input.source),
           submitted_by_user_id: input.submittedByUserId,
           submitted_by_phone: input.submittedByPhone ?? null,
           submitted_by_name: input.submittedByName ?? null,
@@ -136,7 +144,7 @@ export class CloudOperationRepository implements OperationRepository {
     await callSanadAppFunction('sanad-v3-app-trigger-analysis', {
       operation_id: operationId,
       public_token: operation.publicToken,
-      source: operation.source === 'camera' || operation.source === 'file' ? 'pwa_upload' : operation.source,
+      source: toCloudSource(operation.source),
     });
   }
 }
