@@ -1,11 +1,13 @@
 import { motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { MyOperationItem } from '../types';
-import { Calendar, Loader2, ArrowUpRight, FolderOpen, RefreshCcw } from 'lucide-react';
+import { Calendar, Loader2, ArrowUpRight, FolderOpen, RefreshCcw, Eye, X, CloudOff, Clock3 } from 'lucide-react';
 import { getOperationCardDetails } from '../lib/digits';
 import FinancialEntityLogo from './FinancialEntityLogo';
 import ShinyText from './ui/ShinyText';
+import { listLocalOperationHistory, type LocalOperationHistoryItem } from '../features/local-first/localOperationHistory';
+import { LOCAL_RUNTIME_STATUS_EVENT } from '../features/local-first/localRuntimeEvents';
 
 interface MyOperationsProps {
   onNavigateToDetails: (token: string) => void;
@@ -13,17 +15,74 @@ interface MyOperationsProps {
 
 type FilterType = 'uploader' | 'verifier';
 
+function localStatusLabel(item: LocalOperationHistoryItem): string {
+  switch (item.operation.status) {
+    case 'syncing':
+      return 'جاري المزامنة مع سند';
+    case 'synced':
+      return 'تمت المزامنة — جاري إكمال المعالجة';
+    case 'sync_failed':
+      return 'محفوظ محليًا — تعذر إكمال المزامنة';
+    case 'retry_wait':
+      return 'محفوظ محليًا — سيعيد سند المحاولة';
+    default:
+      return 'محفوظ محليًا — بانتظار الاتصال لإكمال التحليل';
+  }
+}
+
+function localStatusClass(item: LocalOperationHistoryItem): string {
+  if (item.operation.status === 'synced') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  if (item.operation.status === 'syncing') return 'bg-sky-50 text-sky-700 border-sky-100';
+  if (item.operation.status === 'sync_failed') return 'bg-rose-50 text-rose-700 border-rose-100';
+  return 'bg-amber-50 text-amber-800 border-amber-100';
+}
+
 export default function MyOperations({ onNavigateToDetails }: MyOperationsProps) {
   const reduceMotion = useReducedMotion();
   const [operations, setOperations] = useState<MyOperationItem[]>([]);
+  const [localOperations, setLocalOperations] = useState<LocalOperationHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('uploader');
+  const [preview, setPreview] = useState<{ url: string; name: string; mimeType: string } | null>(null);
 
-  const fetchOperations = async () => {
+  const closePreview = useCallback(() => {
+    setPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  }, []);
+
+  const openLocalPreview = useCallback((item: LocalOperationHistoryItem) => {
+    if (!item.file) return;
+    closePreview();
+    const url = URL.createObjectURL(item.file.blob);
+    setPreview({ url, name: item.file.name, mimeType: item.file.mimeType });
+  }, [closePreview]);
+
+  const fetchOperations = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    let localItems: LocalOperationHistoryItem[] = [];
+    if (activeFilter === 'uploader') {
+      try {
+        localItems = await listLocalOperationHistory();
+        setLocalOperations(localItems);
+      } catch (caught) {
+        console.error('local operation history error:', caught);
+        setLocalOperations([]);
+      }
+    } else {
+      setLocalOperations([]);
+    }
+
     try {
+      if (navigator.onLine === false) {
+        setOperations([]);
+        return;
+      }
+
       const { data, error: rpcError } = await supabase.rpc('get_my_operations', {
         p_relation_type: activeFilter,
         p_from: null,
@@ -55,15 +114,35 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
       }
     } catch (caught) {
       console.error('get_my_operations error:', caught);
-      setError('تعذر جلب العمليات من قاعدة سند. أعد المحاولة.');
+      setOperations([]);
+      if (navigator.onLine !== false || localItems.length === 0 || activeFilter === 'verifier') {
+        setError('تعذر جلب العمليات من قاعدة سند. أعد المحاولة.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeFilter]);
 
   useEffect(() => {
     void fetchOperations();
-  }, [activeFilter]);
+  }, [fetchOperations]);
+
+  useEffect(() => {
+    const refreshLocalHistory = () => void fetchOperations();
+    window.addEventListener(LOCAL_RUNTIME_STATUS_EVENT, refreshLocalHistory);
+    window.addEventListener('online', refreshLocalHistory);
+    return () => {
+      window.removeEventListener(LOCAL_RUNTIME_STATUS_EVENT, refreshLocalHistory);
+      window.removeEventListener('online', refreshLocalHistory);
+      closePreview();
+    };
+  }, [fetchOperations, closePreview]);
+
+  const cloudOperationIds = new Set(operations.map((item) => item.operation_id).filter(Boolean));
+  const visibleLocalOperations = activeFilter === 'uploader'
+    ? localOperations.filter((item) => !item.operation.cloudOperationId || !cloudOperationIds.has(item.operation.cloudOperationId))
+    : [];
+  const totalVisible = operations.length + visibleLocalOperations.length;
 
   return (
     <div className="space-y-6" id="my_operations_view">
@@ -111,12 +190,19 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
         </div>
       )}
 
-      {loading ? (
+      {activeFilter === 'uploader' && navigator.onLine === false && visibleLocalOperations.length > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-100 text-amber-900 rounded-2xl text-xs font-arabic flex items-start gap-2.5">
+          <CloudOff className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>أنت دون اتصال. يعرض سند الآن العمليات المحفوظة على هذا الجهاز، وسيكمل رفعها وتحليلها تلقائيًا عند عودة الإنترنت.</span>
+        </div>
+      )}
+
+      {loading && totalVisible === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-3" id="operations_loader">
           <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-          <span className="text-xs text-slate-400 font-arabic">جاري تحميل سجل العمليات الموثقة...</span>
+          <span className="text-xs text-slate-400 font-arabic">جاري تحميل سجل العمليات...</span>
         </div>
-      ) : operations.length === 0 ? (
+      ) : totalVisible === 0 ? (
         <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center space-y-4" id="empty_operations_state">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 mb-2">
             <FolderOpen className="w-6 h-6" />
@@ -130,6 +216,55 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
         </motion.div>
       ) : (
         <div className="space-y-3.5" id="operations_list">
+          {visibleLocalOperations.map((item, index) => (
+            <motion.div
+              key={item.operation.localId}
+              initial={reduceMotion ? false : { opacity: 0, y: 18, scale: .985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: reduceMotion ? 0 : Math.min(index * .045, .36), duration: .3, ease: [0.22, 1, 0.36, 1] }}
+              className="bg-white rounded-2xl border border-amber-100 p-4 shadow-sm space-y-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 text-right overflow-hidden min-w-0">
+                  <div className="h-12 w-12 shrink-0 rounded-2xl border border-amber-100 bg-amber-50 flex items-center justify-center text-amber-700">
+                    <Clock3 className="w-5 h-5" />
+                  </div>
+                  <div className="overflow-hidden min-w-0">
+                    <h3 className="text-xs font-bold text-slate-900 truncate leading-snug">{item.file?.name || 'إشعار مالي محفوظ محليًا'}</h3>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[10px] text-slate-500 font-arabic">
+                      <span className="flex items-center gap-1 text-slate-400 font-mono text-[9px] shrink-0">
+                        <Calendar className="w-3 h-3 text-slate-300" />
+                        <span>{new Date(item.operation.createdAt).toLocaleString('ar-YE')}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-semibold shrink-0 bg-emerald-50 text-emerald-700">مرسل</span>
+                    </div>
+                  </div>
+                </div>
+                {item.operation.publicToken ? (
+                  <button
+                    onClick={() => onNavigateToDetails(item.operation.publicToken!)}
+                    className="px-3.5 py-2 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200/50 hover:border-emerald-200 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <span>تفاصيل</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openLocalPreview(item)}
+                    disabled={!item.file}
+                    className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-100 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <span>عرض الإشعار</span>
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className={`rounded-xl border px-3 py-2 text-[10px] font-semibold font-arabic ${localStatusClass(item)}`}>
+                {localStatusLabel(item)}
+              </div>
+            </motion.div>
+          ))}
+
           {operations.map((item, index) => {
             const card = getOperationCardDetails(item);
             return (
@@ -137,7 +272,7 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
                 key={item.operation_id || item.public_token}
                 initial={reduceMotion ? false : { opacity: 0, y: 18, scale: .985 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: reduceMotion ? 0 : Math.min(index * .045, .36), duration: .3, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ delay: reduceMotion ? 0 : Math.min((index + visibleLocalOperations.length) * .045, .36), duration: .3, ease: [0.22, 1, 0.36, 1] }}
                 className="bg-white rounded-2xl border border-slate-100 hover:border-emerald-200/50 p-4 shadow-sm flex items-center justify-between gap-4 hover:shadow-md transition-all group"
               >
                 <div className="flex items-center gap-3 text-right overflow-hidden min-w-0">
@@ -181,6 +316,31 @@ export default function MyOperations({ onNavigateToDetails }: MyOperationsProps)
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {preview && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex items-center justify-center" onClick={closePreview}>
+          <div className="bg-white rounded-3xl w-full max-w-xl max-h-[88vh] overflow-hidden shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+              <div className="min-w-0 text-right">
+                <p className="text-sm font-bold text-slate-900 truncate">الإشعار المحفوظ محليًا</p>
+                <p className="text-[10px] text-slate-500 truncate">{preview.name}</p>
+              </div>
+              <button onClick={closePreview} className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center" aria-label="إغلاق">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 bg-slate-50 overflow-auto max-h-[75vh]">
+              {preview.mimeType.startsWith('image/') ? (
+                <img src={preview.url} alt={preview.name} className="w-full h-auto rounded-2xl bg-white object-contain" />
+              ) : preview.mimeType === 'application/pdf' ? (
+                <iframe src={preview.url} title={preview.name} className="w-full h-[68vh] rounded-2xl bg-white" />
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-600 font-arabic">الملف محفوظ محليًا وسيتم رفعه إلى سند عند توفر الاتصال.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
