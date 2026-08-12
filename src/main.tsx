@@ -7,6 +7,7 @@ import OperationDetailsRuntimeV2 from './features/operations/OperationDetailsRun
 import OperationIdentityDetailsBanner from './features/operations/OperationIdentityDetailsBanner';
 import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
+import LocalRuntimeController from './features/local-first/LocalRuntimeController';
 import './index.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
       </Suspense>
     ) : (
       <>
+        <LocalRuntimeController />
         <OperationEntryGate />
         <OperationDetailsRuntimeV2 />
         <OperationIdentityDetailsBanner />
