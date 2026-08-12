@@ -1,0 +1,43 @@
+name: SANAD Local-first quality
+
+on:
+  pull_request:
+    paths:
+      - 'src/features/local-first/**'
+      - 'scripts/test-local-first-foundation.ts'
+      - '.github/workflows/local-first-quality.yml'
+  push:
+    branches:
+      - feature/sanad-react-local-first
+    paths:
+      - 'src/features/local-first/**'
+      - 'scripts/test-local-first-foundation.ts'
+      - '.github/workflows/local-first-quality.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-first-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Type-check application
+        run: npm run lint
+      - name: Test Local-first deterministic foundation
+        run: npx tsx scripts/test-local-first-foundation.ts
+      - name: Build production PWA
+        run: npm run build -- --mode production
