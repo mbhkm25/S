@@ -46,9 +46,11 @@ class ReleaseUpdateService {
     final manifestUri = Uri.parse(configured);
     _requireTrustedUrl(manifestUri);
 
-    final response = await _client.get(manifestUri).timeout(const Duration(seconds: 15));
+    final manifestRequest = http.Request('GET', manifestUri)..followRedirects = false;
+    final response = await _client.send(manifestRequest).timeout(const Duration(seconds: 15));
     if (response.statusCode != HttpStatus.ok) return null;
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = await _readLimited(response.stream, 256 * 1024);
+    final json = jsonDecode(utf8.decode(body)) as Map<String, dynamic>;
     final versionCode = (json['version_code'] as num?)?.toInt() ?? 0;
     if (versionCode <= currentVersion) return null;
 
@@ -82,7 +84,7 @@ class ReleaseUpdateService {
     LocalRelease release, {
     void Function(int percent)? onProgress,
   }) async {
-    final request = http.Request('GET', release.downloadUrl);
+    final request = http.Request('GET', release.downloadUrl)..followRedirects = false;
     final response = await _client.send(request).timeout(const Duration(seconds: 60));
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException('release_download_failed_${response.statusCode}');
@@ -133,6 +135,17 @@ class ReleaseUpdateService {
     if (uri.scheme != 'https' || uri.host != 'app.sanadflow.com') {
       throw const FormatException('untrusted_release_url');
     }
+  }
+
+  static Future<List<int>> _readLimited(Stream<List<int>> stream, int maximumBytes) async {
+    final bytes = <int>[];
+    await for (final chunk in stream) {
+      if (bytes.length + chunk.length > maximumBytes) {
+        throw const FormatException('release_manifest_too_large');
+      }
+      bytes.addAll(chunk);
+    }
+    return bytes;
   }
 }
 
