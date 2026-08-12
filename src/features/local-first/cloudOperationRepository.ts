@@ -27,6 +27,39 @@ async function sha256Hex(file: File): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function syncIdempotencyKey(input: CreateOperationInput): string | null {
+  const value = input.clientMetadata?.sync_idempotency_key;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+async function findExistingSyncOperation(syncKey: string): Promise<{ id: string; public_token: string } | null> {
+  const { data, error } = await supabase
+    .from('operations')
+    .select('id, public_token')
+    .contains('client_upload_metadata', { sync_idempotency_key: syncKey })
+    .maybeSingle();
+  if (error) return null;
+  return data ?? null;
+}
+
+function createdFromExisting(
+  existing: { id: string; public_token: string },
+  input: CreateOperationInput,
+  fileSha256: string,
+): CreatedOperation {
+  return {
+    identity: {
+      localId: `cloud:${existing.id}`,
+      cloudOperationId: existing.id,
+      fileSha256,
+    },
+    publicToken: existing.public_token,
+    source: input.source,
+    mode: 'cloud',
+    analysisTriggerFailed: false,
+  };
+}
+
 export class CloudOperationRepository implements OperationRepository {
   readonly mode = 'cloud' as const;
   readonly capabilities = {
@@ -40,10 +73,19 @@ export class CloudOperationRepository implements OperationRepository {
   async create(input: CreateOperationInput): Promise<CreatedOperation> {
     const bucket = input.fileBucket ?? OPERATION_FILES_BUCKET;
     const storagePath = `${input.submittedByUserId}/${Date.now()}-${safeFileName(input.file.name)}`;
+    const syncKey = syncIdempotencyKey(input);
     let uploaded = false;
 
     try {
       const fileSha256 = await sha256Hex(input.file);
+
+      // Recovery fast-path: if a previous attempt committed the canonical row
+      // but the client lost the response, reuse it before uploading a second file.
+      if (syncKey) {
+        const existing = await findExistingSyncOperation(syncKey);
+        if (existing) return createdFromExisting(existing, input, fileSha256);
+      }
+
       const { error: storageError } = await supabase.storage.from(bucket).upload(storagePath, input.file, {
         cacheControl: '3600',
         upsert: false,
@@ -80,13 +122,25 @@ export class CloudOperationRepository implements OperationRepository {
           client_upload_metadata: {
             ...(input.clientMetadata ?? {}),
             file_sha256: fileSha256,
-            repository_mode: 'cloud',
+            repository_mode: syncKey ? 'local_sync' : 'cloud',
           },
         })
         .select('id, public_token')
         .single();
 
       if (error || !data) {
+        // The database unique index is the final concurrency guard. If another
+        // retry won the race, remove this attempt's orphan upload and reuse the
+        // canonical operation instead of surfacing a false failure.
+        if (syncKey && error?.code === '23505') {
+          if (uploaded) {
+            await supabase.storage.from(bucket).remove([storagePath]).catch(() => undefined);
+            uploaded = false;
+          }
+          const existing = await findExistingSyncOperation(syncKey);
+          if (existing) return createdFromExisting(existing, input, fileSha256);
+        }
+
         throw new OperationRepositoryError(
           'cloud_operation_create_failed',
           'تم رفع الملف، لكن تعذر إنشاء العملية. لم يتم الاحتفاظ بالملف غير المرتبط.',
@@ -94,17 +148,7 @@ export class CloudOperationRepository implements OperationRepository {
         );
       }
 
-      return {
-        identity: {
-          localId: `cloud:${data.id}`,
-          cloudOperationId: data.id,
-          fileSha256,
-        },
-        publicToken: data.public_token,
-        source: input.source,
-        mode: 'cloud',
-        analysisTriggerFailed: false,
-      };
+      return createdFromExisting(data, input, fileSha256);
     } catch (error) {
       if (uploaded) {
         await supabase.storage.from(bucket).remove([storagePath]).catch(() => undefined);
