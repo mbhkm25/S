@@ -178,7 +178,7 @@ class OperationPipeline {
     await _db.updateOperation(operation, eventType: 'local_financial_rules_completed');
 
     final quality = deterministic['quality'] as Map<String, dynamic>?;
-    final deterministicComplete = quality?['criticalComplete'] == true &&
+    final deterministicComplete = quality?['autoAcceptEligible'] == true &&
         ((deterministic['confidence'] as num?)?.toDouble() ?? 0) >= .90;
     if (deterministicComplete) return;
 

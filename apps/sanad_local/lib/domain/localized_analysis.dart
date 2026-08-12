@@ -23,19 +23,29 @@ const _warningMessages = <String, String>{
   'multiple_reference_candidates': 'يحتوي المستند على أكثر من رقم مرجعي محتمل؛ تحقق من المرجع.',
   'deterministic_partial_extraction': 'استُخرجت بعض البيانات محليًا، وما زالت الحقول الناقصة تحتاج مراجعة.',
   'local_ocr_insufficient': 'قراءة المستند محليًا غير كافية للتحليل التلقائي.',
+  'party_details_unresolved': 'بيانات المرسل أو المستلم غير مكتملة. راجع أسماء الأطراف وأرقام الحسابات.',
 };
 
 String localizedWarning(String code) =>
     _warningMessages[code] ?? 'توجد ملاحظة على نتيجة التحليل. قارن البيانات بالمستند الأصلي.';
 
-String localizedTransactionType(String? type) => switch (type) {
-      'deposit' => 'إيداع',
-      'withdrawal' => 'سحب',
-      'transfer' || 'account_transfer' => 'تحويل',
-      'payment' => 'دفع',
-      'credit_notice' => 'إشعار دائن',
-      _ => 'غير محدد',
-    };
+String localizedTransactionType(String? type) {
+  switch (type) {
+    case 'deposit':
+      return 'إيداع';
+    case 'withdrawal':
+      return 'سحب';
+    case 'transfer':
+    case 'account_transfer':
+      return 'تحويل';
+    case 'payment':
+      return 'دفع';
+    case 'credit_notice':
+      return 'إشعار دائن';
+    default:
+      return 'غير محدد';
+  }
+}
 
 String localizedCurrency(String? currency) => switch (currency) {
       'YER' => 'ريال يمني',

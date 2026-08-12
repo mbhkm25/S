@@ -482,7 +482,7 @@ class FinancialEntityLogo extends StatelessWidget {
       ),
       child: entity.logoAsset == null
           ? fallback
-          : Image.asset(entity.logoAsset!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => fallback),
+          : Image.asset(entity.logoAsset!, fit: BoxFit.contain, errorBuilder: (_, _, _) => fallback),
     );
   }
 }
@@ -675,7 +675,7 @@ class _OperationDetailsScreenState extends State<OperationDetailsScreen> {
                   height: 250,
                   width: double.infinity,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(
+                  errorBuilder: (_, _, _) => const SizedBox(
                     height: 180,
                     child: Center(child: Icon(Icons.broken_image_outlined, size: 42)),
                   ),
@@ -855,44 +855,65 @@ class _DetailRow extends StatelessWidget {
         ),
       );
 
-String statusText(LocalOperationStatus status) => switch (status) {
-      LocalOperationStatus.localOnly => 'تم الحفظ محليًا',
-      LocalOperationStatus.readingDocument || LocalOperationStatus.pendingOcr => 'جاري قراءة المستند',
-      LocalOperationStatus.ocrCompleted => 'تمت قراءة المستند',
-      LocalOperationStatus.waitingInternet => 'بانتظار الإنترنت',
-      LocalOperationStatus.analyzing || LocalOperationStatus.pendingAnalysis => 'جاري التحليل',
-      LocalOperationStatus.analyzed => 'تم التحليل',
-      LocalOperationStatus.reviewRequired => 'يحتاج مراجعة',
-      LocalOperationStatus.incompleteAnalysis => 'تحليل غير مكتمل',
-      LocalOperationStatus.failedAnalysis => 'فشل التحليل',
-      LocalOperationStatus.reviewed => 'تمت المراجعة',
-      LocalOperationStatus.pendingSync => 'بانتظار المزامنة',
-      LocalOperationStatus.synced => 'تمت المزامنة',
-      LocalOperationStatus.syncFailed => 'تعذرت المزامنة',
-      LocalOperationStatus.promotedToCloud => 'نُقلت إلى سند السحابي',
-    };
+String statusText(LocalOperationStatus status) {
+  switch (status) {
+    case LocalOperationStatus.localOnly:
+      return 'تم الحفظ محليًا';
+    case LocalOperationStatus.readingDocument:
+    case LocalOperationStatus.pendingOcr:
+      return 'جاري قراءة المستند';
+    case LocalOperationStatus.ocrCompleted:
+      return 'تمت قراءة المستند';
+    case LocalOperationStatus.waitingInternet:
+      return 'بانتظار الإنترنت';
+    case LocalOperationStatus.analyzing:
+    case LocalOperationStatus.pendingAnalysis:
+      return 'جاري التحليل';
+    case LocalOperationStatus.analyzed:
+      return 'تم التحليل';
+    case LocalOperationStatus.reviewRequired:
+      return 'يحتاج مراجعة';
+    case LocalOperationStatus.incompleteAnalysis:
+      return 'تحليل غير مكتمل';
+    case LocalOperationStatus.failedAnalysis:
+      return 'فشل التحليل';
+    case LocalOperationStatus.reviewed:
+      return 'تمت المراجعة';
+    case LocalOperationStatus.pendingSync:
+      return 'بانتظار المزامنة';
+    case LocalOperationStatus.synced:
+      return 'تمت المزامنة';
+    case LocalOperationStatus.syncFailed:
+      return 'تعذرت المزامنة';
+    case LocalOperationStatus.promotedToCloud:
+      return 'نُقلت إلى سند السحابي';
+  }
+}
 
-IconData statusIcon(LocalOperationStatus status) => switch (status) {
-      LocalOperationStatus.analyzed ||
-      LocalOperationStatus.reviewed ||
-      LocalOperationStatus.synced ||
-      LocalOperationStatus.promotedToCloud =>
-        Icons.check_circle_outline_rounded,
-      LocalOperationStatus.reviewRequired ||
-      LocalOperationStatus.incompleteAnalysis ||
-      LocalOperationStatus.failedAnalysis ||
-      LocalOperationStatus.syncFailed =>
-        Icons.error_outline_rounded,
-      LocalOperationStatus.readingDocument ||
-      LocalOperationStatus.pendingOcr ||
-      LocalOperationStatus.ocrCompleted ||
-      LocalOperationStatus.waitingInternet ||
-      LocalOperationStatus.analyzing ||
-      LocalOperationStatus.pendingAnalysis ||
-      LocalOperationStatus.pendingSync =>
-        Icons.timelapse_rounded,
-      LocalOperationStatus.localOnly => Icons.phone_android_rounded,
-    };
+IconData statusIcon(LocalOperationStatus status) {
+  switch (status) {
+    case LocalOperationStatus.analyzed:
+    case LocalOperationStatus.reviewed:
+    case LocalOperationStatus.synced:
+    case LocalOperationStatus.promotedToCloud:
+      return Icons.check_circle_outline_rounded;
+    case LocalOperationStatus.reviewRequired:
+    case LocalOperationStatus.incompleteAnalysis:
+    case LocalOperationStatus.failedAnalysis:
+    case LocalOperationStatus.syncFailed:
+      return Icons.error_outline_rounded;
+    case LocalOperationStatus.readingDocument:
+    case LocalOperationStatus.pendingOcr:
+    case LocalOperationStatus.ocrCompleted:
+    case LocalOperationStatus.waitingInternet:
+    case LocalOperationStatus.analyzing:
+    case LocalOperationStatus.pendingAnalysis:
+    case LocalOperationStatus.pendingSync:
+      return Icons.timelapse_rounded;
+    case LocalOperationStatus.localOnly:
+      return Icons.phone_android_rounded;
+  }
+}
 
 Color statusColor(BuildContext context, LocalOperationStatus status) {
   final scheme = Theme.of(context).colorScheme;

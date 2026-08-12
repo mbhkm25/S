@@ -30,7 +30,12 @@ class LocalFinancialAnalyzer {
         amount != null &&
         currency != null &&
         (references.documentReference != null || references.transferReference != null);
+    final identifiersComplete = _routingIdentifiersComplete(parties);
+    final requiresParties = entity.code == 'alomqy_mobile' ||
+        entity.code.startsWith('kuraimi') ||
+        entity.code.startsWith('bin_dowal');
     if (!criticalComplete) warnings.add('critical_field_unresolved');
+    if (requiresParties && !identifiersComplete) warnings.add('party_details_unresolved');
 
     final fieldConfidence = <String, double>{
       'financialEntity': entity.code == 'unknown' ? 0 : .98,
@@ -42,7 +47,12 @@ class LocalFinancialAnalyzer {
     final present = fieldConfidence.values.where((value) => value > 0).toList();
     final rulesConfidence = present.isEmpty ? 0.0 : present.reduce((a, b) => a + b) / present.length;
     final confidence = ((rulesConfidence * .78) + (ocrConfidence * .22)).clamp(0.0, 1.0).toDouble();
-    if (!criticalComplete) warnings.add('deterministic_partial_extraction');
+    final autoAcceptEligible = criticalComplete &&
+        (!requiresParties || identifiersComplete) &&
+        ocrConfidence >= .80 &&
+        !warnings.contains('multiple_amount_candidates') &&
+        !warnings.contains('multiple_reference_candidates');
+    if (!autoAcceptEligible) warnings.add('deterministic_partial_extraction');
 
     return {
       'schemaVersion': 2,
@@ -61,9 +71,11 @@ class LocalFinancialAnalyzer {
       'confidence': confidence,
       'fieldConfidence': fieldConfidence,
       'warnings': warnings.toSet().toList(),
-      'reviewRequired': !criticalComplete || warnings.isNotEmpty || confidence < .90,
+      'reviewRequired': !autoAcceptEligible || confidence < .90,
       'quality': {
         'criticalComplete': criticalComplete,
+        'routingIdentifiersComplete': identifiersComplete,
+        'autoAcceptEligible': autoAcceptEligible,
         'evidenceValidated': true,
         'source': 'local_financial_rules_v2',
       },
@@ -118,7 +130,14 @@ class LocalFinancialAnalyzer {
         (merged['amount'] as num) > 0 &&
         merged['currency'] != null &&
         (merged['documentReference'] != null || merged['transferReference'] != null);
+    final identifiersComplete = _routingIdentifiersComplete(
+      (merged['parties'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList(),
+    );
+    final requiresParties = entity.code == 'alomqy_mobile' ||
+        entity.code.startsWith('kuraimi') ||
+        entity.code.startsWith('bin_dowal');
     if (!criticalComplete) warnings.add('critical_field_unresolved');
+    if (requiresParties && !identifiersComplete) warnings.add('party_details_unresolved');
     if (ocrConfidence < .72) warnings.add('ocr_confidence_below_automatic_threshold');
 
     final semanticConfidence = (semantic['confidence'] as num?)?.toDouble() ?? 0;
@@ -128,6 +147,7 @@ class LocalFinancialAnalyzer {
     merged['warnings'] = warnings.toList();
     merged['reviewRequired'] = semantic['reviewRequired'] == true ||
         !criticalComplete ||
+        (requiresParties && !identifiersComplete) ||
         warnings.any((warning) => const {
               'critical_field_unresolved',
               'local_ocr_insufficient',
@@ -135,6 +155,8 @@ class LocalFinancialAnalyzer {
             }.contains(warning));
     merged['quality'] = {
       'criticalComplete': criticalComplete,
+      'routingIdentifiersComplete': identifiersComplete,
+      'autoAcceptEligible': criticalComplete && (!requiresParties || identifiersComplete),
       'evidenceValidated': true,
       'source': 'local_rules_plus_semantic_v2',
     };
@@ -242,7 +264,7 @@ class LocalFinancialAnalyzer {
 
   String? _labelledReference(String text, List<String> labels) {
     for (final label in labels) {
-      final match = RegExp('${RegExp.escape(label)}\\s*[:#\-]*\\s*([A-Z0-9-]{4,})', caseSensitive: false).firstMatch(text);
+      final match = RegExp('${RegExp.escape(label)}\\s*[-:#]*\\s*([A-Z0-9-]{4,})', caseSensitive: false).firstMatch(text);
       if (match != null) return match.group(1);
     }
     return null;
@@ -332,6 +354,26 @@ class LocalFinancialAnalyzer {
       if (party['name'] != null || identifiers.isNotEmpty) out.add(party);
     }
     return out;
+  }
+
+  bool _routingIdentifiersComplete(List<Map<String, dynamic>> parties) {
+    bool hasRole(Set<String> roles) => parties.any((party) {
+          if (!roles.contains(party['role'])) return false;
+          final identifiers = party['identifiers'];
+          return identifiers is List && identifiers.whereType<Map>().any((identifier) {
+            final type = identifier['type']?.toString();
+            return const {
+              'account_number',
+              'financial_account_number',
+              'wallet_number',
+              'customer_line',
+              'phone_number',
+              'iban',
+            }.contains(type);
+          });
+        });
+    return hasRole(const {'sender', 'debited_party'}) &&
+        hasRole(const {'receiver', 'beneficiary', 'credited_party'});
   }
 
   bool _hasEvidence(String source, dynamic value) {
