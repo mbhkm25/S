@@ -1,4 +1,5 @@
 import type {
+  EvidenceCandidate,
   FinancialCurrency,
   FinancialFieldCandidates,
   StructuredFinancialAnalysis,
@@ -15,14 +16,20 @@ function chooseUnique(items: { value: string }[]): string | null {
   return values.length === 1 ? values[0] : null;
 }
 
+function choosePreferred(items: EvidenceCandidate[], preferredKind: string): string | null {
+  const preferred = items.filter((item) => item.kind === preferredKind);
+  const preferredValue = chooseUnique(preferred);
+  return preferredValue ?? chooseUnique(items);
+}
+
 function resolveEntity(candidates: FinancialFieldCandidates, normalizedText: string): { code: string; name: string } {
   const hints = uniqueValues(candidates.entityHints);
   if (hints.length === 1) {
     const code = hints[0];
-    if (code === 'alomqi' || code === 'alomqy') return { code: 'alomqi', name: 'العمقي' };
+    if (code === 'alomqi') return { code, name: 'العمقي' };
     if (code === 'bin_dowal') return { code, name: 'بن دول' };
     if (code === 'al_busairi') return { code, name: 'البسيري' };
-    if (code === 'kuraimi_haseb' || code === 'alkuraimi') return { code: 'kuraimi_haseb', name: 'الكريمي / حاسب' };
+    if (code === 'kuraimi_haseb') return { code, name: 'الكريمي / حاسب' };
   }
 
   if (/Fund\s+Transfer\s*-\s*Other/i.test(normalizedText) && /\bFT[A-Z0-9]{6,}\b/i.test(normalizedText)) {
@@ -62,9 +69,9 @@ export function buildDeterministicFinancialAnalysis(input: {
 }): { structured: StructuredFinancialAnalysis; grounding: ReturnType<typeof groundStructuredAnalysis> } {
   const normalizedText = normalizeFinancialOcrText(input.rawText);
   const entity = resolveEntity(input.candidates, normalizedText);
-  const amountValue = chooseUnique(input.candidates.amounts);
+  const amountValue = choosePreferred(input.candidates.amounts, 'labeled_amount');
   const currencyValue = chooseUnique(input.candidates.currencies) as FinancialCurrency | null;
-  const referenceValue = chooseUnique(input.candidates.references);
+  const referenceValue = choosePreferred(input.candidates.references, 'labeled_reference');
   const dateValue = chooseUnique(input.candidates.dates);
 
   const amount = amountValue !== null && /^\d+(?:\.\d{1,2})?$/.test(amountValue) ? Number(amountValue) : null;
@@ -76,9 +83,11 @@ export function buildDeterministicFinancialAnalysis(input: {
   });
 
   const warnings: string[] = [];
-  if (uniqueValues(input.candidates.amounts).length > 1) warnings.push('ambiguous_amount_candidates');
+  const labeledAmounts = uniqueValues(input.candidates.amounts.filter((item) => item.kind === 'labeled_amount'));
+  if (labeledAmounts.length > 1) warnings.push('ambiguous_labeled_amount_candidates');
   if (uniqueValues(input.candidates.currencies).length > 1) warnings.push('ambiguous_currency_candidates');
-  if (uniqueValues(input.candidates.references).length > 1) warnings.push('ambiguous_reference_candidates');
+  const labeledReferences = uniqueValues(input.candidates.references.filter((item) => item.kind === 'labeled_reference'));
+  if (labeledReferences.length > 1) warnings.push('ambiguous_labeled_reference_candidates');
   if (entity.code === 'unknown') warnings.push('financial_entity_unresolved');
 
   const structured: StructuredFinancialAnalysis = {
