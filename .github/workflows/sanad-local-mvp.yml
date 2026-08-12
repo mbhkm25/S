@@ -1,4 +1,4 @@
-name: SANAD Local MVP
+name: SANAD Local v0.2
 
 on:
   pull_request:
@@ -131,6 +131,18 @@ jobs:
           perms = '    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n'
           if 'android.permission.CAMERA' not in m:
               m = m.replace(marker, perms + marker, 1)
+          share_filter = '''
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>'''
+          if 'android.intent.action.SEND' not in m:
+              activity_end = m.find('</activity>')
+              if activity_end < 0:
+                  raise SystemExit('MainActivity closing tag not found')
+              m = m[:activity_end] + share_filter + '\n        ' + m[activity_end:]
           manifest.write_text(m)
           PY
           cp tool/android/MainActivity.kt android/app/src/main/kotlin/com/sanadflow/sanad_local/MainActivity.kt
@@ -169,7 +181,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: sanad-local-mvp-apk
+          name: sanad-local-v0.2-apk
           path: apps/sanad_local/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14

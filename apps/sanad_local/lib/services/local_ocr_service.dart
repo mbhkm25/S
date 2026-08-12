@@ -25,14 +25,16 @@ class TesseractArabicOcrEngine implements LocalOcrEngine {
   @override
   Future<LocalOcrResult> recognize(String imagePath) async {
     final watch = Stopwatch()..start();
-    final raw = await _channel.invokeMethod<String>('recognize', {'imagePath': imagePath}) ?? '';
+    final response = await _channel.invokeMethod<dynamic>('recognize', {'imagePath': imagePath});
     watch.stop();
+    final raw = response is Map ? response['text']?.toString() ?? '' : response?.toString() ?? '';
     final normalized = normalizeOcrText(raw);
     if (normalized.trim().isEmpty) throw StateError('ocr_text_empty');
+    final nativeConfidence = response is Map ? (response['confidence'] as num?)?.toDouble() : null;
     return LocalOcrResult(
       text: normalized,
-      confidence: heuristicConfidence(normalized),
-      provider: 'tesseract4android:5.5.1:ara+eng',
+      confidence: (nativeConfidence ?? heuristicConfidence(normalized)).clamp(0.0, 1.0).toDouble(),
+      provider: 'tesseract4android:ara+eng:preprocessed-v2',
       durationMs: watch.elapsedMilliseconds,
     );
   }

@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sanad_local/domain/local_operation.dart';
+import 'package:sanad_local/domain/financial_entity_registry.dart';
+import 'package:sanad_local/domain/localized_analysis.dart';
+import 'package:sanad_local/services/financial_analysis_engine.dart';
 import 'package:sanad_local/services/local_ocr_service.dart';
 
 void main() {
@@ -45,5 +48,79 @@ void main() {
     expect(restored.amount, 50000);
     expect(restored.referenceNumber, '87542136');
     expect(restored.analysisConfidence, .98);
+  });
+
+  test('financial entity registry canonicalizes Arabic and English names', () {
+    expect(
+      FinancialEntityRegistry.resolve(name: 'Al Kuraimi Islamic Bank').arabicName,
+      'بنك الكريمي الإسلامي',
+    );
+    expect(
+      FinancialEntityRegistry.resolve(name: 'Al-Omqi Exchange').arabicName,
+      'شركة العمقي للصرافة',
+    );
+  });
+
+  test('warning codes are converted to cashier-facing Arabic', () {
+    expect(localizedWarning('critical_field_unresolved'), contains('المبلغ'));
+    expect(localizedWarning('critical_field_unresolved'), isNot(contains('critical_field')));
+  });
+
+  test('local rules extract real-shape Al-Omqi critical fields', () {
+    const text = '''
+شركة العمقي للصرافة
+إشعار إيداع عبر تطبيق العمقي جوال
+المرجع: 8-342038458
+المبلغ #500# سعودي
+2026-08-11 08:29 PM
+''';
+    final result = const LocalFinancialAnalyzer().analyzeDeterministically(text, ocrConfidence: .96);
+    expect(result['financialEntityCode'], 'alomqy_mobile');
+    expect(result['templateCode'], 'amqi_mobile_deposit_notice_v1');
+    expect(result['amount'], 500);
+    expect(result['currency'], 'SAR');
+    expect(result['documentReference'], '8-342038458');
+    expect((result['quality'] as Map)['criticalComplete'], isTrue);
+  });
+
+  test('local rules separate Kuraimi FT reference from document reference', () {
+    const text = '''
+Al Kuraimi Islamic Bank
+Fund Transfer - Other
+Amount 125000 YER
+رقم المرجع: 7542198
+FT9AC204881
+''';
+    final result = const LocalFinancialAnalyzer().analyzeDeterministically(text, ocrConfidence: .94);
+    expect(result['financialEntityCode'], 'kuraimi_yer');
+    expect(result['amount'], 125000);
+    expect(result['currency'], 'YER');
+    expect(result['documentReference'], '7542198');
+    expect(result['transferReference'], 'FT9AC204881');
+  });
+
+  test('semantic values without OCR evidence are rejected', () {
+    const text = 'العمقي المبلغ 500 SAR المرجع 8-342038458';
+    final analyzer = const LocalFinancialAnalyzer();
+    final deterministic = analyzer.analyzeDeterministically(text, ocrConfidence: .9);
+    final merged = analyzer.mergeSemanticWithEvidence(
+      deterministic: deterministic,
+      semantic: const {
+        'financialEntity': 'Al-Omqi Exchange',
+        'financialEntityCode': 'alomqi',
+        'amount': 999,
+        'currency': 'USD',
+        'documentReference': '999999999',
+        'parties': [],
+        'confidence': .99,
+        'warnings': [],
+        'reviewRequired': false,
+      },
+      ocrText: text,
+      ocrConfidence: .9,
+    );
+    expect(merged['amount'], 500);
+    expect(merged['currency'], 'SAR');
+    expect(merged['documentReference'], '8-342038458');
   });
 }

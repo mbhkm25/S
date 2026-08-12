@@ -19,7 +19,9 @@ class LocalReportService {
     }).toList();
 
     final fontData = await rootBundle.load('assets/fonts/NotoSansArabic.ttf');
+    final logoData = await rootBundle.load('assets/branding/sanad-logo.png');
     final arabic = pw.Font.ttf(fontData);
+    final logo = pw.MemoryImage(logoData.buffer.asUint8List());
     final document = pw.Document();
     final totals = <String, double>{};
     for (final operation in today) {
@@ -39,7 +41,17 @@ class LocalReportService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('SANAD Local', style: pw.TextStyle(font: arabic, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Container(
+                width: 72,
+                height: 46,
+                padding: const pw.EdgeInsets.all(4),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.white,
+                  border: pw.Border.all(color: PdfColors.grey300, width: .5),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+                ),
+                child: pw.Image(logo, fit: pw.BoxFit.contain),
+              ),
               pw.Text('تقرير عمليات اليوم', style: pw.TextStyle(font: arabic, fontSize: 18, fontWeight: pw.FontWeight.bold)),
             ],
           ),
@@ -66,7 +78,7 @@ class LocalReportService {
                   today[i].amount == null ? '—' : NumberFormat('#,##0.##', 'en').format(today[i].amount),
                   today[i].currency ?? '—',
                   today[i].referenceNumber ?? '—',
-                  today[i].needsReview ? 'مراجعة' : today[i].isAnalyzed ? 'محلل' : 'محلي',
+                  _reportStatus(today[i]),
                 ],
             ],
             headerStyle: pw.TextStyle(font: arabic, fontSize: 9, fontWeight: pw.FontWeight.bold),
@@ -77,7 +89,7 @@ class LocalReportService {
           ),
           pw.SizedBox(height: 12),
           pw.Text(
-            'هذا التقرير أُنشئ محليًا من جهاز المستخدم. الصور الأصلية لا تُرفق ولا تُرفع إلى السحابة تلقائيًا.',
+            'أُنشئ هذا التقرير بالكامل على الهاتف. المستندات الأصلية لا تُرفق ولا تُرفع إلى السحابة تلقائيًا.',
             style: pw.TextStyle(font: arabic, fontSize: 8, color: PdfColors.grey700),
           ),
         ],
@@ -95,4 +107,13 @@ class LocalReportService {
   Future<void> share(File file) async {
     await Printing.sharePdf(bytes: await file.readAsBytes(), filename: p.basename(file.path));
   }
+}
+
+String _reportStatus(LocalOperation operation) {
+  if (operation.status == LocalOperationStatus.reviewed) return 'تمت المراجعة';
+  if (operation.needsReview) return 'يحتاج مراجعة';
+  if (operation.isAnalyzed) return 'تم التحليل';
+  if (operation.status == LocalOperationStatus.waitingInternet) return 'بانتظار الإنترنت';
+  if (operation.status == LocalOperationStatus.failedAnalysis) return 'فشل التحليل';
+  return 'محفوظ محليًا';
 }

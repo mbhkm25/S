@@ -42,6 +42,7 @@ class SanadSemanticAnalyzer {
     required double ocrConfidence,
     required String ocrProvider,
     required int revision,
+    required Map<String, dynamic> localHints,
   }) async {
     final session = Supabase.instance.client.auth.currentSession;
     if (session == null) throw StateError('sanad_auth_required');
@@ -59,6 +60,7 @@ class SanadSemanticAnalyzer {
         'ocr_text': ocrText,
         'ocr_confidence': ocrConfidence,
         'ocr_provider': ocrProvider,
+        'local_hints': localHints,
       }),
     ).timeout(const Duration(seconds: 35));
 

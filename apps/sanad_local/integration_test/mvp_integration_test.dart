@@ -9,6 +9,7 @@ import 'package:sanad_local/app.dart';
 import 'package:sanad_local/data/local_database.dart';
 import 'package:sanad_local/domain/local_operation.dart';
 import 'package:sanad_local/services/local_ocr_service.dart';
+import 'package:sanad_local/services/local_file_store.dart';
 import 'package:sanad_local/services/local_report_service.dart';
 import 'package:sanad_local/services/sanad_cloud.dart';
 
@@ -23,8 +24,9 @@ void main() {
   testWidgets('boots with system-native cashier actions', (tester) async {
     await tester.pumpWidget(const SanadLocalApp());
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    expect(find.text('سند المحلي'), findsOneWidget);
+    expect(find.text('دفتر العمليات المحلي'), findsOneWidget);
     expect(find.byKey(const Key('capture-camera')), findsOneWidget);
+    expect(find.byKey(const Key('import-files')), findsOneWidget);
     expect(find.byKey(const Key('local-report')), findsOneWidget);
   });
 
@@ -82,5 +84,16 @@ void main() {
     expect(await file.length(), greaterThan(1500));
     final header = await file.openRead(0, 5).fold<List<int>>([], (a, b) => a..addAll(b));
     expect(String.fromCharCodes(header), startsWith('%PDF'));
+
+    final stored = await LocalFileStore().persist(
+      sourcePath: file.path,
+      operationId: 'pdf-import-${now.microsecondsSinceEpoch}',
+      originalFileName: 'financial-notice.pdf',
+      declaredMimeType: 'application/pdf',
+    );
+    expect(stored.mimeType, 'application/pdf');
+    expect(stored.pageCount, greaterThanOrEqualTo(1));
+    expect(stored.previewPath, isNotNull);
+    expect(await File(stored.previewPath!).exists(), isTrue);
   });
 }

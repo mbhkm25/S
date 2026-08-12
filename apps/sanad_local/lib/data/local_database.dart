@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -16,7 +18,7 @@ class LocalDatabase {
     final path = p.join(root, 'sanad_local.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 3,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
         await db.rawQuery('PRAGMA journal_mode = WAL');
@@ -30,23 +32,38 @@ class LocalDatabase {
             updated_at TEXT NOT NULL,
             status TEXT NOT NULL,
             image_path TEXT NOT NULL,
+            preview_path TEXT,
+            original_file_name TEXT,
+            file_extension TEXT,
+            mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+            document_page_count INTEGER NOT NULL DEFAULT 1,
+            import_source TEXT NOT NULL DEFAULT 'camera',
             file_sha256 TEXT,
             ocr_text TEXT,
             ocr_confidence REAL,
             ocr_provider TEXT,
+            ocr_duration_ms INTEGER,
             analysis_revision INTEGER NOT NULL DEFAULT 1,
             financial_entity TEXT,
             financial_entity_code TEXT,
+            template_code TEXT,
+            transaction_type TEXT,
+            transaction_direction TEXT,
             amount REAL,
             currency TEXT,
             reference_number TEXT,
+            document_reference TEXT,
+            transfer_reference TEXT,
             transaction_datetime TEXT,
+            sender_name TEXT,
             receiver_name TEXT,
             receiver_identifier_type TEXT,
             receiver_identifier_value TEXT,
             analysis_json TEXT,
             analysis_warnings TEXT NOT NULL DEFAULT '[]',
             analysis_confidence REAL,
+            corrected_json TEXT,
+            reviewed_at TEXT,
             cloud_operation_id TEXT
           )
         ''');
@@ -94,6 +111,31 @@ class LocalDatabase {
           )
         ''');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          for (final statement in const [
+            'ALTER TABLE local_operations ADD COLUMN preview_path TEXT',
+            'ALTER TABLE local_operations ADD COLUMN original_file_name TEXT',
+            'ALTER TABLE local_operations ADD COLUMN file_extension TEXT',
+            "ALTER TABLE local_operations ADD COLUMN mime_type TEXT NOT NULL DEFAULT 'image/jpeg'",
+            'ALTER TABLE local_operations ADD COLUMN document_page_count INTEGER NOT NULL DEFAULT 1',
+            "ALTER TABLE local_operations ADD COLUMN import_source TEXT NOT NULL DEFAULT 'legacy'",
+            'ALTER TABLE local_operations ADD COLUMN ocr_duration_ms INTEGER',
+            'ALTER TABLE local_operations ADD COLUMN template_code TEXT',
+            'ALTER TABLE local_operations ADD COLUMN transaction_type TEXT',
+            'ALTER TABLE local_operations ADD COLUMN transaction_direction TEXT',
+            'ALTER TABLE local_operations ADD COLUMN document_reference TEXT',
+            'ALTER TABLE local_operations ADD COLUMN transfer_reference TEXT',
+            'ALTER TABLE local_operations ADD COLUMN sender_name TEXT',
+          ]) {
+            await db.execute(statement);
+          }
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE local_operations ADD COLUMN corrected_json TEXT');
+          await db.execute('ALTER TABLE local_operations ADD COLUMN reviewed_at TEXT');
+        }
+      },
     );
   }
 
@@ -118,7 +160,11 @@ class LocalDatabase {
     });
   }
 
-  Future<void> updateOperation(LocalOperation operation, {String? eventType}) async {
+  Future<void> updateOperation(
+    LocalOperation operation, {
+    String? eventType,
+    Map<String, Object?>? eventPayload,
+  }) async {
     final db = await database;
     await db.transaction((txn) async {
       await txn.update('local_operations', operation.toDb(), where: 'id = ?', whereArgs: [operation.id]);
@@ -126,10 +172,24 @@ class LocalDatabase {
         await txn.insert('local_operation_events', {
           'operation_id': operation.id,
           'event_type': eventType,
-          'payload_json': null,
+          'payload_json': eventPayload == null ? null : jsonEncode(eventPayload),
           'created_at': DateTime.now().toUtc().toIso8601String(),
         });
       }
+    });
+  }
+
+  Future<void> addEvent(
+    String operationId,
+    String eventType, {
+    Map<String, Object?>? payload,
+  }) async {
+    final db = await database;
+    await db.insert('local_operation_events', {
+      'operation_id': operationId,
+      'event_type': eventType,
+      'payload_json': payload == null ? null : jsonEncode(payload),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -154,9 +214,9 @@ class LocalDatabase {
     final rows = await db.query(
       'local_operations',
       where: amount == null
-          ? '(reference_number LIKE ? OR financial_entity LIKE ? OR receiver_name LIKE ? OR currency LIKE ?)'
-          : '(amount = ? OR reference_number LIKE ? OR financial_entity LIKE ? OR receiver_name LIKE ?)',
-      whereArgs: amount == null ? [like, like, like, like] : [amount, like, like, like],
+          ? '(reference_number LIKE ? OR financial_entity LIKE ? OR receiver_name LIKE ? OR sender_name LIKE ? OR currency LIKE ?)'
+          : '(amount = ? OR reference_number LIKE ? OR financial_entity LIKE ? OR receiver_name LIKE ? OR sender_name LIKE ?)',
+      whereArgs: amount == null ? [like, like, like, like, like] : [amount, like, like, like, like],
       orderBy: 'created_at DESC',
       limit: limit,
     );
@@ -170,7 +230,7 @@ class LocalDatabase {
     final rows = await db.rawQuery('''
       SELECT currency, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
       FROM local_operations
-      WHERE created_at >= ? AND status IN ('analyzed', 'review_required', 'synced', 'promoted_to_cloud')
+      WHERE created_at >= ? AND status IN ('analyzed', 'review_required', 'incomplete_analysis', 'reviewed', 'synced', 'promoted_to_cloud')
       GROUP BY currency
     ''', [start]);
     final out = <String, num>{};

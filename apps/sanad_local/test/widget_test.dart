@@ -17,8 +17,9 @@ void main() {
   testWidgets('SANAD Local renders cashier-first home', (tester) async {
     await tester.pumpWidget(const SanadLocalApp());
     await tester.pumpAndSettle();
-    expect(find.text('سند المحلي'), findsOneWidget);
+    expect(find.text('دفتر العمليات المحلي'), findsOneWidget);
     expect(find.text('تصوير إشعار مالي'), findsOneWidget);
+    expect(find.text('من الملفات'), findsOneWidget);
     expect(find.text('تقرير اليوم'), findsOneWidget);
   });
 }

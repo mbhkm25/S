@@ -1,7 +1,7 @@
 name: sanad_local
 description: SANAD Local cashier-first Android application.
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -15,6 +15,7 @@ dependencies:
   path: ^1.9.1
   uuid: ^4.6.0
   image_picker: ^1.2.3
+  file_picker: ^10.3.10
   crypto: ^3.0.6
   http: ^1.6.0
   intl: ^0.20.2
@@ -38,3 +39,5 @@ flutter:
     - assets/tessdata/
     - assets/fonts/
     - assets/test/
+    - assets/branding/
+    - assets/financial_entities/
