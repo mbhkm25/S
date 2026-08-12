@@ -163,8 +163,9 @@ class MainActivity : FlutterActivity() {
             val signingInfo = info.signingInfo ?: throw SecurityException("update_signing_info_missing")
             if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners else signingInfo.signingCertificateHistory
         } else {
-            @Suppress("DEPRECATION") info.signatures
+            @Suppress("DEPRECATION") (info.signatures ?: emptyArray())
         }
+        if (signatures.isEmpty()) throw SecurityException("update_signing_certificate_missing")
         return signatures.map { signature ->
             MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
                 .joinToString("") { "%02x".format(it) }
