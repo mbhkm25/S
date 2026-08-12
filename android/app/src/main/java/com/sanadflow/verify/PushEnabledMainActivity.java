@@ -9,6 +9,7 @@ import android.webkit.WebView;
 public class PushEnabledMainActivity extends MainActivity {
     private static final String TAG = "SANAD_PushActivity";
     private AndroidPushBridge androidPushBridge;
+    private AndroidLocalRuntimeBridge androidLocalRuntimeBridge;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -18,7 +19,11 @@ public class PushEnabledMainActivity extends MainActivity {
             androidPushBridge = new AndroidPushBridge(this, webView);
             webView.addJavascriptInterface(androidPushBridge, "AndroidPush");
             androidPushBridge.capturePushIntent(getIntent());
-            Log.i(TAG, "Native Android push bridge enabled");
+
+            androidLocalRuntimeBridge = new AndroidLocalRuntimeBridge(this, webView);
+            webView.addJavascriptInterface(androidLocalRuntimeBridge, "AndroidLocalRuntime");
+            androidLocalRuntimeBridge.dispatchPendingSignals();
+            Log.i(TAG, "Native Android push + Local-first bridges enabled");
         }
     }
 
@@ -27,12 +32,14 @@ public class PushEnabledMainActivity extends MainActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (androidPushBridge != null) androidPushBridge.capturePushIntent(intent);
+        if (androidLocalRuntimeBridge != null) androidLocalRuntimeBridge.dispatchPendingSignals();
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (androidPushBridge != null) androidPushBridge.refreshRegistration();
+        if (androidLocalRuntimeBridge != null) androidLocalRuntimeBridge.dispatchPendingSignals();
     }
 
     @Override
