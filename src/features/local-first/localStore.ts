@@ -138,6 +138,18 @@ export async function getLocalOperation(localId: string): Promise<LocalStoredOpe
   }
 }
 
+export async function listLocalOperations(): Promise<LocalStoredOperation[]> {
+  const db = await openLocalFirstDatabase();
+  try {
+    const tx = db.transaction(OPERATIONS, 'readonly');
+    const values = await requestResult(tx.objectStore(OPERATIONS).getAll() as IDBRequest<LocalStoredOperation[]>);
+    await transactionDone(tx);
+    return values.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } finally {
+    db.close();
+  }
+}
+
 export async function getLocalOperationFile(localId: string): Promise<LocalStoredFile | null> {
   const operation = await getLocalOperation(localId);
   if (!operation) return null;
