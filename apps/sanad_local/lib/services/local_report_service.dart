@@ -9,6 +9,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../domain/local_operation.dart';
+import '../domain/financial_entity_registry.dart';
+import '../domain/localized_analysis.dart';
 
 class LocalReportService {
   Future<File> buildDailyReport(List<LocalOperation> operations) async {
@@ -25,7 +27,7 @@ class LocalReportService {
     final document = pw.Document();
     final totals = <String, double>{};
     for (final operation in today) {
-      final currency = operation.currency ?? 'غير محدد';
+      final currency = localizedCurrency(operation.currency);
       totals[currency] = (totals[currency] ?? 0) + (operation.amount ?? 0);
     }
 
@@ -74,9 +76,13 @@ class LocalReportService {
                 [
                   '${i + 1}',
                   DateFormat('HH:mm').format(today[i].createdAt),
-                  today[i].financialEntity ?? '—',
+                  FinancialEntityRegistry.resolve(
+                    code: today[i].financialEntityCode,
+                    name: today[i].financialEntity,
+                    currency: today[i].currency,
+                  ).arabicName,
                   today[i].amount == null ? '—' : NumberFormat('#,##0.##', 'en').format(today[i].amount),
-                  today[i].currency ?? '—',
+                  localizedCurrency(today[i].currency),
                   today[i].referenceNumber ?? '—',
                   _reportStatus(today[i]),
                 ],

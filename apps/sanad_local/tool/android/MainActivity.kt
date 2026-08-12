@@ -7,8 +7,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -102,8 +104,10 @@ class MainActivity : FlutterActivity() {
     private fun recognize(imagePath: String): Map<String, Any> {
         val image = File(imagePath)
         if (!image.isFile || image.length() == 0L) throw IllegalArgumentException("ocr_image_missing")
-        val source = BitmapFactory.decodeFile(image.absolutePath)
+        val decoded = BitmapFactory.decodeFile(image.absolutePath)
             ?: throw IllegalArgumentException("ocr_image_decode_failed")
+        val source = applyExifOrientation(decoded, image.absolutePath)
+        if (source !== decoded) decoded.recycle()
         val prepared = preprocessForOcr(source)
         if (prepared !== source) source.recycle()
 
@@ -127,6 +131,38 @@ class MainActivity : FlutterActivity() {
             tess.recycle()
             prepared.recycle()
         }
+    }
+
+    private fun applyExifOrientation(source: Bitmap, imagePath: String): Bitmap {
+        val orientation = try {
+            ExifInterface(imagePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+        } catch (_: Throwable) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+        if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) {
+            return source
+        }
+        val matrix = Matrix().apply {
+            when (orientation) {
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> setScale(-1f, 1f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> setRotate(180f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> setScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> {
+                    setRotate(90f)
+                    postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_ROTATE_90 -> setRotate(90f)
+                ExifInterface.ORIENTATION_TRANSVERSE -> {
+                    setRotate(270f)
+                    postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_ROTATE_270 -> setRotate(270f)
+            }
+        }
+        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
     private fun preprocessForOcr(source: Bitmap): Bitmap {

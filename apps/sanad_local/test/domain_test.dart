@@ -81,6 +81,8 @@ void main() {
     expect(result['currency'], 'SAR');
     expect(result['documentReference'], '8-342038458');
     expect((result['quality'] as Map)['criticalComplete'], isTrue);
+    expect((result['quality'] as Map)['autoAcceptEligible'], isFalse);
+    expect(result['reviewRequired'], isTrue);
   });
 
   test('local rules separate Kuraimi FT reference from document reference', () {
@@ -97,6 +99,7 @@ FT9AC204881
     expect(result['currency'], 'YER');
     expect(result['documentReference'], '7542198');
     expect(result['transferReference'], 'FT9AC204881');
+    expect((result['quality'] as Map)['autoAcceptEligible'], isFalse);
   });
 
   test('semantic values without OCR evidence are rejected', () {
@@ -122,5 +125,47 @@ FT9AC204881
     expect(merged['amount'], 500);
     expect(merged['currency'], 'SAR');
     expect(merged['documentReference'], '8-342038458');
+  });
+
+  test('semantic completion cannot bypass the local OCR confidence gate', () {
+    const text = '''
+العمقي المبلغ 500 SAR المرجع 8-342038458
+من حساب أحمد رقم 123456789 إلى حساب محمد رقم 987654321
+''';
+    final analyzer = const LocalFinancialAnalyzer();
+    final deterministic = analyzer.analyzeDeterministically(text, ocrConfidence: .75);
+    final merged = analyzer.mergeSemanticWithEvidence(
+      deterministic: deterministic,
+      semantic: const {
+        'financialEntity': 'Al-Omqi Exchange',
+        'financialEntityCode': 'alomqi',
+        'amount': 500,
+        'currency': 'SAR',
+        'documentReference': '8-342038458',
+        'parties': [
+          {
+            'role': 'sender',
+            'name': 'أحمد',
+            'identifiers': [
+              {'type': 'account_number', 'value': '123456789'}
+            ],
+          },
+          {
+            'role': 'receiver',
+            'name': 'محمد',
+            'identifiers': [
+              {'type': 'account_number', 'value': '987654321'}
+            ],
+          },
+        ],
+        'confidence': .99,
+        'warnings': [],
+        'reviewRequired': false,
+      },
+      ocrText: text,
+      ocrConfidence: .75,
+    );
+    expect((merged['quality'] as Map)['autoAcceptEligible'], isFalse);
+    expect(merged['reviewRequired'], isTrue);
   });
 }

@@ -142,12 +142,16 @@ class LocalFinancialAnalyzer {
 
     final semanticConfidence = (semantic['confidence'] as num?)?.toDouble() ?? 0;
     final deterministicConfidence = (deterministic['confidence'] as num?)?.toDouble() ?? 0;
+    final autoAcceptEligible = criticalComplete &&
+        (!requiresParties || identifiersComplete) &&
+        ocrConfidence >= .80 &&
+        !warnings.contains('multiple_amount_candidates') &&
+        !warnings.contains('multiple_reference_candidates');
     merged['schemaVersion'] = 2;
     merged['confidence'] = semanticConfidence > deterministicConfidence ? semanticConfidence : deterministicConfidence;
     merged['warnings'] = warnings.toList();
     merged['reviewRequired'] = semantic['reviewRequired'] == true ||
-        !criticalComplete ||
-        (requiresParties && !identifiersComplete) ||
+        !autoAcceptEligible ||
         warnings.any((warning) => const {
               'critical_field_unresolved',
               'local_ocr_insufficient',
@@ -156,7 +160,7 @@ class LocalFinancialAnalyzer {
     merged['quality'] = {
       'criticalComplete': criticalComplete,
       'routingIdentifiersComplete': identifiersComplete,
-      'autoAcceptEligible': criticalComplete && (!requiresParties || identifiersComplete),
+      'autoAcceptEligible': autoAcceptEligible,
       'evidenceValidated': true,
       'source': 'local_rules_plus_semantic_v2',
     };

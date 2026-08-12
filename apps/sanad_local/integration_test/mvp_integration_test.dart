@@ -96,4 +96,27 @@ void main() {
     expect(stored.previewPath, isNotNull);
     expect(await File(stored.previewPath!).exists(), isTrue);
   });
+
+  testWidgets('Arabic PDF report scales to 1, 50, 200 and 500 operations', (tester) async {
+    final now = DateTime.now();
+    for (final count in const [1, 50, 200, 500]) {
+      final operations = List.generate(
+        count,
+        (index) => LocalOperation(
+          id: 'report-scale-$count-$index',
+          createdAt: now.add(Duration(milliseconds: index)),
+          updatedAt: now.add(Duration(milliseconds: index)),
+          status: index.isEven ? LocalOperationStatus.analyzed : LocalOperationStatus.reviewRequired,
+          imagePath: '/private/report-$index.jpg',
+          financialEntity: index.isEven ? 'شركة العمقي للصرافة' : 'بنك الكريمي الإسلامي',
+          amount: (index + 1) * 1000,
+          currency: index.isEven ? 'YER' : 'SAR',
+          referenceNumber: 'R$count$index',
+        ),
+      );
+      final file = await LocalReportService().buildDailyReport(operations);
+      expect(await file.exists(), isTrue, reason: 'report size $count');
+      expect(await file.length(), greaterThan(1500), reason: 'report size $count');
+    }
+  });
 }
