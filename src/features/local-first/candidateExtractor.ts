@@ -34,9 +34,7 @@ export function extractFinancialCandidates(rawText: string): FinancialFieldCandi
 
   for (const line of lines) {
     for (const currency of CURRENCY_PATTERNS) {
-      if (currency.pattern.test(line)) {
-        currencies.push({ value: currency.code, line, kind: 'currency', score: 1 });
-      }
+      if (currency.pattern.test(line)) currencies.push({ value: currency.code, line, kind: 'currency', score: 1 });
     }
 
     const reference = line.match(REFERENCE_LABEL)?.[1];
@@ -51,17 +49,19 @@ export function extractFinancialCandidates(rawText: string): FinancialFieldCandi
     }
 
     for (const match of line.matchAll(AMOUNT_PATTERN)) {
-      const rawAmount = match[1];
-      const compact = rawAmount.replace(/[\s,]/g, '');
-      if (/^\d+(?:\.\d{1,2})?$/.test(compact)) {
-        amounts.push({ value: compact, line, kind: 'amount_like', score: 0.6 });
-      }
+      const compact = match[1].replace(/[\s,]/g, '');
+      if (/^\d+(?:\.\d{1,2})?$/.test(compact)) amounts.push({ value: compact, line, kind: 'amount_like', score: 0.6 });
     }
 
     const lower = line.toLowerCase();
-    if (/(الكريمي|kuraimi)/i.test(lower)) entityHints.push({ value: 'alkuraimi', line, kind: 'entity_hint', score: 0.95 });
-    if (/(العمقي|alomqy|alomqi)/i.test(lower)) entityHints.push({ value: 'alomqy', line, kind: 'entity_hint', score: 0.95 });
+    if (/(الكريمي|حاسب|kuraimi|haseb)/i.test(lower)) entityHints.push({ value: 'kuraimi_haseb', line, kind: 'entity_hint', score: 0.95 });
+    if (/(العمقي|alomqy|alomqi|amqi)/i.test(lower)) entityHints.push({ value: 'alomqi', line, kind: 'entity_hint', score: 0.95 });
     if (/(بن\s*دول|bindaw?al|bin\s*dowal)/i.test(lower)) entityHints.push({ value: 'bin_dowal', line, kind: 'entity_hint', score: 0.9 });
+    if (/(البسيري|busairi|al\s*busairi)/i.test(lower)) entityHints.push({ value: 'al_busairi', line, kind: 'entity_hint', score: 0.9 });
+
+    for (const ft of line.matchAll(/\bFT[A-Z0-9]{6,}\b/gi)) {
+      references.push({ value: normalizeCandidateToken(ft[0]), line, kind: 'ft_transfer_reference', score: 0.95 });
+    }
   }
 
   return {
