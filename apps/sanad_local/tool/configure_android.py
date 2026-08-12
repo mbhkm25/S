@@ -85,6 +85,17 @@ wrapper_text = re.sub(
 )
 wrapper.write_text(wrapper_text)
 
+# The Kotlin daemon repeatedly fails to accept local connections on some Windows
+# development machines. Force in-process compilation there to avoid repeated
+# daemon retries/fallbacks that can turn a debug build into a 30+ minute wait.
+gradle_properties = Path('android/gradle.properties')
+properties_text = gradle_properties.read_text()
+if os.name == 'nt' and 'kotlin.compiler.execution.strategy=' not in properties_text:
+    properties_text += '\nkotlin.compiler.execution.strategy=in-process\n'
+if os.name == 'nt' and 'org.gradle.workers.max=' not in properties_text:
+    properties_text += 'org.gradle.workers.max=2\n'
+gradle_properties.write_text(properties_text)
+
 manifest = Path('android/app/src/main/AndroidManifest.xml')
 manifest_text = manifest.read_text()
 application_marker = '<application'
