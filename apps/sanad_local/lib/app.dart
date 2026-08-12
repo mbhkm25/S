@@ -10,6 +10,7 @@ import 'domain/local_operation.dart';
 import 'domain/localized_analysis.dart';
 import 'services/local_report_service.dart';
 import 'services/operation_pipeline.dart';
+import 'services/release_update_service.dart';
 
 class SanadLocalApp extends StatelessWidget {
   const SanadLocalApp({super.key});
@@ -71,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final OperationPipeline _pipeline = OperationPipeline();
   final LocalReportService _report = LocalReportService();
   final TextEditingController _search = TextEditingController();
+  final ReleaseUpdateService _updates = ReleaseUpdateService();
 
   List<LocalOperation> _operations = const [];
   Map<String, num> _summary = const {};
@@ -83,7 +85,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refresh();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _consumeSharedFile());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumeSharedFile();
+      _checkForUpdate();
+    });
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final release = await _updates.check();
+      if (!mounted || release == null) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: !release.requiredUpdate,
+        builder: (context) => _ReleaseUpdateDialog(
+          release: release,
+          updates: _updates,
+        ),
+      );
+    } catch (_) {
+      // Update checks are intentionally silent; local operation capture must never
+      // depend on the release server or internet connectivity.
+    }
   }
 
   @override
@@ -227,6 +250,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
+    _updates.dispose();
     unawaited(_pipeline.dispose());
     super.dispose();
   }
@@ -355,6 +379,90 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+class _ReleaseUpdateDialog extends StatefulWidget {
+  const _ReleaseUpdateDialog({required this.release, required this.updates});
+
+  final LocalRelease release;
+  final ReleaseUpdateService updates;
+
+  @override
+  State<_ReleaseUpdateDialog> createState() => _ReleaseUpdateDialogState();
+}
+
+class _ReleaseUpdateDialogState extends State<_ReleaseUpdateDialog> {
+  int? _progress;
+  String? _error;
+
+  Future<void> _install() async {
+    setState(() {
+      _progress = 0;
+      _error = null;
+    });
+    try {
+      final result = await widget.updates.downloadAndInstall(
+        widget.release,
+        onProgress: (value) {
+          if (mounted) setState(() => _progress = value);
+        },
+      );
+      if (!mounted) return;
+      if (result['permissionRequired'] == true) {
+        setState(() {
+          _progress = null;
+          _error = 'اسمح لسند المحلي بالتثبيت من هذا المصدر، ثم اضغط «تحديث الآن» مجددًا.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _progress = null;
+          _error = 'تعذر تنزيل التحديث أو التحقق منه. لم يتم تثبيت أي ملف.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(widget.release.requiredUpdate
+              ? 'يلزم تحديث سند المحلي'
+              : 'نسخة جديدة من سند المحلي'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('الإصدار ${widget.release.versionName} متاح الآن.'),
+              for (final note in widget.release.releaseNotes)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('• $note'),
+                ),
+              if (_progress != null) ...[
+                const SizedBox(height: 16),
+                LinearProgressIndicator(value: _progress! / 100),
+                const SizedBox(height: 6),
+                Text('جارٍ التنزيل والتحقق… $_progress٪'),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ],
+            ],
+          ),
+          actions: [
+            if (!widget.release.requiredUpdate && _progress == null)
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('لاحقًا')),
+            FilledButton(
+              onPressed: _progress == null ? _install : null,
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
+      );
 }
 
 class _SanadHeader extends StatelessWidget {

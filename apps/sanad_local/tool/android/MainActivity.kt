@@ -15,7 +15,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import android.provider.OpenableColumns
+import android.provider.Settings
+import android.content.pm.PackageManager
+import androidx.core.content.FileProvider
 import com.googlecode.tesseract.android.TessBaseAPI
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -23,6 +27,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.cos
@@ -99,9 +104,71 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "getAppInfo" -> {
+                        val info = packageManager.getPackageInfo(packageName, 0)
+                        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            info.longVersionCode
+                        } else {
+                            @Suppress("DEPRECATION") info.versionCode.toLong()
+                        }
+                        result.success(mapOf("versionCode" to versionCode, "versionName" to (info.versionName ?: "")))
+                    }
+                    "installVerifiedApk" -> {
+                        val apkPath = call.argument<String>("apkPath")
+                        if (apkPath.isNullOrBlank()) {
+                            result.error("update_invalid_argument", "apkPath is required", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            result.success(installVerifiedApk(apkPath))
+                        } catch (error: Throwable) {
+                            result.error("update_verification_failed", error.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun installVerifiedApk(apkPath: String): Map<String, Any> {
+        val apk = File(apkPath)
+        if (!apk.isFile || apk.length() == 0L) throw SecurityException("update_file_missing")
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
+        }
+        @Suppress("DEPRECATION")
+        val archive = packageManager.getPackageArchiveInfo(apk.absolutePath, flags)
+            ?: throw SecurityException("update_package_invalid")
+        if (archive.packageName != packageName) throw SecurityException("update_package_name_mismatch")
+        val installed = packageManager.getPackageInfo(packageName, flags)
+        if (certificateDigests(archive) != certificateDigests(installed)) {
+            throw SecurityException("update_signing_certificate_mismatch")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            return mapOf("permissionRequired" to true)
+        }
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apk)
+        startActivity(Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+        return mapOf("installerOpened" to true)
+    }
+
+    private fun certificateDigests(info: android.content.pm.PackageInfo): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: throw SecurityException("update_signing_info_missing")
+            if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners else signingInfo.signingCertificateHistory
+        } else {
+            @Suppress("DEPRECATION") info.signatures
+        }
+        return signatures.map { signature ->
+            MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        }.toSet()
     }
 
     private fun recognize(imagePath: String): Map<String, Any> {

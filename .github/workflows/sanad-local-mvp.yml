@@ -86,8 +86,34 @@ jobs:
           cache: true
       - name: Install fixture dependency
         run: python3 -m pip install --user pillow
+      - name: Restore stable Android signing key when available
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          values=("$KEYSTORE_BASE64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD")
+          present=0
+          for value in "${values[@]}"; do [[ -n "$value" ]] && present=$((present + 1)); done
+          if [[ "$present" = 0 ]]; then
+            echo "Stable signing secrets are unavailable; this CI run will use the non-publishable test key."
+            exit 0
+          fi
+          [[ "$present" = 4 ]] || { echo "Android signing secrets are incomplete." >&2; exit 1; }
+          install -m 700 -d "$RUNNER_TEMP/sanad-local-signing"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
+          chmod 600 "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
+          test -s "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
       - name: Create Android platform with native OCR bridge
         working-directory: apps/sanad_local
+        env:
+          SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-local-signing/sanad-release.jks
+          SANAD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          SANAD_ANDROID_KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          SANAD_ANDROID_KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
@@ -99,6 +125,18 @@ jobs:
           text = gradle.read_text()
           text = text.replace('applicationId = "com.sanadflow.sanad_local"', 'applicationId = "com.sanadflow.local"')
           text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 26')
+          release_key = Path(__import__('os').environ.get('SANAD_ANDROID_KEYSTORE_PATH', ''))
+          if release_key.is_file():
+              signing = ('\n    signingConfigs {\n'
+                         '        create("sanadRelease") {\n'
+                         '            storeFile = file(System.getenv("SANAD_ANDROID_KEYSTORE_PATH"))\n'
+                         '            storePassword = System.getenv("SANAD_ANDROID_KEYSTORE_PASSWORD")\n'
+                         '            keyAlias = System.getenv("SANAD_ANDROID_KEY_ALIAS")\n'
+                         '            keyPassword = System.getenv("SANAD_ANDROID_KEY_PASSWORD")\n'
+                         '        }\n'
+                         '    }\n')
+              text = text.replace('\n    buildTypes {', signing + '\n    buildTypes {', 1)
+              text = text.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("sanadRelease")')
           if 'cz.adaptech.tesseract4android:tesseract4android:4.9.0' not in text:
               text += '\n\ndependencies {\n    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")\n}\n'
           gradle.write_text(text)
@@ -143,7 +181,30 @@ jobs:
               if activity_end < 0:
                   raise SystemExit('MainActivity closing tag not found')
               m = m[:activity_end] + share_filter + '\n        ' + m[activity_end:]
+          if 'android.permission.REQUEST_INSTALL_PACKAGES' not in m:
+              m = m.replace(marker, '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n' + marker, 1)
+          provider = ('\n        <provider\n'
+                      '            android:name="androidx.core.content.FileProvider"\n'
+                      '            android:authorities="${applicationId}.fileprovider"\n'
+                      '            android:exported="false"\n'
+                      '            android:grantUriPermissions="true">\n'
+                      '            <meta-data\n'
+                      '                android:name="android.support.FILE_PROVIDER_PATHS"\n'
+                      '                android:resource="@xml/update_file_paths" />\n'
+                      '        </provider>')
+          if '${applicationId}.fileprovider' not in m:
+              application_end = m.find('</application>')
+              m = m[:application_end] + provider + '\n    ' + m[application_end:]
           manifest.write_text(m)
+
+          xml = Path('android/app/src/main/res/xml')
+          xml.mkdir(parents=True, exist_ok=True)
+          (xml / 'update_file_paths.xml').write_text(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              '<paths xmlns:android="http://schemas.android.com/apk/res/android">\n'
+              '    <cache-path name="updates" path="." />\n'
+              '</paths>\n'
+          )
           PY
           cp tool/android/MainActivity.kt android/app/src/main/kotlin/com/sanadflow/sanad_local/MainActivity.kt
       - name: Prepare fully offline runtime assets
@@ -177,12 +238,65 @@ jobs:
           flutter pub get
       - name: Build release APK
         working-directory: apps/sanad_local
-        run: flutter build apk --release --no-pub --dart-define=SANAD_SUPABASE_URL=https://api.sanadflow.com
+        env:
+          SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-local-signing/sanad-release.jks
+          SANAD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          SANAD_ANDROID_KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          SANAD_ANDROID_KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 --no-pub --dart-define=SANAD_SUPABASE_URL=https://api.sanadflow.com
+      - name: Verify APK signatures and package identity
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -perm -u+x | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt -perm -u+x | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          for apk in build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/app/outputs/flutter-apk/app-arm64-v8a-release.apk; do
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
+            "$AAPT" dump badging "$apk" | grep -Fq "package: name='com.sanadflow.local'"
+          done
+      - name: Record APK sizes and checksums
+        working-directory: apps/sanad_local
+        run: |
+          set -euo pipefail
+          cd build/app/outputs/flutter-apk
+          sha256sum app-armeabi-v7a-release.apk app-arm64-v8a-release.apk > SHA256SUMS
+          ls -lh app-armeabi-v7a-release.apk app-arm64-v8a-release.apk
+      - name: Prepare isolated SANAD Local release contract
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=build/app/outputs/flutter-apk
+          APK="$OUT/app-arm64-v8a-release.apk"
+          cp "$APK" "$OUT/sanad-local-latest.apk"
+          SHA="$(sha256sum "$APK" | cut -d' ' -f1)"
+          SIZE="$(stat -c '%s' "$APK")"
+          VERSION="$(sed -nE 's/^version:[[:space:]]*([^+]+)\+([0-9]+)$/\1/p' pubspec.yaml)"
+          CODE="$(sed -nE 's/^version:[[:space:]]*([^+]+)\+([0-9]+)$/\2/p' pubspec.yaml)"
+          jq -n \
+            --arg version_name "$VERSION" \
+            --argjson version_code "$CODE" \
+            --arg sha256 "$SHA" \
+            --argjson size_bytes "$SIZE" \
+            --arg commit "$GITHUB_SHA" \
+            '{platform:"android",application_id:"com.sanadflow.local",abi:"arm64-v8a",version_name:$version_name,version_code:$version_code,minimum_supported_version_code:2,update_policy:"recommended",release_notes:["حزمة أصغر مخصصة لهواتف ARM64","تحديث آمن من داخل سند المحلي"],filename:"sanad-local-latest.apk",download_url:"/downloads/sanad-local-latest.apk",sha256:$sha256,size_bytes:$size_bytes,commit:$commit,built_at:(now|todateiso8601)}' \
+            > "$OUT/sanad-local-latest.json"
+          printf '%s  %s\n' "$SHA" sanad-local-latest.apk > "$OUT/sanad-local-latest.apk.sha256"
+          jq . "$OUT/sanad-local-latest.json"
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
           name: sanad-local-v0.2-apk
-          path: apps/sanad_local/build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            apps/sanad_local/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            apps/sanad_local/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            apps/sanad_local/build/app/outputs/flutter-apk/SHA256SUMS
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.apk
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.apk.sha256
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.json
           if-no-files-found: error
           retention-days: 14
       - name: Restore integration-test dependency graph
