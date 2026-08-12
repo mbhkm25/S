@@ -44,6 +44,7 @@ String normalizeOcrText(String input) {
   final value = input
       .replaceAllMapped(RegExp('[٠-٩]'), (m) => '٠١٢٣٤٥٦٧٨٩'.indexOf(m[0]!).toString())
       .replaceAllMapped(RegExp('[۰-۹]'), (m) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(m[0]!).toString())
+      .replaceAll('ى', 'ي')
       .replaceAll('\u200f', '')
       .replaceAll('\u200e', '')
       .replaceAll('\u00a0', ' ');

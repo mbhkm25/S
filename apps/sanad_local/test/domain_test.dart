@@ -13,10 +13,11 @@ void main() {
   });
 
   test('OCR normalization converts Arabic and Persian digits', () {
-    const input = 'المبلغ ٥٠٠٠٠ ريال\nReference ۱۲۳۴۵۶';
+    const input = 'المبلغ ٥٠٠٠٠ ريال سعودى\nReference ۱۲۳۴۵۶';
     final normalized = normalizeOcrText(input);
     expect(normalized, contains('50000'));
     expect(normalized, contains('123456'));
+    expect(normalized, contains('سعودي'));
   });
 
   test('OCR heuristic rewards financial evidence', () {
@@ -100,6 +101,21 @@ FT9AC204881
     expect(result['documentReference'], '7542198');
     expect(result['transferReference'], 'FT9AC204881');
     expect((result['quality'] as Map)['autoAcceptEligible'], isFalse);
+  });
+
+  test('Kuraimi transaction card is detected from its FT contract without a printed bank name', () {
+    const text = '''
+2026-04-21 11:34AM
+1,721.88 SAR المبلغ
+FT26111FG616 رقم المرجع
+Fund Transfer - Other نوع العملية
+''';
+    final result = const LocalFinancialAnalyzer().analyzeDeterministically(text, ocrConfidence: .89);
+    expect(result['financialEntityCode'], 'kuraimi_sar');
+    expect(result['templateCode'], 'kuraimi_haseb_transaction_card_v1');
+    expect(result['amount'], 1721.88);
+    expect(result['currency'], 'SAR');
+    expect(result['transferReference'], 'FT26111FG616');
   });
 
   test('semantic values without OCR evidence are rejected', () {

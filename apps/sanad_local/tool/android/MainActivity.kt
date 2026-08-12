@@ -24,9 +24,12 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.concurrent.Executors
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 class MainActivity : FlutterActivity() {
     private val executor = Executors.newSingleThreadExecutor()
@@ -113,24 +116,63 @@ class MainActivity : FlutterActivity() {
 
         val root = File(filesDir, "tesseract")
         prepareLanguageData(root)
+        try {
+            val primary = recognizePass(prepared, root, TessBaseAPI.PageSegMode.PSM_AUTO)
+            val passes = mutableListOf(primary)
+            if (primary.confidence < 0.80) {
+                passes += recognizePass(prepared, root, TessBaseAPI.PageSegMode.PSM_SINGLE_BLOCK)
+                val corrected = rotateForOcr(prepared, -5f)
+                try {
+                    passes += recognizePass(corrected, root, TessBaseAPI.PageSegMode.PSM_SINGLE_COLUMN)
+                } finally {
+                    corrected.recycle()
+                }
+            }
+            val text = passes.map { it.text.trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
+            return mapOf(
+                "text" to text,
+                "confidence" to passes.maxOf { it.confidence },
+                "width" to prepared.width,
+                "height" to prepared.height,
+                "passCount" to passes.size,
+            )
+        } finally {
+            prepared.recycle()
+        }
+    }
+
+    private data class OcrPass(val text: String, val confidence: Double)
+
+    private fun recognizePass(bitmap: Bitmap, root: File, pageSegMode: Int): OcrPass {
         val tess = TessBaseAPI()
         try {
             if (!tess.init(root.absolutePath, "ara+eng")) throw IllegalStateException("tesseract_init_failed")
-            tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
+            tess.pageSegMode = pageSegMode
             tess.setVariable("preserve_interword_spaces", "1")
-            tess.setImage(prepared)
-            val text = tess.getUTF8Text() ?: ""
-            val confidence = (tess.meanConfidence().coerceIn(0, 100) / 100.0)
-            return mapOf(
-                "text" to text,
-                "confidence" to confidence,
-                "width" to prepared.width,
-                "height" to prepared.height,
+            tess.setImage(bitmap)
+            return OcrPass(
+                text = tess.getUTF8Text() ?: "",
+                confidence = tess.meanConfidence().coerceIn(0, 100) / 100.0,
             )
         } finally {
             tess.recycle()
-            prepared.recycle()
         }
+    }
+
+    private fun rotateForOcr(source: Bitmap, degrees: Float): Bitmap {
+        val radians = Math.toRadians(abs(degrees).toDouble())
+        val width = (source.width * cos(radians) + source.height * sin(radians)).roundToInt()
+        val height = (source.height * cos(radians) + source.width * sin(radians)).roundToInt()
+        val output = Bitmap.createBitmap(max(1, width), max(1, height), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawColor(Color.WHITE)
+        val matrix = Matrix().apply {
+            postTranslate(-source.width / 2f, -source.height / 2f)
+            postRotate(degrees)
+            postTranslate(output.width / 2f, output.height / 2f)
+        }
+        canvas.drawBitmap(source, matrix, Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true })
+        return output
     }
 
     private fun applyExifOrientation(source: Bitmap, imagePath: String): Bitmap {

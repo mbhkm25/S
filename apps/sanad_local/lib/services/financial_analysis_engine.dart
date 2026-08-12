@@ -177,6 +177,17 @@ class LocalFinancialAnalyzer {
       if (_extractCurrency(text) == 'YER') return FinancialEntityRegistry.byCode('kuraimi_yer');
       return FinancialEntityRegistry.byCode('kuraimi_haseb');
     }
+    // Kuraimi/Haseb cards do not always print the bank name in the transaction
+    // body. Their FT contract is stable across the real acceptance corpus, so
+    // require both the FT identifier and financial-card labels before inferring
+    // the entity. This avoids treating an arbitrary FT token as bank evidence.
+    if (RegExp(r'\bFT[A-Z0-9]{8,}\b', caseSensitive: false).hasMatch(text) &&
+        RegExp(r'(المبلغ|amount|رقم\s*المرجع|fund\s*transfer|haseb\s*payment)', caseSensitive: false)
+            .hasMatch(text)) {
+      if (_extractCurrency(text) == 'SAR') return FinancialEntityRegistry.byCode('kuraimi_sar');
+      if (_extractCurrency(text) == 'YER') return FinancialEntityRegistry.byCode('kuraimi_yer');
+      return FinancialEntityRegistry.byCode('kuraimi_haseb');
+    }
     if (RegExp(r'(bin\s*dowal\s*pay|بن\s*دول\s*باي)', caseSensitive: false).hasMatch(normalized)) {
       return FinancialEntityRegistry.byCode('bin_dowal_pay');
     }
