@@ -1,5 +1,6 @@
 import { cloudOperationRepository } from './cloudOperationRepository';
 import type { CreateOperationInput } from './operationRepository';
+import { emitLocalRuntimeStatus } from './localRuntimeEvents';
 import {
   enqueueLocalSyncJob,
   getLocalOperation,
@@ -15,6 +16,15 @@ const BASE_RETRY_MS = 15_000;
 
 function buildIdempotencyKey(localId: string, fileSha256: string): string {
   return `sanad-local:${localId}:${fileSha256}`;
+}
+
+function scheduleNativeRecovery(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.AndroidLocalRuntime?.scheduleRecovery?.();
+  } catch (error) {
+    console.warn('SANAD local-first native recovery scheduling failed', error);
+  }
 }
 
 export async function queueOperationForCloud(localId: string): Promise<LocalSyncJob> {
@@ -39,6 +49,8 @@ export async function queueOperationForCloud(localId: string): Promise<LocalSync
     (current) => ({ ...current, status: 'queued_for_sync', updatedAt: now }),
     { type: 'sync_queued', payload: { idempotency_key: job.idempotencyKey } },
   );
+  scheduleNativeRecovery();
+  emitLocalRuntimeStatus({ phase: 'queued', message: 'تم حفظ العملية محليًا وستتم مزامنتها بأمان.', localId });
   return job;
 }
 
@@ -53,6 +65,7 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
   const storedFile = await getLocalOperationFile(job.localOperationId);
   if (!operation || !storedFile) {
     await updateSyncJob({ ...job, state: 'failed', lastError: 'local_payload_missing', updatedAt: new Date().toISOString() });
+    emitLocalRuntimeStatus({ phase: 'error', message: 'تعذر العثور على ملف عملية محلية محفوظة.', localId: job.localOperationId });
     return;
   }
 
@@ -68,6 +81,7 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
     (current) => ({ ...current, status: 'syncing', updatedAt: new Date().toISOString() }),
     { type: 'sync_started', payload: { attempt: attemptCount, idempotency_key: job.idempotencyKey } },
   );
+  emitLocalRuntimeStatus({ phase: 'syncing', message: 'جاري مزامنة عملية محفوظة محليًا…', localId: operation.localId });
 
   try {
     const file = new File([storedFile.blob], storedFile.name, { type: storedFile.mimeType, lastModified: Date.parse(storedFile.createdAt) });
@@ -109,6 +123,13 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
 
+    emitLocalRuntimeStatus({
+      phase: 'synced',
+      message: 'تمت مزامنة العملية المحلية مع سند كلاود.',
+      localId: operation.localId,
+      cloudOperationId,
+    });
+
     try {
       await cloudOperationRepository.triggerAnalysis(cloud);
     } catch (error) {
@@ -131,6 +152,14 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
       (current) => ({ ...current, status: terminal ? 'sync_failed' : 'retry_wait', updatedAt: now }),
       { type: terminal ? 'sync_failed' : 'sync_retry_scheduled', payload: { attempt: attemptCount, error: message } },
     );
+    if (!terminal) scheduleNativeRecovery();
+    emitLocalRuntimeStatus({
+      phase: terminal ? 'error' : 'queued',
+      message: terminal
+        ? 'تعذر مزامنة العملية بعد عدة محاولات. ستبقى محفوظة محليًا للمراجعة.'
+        : 'تعذر الاتصال مؤقتًا. بقيت العملية محفوظة وسيعيد سند المحاولة.',
+      localId: operation.localId,
+    });
   }
 }
 
