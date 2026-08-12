@@ -15,6 +15,7 @@ import android.view.WindowManager;
 import android.widget.ImageButton;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Set;
 
 import org.json.JSONObject;
@@ -22,11 +23,10 @@ import org.json.JSONObject;
 /**
  * Explicitly opt-in notification listener for selected financial applications.
  *
- * Privacy invariant: no package is monitored by default. The React settings
- * surface must persist an allow-list through AndroidLocalRuntimeBridge before
- * notification content is captured. The original notification remains owned
- * by its source app; SANAD stores only the text evidence required to create a
- * local operation candidate.
+ * Privacy invariant: no notification content is captured unless the source
+ * package is explicitly present in SANAD's monitored-package allow-list.
+ * Before selection, SANAD may retain only package name + app label + last-seen
+ * timestamp so the user can identify which financial app to enable.
  */
 public class SanadFinancialNotificationListener extends NotificationListenerService {
     private SharedPreferences prefs;
@@ -44,6 +44,9 @@ public class SanadFinancialNotificationListener extends NotificationListenerServ
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null || sbn.getNotification() == null) return;
         String packageName = sbn.getPackageName();
+        String appLabel = resolveAppLabel(packageName);
+        rememberSeenApp(packageName, appLabel, sbn.getPostTime());
+
         Set<String> allowList = prefs.getStringSet(
             AndroidLocalRuntimeBridge.KEY_MONITORED_PACKAGES,
             Collections.emptySet()
@@ -59,7 +62,7 @@ public class SanadFinancialNotificationListener extends NotificationListenerServ
         try {
             JSONObject payload = new JSONObject();
             payload.put("packageName", packageName);
-            payload.put("appLabel", resolveAppLabel(packageName));
+            payload.put("appLabel", appLabel);
             payload.put("title", title == null ? JSONObject.NULL : title.toString());
             payload.put("text", text == null ? JSONObject.NULL : text.toString());
             payload.put("bigText", bigText == null ? JSONObject.NULL : bigText.toString());
@@ -71,6 +74,38 @@ public class SanadFinancialNotificationListener extends NotificationListenerServ
             showFloatingSanad();
         } catch (Exception ignored) {
             // A malformed notification must never crash the listener process.
+        }
+    }
+
+    private void rememberSeenApp(String packageName, String appLabel, long postedAt) {
+        try {
+            JSONObject root = new JSONObject(prefs.getString(AndroidLocalRuntimeBridge.KEY_SEEN_NOTIFICATION_APPS, "{}"));
+            JSONObject item = new JSONObject();
+            item.put("packageName", packageName);
+            item.put("appLabel", appLabel);
+            item.put("lastSeenAt", postedAt);
+            root.put(packageName, item);
+
+            // Keep discovery metadata bounded. This contains no notification text.
+            if (root.length() > 40) {
+                String oldestKey = null;
+                long oldest = Long.MAX_VALUE;
+                Iterator<String> keys = root.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    long seen = root.optJSONObject(key) == null
+                        ? 0L
+                        : root.optJSONObject(key).optLong("lastSeenAt", 0L);
+                    if (seen < oldest) {
+                        oldest = seen;
+                        oldestKey = key;
+                    }
+                }
+                if (oldestKey != null) root.remove(oldestKey);
+            }
+            prefs.edit().putString(AndroidLocalRuntimeBridge.KEY_SEEN_NOTIFICATION_APPS, root.toString()).apply();
+        } catch (Exception ignored) {
+            // Discovery metadata is optional and must not affect notification delivery.
         }
     }
 
