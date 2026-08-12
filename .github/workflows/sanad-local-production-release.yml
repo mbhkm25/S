@@ -1,0 +1,181 @@
+name: SANAD Local Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Optional full main commit SHA. Leave empty to release current main."
+        required: false
+        type: string
+      update_policy:
+        description: "recommended or required"
+        required: true
+        default: recommended
+        type: choice
+        options:
+          - recommended
+          - required
+      minimum_supported_version_code:
+        description: "Minimum version code allowed to continue without this update"
+        required: true
+        default: "3"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-local-production-release
+  cancel-in-progress: false
+
+jobs:
+  build-production-release:
+    name: Signed production APK + update manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve release commit
+        id: release
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          MAIN_SHA="$(git rev-parse origin/main)"
+          RELEASE_SHA="${REQUESTED_SHA:-$MAIN_SHA}"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "${RELEASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          git checkout --detach "$RELEASE_SHA"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Require complete stable Android signing identity
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SANAD_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$KEYSTORE_BASE64" ]] || { echo "SANAD_ANDROID_KEYSTORE_BASE64 is missing" >&2; exit 1; }
+          [[ -n "$KEYSTORE_PASSWORD" ]] || { echo "SANAD_ANDROID_KEYSTORE_PASSWORD is missing" >&2; exit 1; }
+          [[ -n "$KEY_ALIAS" ]] || { echo "SANAD_ANDROID_KEY_ALIAS is missing" >&2; exit 1; }
+          [[ -n "$KEY_PASSWORD" ]] || { echo "SANAD_ANDROID_KEY_PASSWORD is missing" >&2; exit 1; }
+          install -m 700 -d "$RUNNER_TEMP/sanad-local-signing"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
+          chmod 600 "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
+          test -s "$RUNNER_TEMP/sanad-local-signing/sanad-release.jks"
+
+      - name: Install fixture dependency
+        run: python3 -m pip install --user pillow
+
+      - name: Create Android workspace
+        working-directory: apps/sanad_local
+        env:
+          SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-local-signing/sanad-release.jks
+          SANAD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          SANAD_ANDROID_KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          SANAD_ANDROID_KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: bash tool/bootstrap_android.sh
+
+      - name: Static analysis and unit tests
+        working-directory: apps/sanad_local
+        run: |
+          flutter analyze --fatal-infos
+          flutter test --no-pub test
+
+      - name: Build ARM64 production APK
+        working-directory: apps/sanad_local
+        env:
+          SANAD_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/sanad-local-signing/sanad-release.jks
+          SANAD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SANAD_ANDROID_KEYSTORE_PASSWORD }}
+          SANAD_ANDROID_KEY_ALIAS: ${{ secrets.SANAD_ANDROID_KEY_ALIAS }}
+          SANAD_ANDROID_KEY_PASSWORD: ${{ secrets.SANAD_ANDROID_KEY_PASSWORD }}
+        run: >-
+          flutter build apk --release --split-per-abi
+          --target-platform android-arm64
+          --dart-define=SANAD_SUPABASE_URL=https://api.sanadflow.com
+          --dart-define=SANAD_LOCAL_RELEASE_MANIFEST_URL=https://app.sanadflow.com/downloads/sanad-local-latest.json
+
+      - name: Verify package and production signature
+        id: signature
+        working-directory: apps/sanad_local
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -perm -u+x | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt -perm -u+x | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee build/app/outputs/flutter-apk/APK-SIGNATURE.txt
+          "$AAPT" dump badging "$APK" | grep -Fq "package: name='com.sanadflow.local'"
+          CERT_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' build/app/outputs/flutter-apk/APK-SIGNATURE.txt | head -n 1 | tr -d ':[:space:]' | tr 'A-F' 'a-f')"
+          [[ "$CERT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          echo "sha256=$CERT_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Build immutable release contract
+        working-directory: apps/sanad_local
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          UPDATE_POLICY: ${{ inputs.update_policy }}
+          MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
+          CERT_SHA256: ${{ steps.signature.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$UPDATE_POLICY" = "recommended" || "$UPDATE_POLICY" = "required" ]]
+          [[ "$MINIMUM_SUPPORTED" =~ ^[0-9]+$ ]]
+          OUT=build/app/outputs/flutter-apk
+          APK="$OUT/app-arm64-v8a-release.apk"
+          cp "$APK" "$OUT/sanad-local-latest.apk"
+          SHA="$(sha256sum "$APK" | cut -d' ' -f1)"
+          SIZE="$(stat -c '%s' "$APK")"
+          VERSION="$(sed -nE 's/^version:[[:space:]]*([^+]+)\+([0-9]+)$/\1/p' pubspec.yaml)"
+          CODE="$(sed -nE 's/^version:[[:space:]]*([^+]+)\+([0-9]+)$/\2/p' pubspec.yaml)"
+          [[ -n "$VERSION" && "$CODE" =~ ^[0-9]+$ ]]
+          jq -n \
+            --arg version_name "$VERSION" \
+            --argjson version_code "$CODE" \
+            --argjson minimum_supported_version_code "$MINIMUM_SUPPORTED" \
+            --arg update_policy "$UPDATE_POLICY" \
+            --arg sha256 "$SHA" \
+            --argjson size_bytes "$SIZE" \
+            --arg commit "$RELEASE_SHA" \
+            --arg signing_certificate_sha256 "$CERT_SHA256" \
+            '{platform:"android",application_id:"com.sanadflow.local",abi:"arm64-v8a",version_name:$version_name,version_code:$version_code,minimum_supported_version_code:$minimum_supported_version_code,update_policy:$update_policy,release_notes:["تحديث إنتاجي موقّع لسند المحلي"],filename:"sanad-local-latest.apk",download_url:"/downloads/sanad-local-latest.apk",sha256:$sha256,size_bytes:$size_bytes,commit:$commit,signing_certificate_sha256:$signing_certificate_sha256,built_at:(now|todateiso8601)}' \
+            > "$OUT/sanad-local-latest.json"
+          printf '%s  %s\n' "$SHA" sanad-local-latest.apk > "$OUT/sanad-local-latest.apk.sha256"
+          sha256sum -c "$OUT/sanad-local-latest.apk.sha256" --ignore-missing
+          jq . "$OUT/sanad-local-latest.json"
+
+      - name: Upload production release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-local-production-release
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.apk
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.apk.sha256
+            apps/sanad_local/build/app/outputs/flutter-apk/sanad-local-latest.json
+            apps/sanad_local/build/app/outputs/flutter-apk/APK-SIGNATURE.txt
