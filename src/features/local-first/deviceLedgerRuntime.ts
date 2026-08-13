@@ -32,11 +32,16 @@ export function installDeviceLedgerRuntime(): () => void {
     if (document.visibilityState === 'visible' && navigator.onLine !== false) void refreshActiveUserLedger();
   };
 
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user && navigator.onLine !== false) void refreshActiveUserLedger();
+  });
+
   window.addEventListener('online', onOnline);
   document.addEventListener('visibilitychange', onVisibility);
   if (navigator.onLine !== false) void refreshActiveUserLedger();
 
   return () => {
+    subscription.unsubscribe();
     window.removeEventListener('online', onOnline);
     document.removeEventListener('visibilitychange', onVisibility);
   };
