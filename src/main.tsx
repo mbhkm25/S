@@ -10,6 +10,7 @@ import OperationDocumentPreviewEnhancer from './features/operations/OperationDoc
 import LocalRuntimeController from './features/local-first/LocalRuntimeController';
 import { installDeviceLedgerRuntime } from './features/local-first/deviceLedgerRuntime';
 import './index.css';
+import './styles/local-first-connectivity.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
 import { initializeAndroidNativePush } from './lib/androidNativePush';
