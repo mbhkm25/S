@@ -75,7 +75,6 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 
 export async function openLocalFirstDatabase(): Promise<IDBDatabase> {
   if (!('indexedDB' in globalThis)) throw new Error('IndexedDB is unavailable on this runtime.');
-
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
@@ -109,11 +108,7 @@ export async function openLocalFirstDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function persistLocalOperationAtomic(input: {
-  operation: LocalStoredOperation;
-  file: LocalStoredFile;
-  event?: LocalOperationEvent;
-}): Promise<void> {
+export async function persistLocalOperationAtomic(input: { operation: LocalStoredOperation; file: LocalStoredFile; event?: LocalOperationEvent }): Promise<void> {
   const db = await openLocalFirstDatabase();
   try {
     const tx = db.transaction([OPERATIONS, FILES, EVENTS], 'readwrite');
@@ -121,9 +116,7 @@ export async function persistLocalOperationAtomic(input: {
     tx.objectStore(OPERATIONS).add(input.operation);
     if (input.event) tx.objectStore(EVENTS).add(input.event);
     await transactionDone(tx);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function getLocalOperation(localId: string): Promise<LocalStoredOperation | null> {
@@ -133,9 +126,7 @@ export async function getLocalOperation(localId: string): Promise<LocalStoredOpe
     const value = await requestResult(tx.objectStore(OPERATIONS).get(localId) as IDBRequest<LocalStoredOperation | undefined>);
     await transactionDone(tx);
     return value ?? null;
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function listLocalOperations(): Promise<LocalStoredOperation[]> {
@@ -145,9 +136,11 @@ export async function listLocalOperations(): Promise<LocalStoredOperation[]> {
     const values = await requestResult(tx.objectStore(OPERATIONS).getAll() as IDBRequest<LocalStoredOperation[]>);
     await transactionDone(tx);
     return values.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
+}
+
+export async function listLocalOperationsForUser(userId: string): Promise<LocalStoredOperation[]> {
+  return (await listLocalOperations()).filter((operation) => operation.submittedByUserId === userId);
 }
 
 export async function getLocalOperationFile(localId: string): Promise<LocalStoredFile | null> {
@@ -159,9 +152,7 @@ export async function getLocalOperationFile(localId: string): Promise<LocalStore
     const value = await requestResult(tx.objectStore(FILES).get(operation.fileId) as IDBRequest<LocalStoredFile | undefined>);
     await transactionDone(tx);
     return value ?? null;
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function updateLocalOperation(
@@ -178,19 +169,11 @@ export async function updateLocalOperation(
     const next = mutate(current);
     store.put(next);
     if (event) {
-      tx.objectStore(EVENTS).add({
-        id: crypto.randomUUID(),
-        localOperationId: localId,
-        type: event.type,
-        payload: event.payload,
-        createdAt: new Date().toISOString(),
-      } satisfies LocalOperationEvent);
+      tx.objectStore(EVENTS).add({ id: crypto.randomUUID(), localOperationId: localId, type: event.type, payload: event.payload, createdAt: new Date().toISOString() } satisfies LocalOperationEvent);
     }
     await transactionDone(tx);
     return next;
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function enqueueLocalSyncJob(job: LocalSyncJob): Promise<void> {
@@ -199,9 +182,7 @@ export async function enqueueLocalSyncJob(job: LocalSyncJob): Promise<void> {
     const tx = db.transaction(SYNC_QUEUE, 'readwrite');
     tx.objectStore(SYNC_QUEUE).add(job);
     await transactionDone(tx);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function listRunnableSyncJobs(now = new Date()): Promise<LocalSyncJob[]> {
@@ -212,11 +193,13 @@ export async function listRunnableSyncJobs(now = new Date()): Promise<LocalSyncJ
     await transactionDone(tx);
     const timestamp = now.getTime();
     return jobs
-      .filter((job) => job.state === 'queued' || (job.state === 'retry_wait' && (!job.nextAttemptAt || Date.parse(job.nextAttemptAt) <= timestamp)))
+      .filter((job) =>
+        job.state === 'queued' ||
+        job.state === 'syncing' ||
+        (job.state === 'retry_wait' && (!job.nextAttemptAt || Date.parse(job.nextAttemptAt) <= timestamp)),
+      )
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }
 
 export async function updateSyncJob(job: LocalSyncJob): Promise<void> {
@@ -225,7 +208,5 @@ export async function updateSyncJob(job: LocalSyncJob): Promise<void> {
     const tx = db.transaction(SYNC_QUEUE, 'readwrite');
     tx.objectStore(SYNC_QUEUE).put(job);
     await transactionDone(tx);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 }

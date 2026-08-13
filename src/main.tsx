@@ -8,7 +8,9 @@ import OperationIdentityDetailsBanner from './features/operations/OperationIdent
 import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
 import LocalRuntimeController from './features/local-first/LocalRuntimeController';
+import { installDeviceLedgerRuntime } from './features/local-first/deviceLedgerRuntime';
 import './index.css';
+import './styles/local-first-connectivity.css';
 import './lib/publicBusinessProfileSwipe';
 import './lib/publicBusinessProfileShare';
 import { initializeAndroidNativePush } from './lib/androidNativePush';
@@ -29,6 +31,7 @@ const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
 
 if (isAndroidNative && !import.meta.env.DEV) initializeAndroidNativePush();
+if (!isPublicInteractiveReport) installDeviceLedgerRuntime();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -13,6 +13,7 @@ import {
 
 const MAX_ATTEMPTS = 6;
 const BASE_RETRY_MS = 15_000;
+let drainPromise: Promise<{ attempted: number }> | null = null;
 
 function buildIdempotencyKey(localId: string, fileSha256: string): string {
   return `sanad-local:${localId}:${fileSha256}`;
@@ -70,7 +71,15 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
   }
 
   if (operation.cloudOperationId) {
-    await updateSyncJob({ ...job, state: 'completed', lastError: null, updatedAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    if (operation.status !== 'synced') {
+      await updateLocalOperation(
+        operation.localId,
+        (current) => ({ ...current, status: 'synced', updatedAt: now }),
+        { type: 'sync_state_reconciled', payload: { cloud_operation_id: operation.cloudOperationId } },
+      );
+    }
+    await updateSyncJob({ ...job, state: 'completed', nextAttemptAt: null, lastError: null, updatedAt: now });
     return;
   }
 
@@ -105,30 +114,12 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
 
     await updateLocalOperation(
       operation.localId,
-      (current) => ({
-        ...current,
-        cloudOperationId,
-        publicToken: cloud.publicToken ?? null,
-        status: 'synced',
-        updatedAt: new Date().toISOString(),
-      }),
+      (current) => ({ ...current, cloudOperationId, publicToken: cloud.publicToken ?? null, status: 'synced', updatedAt: new Date().toISOString() }),
       { type: 'sync_completed', payload: { cloud_operation_id: cloudOperationId, public_token: cloud.publicToken } },
     );
-    await updateSyncJob({
-      ...job,
-      state: 'completed',
-      attemptCount,
-      nextAttemptAt: null,
-      lastError: null,
-      updatedAt: new Date().toISOString(),
-    });
+    await updateSyncJob({ ...job, state: 'completed', attemptCount, nextAttemptAt: null, lastError: null, updatedAt: new Date().toISOString() });
 
-    emitLocalRuntimeStatus({
-      phase: 'synced',
-      message: 'تمت مزامنة العملية المحلية مع سند كلاود.',
-      localId: operation.localId,
-      cloudOperationId,
-    });
+    emitLocalRuntimeStatus({ phase: 'synced', message: 'تمت مزامنة العملية المحلية مع سند كلاود.', localId: operation.localId, cloudOperationId });
 
     try {
       await cloudOperationRepository.triggerAnalysis(cloud);
@@ -139,14 +130,7 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
     const message = error instanceof Error ? error.message : 'unknown_sync_error';
     const terminal = attemptCount >= MAX_ATTEMPTS;
     const now = new Date().toISOString();
-    await updateSyncJob({
-      ...job,
-      state: terminal ? 'failed' : 'retry_wait',
-      attemptCount,
-      nextAttemptAt: terminal ? null : nextRetryAt(attemptCount),
-      lastError: message,
-      updatedAt: now,
-    });
+    await updateSyncJob({ ...job, state: terminal ? 'failed' : 'retry_wait', attemptCount, nextAttemptAt: terminal ? null : nextRetryAt(attemptCount), lastError: message, updatedAt: now });
     await updateLocalOperation(
       operation.localId,
       (current) => ({ ...current, status: terminal ? 'sync_failed' : 'retry_wait', updatedAt: now }),
@@ -155,19 +139,23 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
     if (!terminal) scheduleNativeRecovery();
     emitLocalRuntimeStatus({
       phase: terminal ? 'error' : 'queued',
-      message: terminal
-        ? 'تعذر مزامنة العملية بعد عدة محاولات. ستبقى محفوظة محليًا للمراجعة.'
-        : 'تعذر الاتصال مؤقتًا. بقيت العملية محفوظة وسيعيد سند المحاولة.',
+      message: terminal ? 'تعذر مزامنة العملية بعد عدة محاولات. ستبقى محفوظة محليًا للمراجعة.' : 'تعذر الاتصال مؤقتًا. بقيت العملية محفوظة وسيعيد سند المحاولة.',
       localId: operation.localId,
     });
   }
 }
 
-export async function drainLocalSyncQueue(): Promise<{ attempted: number }> {
+async function runDrain(): Promise<{ attempted: number }> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return { attempted: 0 };
   const jobs = await listRunnableSyncJobs();
   for (const job of jobs) await syncOne(job);
   return { attempted: jobs.length };
+}
+
+export function drainLocalSyncQueue(): Promise<{ attempted: number }> {
+  if (drainPromise) return drainPromise;
+  drainPromise = runDrain().finally(() => { drainPromise = null; });
+  return drainPromise;
 }
 
 export function installReconnectSyncListener(): () => void {

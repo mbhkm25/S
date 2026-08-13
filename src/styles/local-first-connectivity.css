@@ -1,0 +1,11 @@
+/*
+ * SANAD Local-first connectivity UX
+ *
+ * Offline is no longer an application failure state: payment intake and the
+ * device ledger remain available. LocalRuntimeController owns the short,
+ * neutral connectivity notice. Suppress the legacy persistent red banner
+ * emitted by App.tsx so users do not receive two contradictory indicators.
+ */
+#app_root > .sticky.bg-rose-600 {
+  display: none !important;
+}
