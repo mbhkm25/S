@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, RefreshCw, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, ShieldCheck, Sparkles, X } from 'lucide-react';
 
 type UpdateStatus =
   | 'idle'
   | 'checking'
   | 'update_available'
   | 'up_to_date'
+  | 'starting'
   | 'downloading'
   | 'verified'
   | 'permission_required'
@@ -43,6 +44,7 @@ declare global {
 }
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const START_TIMEOUT_MS = 15_000;
 const DISMISS_KEY_PREFIX = 'sanad_android_update_dismissed_';
 
 function toLatin(value: unknown) {
@@ -109,17 +111,33 @@ export default function AndroidUpdatePrompt() {
     };
   }, [checkForUpdate]);
 
+  useEffect(() => {
+    if (status !== 'starting') return undefined;
+    const timer = window.setTimeout(() => {
+      setDetail(current => current.status === 'starting'
+        ? { ...current, status: 'error', message: 'لم يبدأ تنزيل التحديث في الوقت المتوقع. تحقق من الاتصال وحاول مرة أخرى.' }
+        : current);
+    }, START_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
   const beginUpdate = () => {
     if (!isNativeUpdaterAvailable()) {
-      setDetail({ status: 'error', message: 'ميزة التحديث غير متاحة في هذه النسخة من سند.' });
+      setDetail(current => ({ ...current, status: 'error', message: 'ميزة التحديث غير متاحة في هذه النسخة من سند.' }));
       return;
     }
     setDismissed(false);
-    window.AndroidUpdater?.startUpdate?.();
+    setDetail(current => ({ ...current, status: 'starting', percent: 0, message: undefined }));
+    try {
+      window.AndroidUpdater?.startUpdate?.();
+    } catch (error) {
+      console.warn('Android updater start failed:', error);
+      setDetail(current => ({ ...current, status: 'error', message: 'تعذر بدء التحديث. حاول مرة أخرى.' }));
+    }
   };
 
   const dismiss = () => {
-    if (required || status === 'downloading' || status === 'verified' || status === 'permission_required') return;
+    if (required || status === 'starting' || status === 'downloading' || status === 'verified' || status === 'permission_required') return;
     if (detail.version_code) sessionStorage.setItem(`${DISMISS_KEY_PREFIX}${detail.version_code}`, '1');
     setDismissed(true);
   };
@@ -128,7 +146,8 @@ export default function AndroidUpdatePrompt() {
   if (['idle', 'checking', 'up_to_date'].includes(status) || dismissed) return null;
 
   const progress = Math.max(0, Math.min(100, Number(detail.percent || 0)));
-  const isBusy = status === 'downloading' || status === 'verified';
+  const isStarting = status === 'starting';
+  const isBusy = isStarting || status === 'downloading' || status === 'verified';
   const isError = status === 'error';
   const needsPermission = status === 'permission_required';
   const installerOpened = status === 'installer_opened';
@@ -139,9 +158,11 @@ export default function AndroidUpdatePrompt() {
       ? 'أكمل تثبيت التحديث'
       : needsPermission
         ? 'اسمح لسند بتثبيت التحديث'
-        : required
-          ? 'يلزم تحديث سند للمتابعة'
-          : 'نسخة جديدة من سند متاحة';
+        : isStarting
+          ? 'جاري بدء التحديث'
+          : required
+            ? 'يلزم تحديث سند للمتابعة'
+            : 'نسخة جديدة من سند متاحة';
 
   return (
     <aside
@@ -155,7 +176,7 @@ export default function AndroidUpdatePrompt() {
         <div className="pointer-events-auto w-full rounded-[1.6rem] border border-slate-200 bg-white/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.30)]">
           <div className="flex items-start gap-3">
             <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${isError ? 'bg-rose-50 text-rose-700' : required ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-              {isError ? <AlertTriangle className="h-5 w-5" /> : installerOpened ? <CheckCircle2 className="h-5 w-5" /> : required ? <ShieldCheck className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+              {isError ? <AlertTriangle className="h-5 w-5" /> : installerOpened ? <CheckCircle2 className="h-5 w-5" /> : isStarting ? <Loader2 className="h-5 w-5 animate-spin" /> : required ? <ShieldCheck className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
             </div>
 
             <div className="min-w-0 flex-1 text-right">
@@ -169,6 +190,7 @@ export default function AndroidUpdatePrompt() {
                   {required ? 'هذه النسخة لم تعد ضمن الحد المدعوم. حدّث سند حتى تواصل الاستخدام بأمان.' : 'حدّث الآن للحصول على آخر التحسينات مع بقاء بيانات حسابك كما هي.'}
                 </p>
               )}
+              {isStarting && <p className="mt-1 text-[10px] leading-5 text-slate-500">يجهز سند رابط التحديث ويبدأ التنزيل الآن…</p>}
               {status === 'downloading' && <p className="mt-1 text-[10px] leading-5 text-slate-500">جارٍ تنزيل التحديث من خادم سند والتحقق منه قبل فتح شاشة التثبيت.</p>}
               {status === 'verified' && <p className="mt-1 text-[10px] leading-5 text-emerald-700">تم تنزيل الملف والتحقق من سلامته وتوقيع سند.</p>}
               {needsPermission && <p className="mt-1 text-[10px] leading-5 text-amber-700">يفتح Android إعداد «السماح من هذا المصدر». فعّل الإذن لسند ثم عد إلى التطبيق، وسيكمل سند تلقائيًا.</p>}
@@ -205,14 +227,16 @@ export default function AndroidUpdatePrompt() {
           </div>
 
           <div className="mt-4 flex gap-2">
-            {(status === 'update_available' || isError || needsPermission) && (
+            {(status === 'update_available' || isStarting || isError || needsPermission) && (
               <button
                 type="button"
                 onClick={isError ? checkForUpdate : beginUpdate}
-                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-xs font-black text-white"
+                disabled={isStarting}
+                aria-busy={isStarting}
+                className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-xs font-black text-white transition-all ${isStarting ? 'cursor-wait bg-slate-700' : 'bg-slate-950 active:scale-[0.99]'}`}
               >
-                {isError ? <RefreshCw className="h-4 w-4" /> : <Download className="h-4 w-4" />}
-                {isError ? 'إعادة المحاولة' : needsPermission ? 'متابعة التحديث' : 'تحديث الآن'}
+                {isStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : isError ? <RefreshCw className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                {isStarting ? 'جاري بدء التحديث…' : isError ? 'إعادة المحاولة' : needsPermission ? 'متابعة التحديث' : 'تحديث الآن'}
               </button>
             )}
             {status === 'update_available' && !required && (

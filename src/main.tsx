@@ -8,6 +8,7 @@ import OperationIdentityDetailsBanner from './features/operations/OperationIdent
 import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
 import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
 import LocalRuntimeController from './features/local-first/LocalRuntimeController';
+import CaptureFirstNavigationRuntime from './features/local-first/CaptureFirstNavigationRuntime';
 import { installDeviceLedgerRuntime } from './features/local-first/deviceLedgerRuntime';
 import './index.css';
 import './styles/local-first-connectivity.css';
@@ -42,6 +43,7 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <>
         <LocalRuntimeController />
+        <CaptureFirstNavigationRuntime />
         <OperationEntryGate />
         <OperationDetailsRuntimeV2 />
         <OperationIdentityDetailsBanner />

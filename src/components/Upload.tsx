@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile } from '../types';
-import { Camera, Check, CheckCircle2, Clipboard, CloudOff, ExternalLink, FileImage, FileText, ImagePlus, Loader2, PlusCircle, QrCode, RefreshCw, Share2, UploadCloud } from 'lucide-react';
+import { Camera, Check, CheckCircle2, Clipboard, ExternalLink, FileImage, FileText, ImagePlus, Loader2, PlusCircle, QrCode, RefreshCw, Share2, UploadCloud } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getPublicAppUrl } from '../lib/urlUtils';
 import { toLatinDigits } from '../lib/digits';
@@ -19,7 +19,7 @@ type UploadProps = {
   ensureProfileComplete?: (action: () => void) => void;
 };
 
-type UploadStage = 'idle' | 'optimizing' | 'saving-local' | 'syncing';
+type UploadStage = 'idle' | 'optimizing' | 'saving-local';
 type NativePaymentCapturePayload = { status?: 'success' | 'cancelled' | 'error'; name?: string; mimeType?: string; base64?: string; gallerySaved?: boolean; message?: string };
 type SuccessData = { localId: string; cloudOperationId: string | null; publicToken: string | null; qrUrl: string | null; localQrCodeDataUrl: string | null; synced: boolean };
 type SuccessPreview = { url: string; mimeType: string; name: string };
@@ -33,7 +33,9 @@ declare global {
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const ALLOWED_PDF_TYPE = 'application/pdf';
-const stageLabels: Record<UploadStage, string> = { idle: '', optimizing: 'جاري تحسين الصورة…', 'saving-local': 'جاري حفظ العملية على الجهاز…', syncing: 'جاري مزامنة العملية مع سند كلاود…' };
+const DIRECT_CAPTURE_KEY = 'sanad_direct_capture_once';
+const DIRECT_CAPTURE_EVENT = 'sanadDirectCaptureRequested';
+const stageLabels: Record<UploadStage, string> = { idle: '', optimizing: 'جاري تحسين الصورة…', 'saving-local': 'جاري حفظ العملية على الجهاز…' };
 
 function formatMegabytes(bytes: number): string { return `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 2 : 3)} MB`; }
 function sleep(milliseconds: number): Promise<void> { return new Promise((resolve) => window.setTimeout(resolve, milliseconds)); }
@@ -141,11 +143,30 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
     };
   }, [successData?.localId]);
 
-  const startCameraCapture = () => {
+  const startCameraCapture = useCallback(() => {
     setErrorMessage(null);
     if (nativePaymentCaptureAvailable) { window.AndroidPaymentCapture?.startCapture(); return; }
     cameraInputRef.current?.click();
-  };
+  }, [nativePaymentCaptureAvailable]);
+
+  useEffect(() => {
+    const consumeDirectCapture = () => {
+      let requested = false;
+      try {
+        requested = Boolean(sessionStorage.getItem(DIRECT_CAPTURE_KEY));
+        if (requested) sessionStorage.removeItem(DIRECT_CAPTURE_KEY);
+      } catch {
+        requested = true;
+      }
+      if (!requested) return;
+      window.requestAnimationFrame(() => startCameraCapture());
+    };
+
+    consumeDirectCapture();
+    window.addEventListener(DIRECT_CAPTURE_EVENT, consumeDirectCapture);
+    return () => window.removeEventListener(DIRECT_CAPTURE_EVENT, consumeDirectCapture);
+  }, [startCameraCapture]);
+
   const handleDrag = (event: React.DragEvent) => {
     event.preventDefault(); event.stopPropagation();
     if (event.type === 'dragenter' || event.type === 'dragover') setDragActive(true);
@@ -156,6 +177,21 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
     const selectedFile = event.dataTransfer.files?.[0];
     if (selectedFile) { setGallerySavedForCurrentFile(false); validateAndSetFile(selectedFile); }
   };
+
+  const syncOperationInBackground = useCallback(async (localId: string) => {
+    if (!navigator.onLine) return;
+    try {
+      await drainLocalSyncQueue();
+      const stored = await getLocalOperation(localId);
+      if (!stored?.cloudOperationId || !stored.publicToken) return;
+      const presentation = await buildCloudPresentation(stored.publicToken);
+      setSuccessData(current => current?.localId === localId
+        ? { localId: stored.localId, cloudOperationId: stored.cloudOperationId, publicToken: stored.publicToken, qrUrl: presentation.qrUrl, localQrCodeDataUrl: presentation.localQrCodeDataUrl, synced: true }
+        : current);
+    } catch (error) {
+      console.warn('Background local operation sync failed; durable queue will retry:', error);
+    }
+  }, []);
 
   const handleUploadSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -171,17 +207,18 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
         setUploadStage('saving-local');
         const local = await localOperationRepository.create({
           source: 'pwa_upload', submittedByUserId: user.id, submittedByPhone: phone, submittedByName: profile.full_name, file: uploadFile,
-          clientMetadata: { userAgent: navigator.userAgent, uploadedAt: new Date().toISOString(), app_upload: true, upload_experience: 'react_local_first_v1', local_first: true, local_gallery_saved: gallerySavedForCurrentFile, capture_flow: gallerySavedForCurrentFile ? 'android_native_gallery_capture_v1' : 'standard_picker_v1', ...prepared.metadata },
+          clientMetadata: { userAgent: navigator.userAgent, uploadedAt: new Date().toISOString(), app_upload: true, upload_experience: 'react_local_first_v2', local_first: true, local_success_before_cloud: true, local_gallery_saved: gallerySavedForCurrentFile, capture_flow: gallerySavedForCurrentFile ? 'android_native_gallery_capture_v1' : 'standard_picker_v1', ...prepared.metadata },
         });
         await localOperationRepository.queueForCloud(local);
-        let stored = await getLocalOperation(local.identity.localId);
-        if (navigator.onLine) { setUploadStage('syncing'); await drainLocalSyncQueue(); stored = await getLocalOperation(local.identity.localId); }
-        if (stored?.cloudOperationId && stored.publicToken) {
-          const presentation = await buildCloudPresentation(stored.publicToken);
-          setSuccessData({ localId: stored.localId, cloudOperationId: stored.cloudOperationId, publicToken: stored.publicToken, qrUrl: presentation.qrUrl, localQrCodeDataUrl: presentation.localQrCodeDataUrl, synced: true });
-        } else {
-          setSuccessData({ localId: local.identity.localId, cloudOperationId: null, publicToken: null, qrUrl: null, localQrCodeDataUrl: null, synced: false });
-        }
+
+        // Local durability is the completion boundary for the user's action.
+        // Never hold the success screen behind Cloud upload or analysis.
+        setSuccessData({ localId: local.identity.localId, cloudOperationId: null, publicToken: null, qrUrl: null, localQrCodeDataUrl: null, synced: false });
+        setUploadStage('idle');
+
+        // Cloud promotion is deliberately detached from the interaction. The
+        // durable queue and device-led runtime will also retry after reconnect/restart.
+        if (navigator.onLine) void syncOperationInBackground(local.identity.localId);
       } catch (error) {
         console.warn('Local-first payment intake failed:', error);
         const baseMessage = error instanceof Error ? error.message : 'تعذر حفظ العملية على هذا الجهاز. حاول مرة أخرى.';
@@ -189,22 +226,6 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
       } finally { setUploadStage('idle'); }
     };
     if (ensureProfileComplete) ensureProfileComplete(performUpload); else await performUpload();
-  };
-
-  const refreshPendingSync = async () => {
-    if (!successData || successData.synced || !navigator.onLine) return;
-    setUploadStage('syncing'); setErrorMessage(null);
-    try {
-      await drainLocalSyncQueue();
-      const stored = await getLocalOperation(successData.localId);
-      if (stored?.cloudOperationId && stored.publicToken) {
-        const presentation = await buildCloudPresentation(stored.publicToken);
-        setSuccessData({ localId: stored.localId, cloudOperationId: stored.cloudOperationId, publicToken: stored.publicToken, qrUrl: presentation.qrUrl, localQrCodeDataUrl: presentation.localQrCodeDataUrl, synced: true });
-      }
-    } catch (error) {
-      console.warn('Pending local operation sync failed:', error);
-      setErrorMessage('العملية ما زالت محفوظة على الجهاز. تعذر مزامنتها الآن وسيعيد سند المحاولة تلقائيًا.');
-    } finally { setUploadStage('idle'); }
   };
 
   const openDetailsWhenReady = async () => {
@@ -237,7 +258,7 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
 
   return (
     <div className="space-y-5 font-arabic" id="upload_view" dir="rtl">
-      <header className="text-right"><p className="text-[10px] font-bold text-emerald-700">سند المالي</p><h2 className="mt-1 text-lg font-bold text-slate-950">إضافة عملية دفع</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">صوّر أو أضف إشعار دفع. يحفظه سند على الجهاز أولًا ثم يزامنه تلقائيًا عند توفر الإنترنت.</p></header>
+      <header className="text-right"><p className="text-[10px] font-bold text-emerald-700">سند المالي</p><h2 className="mt-1 text-lg font-bold text-slate-950">إضافة عملية دفع</h2><p className="mt-1 text-[11px] leading-5 text-slate-500">صوّر أو أضف إشعار دفع. يحفظه سند على الجهاز أولًا، ويكمل المزامنة والتحليل في الخلفية.</p></header>
       {errorMessage && <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-right text-xs text-rose-800"><strong className="mb-1 block">تعذر إكمال الإجراء</strong><span>{errorMessage}</span></div>}
 
       {!successData ? (
@@ -256,15 +277,19 @@ export default function UploadNotification({ user, profile, onNavigateToDetails,
         </form>
       ) : (
         <section className="space-y-4 rounded-[1.8rem] border border-slate-200/70 bg-white p-5 text-center shadow-sm" id="success_qr_screen">
-          <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border ${successData.synced ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : 'border-amber-100 bg-amber-50 text-amber-700'}`}>{successData.synced ? <CheckCircle2 className="h-6 w-6" /> : <CloudOff className="h-6 w-6" />}</span>
-          <div><h2 className="text-base font-bold text-slate-950">{successData.synced ? 'تم إنشاء العملية بنجاح' : 'تم حفظ العملية على هذا الجهاز'}</h2><p className="mt-1 px-2 text-[10px] leading-5 text-slate-500">{successData.synced ? 'حُفظ المستند على الجهاز ثم تمت مزامنته مع سند كلاود وبدأت دورة التحليل.' : 'لن تضيع العملية. ستتم مزامنتها تلقائيًا مع سند كلاود عند عودة الإنترنت.'}</p></div>
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-6 w-6" /></span>
+          <div><h2 className="text-base font-bold text-slate-950">تم حفظ الإشعار بنجاح</h2><p className="mt-1 px-2 text-[10px] leading-5 text-slate-500">يمكنك مراجعة الإشعار أو متابعة عملك فورًا. يكمل سند المزامنة والتحليل في الخلفية دون تعطيلك.</p></div>
+
+          <div className={`mx-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[9px] font-bold ${successData.synced ? 'bg-emerald-50 text-emerald-700' : navigator.onLine ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${successData.synced ? 'bg-emerald-500' : navigator.onLine ? 'bg-sky-500 animate-pulse' : 'bg-amber-500'}`} />
+            {successData.synced ? 'تمت المزامنة مع سند' : navigator.onLine ? 'جاري الاستكمال في الخلفية' : 'بانتظار الاتصال لإكمال المزامنة'}
+          </div>
 
           {successPreview && <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 text-right"><div className="mb-2"><strong className="block text-[11px] text-slate-900">الإشعار الذي تم حفظه</strong><span className="block truncate text-[9px] text-slate-400" dir="auto">{successPreview.name}</span></div>{successPreview.mimeType.startsWith('image/') ? <TouchZoomImage src={successPreview.url} alt="الإشعار المالي الذي تم حفظه" /> : successPreview.mimeType === ALLOWED_PDF_TYPE ? <iframe src={successPreview.url} title="الإشعار المالي الذي تم حفظه" className="h-[58vh] w-full rounded-2xl bg-white" /> : null}</div>}
 
           {gallerySavedForCurrentFile && <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-right text-[10px] leading-5 text-emerald-800"><strong className="block">نسخة إضافية محفوظة في الاستوديو</strong><span>الصورة الأصلية موجودة أيضًا في Pictures/SANAD، بالإضافة إلى النسخة المحفوظة داخل سند.</span></div>}
 
           {processedSummary?.compressionApplied && <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-right text-[10px] text-emerald-800"><strong className="block">تم تحسين الصورة قبل الحفظ داخل سند</strong><span className="mt-1 block">{formatMegabytes(processedSummary.originalSize)} ← {formatMegabytes(processedSummary.processedSize)} بصيغة WebP</span></div>}
-          {!successData.synced && navigator.onLine && <button type="button" onClick={refreshPendingSync} disabled={uploading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-4 py-3.5 text-xs font-bold text-white disabled:opacity-60">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}<span>{uploading ? 'جاري المزامنة…' : 'مزامنة الآن'}</span></button>}
           {successData.synced && successData.publicToken && <button type="button" onClick={openDetailsWhenReady} disabled={openingDetails} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3.5 text-xs font-bold text-white shadow-sm disabled:opacity-60">{openingDetails ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}<span>{openingDetails ? 'جاري تجهيز التفاصيل…' : 'فتح تفاصيل العملية'}</span></button>}
           {successData.synced && successData.qrUrl && <><button type="button" onClick={() => setShowQr((current) => !current)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-bold text-slate-700"><QrCode className="h-4 w-4" /><span>{showQr ? 'إخفاء رابط وQR' : 'عرض رابط وQR للمشاركة'}</span></button>{showQr && <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">{successData.localQrCodeDataUrl && <img src={successData.localQrCodeDataUrl} alt="رمز العملية" className="mx-auto h-36 w-36 rounded-xl bg-white p-2 object-contain" />}<div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 pr-3"><div className="min-w-0 flex-1 truncate px-1 text-left font-mono text-[9px] text-slate-500" dir="ltr">{successData.qrUrl}</div><button type="button" onClick={copyQrUrlToClipboard} className={`flex h-8 shrink-0 items-center gap-1 rounded-lg px-3 text-[10px] font-bold ${copied ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-950 text-white'}`}>{copied ? <Check className="h-3 w-3" /> : <Clipboard className="h-3 w-3" />}<span>{copied ? 'تم النسخ' : 'نسخ'}</span></button></div><button type="button" onClick={shareQrUrl} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-[10px] font-bold text-white"><Share2 className="h-3.5 w-3.5" /> مشاركة الرابط</button></div>}</>}
           <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-4"><button type="button" onClick={() => onNavigate('my-operations')} className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2.5 text-[10px] font-bold text-white"><FileText className="h-3.5 w-3.5" /> سجل العمليات</button><button type="button" onClick={resetUpload} className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[10px] font-bold text-slate-700"><RefreshCw className="h-3.5 w-3.5" /> إضافة عملية أخرى</button></div>
