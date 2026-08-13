@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 
 function clamp(value: number, min: number, max: number): number {
@@ -38,7 +39,7 @@ export default function TouchZoomImage({ src, alt, className = '' }: Props) {
     if (value === 1) setOffset({ x: 0, y: 0 });
   };
 
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size === 1) lastPanPoint.current = { x: event.clientX, y: event.clientY };
@@ -49,7 +50,7 @@ export default function TouchZoomImage({ src, alt, className = '' }: Props) {
     }
   };
 
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -70,7 +71,7 @@ export default function TouchZoomImage({ src, alt, className = '' }: Props) {
     }
   };
 
-  const endPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+  const endPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     pointers.current.delete(event.pointerId);
     if (pointers.current.size < 2) lastPinchDistance.current = null;
     const remaining = [...pointers.current.values()][0];
