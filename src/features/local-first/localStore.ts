@@ -150,6 +150,11 @@ export async function listLocalOperations(): Promise<LocalStoredOperation[]> {
   }
 }
 
+export async function listLocalOperationsForUser(userId: string): Promise<LocalStoredOperation[]> {
+  const operations = await listLocalOperations();
+  return operations.filter((operation) => operation.submittedByUserId === userId);
+}
+
 export async function getLocalOperationFile(localId: string): Promise<LocalStoredFile | null> {
   const operation = await getLocalOperation(localId);
   if (!operation) return null;
