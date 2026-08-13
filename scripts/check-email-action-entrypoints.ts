@@ -13,10 +13,13 @@ assert.match(indexHtml, /reset-password\.html/, 'recovery callbacks must be quar
 assert.match(indexHtml, /auth-action\.html/, 'non-recovery callbacks must be quarantined to auth-action.html');
 assert.match(indexHtml, /window\.location\.replace/, 'callback quarantine must run before application bootstrap');
 
-assert.match(authSource, /emailRedirectTo:\s*getEmailActionUrl\('signup'\)/, 'signup must target the dedicated action page');
-assert.match(authSource, /type:\s*'signup'[\s\S]*emailRedirectTo:\s*getEmailActionUrl\('signup'\)/, 'resend confirmation must use the same action page');
-assert.match(authSource, /new URL\('reset-password\.html'/, 'password recovery must build the dedicated recovery URL');
-assert.match(authSource, /resetPasswordForEmail\(/, 'password recovery must send through Supabase Auth');
+assert.match(authSource, /emailRedirectTo:\s*getEmailActionUrl\('signup'\)/, 'signup must keep a safe dedicated action page if confirmation is enabled unexpectedly');
+assert.match(authSource, /INTERNAL_AUTH_EMAIL_DOMAIN\s*=\s*'users\.sanadflow\.com'/, 'phone-first signup must use the controlled internal auth namespace');
+assert.match(authSource, /auth_identifier:\s*'phone_internal_email_v1'/, 'phone-first signup must mark the compatibility identity strategy');
+assert.match(authSource, /signInMethod === 'phone'/, 'sign-in must support phone-first credentials');
+assert.match(authSource, /signInMethod === 'email'/, 'legacy email sign-in must remain available');
+assert.match(authSource, /new URL\('reset-password\.html'/, 'legacy password recovery must build the dedicated recovery URL');
+assert.match(authSource, /resetPasswordForEmail\(/, 'legacy password recovery must send through Supabase Auth');
 
 assert.match(authActionHtml, /auth-action-root/, 'auth action HTML root must exist');
 assert.match(authActionSource, /endTemporaryBrowserSession/, 'email action page must end temporary browser sessions');
@@ -28,4 +31,4 @@ assert.match(resetPasswordSource, /updateUser\(\{ password \}\)/, 'recovery page
 assert.match(resetPasswordSource, /signOut\(\{ scope: 'local' \}\)/, 'recovery page must end its temporary session');
 assert.match(resetPasswordSource, /سجّل الدخول باستخدام كلمة المرور الجديدة/, 'recovery success must require explicit sign-in');
 
-console.log('Email action entrypoint contract passed: 17 checks.');
+console.log('Auth and email action entrypoint contract passed: 20 checks.');
