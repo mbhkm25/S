@@ -70,7 +70,21 @@ async function syncOne(job: LocalSyncJob): Promise<void> {
   }
 
   if (operation.cloudOperationId) {
-    await updateSyncJob({ ...job, state: 'completed', lastError: null, updatedAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    if (operation.status !== 'synced') {
+      await updateLocalOperation(
+        operation.localId,
+        (current) => ({ ...current, status: 'synced', updatedAt: now }),
+        { type: 'sync_state_reconciled', payload: { cloud_operation_id: operation.cloudOperationId } },
+      );
+    }
+    await updateSyncJob({
+      ...job,
+      state: 'completed',
+      nextAttemptAt: null,
+      lastError: null,
+      updatedAt: now,
+    });
     return;
   }
 
