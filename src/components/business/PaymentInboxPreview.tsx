@@ -7,6 +7,7 @@ type PreviewResponse = {
   status?: string;
   available?: boolean;
   signed_url?: string;
+  retry_after_seconds?: number;
 };
 
 export default function PaymentInboxPreview({ publicToken, entity }: { publicToken: string; entity: string }) {
@@ -14,6 +15,7 @@ export default function PaymentInboxPreview({ publicToken, entity }: { publicTok
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
     const node = hostRef.current;
@@ -29,19 +31,40 @@ export default function PaymentInboxPreview({ publicToken, entity }: { publicTok
   }, []);
 
   useEffect(() => {
+    setUrl(null);
+    setRetryTick(0);
+  }, [publicToken]);
+
+  useEffect(() => {
     if (!visible || !publicToken || url) return;
     let cancelled = false;
+    let retryTimer: number | undefined;
     setLoading(true);
+
     void supabase.functions.invoke<PreviewResponse>('sanad-operation-preview-access', {
       body: { public_token: publicToken, request_processing: false },
     }).then(({ data, error }) => {
       if (cancelled) return;
-      if (!error && data?.ok && data.available && data.signed_url) setUrl(data.signed_url);
+      if (!error && data?.ok && data.available && data.signed_url) {
+        setUrl(data.signed_url);
+        return;
+      }
+
+      if (!error && data?.ok && !data.available) {
+        const seconds = Math.min(15, Math.max(2, Number(data.retry_after_seconds || 5)));
+        retryTimer = window.setTimeout(() => {
+          if (!cancelled) setRetryTick(value => value + 1);
+        }, seconds * 1000);
+      }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
-    return () => { cancelled = true; };
-  }, [publicToken, url, visible]);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [publicToken, retryTick, url, visible]);
 
   return (
     <div ref={hostRef} className="relative aspect-[16/7] overflow-hidden rounded-[1.65rem] border border-white/80 bg-gradient-to-br from-violet-100 via-rose-50 to-amber-50 shadow-inner">
