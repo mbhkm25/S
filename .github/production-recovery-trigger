@@ -1,0 +1,3 @@
+reason=restore-app-sanadflow-com-after-502
+requested_at=2026-08-28T14:30:00Z
+scope=static-web-and-nginx-reload-only
