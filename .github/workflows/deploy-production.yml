@@ -51,8 +51,20 @@ jobs:
           fi
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout validated release
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Reject high-severity dependency vulnerabilities
+        run: npm audit --audit-level=high
 
       - name: TypeScript and route checks
         run: |
@@ -60,6 +72,8 @@ jobs:
           npm run check:routes
 
       - name: Production build
+        env:
+          VITE_APP_VERSION: ${{ steps.release.outputs.sha }}
         run: npm run build
 
   deploy:
@@ -103,14 +117,20 @@ jobs:
 
       - name: Verify published release
         shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.validate.outputs.release_sha }}
         run: |
           set -euo pipefail
+          EXPECTED_VERSION="${RELEASE_SHA:0:12}"
           for attempt in 1 2 3 4 5; do
             APP_OK=0
             APK_OK=0
+            VERSION_OK=0
             curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/ >/dev/null && APP_OK=1
             curl --fail --silent --show-error --location --head --max-time 30 https://app.sanadflow.com/downloads/sanad-latest.apk >/dev/null && APK_OK=1
-            if [[ "$APP_OK" -eq 1 && "$APK_OK" -eq 1 ]]; then
+            PUBLISHED_VERSION="$(curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/version.json | jq -r '.version // empty' || true)"
+            [[ "$PUBLISHED_VERSION" == "$EXPECTED_VERSION" || "$PUBLISHED_VERSION" == "$RELEASE_SHA" ]] && VERSION_OK=1
+            if [[ "$APP_OK" -eq 1 && "$APK_OK" -eq 1 && "$VERSION_OK" -eq 1 ]]; then
               exit 0
             fi
             sleep 5

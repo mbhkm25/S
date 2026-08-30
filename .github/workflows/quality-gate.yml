@@ -28,11 +28,14 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
+            landing/package-lock.json
             services/push-worker/package-lock.json
       - name: Set up Android icon generator
         run: python -m pip install --disable-pip-version-check Pillow
       - name: Install application dependencies
         run: npm ci
+      - name: Reject high-severity dependency vulnerabilities
+        run: npm audit --audit-level=high
       - name: Type-check application
         run: npm run lint
       - name: Validate application routes
@@ -53,9 +56,21 @@ jobs:
           test -f dist/manifest.webmanifest
           test -f dist/version.json
           test -d dist/assets
+      - name: Install landing page dependencies
+        working-directory: landing
+        run: npm ci
+      - name: Reject high-severity landing page vulnerabilities
+        working-directory: landing
+        run: npm audit --audit-level=high
+      - name: Build landing page
+        working-directory: landing
+        run: npm run build
       - name: Install push worker dependencies
         working-directory: services/push-worker
         run: npm ci
+      - name: Reject high-severity push worker vulnerabilities
+        working-directory: services/push-worker
+        run: npm audit --audit-level=high
       - name: Type-check push worker
         working-directory: services/push-worker
         run: npm run lint
