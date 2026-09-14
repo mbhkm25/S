@@ -1,7 +1,3 @@
--- Keep report generation state independent from WhatsApp delivery state.
--- A ready PDF/interactive report must remain ready even if Meta later rejects delivery
--- (for example error 131047 outside the free-form messaging window).
-
 create or replace function public.apply_report_whatsapp_delivery_status(
   p_message_id text,
   p_status text,

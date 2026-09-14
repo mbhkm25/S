@@ -21,9 +21,9 @@ begin
     select * into v_access from public.operations where id=nullif(v_reuse->>'canonical_operation_id','')::uuid;
   else v_access := v_requested; end if;
 
-  -- One user's quota is shared across all operations. Serialize first-open attempts
-  -- before reading remaining quota so different concurrent operations cannot both
-  -- consume the final available slot.
+  -- The quota is shared by all operations for one user. Serialize all first-open
+  -- attempts for that user before reading remaining quota so concurrent requests
+  -- for different operations cannot both consume the final available slot.
   perform pg_advisory_xact_lock(hashtextextended('sanad-operation-access-quota:' || v_user::text,0));
 
   select exists(select 1 from public.operation_access_logs where user_id=v_user and operation_id=v_access.id) into v_existing;

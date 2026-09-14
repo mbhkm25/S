@@ -1,7 +1,3 @@
--- Remove circular RLS dependencies between business_profiles, business_team_members,
--- and business_customers. Security-definer helpers perform narrow membership checks
--- without re-entering the caller's table policies.
-
 create or replace function private.user_is_business_owner(p_business_id uuid,p_user_id uuid)
 returns boolean
 language sql

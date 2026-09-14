@@ -1,7 +1,3 @@
--- Bind authenticated operation intake rows to a real object owned by the caller.
--- This prevents queue/AI abuse through forged database rows that reference missing,
--- foreign, or metadata-mismatched storage objects.
-
 create or replace function private.enforce_authenticated_operation_storage_contract()
 returns trigger
 language plpgsql

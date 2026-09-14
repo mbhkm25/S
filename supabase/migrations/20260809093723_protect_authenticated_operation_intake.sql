@@ -1,8 +1,3 @@
--- Prevent authenticated clients from forging analyzed/verified operation state.
--- Browser/PWA clients may only create stored, pending-analysis intake records
--- from their own operation-files path. Analysis, routing, and verification remain
--- server-owned transitions.
-
 create or replace function private.enforce_authenticated_operation_intake()
 returns trigger
 language plpgsql
