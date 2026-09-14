@@ -12,8 +12,12 @@ This document freezes the technical baseline before the next broad development p
 - Production branch: `main`
 - Integration branch: `develop`
 - Production Supabase project: `sanad_verify_v3`
-- Supabase project ref: `hudbzlgclghlhazlduas`
-- API origin: `https://api.sanadflow.com`
+- Production Supabase project ref: `hudbzlgclghlhazlduas`
+- Production API origin: `https://api.sanadflow.com`
+- Development Supabase branch: `develop`
+- Development Supabase branch id: `0938065d-0030-485e-922a-383095860d2f`
+- Development Supabase project ref: `abedoqbtqdaflkdpyxgy`
+- Development Supabase API URL: `https://abedoqbtqdaflkdpyxgy.supabase.co`
 
 ## Repository baseline
 
@@ -30,9 +34,10 @@ This document freezes the technical baseline before the next broad development p
 2. Branch from `develop` using a focused branch name, e.g. `feat/<capability>` or `fix/<problem>`.
 3. Keep database changes in `supabase/migrations` and Edge Function changes in `supabase/functions`.
 4. Every feature branch must pass TypeScript, route checks, build checks, migration layout checks, migration-history tests, and Deno checks for critical Edge Functions.
-5. Merge feature branches into `develop` first.
-6. Promote `develop` to `main` only through a pull request after integration testing.
-7. Production deployment remains sourced from `main` only.
+5. Apply schema-changing migrations to the Supabase `develop` branch first, never directly to production during feature development.
+6. Merge feature branches into GitHub `develop` first.
+7. Promote `develop` to `main` only through a pull request after integration testing.
+8. Production deployment remains sourced from `main` only.
 
 ## Supabase production baseline
 
@@ -40,16 +45,33 @@ This document freezes the technical baseline before the next broad development p
 - Region: `eu-central-1`
 - Project state at preparation time: active/healthy.
 - RLS is enabled across the core exposed tables inspected during preparation.
-- Production migration history currently ends with a migration named `sanad_ops_watch_hourly`.
+- Production migration history currently ends with `20260815184635_sanad_ops_watch_hourly`.
+
+## Supabase development branch
+
+The development database branch has been created and is healthy.
+
+- Name: `develop`
+- Branch id: `0938065d-0030-485e-922a-383095860d2f`
+- Project ref: `abedoqbtqdaflkdpyxgy`
+- API URL: `https://abedoqbtqdaflkdpyxgy.supabase.co`
+- Parent project ref: `hudbzlgclghlhazlduas`
+- Production data copied: **no** (`with_data=false`)
+- Branch state after creation: `FUNCTIONS_DEPLOYED` / `ACTIVE_HEALTHY`
+- Confirmed branch cost at creation time: `$0.01344/hour` while the branch exists.
+
+The branch inherited the production Supabase migration history, including the production-side migration identity `20260815184635_sanad_ops_watch_hourly`.
+
+Use this branch as the default database target for new schema, RLS, RPC, trigger, and Edge Function development. Do not hardcode its ref into production runtime code.
 
 ## Migration-history warning
 
 A migration identity discrepancy was observed during baseline inspection:
 
-- Production history reports `20260815184635_sanad_ops_watch_hourly`.
+- Production and the newly created development branch report `20260815184635_sanad_ops_watch_hourly`.
 - The repository currently contains `20260815184500_sanad_ops_watch_hourly.sql`.
 
-Do **not** renumber, delete, or replay either side casually. Before the first schema-changing feature in the new phase, run the repository migration audit against production and reconcile the history deliberately. Treat production schema as authoritative until reconciliation is complete.
+Do **not** renumber, delete, or replay either side casually. Before the first schema-changing feature in the new phase, run the repository migration audit against the development branch and reconcile the history deliberately. Treat production schema as authoritative until reconciliation is complete.
 
 ## Security baseline / debt register
 
@@ -86,23 +108,29 @@ Performance-linter references:
 
 ## Database-development rule for the expansion phase
 
-Production must not be used as the experimentation environment for broad schema work. The preferred next step is to create a Supabase development branch corresponding to GitHub `develop`, then apply and verify new migrations there before promotion.
+Production must not be used as the experimentation environment for broad schema work.
 
-Creating a Supabase branch can incur recurring cost and therefore requires explicit cost confirmation before creation. Until that branch exists:
+The GitHub integration branch and Supabase database branch are now paired conceptually:
 
-- production database changes are frozen except urgent fixes;
-- schema work should be authored as migrations on feature branches;
-- no destructive migration should be executed directly against production.
+- GitHub: `develop`
+- Supabase: `develop` (`abedoqbtqdaflkdpyxgy`)
+
+For every schema-changing feature:
+
+1. author the SQL as a migration in the feature branch;
+2. apply it to Supabase `develop`;
+3. verify behavior, RLS, RPC authorization, indexes, and advisors there;
+4. merge the feature branch into GitHub `develop` after CI passes;
+5. promote to production only after integration acceptance and migration-history reconciliation.
 
 ## First-phase gates before feature work
-
-The expansion phase is ready to start once these gates are satisfied:
 
 - [x] GitHub `develop` integration branch created from production baseline.
 - [x] CI quality gate runs on `develop`.
 - [x] Production Supabase project identified and inspected.
 - [x] Security and performance advisor baselines captured.
-- [ ] Supabase development branch created after cost confirmation.
+- [x] Supabase `develop` branch created and verified healthy.
+- [x] Supabase `develop` inherited the current production migration history.
 - [ ] Production/repository migration-history discrepancy reconciled.
 - [ ] `SECURITY DEFINER` RPC inventory classified by intended audience and authorization model.
 - [ ] Priority foreign-key indexes selected based on actual query paths, not advisor count alone.
