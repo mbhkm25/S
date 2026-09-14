@@ -158,12 +158,38 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: "event_accept_failed" }, 500);
     }
 
+    const ackRecord = (ack || {}) as Record<string, unknown>;
+    const receiptId = optionalString(ackRecord.receipt_id);
+    let normalization: Record<string, unknown> | null = null;
+
+    if (
+      receiptId &&
+      (adapterCode === "edaa" || adapterCode === "edaa_v5") &&
+      (entityType === "sale" || entityType === "sale_transaction")
+    ) {
+      const { data: normalized, error: normalizationError } = await supabase.rpc(
+        "normalize_edaa_sale_v1",
+        { p_raw_event_id: receiptId },
+      );
+
+      if (normalizationError) {
+        console.error("erp_ingest_normalization_rpc_failed", {
+          code: normalizationError.code,
+          event_id: eventId,
+          receipt_id: receiptId,
+        });
+        normalization = { status: "failed", error: "normalization_rpc_failed" };
+      } else {
+        normalization = (normalized || {}) as Record<string, unknown>;
+      }
+    }
+
     await supabase
       .from("business_bridge_device_credentials")
       .update({ last_used_at: new Date().toISOString() })
       .eq("id", credential.id);
 
-    return jsonResponse({ ok: true, ...((ack || {}) as Record<string, unknown>) }, 200);
+    return jsonResponse({ ok: true, ...ackRecord, normalization }, 200);
   } catch (error) {
     console.error("erp_ingest_unhandled", {
       name: error instanceof Error ? error.name : "unknown",

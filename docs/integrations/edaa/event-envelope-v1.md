@@ -128,4 +128,20 @@ A Bridge may retry after network uncertainty. A retry must not create a second l
 
 ## Edaa normalization boundary
 
-This envelope deliberately does not define exact Edaa `payload` keys yet. The technical reference provides semantic bundle structure, but production mapping requires an exact real/anonymized bundle fixture. The mapper must be written from evidence rather than inferred field names.
+The exact Edaa `ibex-1` sale bundle shape has now been verified from a real transaction fixture. Edaa-specific field interpretation remains inside the adapter/normalizer boundary; the generic envelope does not expose Edaa table semantics as platform-wide concepts.
+
+The evidence-based mapping and review rules are documented in:
+
+`docs/integrations/edaa/sale-normalization-v1.md`
+
+For the verified v1 sale path:
+
+- `payload` carries the complete Edaa transaction bundle;
+- `integrity` carries the bundle integrity object;
+- `source_record_id` is the source sale ID;
+- `entity_type` is `sale`;
+- the normalizer preserves raw currency IDs/exchange values and resolves ISO currency only through an explicit source-instance mapping;
+- `AccountID` is never promoted to canonical customer identity by itself;
+- invalid legacy timestamps such as the observed 1899 inventory timestamp are not treated as authoritative transaction time.
+
+Production Bridge revisions must also become update-safe: capture-only values must not determine revision identity, and later ERP corrections must produce a new revision/raw observation rather than overwriting prior evidence.
