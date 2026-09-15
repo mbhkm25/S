@@ -45,6 +45,7 @@ const PERMISSION_LABELS: Record<BusinessTeamPermissionKey, string> = {
   manage_catalog: 'إدارة الكتالوج',
   view_reports: 'عرض التقارير',
   link_operations: 'إضافة العمليات إلى النشاط',
+  manage_accounting_integrations: 'إدارة ربط النظام المحاسبي',
   'payments.view': 'عرض وارد المدفوعات',
   'payments.claim': 'استلام عمليات الدفع',
   'payments.complete': 'إكمال عمليات الدفع',
