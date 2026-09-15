@@ -31,8 +31,8 @@ function resolveVendorChunk(id: string): string | undefined {
   return 'vendor';
 }
 
-function contactRoutePlugin() {
-  const rewriteContactRoute = (
+function staticRoutePlugin() {
+  const rewriteStaticRoutes = (
     req: { url?: string },
     _res: unknown,
     next: () => void
@@ -41,17 +41,21 @@ function contactRoutePlugin() {
       req.url = `/contact/index.html${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
     } else if (req.url === '/contact/') {
       req.url = '/contact/index.html';
+    } else if (req.url === '/bridge/authorize' || req.url?.startsWith('/bridge/authorize?')) {
+      req.url = `/bridge-authorize.html${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`;
+    } else if (req.url === '/bridge/authorize/') {
+      req.url = '/bridge-authorize.html';
     }
     next();
   };
 
   return {
-    name: 'sanad-contact-route',
-    configureServer(server: { middlewares: { use: (handler: typeof rewriteContactRoute) => void } }) {
-      server.middlewares.use(rewriteContactRoute);
+    name: 'sanad-static-routes',
+    configureServer(server: { middlewares: { use: (handler: typeof rewriteStaticRoutes) => void } }) {
+      server.middlewares.use(rewriteStaticRoutes);
     },
-    configurePreviewServer(server: { middlewares: { use: (handler: typeof rewriteContactRoute) => void } }) {
-      server.middlewares.use(rewriteContactRoute);
+    configurePreviewServer(server: { middlewares: { use: (handler: typeof rewriteStaticRoutes) => void } }) {
+      server.middlewares.use(rewriteStaticRoutes);
     }
   };
 }
@@ -69,7 +73,7 @@ export default defineConfig(({ mode }) => {
       __SANAD_BUILD_TIME__: JSON.stringify(buildTime)
     },
     plugins: [
-      contactRoutePlugin(),
+      staticRoutePlugin(),
       react(),
       tailwindcss(),
       {
@@ -137,7 +141,8 @@ export default defineConfig(({ mode }) => {
         input: {
           app: path.resolve(__dirname, 'index.html'),
           'auth-action': path.resolve(__dirname, 'auth-action.html'),
-          'reset-password': path.resolve(__dirname, 'reset-password.html')
+          'reset-password': path.resolve(__dirname, 'reset-password.html'),
+          'bridge-authorize': path.resolve(__dirname, 'bridge-authorize.html')
         },
         output: {
           manualChunks: resolveVendorChunk
