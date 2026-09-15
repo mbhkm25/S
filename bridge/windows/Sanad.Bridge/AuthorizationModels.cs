@@ -60,6 +60,8 @@ namespace Sanad.Bridge
         public string source_instance_id { get; set; }
         public string adapter_code { get; set; }
         public string source_key { get; set; }
+        public string source_version { get; set; }
+        public string schema_fingerprint { get; set; }
         public DateTime authorized_at_utc { get; set; }
     }
 }
