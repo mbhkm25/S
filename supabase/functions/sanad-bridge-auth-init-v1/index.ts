@@ -120,7 +120,7 @@ serve(async (req) => {
   }
 
   const appUrl = (Deno.env.get("SANAD_APP_URL") || "https://app.sanadflow.com").replace(/\/$/, "");
-  const authorizationUrl = `${appUrl}/bridge/authorize?session=${encodeURIComponent(session.session_public_id)}#key=${encodeURIComponent(browserSecret)}`;
+  const authorizationUrl = `${appUrl}/bridge-authorize.html?session=${encodeURIComponent(session.session_public_id)}#key=${encodeURIComponent(browserSecret)}`;
 
   return jsonResponse({
     ok: true,
