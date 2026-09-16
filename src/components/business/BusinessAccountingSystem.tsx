@@ -283,7 +283,9 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
       )}
 
       {!error && active.map(connection => (
-        <ConnectionCard key={connection.connection_id} connection={connection} />
+        <div key={connection.connection_id}>
+          <ConnectionCard connection={connection} />
+        </div>
       ))}
 
       <section className="rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-4">
