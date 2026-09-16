@@ -16,7 +16,10 @@ export default function AppShellV2({
   showBottomNavigation = true,
 }: Props) {
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-slate-800" data-sanad-shell="v2">
+    <div
+      className="min-h-screen bg-[#F7F7F5] text-slate-800 [&_#bottom_nav]:hidden"
+      data-sanad-shell="v2"
+    >
       <div className={showBottomNavigation ? 'pb-24' : undefined}>{children}</div>
       {showBottomNavigation && (
         <BottomNavigationV2

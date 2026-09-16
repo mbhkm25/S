@@ -10,6 +10,8 @@ import OperationDocumentPreviewEnhancer from './features/operations/OperationDoc
 import LocalRuntimeController from './features/local-first/LocalRuntimeController';
 import CaptureFirstNavigationRuntime from './features/local-first/CaptureFirstNavigationRuntime';
 import { installDeviceLedgerRuntime } from './features/local-first/deviceLedgerRuntime';
+import SanadV2Root from './app-shell/SanadV2Root';
+import { SANAD_APP_SHELL_V2_ENABLED } from './app-shell/runtimeFlags';
 import './index.css';
 import './styles/local-first-connectivity.css';
 import './lib/publicBusinessProfileSwipe';
@@ -44,7 +46,7 @@ createRoot(document.getElementById('root')!).render(
       <>
         <LocalRuntimeController />
         <CaptureFirstNavigationRuntime />
-        <OperationEntryGate />
+        {SANAD_APP_SHELL_V2_ENABLED ? <SanadV2Root /> : <OperationEntryGate />}
         <OperationDetailsRuntimeV2 />
         <OperationIdentityDetailsBanner />
         <OperationDetailsActionIntent />
