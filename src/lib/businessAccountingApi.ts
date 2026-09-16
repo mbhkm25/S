@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { toUserSafeServiceError } from './userFacingError';
 
 export type BusinessAccountingConnectionStatus =
   | 'pending'
@@ -39,7 +40,12 @@ export async function getBusinessAccountingConnections(
   });
 
   if (error) {
-    throw new Error(error.message || 'تعذر تحميل حالة النظام المحاسبي.');
+    console.error('[SANAD accounting connections]', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    });
+    throw toUserSafeServiceError(error, 'تعذر تحميل حالة النظام المحاسبي حاليًا.');
   }
 
   if (!data || typeof data !== 'object') return [];
