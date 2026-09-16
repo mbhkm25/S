@@ -476,7 +476,6 @@ when (
 )
 execute function private.refresh_operation_identity_shadow();
 
--- Historical occurrence ledger: one submission per already-created operation.
 insert into private.operation_submissions(
   submitted_operation_id,canonical_operation_id,source,source_message_id,
   submitted_by_user_id,submitted_by_phone,file_sha256,identity_match_type,metadata,created_at,updated_at
@@ -489,7 +488,6 @@ select o.id,o.id,coalesce(o.source,'unknown'),
 from public.operations o
 on conflict (submitted_operation_id) do nothing;
 
--- Historical Shadow backfill oldest-first so canonical candidates are deterministic.
 do $$
 declare
   v_id uuid;

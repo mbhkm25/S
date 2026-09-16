@@ -1,9 +1,3 @@
--- Centralize operation action routing on the canonical operation.
--- Exact duplicate/reused submissions remain accessible by their own token,
--- but all mutating verification actions are resolved server-side to the
--- canonical operation. Payment inbox rows continue to use their dedicated
--- reuse-resolution workflow.
-
 create or replace function private.operation_action_policy(p_operation_id uuid)
 returns jsonb
 language plpgsql

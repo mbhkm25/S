@@ -1,7 +1,3 @@
--- Prevent authenticated clients from changing profile authority fields directly.
--- `global_role` and `status` are authorization inputs used by platform-admin and
--- business access checks, so they must only be changed by privileged server flows.
-
 create or replace function private.protect_profile_authority_fields()
 returns trigger
 language plpgsql

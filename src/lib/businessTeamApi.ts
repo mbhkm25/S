@@ -6,6 +6,7 @@ export type BusinessTeamPermissionKey =
   | 'manage_catalog'
   | 'view_reports'
   | 'link_operations'
+  | 'manage_accounting_integrations'
   | 'payments.view'
   | 'payments.claim'
   | 'payments.complete'
@@ -21,6 +22,7 @@ export const DEFAULT_TEAM_PERMISSIONS: BusinessTeamPermissions = {
   manage_catalog: false,
   view_reports: false,
   link_operations: true,
+  manage_accounting_integrations: false,
   'payments.view': false,
   'payments.claim': false,
   'payments.complete': false,

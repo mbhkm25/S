@@ -1,0 +1,11 @@
+grant select, insert, update, delete on table public.business_locations to service_role;
+grant select, insert, update, delete on table public.business_accounting_connections to service_role;
+grant select, insert, update, delete on table public.business_erp_source_instances to service_role;
+grant select, insert, update, delete on table public.business_bridge_devices to service_role;
+grant select, insert, update, delete on table public.business_bridge_device_credentials to service_role;
+grant select, insert, update, delete on table public.business_bridge_pairing_tokens to service_role;
+grant select, insert, update, delete on table public.business_erp_raw_events to service_role;
+grant select, insert, update, delete on table public.business_parties to service_role;
+grant select, insert, update, delete on table public.business_party_roles to service_role;
+grant select, insert, update, delete on table public.business_party_source_refs to service_role;
+grant select, insert, update, delete on table public.business_activity_events to service_role;

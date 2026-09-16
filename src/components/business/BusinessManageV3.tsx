@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
+  Database,
   FileText,
   LayoutDashboard,
   LayoutTemplate,
@@ -42,6 +43,7 @@ import {
 import { buildPublicBusinessUrl } from '../../lib/urlUtils';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import ResponsiveSheet from '../ui/ResponsiveSheet';
+import BusinessAccountingSystem from './BusinessAccountingSystem';
 import BusinessCustomers from './BusinessCustomers';
 import BusinessFinancialAccountsCenter from './BusinessFinancialAccountsCenter';
 import BusinessReports from './reports/BusinessReports';
@@ -53,7 +55,7 @@ interface Props {
   onNavigate: (page: string, token?: string) => void;
 }
 
-type Tab = 'overview' | 'catalog' | 'hours' | 'customers' | 'team' | 'complaints' | 'reports';
+type Tab = 'overview' | 'catalog' | 'hours' | 'customers' | 'team' | 'accounting' | 'complaints' | 'reports';
 
 type TabMeta = {
   id: Tab;
@@ -68,6 +70,7 @@ const TABS: TabMeta[] = [
   { id: 'customers', label: 'العملاء', description: 'العملاء والارتباط والتواصل', icon: Users, group: 'management' },
   { id: 'catalog', label: 'الكتالوج', description: 'المنتجات والخدمات والوسائط', icon: Package, group: 'management' },
   { id: 'team', label: 'فريق العمل', description: 'الأعضاء والأدوار والصلاحيات', icon: UserCheck, group: 'management' },
+  { id: 'accounting', label: 'النظام المحاسبي', description: 'الربط والمزامنة وحالة إبداع سوفت', icon: Database, group: 'management' },
   { id: 'hours', label: 'ساعات العمل والدوام', description: 'أوقات العمل والتنظيم التشغيلي', icon: Clock, group: 'management' },
   { id: 'reports', label: 'التقارير', description: 'الأداء والعمليات والمؤشرات', icon: FileText, group: 'monitoring' },
   { id: 'complaints', label: 'الشكاوى', description: 'الملاحظات والمتابعة والحلول', icon: MessageSquare, group: 'monitoring' }
@@ -410,6 +413,7 @@ export default function BusinessManageV3({ onNavigate }: Props) {
     if (tab === 'hours') return <BusinessWorkingHoursEditor hours={hours} saving={saving} onChange={setHours} onSave={() => void persistHours()} />;
     if (tab === 'customers') return <BusinessCustomers onNavigate={onNavigate} businessId={business.id} />;
     if (tab === 'team') return <BusinessTeam onNavigate={onNavigate} />;
+    if (tab === 'accounting') return <BusinessAccountingSystem businessId={business.id} />;
     if (tab === 'complaints') return renderComplaints();
     return <BusinessReports business={business} operations={operations} loading={operationsLoading} operationsError={operationsError} onRefreshOperations={() => void loadOperations()} onNavigate={onNavigate} />;
   };

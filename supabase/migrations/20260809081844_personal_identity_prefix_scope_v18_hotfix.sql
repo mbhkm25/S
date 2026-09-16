@@ -1,7 +1,3 @@
--- Correct semantic scope for Yemeni personal identity prefixes.
--- 080 and 663 are NOT Alomqy-specific. They are supporting evidence for a personal/national ID
--- and may appear inside receipts from Alomqy or any other financial entity.
-
 update public.ai_prompts
 set prompt_text = replace(
       replace(
@@ -16,7 +12,7 @@ set prompt_text = replace(
       '- البادئتان 080 و663 قرينتان قويتان لهوية/بطاقة العمقي عندما تكونان بجوار «بط» أو «بطاقة» أو «هوية». البادئة وحدها ليست قاعدة حاسمة إذا كان الحقل مسمى صراحة «رقم الحساب».',
       '- البادئتان 080 و663 قرينتان مساندتان على أن الرقم هو هوية شخصية/بطاقة وطنية يمنية، وقد يظهر هذا الرقم في إشعار صادر عن العمقي أو أي جهة مالية أخرى. لا تربط هاتين البادئتين بجهة مالية بعينها. البادئة وحدها ليست قاعدة حاسمة؛ تسمية الحقل والسياق البصري أقوى.'
     ),
-    version = greatest(version,16) + 1,
-    notes = trim(both from concat_ws(E'\n', nullif(notes,''), 'v17: 080/663 are cross-entity personal/national-ID evidence, not Alomqy-specific; 25 remains Alomqy-account supporting evidence only.')),
+    version = greatest(version,17) + 1,
+    notes = trim(both from concat_ws(E'\n', nullif(notes,''), 'v18 hotfix: corrected scope after v17 replacement mismatch; 080/663 are cross-entity personal-ID evidence.')),
     updated_at = now()
 where prompt_key='sanad_operation_extraction_operational_v2_shadow';
