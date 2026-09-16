@@ -5,6 +5,7 @@ export type PersonalFinanceAccountType = 'asset' | 'liability' | 'income' | 'exp
 export type PersonalFinanceTransactionType = 'income' | 'expense' | 'transfer' | 'liability' | 'settlement' | 'adjustment';
 export type PersonalFinanceTransactionSource = 'manual' | 'sanad_operation' | 'assistant' | 'import';
 export type OperationTransactionDirection = 'incoming' | 'outgoing' | 'internal' | 'unknown';
+export type OperationIntakeType = 'income' | 'expense' | 'transfer';
 
 export type FinancialCurrencySummary = {
   currency: string;
@@ -61,7 +62,7 @@ export type LinkableFinancialOperation = {
   transaction_direction_confidence: number | null;
   sender_name: string | null;
   receiver_name: string | null;
-  suggested_transaction_type: 'income' | 'expense' | null;
+  suggested_transaction_type: OperationIntakeType | null;
   linked_transaction_id: string | null;
   source_linked: boolean;
 };
@@ -100,19 +101,22 @@ export type CreatePersonalFinanceTransactionCommand = {
 
 export type CreateFinanceFromOperationCommand = {
   operation_id: string;
-  transaction_type: 'income' | 'expense';
-  account_id: string;
+  transaction_type: OperationIntakeType;
+  account_id?: string;
+  source_account_id?: string;
+  destination_account_id?: string;
   amount?: number;
   category_id?: string | null;
   description?: string;
   transaction_at?: string;
+  override_reason?: string;
   metadata?: Record<string, unknown>;
 };
 
 export type FinanceFromOperationResult = {
   transaction_id: string;
   operation_id: string;
-  transaction_type: 'income' | 'expense';
+  transaction_type: OperationIntakeType;
   amount: number;
   currency: string;
   amount_overridden: boolean;
@@ -164,13 +168,14 @@ function normalizeActivity(value: Record<string, unknown>): PersonalFinanceActiv
 function normalizeLinkableOperation(value: Record<string, unknown>): LinkableFinancialOperation {
   const direction = nullableString(value.transaction_direction);
   const suggestion = nullableString(value.suggested_transaction_type);
+  const rawCurrency = nullableString(value.currency);
   return {
     operation_id: String(value.operation_id ?? ''),
     public_token: String(value.public_token ?? ''),
     created_at: String(value.created_at ?? ''),
     transaction_date: nullableString(value.transaction_date),
     amount: nullableNumber(value.amount),
-    currency: nullableString(value.currency),
+    currency: rawCurrency?.toUpperCase() ?? null,
     source: String(value.source ?? ''),
     status: String(value.status ?? ''),
     ai_status: String(value.ai_status ?? ''),
@@ -181,7 +186,7 @@ function normalizeLinkableOperation(value: Record<string, unknown>): LinkableFin
     transaction_direction_confidence: nullableNumber(value.transaction_direction_confidence),
     sender_name: nullableString(value.sender_name),
     receiver_name: nullableString(value.receiver_name),
-    suggested_transaction_type: suggestion === 'income' || suggestion === 'expense' ? suggestion : null,
+    suggested_transaction_type: suggestion === 'income' || suggestion === 'expense' || suggestion === 'transfer' ? suggestion : null,
     linked_transaction_id: nullableString(value.linked_transaction_id),
     source_linked: value.source_linked === true,
   };
@@ -286,7 +291,7 @@ export async function createFinanceFromOperation(command: CreateFinanceFromOpera
   return {
     transaction_id: String(payload.transaction_id ?? ''),
     operation_id: String(payload.operation_id ?? ''),
-    transaction_type: String(payload.transaction_type ?? 'expense') as 'income' | 'expense',
+    transaction_type: String(payload.transaction_type ?? 'expense') as OperationIntakeType,
     amount: numberValue(payload.amount),
     currency: String(payload.currency ?? ''),
     amount_overridden: payload.amount_overridden === true,
