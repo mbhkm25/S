@@ -1,18 +1,21 @@
-import type { ComponentType } from 'react';
-import { BriefcaseBusiness, Sparkles, UserRound, WalletCards } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  Sparkles,
+  UserRound,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   SANAD_PRIMARY_DOMAINS,
   type SanadPrimaryDomain,
 } from './domainNavigation';
-
-type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 type Props = {
   activeDomain: SanadPrimaryDomain;
   onSelect: (domain: SanadPrimaryDomain) => void;
 };
 
-const ICONS: Record<SanadPrimaryDomain, IconComponent> = {
+const ICONS: Record<SanadPrimaryDomain, LucideIcon> = {
   ai: Sparkles,
   financial: WalletCards,
   business: BriefcaseBusiness,
