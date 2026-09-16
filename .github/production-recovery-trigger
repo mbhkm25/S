@@ -1,3 +1,4 @@
-reason=restore-app-sanadflow-com-after-502
-requested_at=2026-08-28T14:30:00Z
-scope=static-web-and-nginx-reload-only
+reason=deploy-current-main-for-user-preview
+requested_at=2026-09-16T16:12:00Z
+source_merge_sha=81a8f3ac67b5672eed1286883bc5208d47e325b6
+scope=production-app-and-apk
