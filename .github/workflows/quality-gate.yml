@@ -64,6 +64,30 @@ jobs:
         working-directory: services/push-worker
         run: npm test
 
+  validate-windows-bridge:
+    name: Windows Bridge
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore SANAD Bridge
+        shell: pwsh
+        run: dotnet restore bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj
+      - name: Build SANAD Bridge
+        shell: pwsh
+        run: dotnet build bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj --configuration Release --no-restore --warnaserror
+      - name: Verify Bridge artifact
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem bridge/windows/Sanad.Bridge/bin/Release -Filter Sanad.Bridge.exe -Recurse | Select-Object -First 1
+          if (-not $exe) { throw 'Sanad.Bridge.exe was not produced.' }
+          Write-Host "Bridge artifact: $($exe.FullName)"
+
   validate-supabase:
     name: Supabase migrations and Edge Functions
     runs-on: ubuntu-latest
@@ -170,6 +194,7 @@ jobs:
             sanad-operation-analysis-worker
             sanad-operation-analysis-shadow
             sanad-operation-preview-worker
+            sanad-erp-baseline-v1
           )
           for fn in "${required[@]}"; do
             test -f "supabase/functions/${fn}/index.ts" || {

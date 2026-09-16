@@ -195,8 +195,10 @@ namespace Sanad.Bridge
                     var claim = await client.ClaimAsync(init.session_public_id, init.claim_secret, timeout.Token).ConfigureAwait(false);
 
                     if (claim.status == "pending") continue;
-                    if (claim.status == "denied") throw new BridgeAuthorizationException("authorization_denied", 0);
-                    if (claim.status == "expired" || claim.status == "revoked") throw new BridgeAuthorizationException("authorization_expired", 0);
+                    if (claim.status == "denied")
+                        throw new BridgeAuthorizationException("authorization_denied", System.Net.HttpStatusCode.Forbidden);
+                    if (claim.status == "expired" || claim.status == "revoked")
+                        throw new BridgeAuthorizationException("authorization_expired", System.Net.HttpStatusCode.Gone);
                     if (claim.status != "connected" || string.IsNullOrWhiteSpace(claim.device_public_id))
                         throw new InvalidOperationException(claim.error ?? "authorization_claim_failed");
 

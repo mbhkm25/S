@@ -204,9 +204,6 @@ namespace Sanad.Bridge
         {
             if (value == null || value == DBNull.Value) return null;
             if (value is DateTime) return ((DateTime)value).ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
-            if (value is decimal) return ((decimal)value).ToString(CultureInfo.InvariantCulture);
-            if (value is double) return ((double)value).ToString("R", CultureInfo.InvariantCulture);
-            if (value is float) return ((float)value).ToString("R", CultureInfo.InvariantCulture);
             if (value is Guid) return value.ToString();
             if (value is byte[]) return null;
             return value;
