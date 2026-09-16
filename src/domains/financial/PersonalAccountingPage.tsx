@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, ArrowLeftRight, Loader2, Plus, WalletCards, X } from 'lucide-react';
 import {
+  createFinancialCategory,
   createFinancialTransaction,
   getFinancialAccounts,
   getFinancialActivity,
@@ -40,17 +41,25 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
   const [accountId, setAccountId] = useState('');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const [loadedAccounts, loadedCategories, loadedActivity] = await Promise.all([
         getFinancialAccounts(), getFinancialCategories(), getFinancialActivity(60),
       ]);
-      setAccounts(loadedAccounts); setCategories(loadedCategories); setActivity(loadedActivity);
+      setAccounts(loadedAccounts);
+      setCategories(loadedCategories);
+      setActivity(loadedActivity);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'تعذر تحميل المحاسب الشخصي.');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -63,31 +72,77 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
   );
 
   const openComposer = (type: ComposerType) => {
-    setComposer(type); setAmount(''); setDescription(''); setCategoryId('');
+    setComposer(type);
+    setAmount('');
+    setDescription('');
+    setCategoryId('');
+    setNewCategoryName('');
+    setShowCategoryCreator(false);
     const first = accounts.find((item) => item.status === 'active');
-    setAccountId(first?.id ?? ''); setDestinationAccountId(''); setError(null);
+    setAccountId(first?.id ?? '');
+    setDestinationAccountId('');
+    setError(null);
+  };
+
+  const addCategory = async () => {
+    if (composer !== 'income' && composer !== 'expense') return;
+    const name = newCategoryName.trim();
+    if (!name) {
+      setError('اكتب اسم التصنيف أولًا.');
+      return;
+    }
+
+    setCategorySaving(true);
+    setError(null);
+    try {
+      const id = await createFinancialCategory(composer, name);
+      const refreshed = await getFinancialCategories();
+      setCategories(refreshed);
+      setCategoryId(id);
+      setNewCategoryName('');
+      setShowCategoryCreator(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'تعذر إنشاء التصنيف.');
+    } finally {
+      setCategorySaving(false);
+    }
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!composer) return;
     const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) { setError('أدخل مبلغًا صحيحًا أكبر من صفر.'); return; }
-    if (!selectedAccount) { setError('اختر الحساب الذي ستُسجل عليه الحركة.'); return; }
-    if (composer === 'transfer' && !destinationAccountId) { setError('اختر الحساب المستلم للتحويل.'); return; }
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setError('أدخل مبلغًا صحيحًا أكبر من صفر.');
+      return;
+    }
+    if (!selectedAccount) {
+      setError('اختر الحساب الذي ستُسجل عليه الحركة.');
+      return;
+    }
+    if (composer === 'transfer' && !destinationAccountId) {
+      setError('اختر الحساب المستلم للتحويل.');
+      return;
+    }
 
-    setSaving(true); setError(null);
+    setSaving(true);
+    setError(null);
     try {
       if (composer === 'transfer') {
         await createFinancialTransaction({
-          transaction_type: 'transfer', amount: numericAmount,
-          source_account_id: selectedAccount.id, destination_account_id: destinationAccountId,
+          transaction_type: 'transfer',
+          amount: numericAmount,
+          source_account_id: selectedAccount.id,
+          destination_account_id: destinationAccountId,
           description: description.trim() || undefined,
         });
       } else {
         await createFinancialTransaction({
-          transaction_type: composer, amount: numericAmount, currency: selectedAccount.currency,
-          account_id: selectedAccount.id, category_id: categoryId || null,
+          transaction_type: composer,
+          amount: numericAmount,
+          currency: selectedAccount.currency,
+          account_id: selectedAccount.id,
+          category_id: categoryId || null,
           description: description.trim() || undefined,
         });
       }
@@ -95,7 +150,9 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'تعذر تسجيل الحركة المالية.');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -153,7 +210,7 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
 
       {composer && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/35 backdrop-blur-[2px] sm:items-center sm:p-4" role="dialog" aria-modal="true">
-          <form onSubmit={submit} className="w-full max-w-lg rounded-t-[30px] bg-white p-5 shadow-2xl sm:rounded-[30px]">
+          <form onSubmit={submit} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[30px] bg-white p-5 shadow-2xl sm:rounded-[30px]">
             <div className="mb-5 flex items-center justify-between"><div><p className="text-[11px] font-bold text-emerald-700">قيد جديد</p><h2 className="mt-1 text-[19px] font-black text-slate-950">{composer === 'expense' ? 'تسجيل مصروف' : composer === 'income' ? 'تسجيل دخل' : 'تحويل بين الحسابات'}</h2></div><button type="button" onClick={() => setComposer(null)} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600"><X className="h-4 w-4" /></button></div>
 
             <label className="mb-4 block"><span className="mb-2 block text-[11px] font-black text-slate-600">{composer === 'transfer' ? 'من حساب' : 'الحساب'}</span><select value={accountId} onChange={(e) => { setAccountId(e.target.value); setDestinationAccountId(''); }} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none"><option value="">اختر الحساب</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} — {account.currency}</option>)}</select></label>
@@ -162,11 +219,22 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
 
             <label className="mb-4 block"><span className="mb-2 block text-[11px] font-black text-slate-600">المبلغ {selectedAccount ? `(${selectedAccount.currency})` : ''}</span><input type="number" min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-left text-[16px] font-black outline-none" dir="ltr" /></label>
 
-            {composer !== 'transfer' && composerCategories.length > 0 && <label className="mb-4 block"><span className="mb-2 block text-[11px] font-black text-slate-600">التصنيف</span><select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none"><option value="">بدون تصنيف</option>{composerCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>}
+            {composer !== 'transfer' && (
+              <div className="mb-4">
+                <div className="mb-2 flex items-center justify-between gap-3"><span className="text-[11px] font-black text-slate-600">التصنيف</span><button type="button" onClick={() => setShowCategoryCreator((value) => !value)} className="text-[10px] font-black text-emerald-700">{showCategoryCreator ? 'إلغاء' : '+ تصنيف جديد'}</button></div>
+                <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold outline-none"><option value="">بدون تصنيف</option>{composerCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+                {showCategoryCreator && (
+                  <div className="mt-2 flex gap-2 rounded-2xl bg-slate-50 p-2">
+                    <input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} maxLength={80} placeholder={composer === 'expense' ? 'مثال: أغراض البيت' : 'مثال: دخل إضافي'} className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold outline-none" />
+                    <button type="button" onClick={() => void addCategory()} disabled={categorySaving} className="flex h-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 px-4 text-[10px] font-black text-white disabled:opacity-60">{categorySaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'إضافة'}</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <label className="mb-5 block"><span className="mb-2 block text-[11px] font-black text-slate-600">البيان</span><input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} placeholder="مثال: مقاضي المنزل" className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-bold outline-none" /></label>
 
-            <button type="submit" disabled={saving} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-[13px] font-black text-white disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />} تسجيل القيد</button>
+            <button type="submit" disabled={saving || categorySaving} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-[13px] font-black text-white disabled:opacity-60">{saving && <Loader2 className="h-4 w-4 animate-spin" />} تسجيل القيد</button>
           </form>
         </div>
       )}
