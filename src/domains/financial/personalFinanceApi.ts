@@ -4,6 +4,7 @@ import { toUserSafeServiceError } from '../../lib/userFacingError';
 export type PersonalFinanceAccountType = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 export type PersonalFinanceTransactionType = 'income' | 'expense' | 'transfer' | 'liability' | 'settlement' | 'adjustment';
 export type PersonalFinanceTransactionSource = 'manual' | 'sanad_operation' | 'assistant' | 'import';
+export type OperationTransactionDirection = 'incoming' | 'outgoing' | 'internal' | 'unknown';
 
 export type FinancialCurrencySummary = {
   currency: string;
@@ -43,6 +44,28 @@ export type PersonalFinanceCategory = {
   created_at: string;
 };
 
+export type LinkableFinancialOperation = {
+  operation_id: string;
+  public_token: string;
+  created_at: string;
+  transaction_date: string | null;
+  amount: number | null;
+  currency: string | null;
+  source: string;
+  status: string;
+  ai_status: string;
+  file_original_name: string | null;
+  financial_entity: string | null;
+  financial_entity_code: string | null;
+  transaction_direction: OperationTransactionDirection | null;
+  transaction_direction_confidence: number | null;
+  sender_name: string | null;
+  receiver_name: string | null;
+  suggested_transaction_type: 'income' | 'expense' | null;
+  linked_transaction_id: string | null;
+  source_linked: boolean;
+};
+
 export type FinancialHomeContract = {
   contract_version: number;
   period_start: string;
@@ -75,9 +98,40 @@ export type CreatePersonalFinanceTransactionCommand = {
   metadata?: Record<string, unknown>;
 };
 
+export type CreateFinanceFromOperationCommand = {
+  operation_id: string;
+  transaction_type: 'income' | 'expense';
+  account_id: string;
+  amount?: number;
+  category_id?: string | null;
+  description?: string;
+  transaction_at?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type FinanceFromOperationResult = {
+  transaction_id: string;
+  operation_id: string;
+  transaction_type: 'income' | 'expense';
+  amount: number;
+  currency: string;
+  amount_overridden: boolean;
+  currency_inferred_from_account: boolean;
+};
+
 function numberValue(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
 }
 
 function normalizeAccount(value: Record<string, unknown>): PersonalFinanceAccount {
@@ -98,12 +152,38 @@ function normalizeActivity(value: Record<string, unknown>): PersonalFinanceActiv
     id: String(value.id ?? ''),
     transaction_type: String(value.transaction_type ?? 'adjustment') as PersonalFinanceTransactionType,
     transaction_at: String(value.transaction_at ?? ''),
-    description: typeof value.description === 'string' && value.description.trim() ? value.description : null,
+    description: nullableString(value.description),
     amount: numberValue(value.amount),
     currency: String(value.currency ?? ''),
     source: String(value.source ?? 'manual') as PersonalFinanceTransactionSource,
     category_id: value.category_id ? String(value.category_id) : null,
-    category_name: typeof value.category_name === 'string' ? value.category_name : null,
+    category_name: nullableString(value.category_name),
+  };
+}
+
+function normalizeLinkableOperation(value: Record<string, unknown>): LinkableFinancialOperation {
+  const direction = nullableString(value.transaction_direction);
+  const suggestion = nullableString(value.suggested_transaction_type);
+  return {
+    operation_id: String(value.operation_id ?? ''),
+    public_token: String(value.public_token ?? ''),
+    created_at: String(value.created_at ?? ''),
+    transaction_date: nullableString(value.transaction_date),
+    amount: nullableNumber(value.amount),
+    currency: nullableString(value.currency),
+    source: String(value.source ?? ''),
+    status: String(value.status ?? ''),
+    ai_status: String(value.ai_status ?? ''),
+    file_original_name: nullableString(value.file_original_name),
+    financial_entity: nullableString(value.financial_entity),
+    financial_entity_code: nullableString(value.financial_entity_code),
+    transaction_direction: direction as OperationTransactionDirection | null,
+    transaction_direction_confidence: nullableNumber(value.transaction_direction_confidence),
+    sender_name: nullableString(value.sender_name),
+    receiver_name: nullableString(value.receiver_name),
+    suggested_transaction_type: suggestion === 'income' || suggestion === 'expense' ? suggestion : null,
+    linked_transaction_id: nullableString(value.linked_transaction_id),
+    source_linked: value.source_linked === true,
   };
 }
 
@@ -165,6 +245,17 @@ export async function getFinancialCategories(): Promise<PersonalFinanceCategory[
   });
 }
 
+export async function getLinkableFinancialOperations(limit = 50, includeLinked = false): Promise<LinkableFinancialOperation[]> {
+  const { data, error } = await supabase.rpc('get_my_linkable_financial_operations_v1', {
+    p_limit: limit,
+    p_include_linked: includeLinked,
+  });
+  if (error) throw toUserSafeServiceError(error, 'تعذر تحميل عمليات سند المتاحة للمحاسب.');
+  const payload = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  return items.map((item) => normalizeLinkableOperation((item && typeof item === 'object' ? item : {}) as Record<string, unknown>));
+}
+
 export async function createFinancialAccount(command: CreatePersonalFinanceAccountCommand): Promise<string> {
   const { data, error } = await supabase.rpc('create_personal_finance_account_v1', { p_command: command });
   if (error) throw toUserSafeServiceError(error, 'تعذر إنشاء الحساب المالي. راجع البيانات وحاول مرة أخرى.');
@@ -186,6 +277,21 @@ export async function createFinancialCategory(kind: 'income' | 'expense', name: 
   if (error) throw toUserSafeServiceError(error, 'تعذر إنشاء التصنيف المالي.');
   const payload = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
   return String(payload.category_id ?? '');
+}
+
+export async function createFinanceFromOperation(command: CreateFinanceFromOperationCommand): Promise<FinanceFromOperationResult> {
+  const { data, error } = await supabase.rpc('create_personal_finance_from_operation_v1', { p_command: command });
+  if (error) throw toUserSafeServiceError(error, 'تعذر إدخال عملية سند إلى المحاسب. راجع الحساب والمبلغ ثم حاول مرة أخرى.');
+  const payload = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  return {
+    transaction_id: String(payload.transaction_id ?? ''),
+    operation_id: String(payload.operation_id ?? ''),
+    transaction_type: String(payload.transaction_type ?? 'expense') as 'income' | 'expense',
+    amount: numberValue(payload.amount),
+    currency: String(payload.currency ?? ''),
+    amount_overridden: payload.amount_overridden === true,
+    currency_inferred_from_account: payload.currency_inferred_from_account === true,
+  };
 }
 
 export async function linkOperationToPersonalFinance(operationId: string, transactionId: string): Promise<void> {
