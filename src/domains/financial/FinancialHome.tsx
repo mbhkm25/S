@@ -143,7 +143,7 @@ export default function FinancialHome({ onNavigate }: FinancialHomeProps) {
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm"><FileCheck2 className="h-5 w-5" /></div>
                 <div>
                   <p className="text-sm font-black text-slate-900">{data.unlinked_operations_count} عملية سند خارج الدفتر الشخصي</p>
-                  <p className="mt-1 text-[11px] leading-5 text-slate-500">راجع كل عملية ثم قرر إدخالها كدخل أو مصروف. أصل عملية سند لن يتغير.</p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">راجع كل عملية ثم قرر إدخالها كدخل أو مصروف أو تحويل. أصل عملية سند لن يتغير.</p>
                 </div>
               </div>
               <ArrowLeft className="h-5 w-5 shrink-0 text-emerald-700" />
