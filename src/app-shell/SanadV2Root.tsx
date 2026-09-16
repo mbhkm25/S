@@ -13,6 +13,7 @@ import AiHome from '../domains/ai/AiHome';
 import BusinessHome from '../domains/business/BusinessHome';
 import FinancialAccountsPage from '../domains/financial/FinancialAccountsPage';
 import FinancialHome from '../domains/financial/FinancialHome';
+import FinancialOperationIntakePage from '../domains/financial/FinancialOperationIntakePage';
 import PersonalAccountingPage from '../domains/financial/PersonalAccountingPage';
 import AppShellV2 from './AppShellV2';
 import type { SanadPrimaryDomain } from './domainNavigation';
@@ -185,6 +186,7 @@ export default function SanadV2Root() {
   if (route === '/financial') content = <FinancialHome onNavigate={navigate} />;
   else if (route === '/financial/accounts') content = <FinancialAccountsPage onBack={() => navigate('/financial')} />;
   else if (route === '/financial/accounting') content = <PersonalAccountingPage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} />;
+  else if (route === '/financial/import') content = <FinancialOperationIntakePage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} onOpenOperation={(token) => navigate(`/v/${token}`)} />;
   else if (route === '/financial/operations') content = <MyOperations onNavigateToDetails={(token) => navigate(`/v/${token}`)} />;
   else if (route === '/financial/verify') {
     showBottomNavigation = false;

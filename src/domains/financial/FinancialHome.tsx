@@ -136,14 +136,14 @@ export default function FinancialHome({ onNavigate }: FinancialHomeProps) {
           {data.unlinked_operations_count > 0 && (
             <button
               type="button"
-              onClick={() => onNavigate('/financial/operations')}
+              onClick={() => onNavigate('/financial/import')}
               className="mb-5 flex w-full items-center justify-between gap-4 rounded-[24px] border border-emerald-100 bg-emerald-50/70 p-4 text-right"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm"><FileCheck2 className="h-5 w-5" /></div>
                 <div>
                   <p className="text-sm font-black text-slate-900">{data.unlinked_operations_count} عملية سند خارج الدفتر الشخصي</p>
-                  <p className="mt-1 text-[11px] leading-5 text-slate-500">راجع سجل العمليات أولًا. إدخال أي عملية إلى المحاسب سيكون قرارًا منفصلًا ولن يغيّر أصلها في سند.</p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-500">راجع كل عملية ثم قرر إدخالها كدخل أو مصروف أو تحويل. أصل عملية سند لن يتغير.</p>
                 </div>
               </div>
               <ArrowLeft className="h-5 w-5 shrink-0 text-emerald-700" />
