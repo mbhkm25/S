@@ -80,7 +80,17 @@ jobs:
         run: dotnet restore bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj
       - name: Build SANAD Bridge
         shell: pwsh
-        run: dotnet build bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj --configuration Release --no-restore --warnaserror
+        run: |
+          dotnet build bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj --configuration Release --no-restore --warnaserror 2>&1 | Tee-Object -FilePath bridge-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Bridge build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-bridge-build-diagnostics
+          path: bridge-build.log
+          if-no-files-found: error
+          retention-days: 3
       - name: Verify Bridge artifact
         shell: pwsh
         run: |
