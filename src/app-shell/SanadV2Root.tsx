@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Loader2, UserRound } from 'lucide-react';
 import Auth from '../components/Auth';
@@ -27,7 +27,6 @@ const UNSHELLED_PATTERNS = [
   /^\/reports\/view\//,
   /^\/platform-admin(?:\/|$)/,
   /^\/share-intake(?:\/|$)/,
-  /^\/notifications(?:\/|$)/,
   /^\/auth-action(?:\/|$)/,
   /^\/reset-password(?:\/|$)/,
 ];
@@ -103,33 +102,56 @@ export default function SanadV2Root() {
       try {
         const loadedProfile = await loadProfile(sessionUser);
         if (!active) return;
-        setUser(sessionUser); setProfile(loadedProfile); setSessionError(null); setSessionState('ready');
+        setUser(sessionUser);
+        setProfile(loadedProfile);
+        setSessionError(null);
+        setSessionState('ready');
       } catch (error) {
         if (!active) return;
         console.error('[SANAD v2 session profile]', error);
-        setUser(sessionUser); setProfile(null); setSessionError('تعذر تحميل بيانات الحساب حاليًا.'); setSessionState('error');
+        setUser(sessionUser);
+        setProfile(null);
+        setSessionError('تعذر تحميل بيانات الحساب حاليًا.');
+        setSessionState('error');
       }
     };
 
     void supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
-      if (error) { setSessionError('تعذر تأكيد جلسة سند.'); setSessionState('error'); return; }
+      if (error) {
+        setSessionError('تعذر تأكيد جلسة سند.');
+        setSessionState('error');
+        return;
+      }
       if (data.session?.user) void accept(data.session.user);
-      else { setUser(null); setProfile(null); setSessionState('signed-out'); }
+      else {
+        setUser(null);
+        setProfile(null);
+        setSessionState('signed-out');
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
       if (session?.user) void accept(session.user);
-      else { setUser(null); setProfile(null); setSessionState('signed-out'); }
+      else {
+        setUser(null);
+        setProfile(null);
+        setSessionState('signed-out');
+      }
     });
 
-    return () => { active = false; subscription.unsubscribe(); };
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [loadProfile]);
 
   const activeDomain = useMemo(() => domainForPath(route), [route]);
   const changeDomain = useCallback((domain: SanadPrimaryDomain) => navigate(`/${domain}`), [navigate]);
 
+  // Public/deep-link surfaces keep their established standalone semantics. Account
+  // utilities such as profile and notifications intentionally stay inside AppShellV2.
   if (isUnshelled(route)) return <OperationEntryGate />;
 
   if (sessionState === 'loading') {
@@ -157,28 +179,29 @@ export default function SanadV2Root() {
     );
   }
 
-  let content: React.ReactNode;
+  let content: ReactNode;
   let showBottomNavigation = true;
 
   if (route === '/financial') content = <FinancialHome onNavigate={navigate} />;
   else if (route === '/financial/accounts') content = <FinancialAccountsPage onBack={() => navigate('/financial')} />;
   else if (route === '/financial/accounting') content = <PersonalAccountingPage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} />;
   else if (route === '/financial/operations') content = <MyOperations onNavigateToDetails={(token) => navigate(`/v/${token}`)} />;
-  else if (route === '/financial/verify') { showBottomNavigation = false; content = <VerifyNotice onNavigateToDetails={(token) => navigate(`/v/${token}`)} />; }
-  else if (route === '/financial/add' && profile) {
+  else if (route === '/financial/verify') {
+    showBottomNavigation = false;
+    content = <VerifyNotice onNavigateToDetails={(token) => navigate(`/v/${token}`)} />;
+  } else if (route === '/financial/add' && profile) {
     showBottomNavigation = false;
     content = <UploadNotification user={user} profile={profile} onNavigateToDetails={(token) => navigate(`/v/${token}`)} onNavigate={(page) => {
       if (page === 'my-operations') navigate('/financial/operations');
       else if (page === 'verify-notice' || page === 'scan-qr') navigate('/financial/verify');
       else navigate('/financial');
     }} />;
-  }
-  else if (route === '/financial/reports' && profile) content = <Suspense fallback={<RouteLoader />}><Reports profile={profile} standalone /></Suspense>;
+  } else if (route === '/financial/reports' && profile) content = <Suspense fallback={<RouteLoader />}><Reports profile={profile} standalone /></Suspense>;
   else if (route === '/business') content = <BusinessHome onNavigate={navigate} />;
   else if (route === '/ai') content = <AiHome onNavigate={navigate} />;
   else if (route === '/account') content = <AccountHome user={user} profile={profile} onNavigate={navigate} onSignOut={() => void supabase.auth.signOut()} />;
   else if (route.startsWith('/financial/')) content = <FinancialHome onNavigate={navigate} />;
-  else if (route.startsWith('/business') || route.startsWith('/profile')) content = <OperationEntryGate />;
+  else if (route.startsWith('/business') || route.startsWith('/profile') || route.startsWith('/notifications')) content = <OperationEntryGate />;
   else content = <OperationEntryGate />;
 
   return <AppShellV2 activeDomain={activeDomain} onDomainChange={changeDomain} showBottomNavigation={showBottomNavigation}>{content}</AppShellV2>;
