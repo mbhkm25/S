@@ -6,6 +6,21 @@ using System.Text;
 
 namespace Sanad.Bridge
 {
+    internal sealed class LocalSaleOutboxItem
+    {
+        public string EventId { get; set; }
+        public string SourceKey { get; set; }
+        public long InvoiceId { get; set; }
+        public string BodyJson { get; set; }
+        public string Status { get; set; }
+        public int AttemptCount { get; set; }
+        public DateTime? NextAttemptAtUtc { get; set; }
+        public string LastError { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? SentAtUtc { get; set; }
+        public string AckJson { get; set; }
+    }
+
     internal sealed class SaleStateStore : IDisposable
     {
         private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SANAD.Bridge.SaleOutbox.v1");
@@ -88,6 +103,137 @@ where source_key=@source", _connection, transaction))
             }
         }
 
+        public LocalSaleOutboxItem GetByInvoiceId(long invoiceId)
+        {
+            using (var command = new SQLiteCommand(@"
+select event_id, source_key, invoice_id, body_protected, status,
+       attempt_count, next_attempt_at_utc, last_error,
+       created_at_utc, sent_at_utc, ack_protected
+from sale_outbox
+where invoice_id=@invoice
+order by created_at_utc desc
+limit 1", _connection))
+            {
+                command.Parameters.AddWithValue("@invoice", invoiceId);
+                using (var reader = command.ExecuteReader())
+                {
+                    return reader.Read() ? ReadOutboxItem(reader) : null;
+                }
+            }
+        }
+
+        public bool IsDue(LocalSaleOutboxItem item, DateTime utcNow)
+        {
+            if (item == null) return false;
+            if (string.Equals(item.Status, "sent", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.Equals(item.Status, "pending", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(item.Status, "failed", StringComparison.OrdinalIgnoreCase)) return false;
+            return !item.NextAttemptAtUtc.HasValue || item.NextAttemptAtUtc.Value <= utcNow;
+        }
+
+        public LocalSaleOutboxItem MarkFailed(string eventId, string errorCode)
+        {
+            var existing = GetByEventId(eventId);
+            if (existing == null) throw new InvalidOperationException("sale_outbox_event_not_found");
+            if (string.Equals(existing.Status, "sent", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("sale_outbox_event_already_sent");
+
+            var attempt = existing.AttemptCount + 1;
+            var seconds = Math.Min(300, Math.Max(5, (int)Math.Pow(2, Math.Min(attempt, 8))));
+            var next = DateTime.UtcNow.AddSeconds(seconds);
+            var safeError = string.IsNullOrWhiteSpace(errorCode) ? "send_failed" : errorCode;
+            if (safeError.Length > 240) safeError = safeError.Substring(0, 240);
+
+            using (var command = new SQLiteCommand(@"
+update sale_outbox
+set status='failed',
+    attempt_count=@attempt,
+    next_attempt_at_utc=@next,
+    last_error=@error,
+    sent_at_utc=null,
+    ack_protected=null
+where event_id=@event and status <> 'sent'", _connection))
+            {
+                command.Parameters.AddWithValue("@attempt", attempt);
+                command.Parameters.AddWithValue("@next", next.ToString("o", CultureInfo.InvariantCulture));
+                command.Parameters.AddWithValue("@error", safeError);
+                command.Parameters.AddWithValue("@event", eventId);
+                command.ExecuteNonQuery();
+            }
+
+            return GetByEventId(eventId);
+        }
+
+        public LocalSaleOutboxItem MarkSent(string eventId, string ackJson)
+        {
+            var existing = GetByEventId(eventId);
+            if (existing == null) throw new InvalidOperationException("sale_outbox_event_not_found");
+            if (string.Equals(existing.Status, "sent", StringComparison.OrdinalIgnoreCase))
+                return existing;
+
+            using (var command = new SQLiteCommand(@"
+update sale_outbox
+set status='sent',
+    next_attempt_at_utc=null,
+    last_error=null,
+    sent_at_utc=@sent,
+    ack_protected=@ack
+where event_id=@event", _connection))
+            {
+                command.Parameters.AddWithValue("@sent", UtcNowText());
+                command.Parameters.Add("@ack", System.Data.DbType.Binary).Value = Protect(ackJson ?? "{}");
+                command.Parameters.AddWithValue("@event", eventId);
+                command.ExecuteNonQuery();
+            }
+
+            return GetByEventId(eventId);
+        }
+
+        private LocalSaleOutboxItem GetByEventId(string eventId)
+        {
+            using (var command = new SQLiteCommand(@"
+select event_id, source_key, invoice_id, body_protected, status,
+       attempt_count, next_attempt_at_utc, last_error,
+       created_at_utc, sent_at_utc, ack_protected
+from sale_outbox
+where event_id=@event
+limit 1", _connection))
+            {
+                command.Parameters.AddWithValue("@event", eventId);
+                using (var reader = command.ExecuteReader())
+                {
+                    return reader.Read() ? ReadOutboxItem(reader) : null;
+                }
+            }
+        }
+
+        private static LocalSaleOutboxItem ReadOutboxItem(SQLiteDataReader reader)
+        {
+            return new LocalSaleOutboxItem
+            {
+                EventId = reader.GetString(0),
+                SourceKey = reader.GetString(1),
+                InvoiceId = Convert.ToInt64(reader[2], CultureInfo.InvariantCulture),
+                BodyJson = Unprotect((byte[])reader[3]),
+                Status = reader.GetString(4),
+                AttemptCount = Convert.ToInt32(reader[5], CultureInfo.InvariantCulture),
+                NextAttemptAtUtc = ParseUtc(reader, 6),
+                LastError = reader.IsDBNull(7) ? null : reader.GetString(7),
+                CreatedAtUtc = ParseUtc(reader, 8) ?? DateTime.MinValue,
+                SentAtUtc = ParseUtc(reader, 9),
+                AckJson = reader.IsDBNull(10) ? null : Unprotect((byte[])reader[10])
+            };
+        }
+
+        private static DateTime? ParseUtc(SQLiteDataReader reader, int ordinal)
+        {
+            if (reader.IsDBNull(ordinal)) return null;
+            DateTime parsed;
+            return DateTime.TryParse(reader.GetString(ordinal), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out parsed)
+                ? (DateTime?)parsed
+                : null;
+        }
+
         private void EnsureSchema()
         {
             ExecuteNonQuery(@"
@@ -125,6 +271,12 @@ create index if not exists sale_outbox_pending_idx on sale_outbox(source_key,sta
         {
             var plain = Encoding.UTF8.GetBytes(value ?? string.Empty);
             return ProtectedData.Protect(plain, Entropy, DataProtectionScope.LocalMachine);
+        }
+
+        private static string Unprotect(byte[] protectedBytes)
+        {
+            var plain = ProtectedData.Unprotect(protectedBytes, Entropy, DataProtectionScope.LocalMachine);
+            return Encoding.UTF8.GetString(plain);
         }
 
         private static string UtcNowText()
