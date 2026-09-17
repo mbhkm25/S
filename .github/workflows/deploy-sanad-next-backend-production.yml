@@ -1,0 +1,181 @@
+name: Deploy SANAD NEXT backend to production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-sanad-next-backend-production.yml'
+      - '.github/sanad-next-backend-production-trigger'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-next-backend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Reconcile Supabase schema and Bridge functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Prove deployment source is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate credentials and SANAD NEXT function sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          test -n "${SUPABASE_DB_PASSWORD:-}"
+          deno check supabase/functions/sanad-bridge-auth-init-v1/index.ts
+          deno check supabase/functions/sanad-bridge-authorize-v1/index.ts
+          deno check supabase/functions/sanad-bridge-auth-claim-v1/index.ts
+          deno check supabase/functions/sanad-erp-pair-v1/index.ts
+          deno check supabase/functions/sanad-erp-ingest-v1/index.ts
+          deno check supabase/functions/sanad-erp-baseline-v1/index.ts
+
+      - name: Link and review tracked SANAD NEXT migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          dry_run="$(supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" 2>&1)"
+          printf '%s\n' "$dry_run"
+
+          unexpected=0
+          while IFS= read -r migration; do
+            case "$migration" in
+              20260914094632_sanad_next_erp_integration_foundation_v1.sql|\
+              20260914094703_sanad_next_party_relationship_foundation_v1.sql|\
+              20260914094730_sanad_next_activity_timeline_foundation_v1.sql|\
+              20260914095423_sanad_next_foundation_hardening_v1.sql|\
+              20260914100020_sanad_next_bridge_pairing_v1.sql|\
+              20260914100155_sanad_next_accounting_connection_bootstrap_v1.sql|\
+              20260914100400_sanad_next_invoker_contract_hardening_v1.sql|\
+              20260914100519_sanad_next_authenticated_table_grants_v1.sql|\
+              20260914100600_sanad_next_service_role_table_grants_v1.sql|\
+              20260914101841_sanad_next_edaa_sale_normalizer_v1.sql|\
+              20260914101936_sanad_next_edaa_sale_review_semantics_v1.sql|\
+              20260915070037_sanad_next_desktop_identity_authorization_v1.sql|\
+              20260915071625_sanad_next_desktop_identity_performance_hardening_v1.sql|\
+              20260915075016_sanad_next_edaa_baseline_lifecycle_v1.sql|\
+              20260915080116_sanad_next_edaa_baseline_performance_hardening_v1.sql)
+                ;;
+              *)
+                echo "Unexpected pending migration: $migration" >&2
+                unexpected=1
+                ;;
+            esac
+          done < <(printf '%s\n' "$dry_run" | grep -Eo '[0-9]{14}_[A-Za-z0-9_.-]+\.sql' | sort -u || true)
+          test "$unexpected" -eq 0
+
+      - name: Apply tracked database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Deploy SANAD NEXT Bridge and ERP functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Desktop bootstrap/claim/pairing and ERP sync use explicit one-time/device credentials.
+          supabase functions deploy sanad-bridge-auth-init-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-bridge-auth-claim-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-erp-pair-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-erp-ingest-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          supabase functions deploy sanad-erp-baseline-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          # Browser authorization is tied to the signed-in SANAD user.
+          supabase functions deploy sanad-bridge-authorize-v1 --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify migration and function inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_list="$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD")"
+          printf '%s\n' "$migration_list"
+          for version in \
+            20260914094632 \
+            20260914094703 \
+            20260914094730 \
+            20260914095423 \
+            20260914100020 \
+            20260914100155 \
+            20260914100400 \
+            20260914100519 \
+            20260914100600 \
+            20260914101841 \
+            20260914101936 \
+            20260915070037 \
+            20260915071625 \
+            20260915075016 \
+            20260915080116; do
+            grep -q "$version" <<<"$migration_list"
+          done
+
+          function_list="$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
+          printf '%s\n' "$function_list"
+          for fn in \
+            sanad-bridge-auth-init-v1 \
+            sanad-bridge-authorize-v1 \
+            sanad-bridge-auth-claim-v1 \
+            sanad-erp-pair-v1 \
+            sanad-erp-ingest-v1 \
+            sanad-erp-baseline-v1; do
+            grep -q "$fn" <<<"$function_list"
+          done
+
+      - name: Verify public authentication boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          assert_status() {
+            expected="$1"
+            endpoint="$2"
+            actual="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+              --request POST --header 'content-type: application/json' --data '{}' "$endpoint")"
+            if [ "$actual" != "$expected" ]; then
+              echo "Unexpected HTTP status for $endpoint: expected $expected, received $actual" >&2
+              cat "$response_file" >&2
+              exit 1
+            fi
+          }
+
+          # No valid credential/session supplied: every public path must fail closed.
+          assert_status 400 "$base/sanad-bridge-auth-init-v1"
+          assert_status 400 "$base/sanad-bridge-auth-claim-v1"
+          assert_status 400 "$base/sanad-erp-pair-v1"
+          assert_status 401 "$base/sanad-erp-ingest-v1"
+          assert_status 401 "$base/sanad-erp-baseline-v1"
+          assert_status 401 "$base/sanad-bridge-authorize-v1"
