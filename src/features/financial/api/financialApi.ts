@@ -47,30 +47,30 @@ export async function getBusinessParties(businessId: string): Promise<RpcResult<
   return { data: (data || []) as BusinessParty[], error };
 }
 
-export function createPersonalAccount(command: {
+export async function createPersonalAccount(command: {
   name: string;
   account_type: 'asset' | 'liability';
   currency: string;
   opening_balance?: string;
 }) {
-  return supabase.rpc('create_personal_finance_account_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
+  return await supabase.rpc('create_personal_finance_account_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
 }
 
-export function createPersonalCategory(command: { name: string; kind: 'income' | 'expense' }) {
-  return supabase.rpc('create_personal_finance_category_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
+export async function createPersonalCategory(command: { name: string; kind: 'income' | 'expense' }) {
+  return await supabase.rpc('create_personal_finance_category_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
 }
 
-export function createPersonalParty(command: {
+export async function createPersonalParty(command: {
   display_name: string;
   party_type: 'person' | 'business' | 'household' | 'other';
   phone?: string;
   email?: string;
   notes?: string;
 }) {
-  return supabase.rpc('create_personal_finance_party_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
+  return await supabase.rpc('create_personal_finance_party_v1', { p_command: { ...command, metadata: { ui_surface: 'financial_actions' } } });
 }
 
-export function createPersonalTransaction(command: {
+export async function createPersonalTransaction(command: {
   transaction_type: 'income' | 'expense';
   account_id: string;
   category_id?: string | null;
@@ -78,12 +78,12 @@ export function createPersonalTransaction(command: {
   currency: string;
   description?: string;
 }) {
-  return supabase.rpc('create_personal_finance_transaction_v1', {
+  return await supabase.rpc('create_personal_finance_transaction_v1', {
     p_command: { ...command, source: 'manual', metadata: { ui_surface: 'financial_actions' } },
   });
 }
 
-export function createPersonalBudget(command: {
+export async function createPersonalBudget(command: {
   name: string;
   amount: string;
   currency: string;
@@ -91,12 +91,12 @@ export function createPersonalBudget(command: {
   period_end: string;
   category_id?: string | null;
 }) {
-  return supabase.rpc('create_personal_finance_budget_v1', {
+  return await supabase.rpc('create_personal_finance_budget_v1', {
     p_command: { ...command, metadata: { ui_surface: 'financial_actions' } },
   });
 }
 
-export function createPersonalObligation(command: {
+export async function createPersonalObligation(command: {
   obligation_type: 'payable' | 'receivable';
   title: string;
   amount: string;
@@ -104,30 +104,30 @@ export function createPersonalObligation(command: {
   party_id?: string | null;
   due_date?: string | null;
 }) {
-  return supabase.rpc('create_personal_finance_obligation_v1', {
+  return await supabase.rpc('create_personal_finance_obligation_v1', {
     p_command: { ...command, metadata: { ui_surface: 'financial_actions' } },
   });
 }
 
-export function createPersonalGoal(command: {
+export async function createPersonalGoal(command: {
   name: string;
   target_amount: string;
   currency: string;
   target_date?: string | null;
   linked_account_id?: string | null;
 }) {
-  return supabase.rpc('create_personal_finance_goal_v1', {
+  return await supabase.rpc('create_personal_finance_goal_v1', {
     p_command: { ...command, metadata: { ui_surface: 'financial_actions' } },
   });
 }
 
-export function createBusinessParty(businessId: string, command: { display_name: string; primary_phone?: string }) {
-  return supabase.rpc('create_business_party_v1', {
+export async function createBusinessParty(businessId: string, command: { display_name: string; primary_phone?: string }) {
+  return await supabase.rpc('create_business_party_v1', {
     p_command: { business_id: businessId, ...command, metadata: { ui_surface: 'commercial_actions' } },
   });
 }
 
-export function createCommercialDraft(command: {
+export async function createCommercialDraft(command: {
   business_id: string;
   party_id?: string | null;
   document_type: 'sales_invoice' | 'purchase_invoice' | 'receipt' | 'payment' | 'expense';
@@ -137,7 +137,7 @@ export function createCommercialDraft(command: {
   description: string;
   amount: string;
 }) {
-  return supabase.rpc('create_business_commercial_draft_v1', {
+  return await supabase.rpc('create_business_commercial_draft_v1', {
     p_command: {
       business_id: command.business_id,
       party_id: command.party_id || null,
@@ -151,8 +151,8 @@ export function createCommercialDraft(command: {
   });
 }
 
-export function postCommercialDocument(documentId: string) {
-  return supabase.rpc('post_business_commercial_document_v1', { p_document_id: documentId });
+export async function postCommercialDocument(documentId: string) {
+  return await supabase.rpc('post_business_commercial_document_v1', { p_document_id: documentId });
 }
 
 export async function getSettlementCandidates(businessId: string): Promise<RpcResult<SettlementCandidates>> {
@@ -160,8 +160,8 @@ export async function getSettlementCandidates(businessId: string): Promise<RpcRe
   return { data: (data || null) as SettlementCandidates | null, error };
 }
 
-export function settleCommercialDocument(invoiceId: string, paymentId: string, amount: string) {
-  return supabase.rpc('settle_business_commercial_document_v1', {
+export async function settleCommercialDocument(invoiceId: string, paymentId: string, amount: string) {
+  return await supabase.rpc('settle_business_commercial_document_v1', {
     p_invoice_document_id: invoiceId,
     p_payment_document_id: paymentId,
     p_amount: amount,
