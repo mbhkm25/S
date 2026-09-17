@@ -92,16 +92,11 @@ serve(async (req) => {
 
     const now = new Date().toISOString();
 
-    const { error: deviceUpdateError } = await supabase
-      .from("business_bridge_devices")
-      .update({ last_heartbeat_at: now, updated_at: now })
-      .eq("id", device.id);
-    if (deviceUpdateError) {
-      console.error("erp_heartbeat_device_update_failed", { code: deviceUpdateError.code });
-      return jsonResponse({ ok: false, error: "heartbeat_update_failed" }, 500);
-    }
-
-    await Promise.all([
+    const [deviceUpdate, connectionUpdate, sourceUpdate, credentialUpdate] = await Promise.all([
+      supabase
+        .from("business_bridge_devices")
+        .update({ last_heartbeat_at: now, updated_at: now })
+        .eq("id", device.id),
       supabase
         .from("business_accounting_connections")
         .update({ last_heartbeat_at: now, updated_at: now })
@@ -115,6 +110,13 @@ serve(async (req) => {
         .update({ last_used_at: now })
         .eq("id", credential.id),
     ]);
+
+    const updateError =
+      deviceUpdate.error || connectionUpdate.error || sourceUpdate.error || credentialUpdate.error;
+    if (updateError) {
+      console.error("erp_heartbeat_state_update_failed", { code: updateError.code });
+      return jsonResponse({ ok: false, error: "heartbeat_update_failed" }, 500);
+    }
 
     return jsonResponse({
       ok: true,
