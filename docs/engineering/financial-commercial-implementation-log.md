@@ -55,7 +55,36 @@ Validation:
 - budget, obligation and goal creation succeeded;
 - the fixture transaction was rolled back and no test rows were retained;
 - Supabase migration-history integrity and canonical baseline layout passed for the action-route commit;
-- frontend Production quality gate was pending at the time of this log entry and remains a release blocker until completed successfully.
+- the Production quality gate subsequently passed after fixing the TypeScript `key` prop misuse discovered by CI.
+
+Production state: not promoted.
+
+## 2026-09-17 — Master data, API boundary and settlement hardening
+
+Backend:
+- added `create_personal_finance_party_v1`;
+- added `create_business_party_v1` with normalized-name reuse for an existing active party;
+- added `get_business_commercial_settlement_candidates_v1`;
+- settlement candidates now expose only posted documents with remaining value and include the compatible receipt/payment type.
+
+Frontend:
+- added account/category/party creation to `/financial/actions`;
+- added manual business-party creation to `/commercial/actions`;
+- added compatibility-filtered settlement UI that requires same party, currency and expected receipt/payment type before submission;
+- removed the old raw-document settlement chooser from `FinancialWorkspaceActions`;
+- introduced `src/features/financial/api/financialApi.ts` and `financialTypes.ts`;
+- personal and commercial action components now route data/RPC access through the domain API gateway instead of embedding Supabase calls throughout the UI;
+- added `scripts/check-financial-workspace-routes.ts` and wired it into `npm run check:routes`.
+
+Validation on Supabase `develop`:
+- `create_personal_finance_party_v1` passed an authenticated rollback fixture;
+- unauthorized business-party creation was rejected with `business_access_denied`;
+- unauthorized settlement-candidate access was rejected with `business_access_denied`;
+- test transactions were rolled back and no fixture rows were retained.
+
+Repository organization:
+- added domain ownership READMEs under `docs/domains/financial`, `commercial`, `account`, and `ai`;
+- new frontend client contracts are being placed behind a domain-oriented API/types boundary before the later structural repository move.
 
 Production state: not promoted.
 
@@ -65,6 +94,10 @@ Added:
 - `docs/architecture/sanad-product-domains-v1.md`
 - `docs/engineering/financial-commercial-delivery-runbook.md`
 - `docs/repository/repository-reorganization-v1.md`
+- `docs/domains/financial/README.md`
+- `docs/domains/commercial/README.md`
+- `docs/domains/account/README.md`
+- `docs/domains/ai/README.md`
 
 Decision:
 - do not perform a broad repository move while functional work is active;
@@ -74,11 +107,9 @@ Decision:
 
 ## Next execution queue
 
-1. Wait for / inspect latest frontend quality gate; fix any TypeScript/build issues before expanding scope.
-2. Add negative authenticated fixtures for the new personal commands.
-3. Add first-class empty/success/error UX and better commercial settlement compatibility filtering.
-4. Add domain-level frontend API wrappers/types so UI components stop calling raw RPC names directly.
-5. Add route/contract tests for the four workspaces.
-6. Review Supabase security/performance advisors after DDL changes.
-7. Update this log and PR #277 with final evidence.
-8. Only after functional completion: start repository reorganization as separate structural PRs.
+1. Inspect the final CI runs for the current head and fix any TypeScript, route, build, Admin or migration-gate regressions.
+2. Add a positive authenticated commercial fixture with a temporary business/party/documents to exercise settlement-candidate filtering end-to-end, then roll it back.
+3. Review security/performance advisors specifically for the new contracts and record only relevant findings.
+4. Add first-class personal obligation settlement UI and transaction reversal UI behind their existing server contracts.
+5. Extract dashboard/account/AI client calls into the same domain API boundary.
+6. Only after functional completion and green CI: start repository reorganization as separate structural PRs.
