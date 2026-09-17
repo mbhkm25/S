@@ -12,6 +12,11 @@ namespace Sanad.Bridge
 
         private static async Task<int> Main(string[] args)
         {
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--local-probe", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaSaleLocalProbe.Run(args);
+            }
+
             try
             {
                 Console.WriteLine("SANAD Bridge 0.2 — Edaa discovery and baseline sync");
