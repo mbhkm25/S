@@ -19,9 +19,10 @@ Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. Th
 - [x] Shared financial attachment references (`financial_attachments`).
 - [x] RLS policies for new shared financial data.
 - [x] Covering indexes for new foreign keys.
-- [ ] Atomic command RPCs for personal party creation/update and transaction settlement.
-- [ ] Currency conversion helper that requires explicit source rate and records provenance.
-- [ ] Unified activity event projection for personal financial events.
+- [x] Personal obligation settlement command linked to canonical posted transactions.
+- [ ] Atomic personal party create/update RPCs.
+- [ ] Currency conversion command that requires an explicit recorded source rate and provenance.
+- [ ] Unified activity-event projection for personal financial events.
 
 ## P0 — سند المالي
 
@@ -31,9 +32,10 @@ Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. Th
 - [x] Payables/receivables obligations and party linkage.
 - [x] Recurring-finance rule model.
 - [x] Personal finance dashboard RPC (`get_my_finance_dashboard_v1`).
-- [ ] Account-balance RPC based on canonical postings.
-- [ ] Budget consumption projection by category/currency.
-- [ ] Obligation settlement command with audit/reversal safety.
+- [x] Account-balance RPC based on canonical postings (`get_my_finance_balances_v1`).
+- [x] Budget consumption projection including category descendants (`get_my_budget_progress_v1`).
+- [x] Obligation settlement relation and guarded settlement command.
+- [ ] Reversal command for obligation settlements.
 - [ ] Recurring rule scheduler/materializer.
 - [ ] Monthly cash-flow report and category trend report.
 - [ ] UI: financial home, accounts, transactions, budgets, obligations, goals, exchange rates.
@@ -46,13 +48,15 @@ Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. Th
 - [x] Commercial document lines.
 - [x] Business party ledger entries.
 - [x] Party statement read RPC (`get_business_party_statement_v1`).
-- [ ] Atomic document draft command.
-- [ ] Atomic post command that calculates totals server-side and creates ledger impact once.
-- [ ] Partial payment/settlement relation between receipt/payment documents and invoices.
-- [ ] Cancellation/reversal semantics for posted documents.
+- [x] Atomic document draft command with server-side line calculations.
+- [x] Atomic post command that recalculates totals server-side and creates party-ledger impact once.
+- [x] Posted-document and posted-line immutability guards.
+- [x] Partial payment/settlement relation between receipt/payment documents and invoices.
+- [x] Commercial dashboard: sales, purchases, receipts, payments, expenses, receivables, payables, overdue count.
+- [ ] Settlement reversal semantics.
+- [ ] Cancellation/reversal semantics for posted documents and ledger effects.
 - [ ] Document numbering policies per business/type.
 - [ ] PDF invoice/receipt renderer and WhatsApp share contract.
-- [ ] Business dashboard: sales, collections, payables/receivables, overdue amounts.
 - [ ] UI: parties, documents, products/services, statements, overdue, dashboard.
 
 ## P0 — حسابي
@@ -64,23 +68,26 @@ Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. Th
 - [x] Active push-device summary.
 - [x] Owned business summary.
 - [x] Personal finance status summary.
+- [x] Financial preference model and upsert RPC.
+- [x] Account-center financial preferences projection.
 - [ ] Device/session management UI and revocation flows.
-- [ ] Privacy/preferences center.
-- [ ] Financial default currency and locale preferences.
-- [ ] Unified attachment/file center.
+- [ ] Broader privacy/preferences center.
+- [ ] Unified attachment/file-center UI.
 - [ ] Account activity/security timeline.
 
 ## P0 — SANAD AI
 
-- [x] Read-only financial context RPC (`get_ai_financial_context_v1`).
+- [x] Read-only financial context foundation.
 - [x] Personal scope: dashboard, recent transactions, obligations, goals.
 - [x] Business scope: document totals, overdue documents, current activity.
+- [x] Audited context RPC (`get_ai_financial_context_v2`) with per-request access log.
+- [x] Direct authenticated access to unaudited v1 context revoked.
 - [ ] Intent layer for finance/business/account queries.
 - [ ] Grounded answer formatter that always reports currency and period.
 - [ ] Semantic lookup for transaction/document/party names.
 - [ ] Daily/weekly financial brief generation.
 - [ ] Guardrails preventing write tools until explicit Draft -> Approve flow exists.
-- [ ] Audit every AI data retrieval and future action proposal.
+- [ ] Audit future AI action proposals and approvals.
 
 ## P1 — Financial intelligence
 
