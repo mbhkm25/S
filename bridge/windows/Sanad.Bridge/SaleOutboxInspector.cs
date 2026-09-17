@@ -24,7 +24,7 @@ namespace Sanad.Bridge
                 connection.Open();
 
                 var sql = @"
-select event_id, source_key, invoice_id, body_protected, status,
+select event_id, source_key, invoice_id, revision, body_protected, status,
        attempt_count, next_attempt_at_utc, last_error,
        created_at_utc, sent_at_utc, ack_protected
 from sale_outbox";
@@ -50,20 +50,21 @@ from sale_outbox";
                             Console.WriteLine("Event ID       : " + reader.GetString(0));
                             Console.WriteLine("Source key     : " + reader.GetString(1));
                             Console.WriteLine("Invoice ID     : " + Convert.ToInt64(reader[2], CultureInfo.InvariantCulture));
-                            Console.WriteLine("Status         : " + reader.GetString(4));
-                            Console.WriteLine("Attempt count  : " + Convert.ToInt32(reader[5], CultureInfo.InvariantCulture));
-                            Console.WriteLine("Next attempt   : " + DbText(reader, 6));
-                            Console.WriteLine("Last error     : " + DbText(reader, 7));
-                            Console.WriteLine("Created UTC    : " + DbText(reader, 8));
-                            Console.WriteLine("Sent UTC       : " + DbText(reader, 9));
-                            Console.WriteLine("ACK present    : " + (!reader.IsDBNull(10) ? "yes" : "no"));
-                            if (!reader.IsDBNull(10))
+                            Console.WriteLine("Revision       : " + reader.GetString(3));
+                            Console.WriteLine("Status         : " + reader.GetString(5));
+                            Console.WriteLine("Attempt count  : " + Convert.ToInt32(reader[6], CultureInfo.InvariantCulture));
+                            Console.WriteLine("Next attempt   : " + DbText(reader, 7));
+                            Console.WriteLine("Last error     : " + DbText(reader, 8));
+                            Console.WriteLine("Created UTC    : " + DbText(reader, 9));
+                            Console.WriteLine("Sent UTC       : " + DbText(reader, 10));
+                            Console.WriteLine("ACK present    : " + (!reader.IsDBNull(11) ? "yes" : "no"));
+                            if (!reader.IsDBNull(11))
                             {
-                                Console.WriteLine("ACK JSON       : " + Unprotect((byte[])reader[10]));
+                                Console.WriteLine("ACK JSON       : " + Unprotect((byte[])reader[11]));
                             }
                             Console.WriteLine();
-                            Console.WriteLine("Bundle JSON:");
-                            Console.WriteLine(Unprotect((byte[])reader[3]));
+                            Console.WriteLine("Envelope JSON:");
+                            Console.WriteLine(Unprotect((byte[])reader[4]));
                         }
 
                         Console.WriteLine();
