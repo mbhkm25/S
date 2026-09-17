@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, BriefcaseBusiness, Loader2, WalletCards } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { CommercialActions, PersonalFinanceActions } from './FinancialWorkspaceActions';
-
-type Business = { id?: string; name?: string };
-type AccountCenter = { businesses?: Business[] };
+import { BusinessMasterDataActions, PersonalMasterDataActions } from './FinancialMasterDataActions';
+import CommercialSettlementPanel from './CommercialSettlementPanel';
+import { getOwnedBusinesses } from './api/financialApi';
+import type { AccountBusiness } from './api/financialTypes';
 
 function basePath(): string {
   const value = import.meta.env.VITE_APP_BASE_PATH || '/';
@@ -15,8 +16,9 @@ export default function FinancialActionRoute() {
   const commercial = /\/commercial\/actions\/?$/.test(window.location.pathname);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businesses, setBusinesses] = useState<AccountBusiness[]>([]);
   const [businessId, setBusinessId] = useState('');
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -29,12 +31,12 @@ export default function FinancialActionRoute() {
         return;
       }
       if (commercial) {
-        const { data, error: accountError } = await supabase.rpc('get_my_account_center_v1');
+        const result = await getOwnedBusinesses();
         if (!active) return;
-        if (accountError) { setError(accountError.message); setLoading(false); return; }
-        const list = Array.isArray((data as AccountCenter | null)?.businesses) ? (data as AccountCenter).businesses || [] : [];
+        if (result.error) { setError(result.error.message || 'تعذر تحميل المنشآت.'); setLoading(false); return; }
+        const list = result.data || [];
         setBusinesses(list);
-        setBusinessId(list.find(item => item.id)?.id || '');
+        setBusinessId(list[0]?.id || '');
       }
       setLoading(false);
     })();
@@ -43,7 +45,7 @@ export default function FinancialActionRoute() {
 
   const backPath = commercial ? 'commercial' : 'financial';
   const Icon = commercial ? BriefcaseBusiness : WalletCards;
-  const onChanged = () => undefined;
+  const onChanged = () => setRevision(value => value + 1);
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] font-arabic text-slate-900" dir="rtl">
@@ -62,11 +64,11 @@ export default function FinancialActionRoute() {
         {!loading && error ? <div className="rounded-[1.5rem] bg-rose-50 p-5 text-xs leading-6 text-rose-800">{error}</div> : null}
         {!loading && !error && commercial ? (
           <>
-            {businesses.length ? <label className="block rounded-[1.4rem] bg-white p-4 shadow-sm"><span className="mb-2 block text-[10px] font-bold text-slate-500">المنشأة</span><select value={businessId} onChange={event => setBusinessId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold outline-none">{businesses.map(item => <option key={item.id} value={item.id}>{item.name || 'نشاط بدون اسم'}</option>)}</select></label> : <div className="rounded-[1.4rem] bg-amber-50 p-4 text-xs leading-6 text-amber-800">لا توجد منشأة مملوكة لهذا الحساب.</div>}
-            {businessId ? <CommercialActions businessId={businessId} onChanged={onChanged} /> : null}
+            {businesses.length ? <label className="block rounded-[1.4rem] bg-white p-4 shadow-sm"><span className="mb-2 block text-[10px] font-bold text-slate-500">المنشأة</span><select value={businessId} onChange={event => { setBusinessId(event.target.value); setRevision(value => value + 1); }} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold outline-none">{businesses.map(item => <option key={item.id} value={item.id}>{item.name || 'نشاط بدون اسم'}</option>)}</select></label> : <div className="rounded-[1.4rem] bg-amber-50 p-4 text-xs leading-6 text-amber-800">لا توجد منشأة مملوكة لهذا الحساب.</div>}
+            {businessId ? <div key={`${businessId}-${revision}`} className="space-y-4"><BusinessMasterDataActions businessId={businessId} onChanged={onChanged} /><CommercialActions businessId={businessId} onChanged={onChanged} /><CommercialSettlementPanel businessId={businessId} onChanged={onChanged} /></div> : null}
           </>
         ) : null}
-        {!loading && !error && !commercial ? <PersonalFinanceActions onChanged={onChanged} /> : null}
+        {!loading && !error && !commercial ? <div key={revision} className="space-y-4"><PersonalMasterDataActions onChanged={onChanged} /><PersonalFinanceActions onChanged={onChanged} /></div> : null}
       </main>
     </div>
   );
