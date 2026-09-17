@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Globalization;
-using System.Linq;
 using System.Web.Script.Serialization;
 
 namespace Sanad.Bridge
@@ -12,7 +11,7 @@ namespace Sanad.Bridge
         public static int Run(string[] args)
         {
             Console.WriteLine("SANAD Bridge local sale change detector");
-            Console.WriteLine("Mode: READ-ONLY Edaa + durable local SQLite outbox");
+            Console.WriteLine("Mode: READ-ONLY Edaa + revision-aware durable SQLite outbox");
             Console.WriteLine();
 
             var discovery = EdaaDiscoveryService.Discover();
@@ -49,25 +48,28 @@ namespace Sanad.Bridge
                     return 0;
                 }
 
-                var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue, RecursionLimit = 300 };
                 var queued = 0;
 
                 foreach (var invoiceId in invoiceIds)
                 {
-                    var bundle = BuildBundle(discovery, connection, invoiceId);
-                    if (bundle == null)
+                    var built = EdaaTransactionEnvelopeV1.Build(discovery, connection, invoiceId);
+                    if (built == null)
                         continue;
 
-                    var json = serializer.Serialize(bundle);
-                    var eventId = "edaa-sale:" + discovery.SourceKey + ":" + invoiceId.ToString(CultureInfo.InvariantCulture);
-                    if (state.QueueSaleBundle(discovery.SourceKey, invoiceId, eventId, json))
+                    var json = serializer.Serialize(built.Envelope);
+                    if (state.QueueSaleBundle(discovery.SourceKey, invoiceId, built.Revision, built.EventId, json))
                     {
                         queued++;
-                        Console.WriteLine("Queued invoice " + invoiceId + " as " + eventId);
+                        Console.WriteLine("Queued invoice " + invoiceId + " revision " + built.Revision.Substring(0, 12) + " as " + built.EventId);
+                        Console.WriteLine("  sale/accounting/inventory lines: " + built.SaleLineCount + "/" + built.AccountingLineCount + "/" + built.InventoryLineCount);
+                        Console.WriteLine("  integrity: accounting=" + built.AccountingBalanced.ToString().ToLowerInvariant() +
+                                          ", inventory=" + built.InventoryBalanced.ToString().ToLowerInvariant() +
+                                          ", links=" + (built.AccountingLinked && built.InventoryLinked).ToString().ToLowerInvariant());
                     }
                     else
                     {
-                        Console.WriteLine("Invoice " + invoiceId + " already exists in the local outbox; watermark reconciled.");
+                        Console.WriteLine("Invoice " + invoiceId + " revision already exists in the local outbox; watermark reconciled.");
                     }
                 }
 
@@ -78,7 +80,7 @@ namespace Sanad.Bridge
                 Console.WriteLine("New watermark     : " + state.GetSaleWatermark(discovery.SourceKey));
                 Console.WriteLine("Local state       : " + BridgeStateStore.DatabasePath);
                 Console.WriteLine();
-                Console.WriteLine("No writes were performed against Edaa.");
+                Console.WriteLine("No writes were performed against Edaa or SANAD Cloud.");
                 return 0;
             }
         }
@@ -107,145 +109,6 @@ namespace Sanad.Bridge
                 }
             }
             return result;
-        }
-
-        private static LocalSaleBundle BuildBundle(EdaaDiscoveryResult discovery, SqlConnection connection, long invoiceId)
-        {
-            var header = ReadHeader(connection, invoiceId);
-            if (header == null) return null;
-            var lines = ReadLines(connection, invoiceId);
-            return new LocalSaleBundle
-            {
-                bundle_version = "edaa-sale-bundle-v1",
-                adapter_code = "edaa_v5",
-                source_key = discovery.SourceKey,
-                source_database = discovery.DatabaseName,
-                schema_fingerprint = discovery.SchemaFingerprint,
-                captured_at_utc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
-                sale = header,
-                lines = lines,
-                calculated_lines_total = lines.Where(x => x.total_amount.HasValue).Sum(x => x.total_amount.Value)
-            };
-        }
-
-        private static LocalSaleHeader ReadHeader(SqlConnection connection, long invoiceId)
-        {
-            const string sql = @"
-select top 1
-    ID, TheNumber, TheDate, ThePay, CustomerName, AccountID, CurrencyID,
-    ExchangePrice, Descount, Notes, Deleted, IsLocked, IsMerit, UserID,
-    BranchID, EntryID, ClassEntryID, EnterTime
-from tblSellInvoice
-where ID = @id";
-
-            using (var command = new SqlCommand(sql, connection))
-            {
-                command.CommandTimeout = 15;
-                command.Parameters.AddWithValue("@id", invoiceId);
-                using (var reader = command.ExecuteReader())
-                {
-                    if (!reader.Read()) return null;
-                    return new LocalSaleHeader
-                    {
-                        id = Convert.ToInt64(reader["ID"], CultureInfo.InvariantCulture),
-                        number = StringValue(reader["TheNumber"]),
-                        document_date = DateValue(reader["TheDate"]),
-                        payment_type = StringValue(reader["ThePay"]),
-                        customer_name = StringValue(reader["CustomerName"]),
-                        account_id = LongValue(reader["AccountID"]),
-                        currency_id = LongValue(reader["CurrencyID"]),
-                        exchange_price = DecimalValue(reader["ExchangePrice"]),
-                        discount = DecimalValue(reader["Descount"]),
-                        notes = StringValue(reader["Notes"]),
-                        deleted = BoolValue(reader["Deleted"]),
-                        locked = BoolValue(reader["IsLocked"]),
-                        merit = BoolValue(reader["IsMerit"]),
-                        user_id = LongValue(reader["UserID"]),
-                        branch_id = LongValue(reader["BranchID"]),
-                        entry_id = LongValue(reader["EntryID"]),
-                        class_entry_id = LongValue(reader["ClassEntryID"]),
-                        entered_at = DateValue(reader["EnterTime"])
-                    };
-                }
-            }
-        }
-
-        private static List<LocalSaleLine> ReadLines(SqlConnection connection, long invoiceId)
-        {
-            const string sql = @"
-select
-    d.ID, d.ParentID, d.ClassID, c.ClassName, d.Quantity, d.UnitID, u.UnitName,
-    d.UnitPrice, d.SubDescount, d.TotalAmount, d.SubStoreAccountID, d.UserID,
-    d.BranchID, d.SerialNumber, d.ClassNotes, d.EnterTime
-from tblSellInvoiceDetailes d
-left join tblClasses c on c.ID = d.ClassID
-left join tblUnits u on u.ID = d.UnitID
-where d.ParentID = @parent_id
-order by d.ID";
-
-            var result = new List<LocalSaleLine>();
-            using (var command = new SqlCommand(sql, connection))
-            {
-                command.CommandTimeout = 15;
-                command.Parameters.AddWithValue("@parent_id", invoiceId);
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        result.Add(new LocalSaleLine
-                        {
-                            id = Convert.ToInt64(reader["ID"], CultureInfo.InvariantCulture),
-                            parent_id = Convert.ToInt64(reader["ParentID"], CultureInfo.InvariantCulture),
-                            class_id = LongValue(reader["ClassID"]),
-                            class_name = StringValue(reader["ClassName"]),
-                            quantity = DecimalValue(reader["Quantity"]),
-                            unit_id = LongValue(reader["UnitID"]),
-                            unit_name = StringValue(reader["UnitName"]),
-                            unit_price = DecimalValue(reader["UnitPrice"]),
-                            discount = DecimalValue(reader["SubDescount"]),
-                            total_amount = DecimalValue(reader["TotalAmount"]),
-                            store_account_id = LongValue(reader["SubStoreAccountID"]),
-                            user_id = LongValue(reader["UserID"]),
-                            branch_id = LongValue(reader["BranchID"]),
-                            serial_number = StringValue(reader["SerialNumber"]),
-                            notes = StringValue(reader["ClassNotes"]),
-                            entered_at = DateValue(reader["EnterTime"])
-                        });
-                    }
-                }
-            }
-            return result;
-        }
-
-        private static string StringValue(object value)
-        {
-            if (value == null || value == DBNull.Value) return null;
-            return Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim();
-        }
-
-        private static long? LongValue(object value)
-        {
-            if (value == null || value == DBNull.Value) return null;
-            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
-        }
-
-        private static decimal? DecimalValue(object value)
-        {
-            if (value == null || value == DBNull.Value) return null;
-            return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-        }
-
-        private static bool BoolValue(object value)
-        {
-            if (value == null || value == DBNull.Value) return false;
-            return Convert.ToBoolean(value, CultureInfo.InvariantCulture);
-        }
-
-        private static string DateValue(object value)
-        {
-            if (value == null || value == DBNull.Value) return null;
-            return Convert.ToDateTime(value, CultureInfo.InvariantCulture)
-                .ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
         }
     }
 }
