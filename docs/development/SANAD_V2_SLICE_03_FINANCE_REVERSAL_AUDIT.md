@@ -21,11 +21,13 @@ reversal transaction (adjustment)
 
 This slice does not reinterpret or mutate the original SANAD operation evidence linked to the accounting entry.
 
-## Development-only database migration
+## Development-only database migrations
 
 Applied to Supabase `develop` only:
 
 - `20260917070114_personal_finance_reversal_audit_v1`
+- `20260917071124_personal_finance_reversal_relation_hardening_v2`
+- `20260917071352_personal_finance_reversal_internal_privileges_v3`
 
 Production Supabase and `main` are unchanged.
 
@@ -72,9 +74,37 @@ The database contract:
 6. copies every original posting and flips `debit` ↔ `credit`;
 7. preserves amount, currency, exchange rate and account identity;
 8. posts the reversal using the normal finance posting invariants;
-9. records the immutable original/reversal relationship.
+9. requires the immutable original/reversal relationship to exist before returning success.
 
 The original transaction remains posted and unchanged.
+
+## Atomic audit-relation hardening
+
+A diff review identified a direct-table bypass risk: authenticated clients have row-scoped DML privileges on their personal-finance records, so relying only on the RPC to insert the reversal relationship could allow a technically balanced reversal-like transaction to be posted without its audit relationship.
+
+`personal_finance_reversal_relation_after_post_v1` closes that gap.
+
+Whenever a transaction transitions to `posted` and declares `metadata.reversal_of`:
+
+- it must be an `adjustment`;
+- `reversal_of` must be a valid UUID;
+- `reversal_reason` must be present and valid;
+- the audit relationship is inserted automatically in the same database transaction;
+- the relationship guard validates the exact inverse posting multiset;
+- if any check fails, the transition to `posted` fails atomically.
+
+This applies even when a client bypasses the application RPC and writes its own row-scoped finance records directly. A posted reversal cannot exist without a valid audit relationship.
+
+### Internal trigger privileges
+
+The reversal relationship and integrity trigger helpers are internal database mechanisms, not application RPCs.
+
+Direct `EXECUTE` was revoked from `public`, `anon`, and `authenticated` for:
+
+- `personal_finance_reversal_guard_v1()`
+- `personal_finance_reversal_relation_after_post_v1()`
+
+The triggers continue to execute normally when their tables fire them, while the functions cannot be called directly by application roles.
 
 ### Archived accounts
 
@@ -166,9 +196,27 @@ Verified sequence:
 14. user B could not reverse user A's transaction;
 15. rollback left no test finance data.
 
+### Direct-table bypass verification
+
+A second rollback test verified the hardening independently of the normal frontend/RPC path:
+
+- normal RPC reversal automatically created exactly one relationship;
+- a manually constructed but valid exact-inverse adjustment, posted through row-scoped table DML, automatically created exactly one relationship;
+- a manually constructed adjustment with same-direction rather than inverse postings was rejected during the `posted` transition;
+- the malformed transaction remained `draft`;
+- no relationship was created for the malformed transaction;
+- the rollback left no test account residue.
+
+After revoking direct trigger-function execution, a final rollback test verified:
+
+- reversal still succeeded through the application RPC;
+- the trigger still created exactly one relationship;
+- account balance returned to `0.000000`;
+- both internal reversal trigger functions report `anon EXECUTE = false` and `authenticated EXECUTE = false`.
+
 ## Privilege verification
 
-New application RPCs:
+Application RPCs:
 
 - `get_my_financial_transaction_v1(uuid)`
 - `reverse_personal_finance_transaction_v1(jsonb)`
@@ -184,6 +232,8 @@ The reversal table was verified as:
 - `anon SELECT/INSERT = false`
 - `authenticated SELECT/INSERT = true`
 - `authenticated UPDATE/DELETE = false`
+
+Internal reversal trigger helpers are also `SECURITY INVOKER`, with no direct EXECUTE grant to application roles.
 
 ## Advisor verification
 
