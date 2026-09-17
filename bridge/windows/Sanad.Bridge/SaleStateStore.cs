@@ -11,6 +11,7 @@ namespace Sanad.Bridge
         public string EventId { get; set; }
         public string SourceKey { get; set; }
         public long InvoiceId { get; set; }
+        public string Revision { get; set; }
         public string BodyJson { get; set; }
         public string Status { get; set; }
         public int AttemptCount { get; set; }
@@ -59,19 +60,21 @@ values(@source,@invoice,@updated)", _connection))
             }
         }
 
-        public bool QueueBundle(string sourceKey, long invoiceId, string eventId, string bodyJson)
+        public bool QueueBundle(string sourceKey, long invoiceId, string revision, string eventId, string bodyJson)
         {
+            if (string.IsNullOrWhiteSpace(revision)) throw new ArgumentException("revision is required", nameof(revision));
             using (var transaction = _connection.BeginTransaction())
             {
                 int inserted;
                 using (var command = new SQLiteCommand(@"
 insert or ignore into sale_outbox(
-  event_id,source_key,invoice_id,body_protected,status,attempt_count,created_at_utc
-) values(@event,@source,@invoice,@body,'pending',0,@created)", _connection, transaction))
+  event_id,source_key,invoice_id,revision,body_protected,status,attempt_count,created_at_utc
+) values(@event,@source,@invoice,@revision,@body,'pending',0,@created)", _connection, transaction))
                 {
                     command.Parameters.AddWithValue("@event", eventId);
                     command.Parameters.AddWithValue("@source", sourceKey);
                     command.Parameters.AddWithValue("@invoice", invoiceId);
+                    command.Parameters.AddWithValue("@revision", revision);
                     command.Parameters.Add("@body", System.Data.DbType.Binary).Value = Protect(bodyJson);
                     command.Parameters.AddWithValue("@created", UtcNowText());
                     inserted = command.ExecuteNonQuery();
@@ -106,7 +109,7 @@ where source_key=@source", _connection, transaction))
         public LocalSaleOutboxItem GetByInvoiceId(long invoiceId)
         {
             using (var command = new SQLiteCommand(@"
-select event_id, source_key, invoice_id, body_protected, status,
+select event_id, source_key, invoice_id, revision, body_protected, status,
        attempt_count, next_attempt_at_utc, last_error,
        created_at_utc, sent_at_utc, ack_protected
 from sale_outbox
@@ -192,7 +195,7 @@ where event_id=@event", _connection))
         private LocalSaleOutboxItem GetByEventId(string eventId)
         {
             using (var command = new SQLiteCommand(@"
-select event_id, source_key, invoice_id, body_protected, status,
+select event_id, source_key, invoice_id, revision, body_protected, status,
        attempt_count, next_attempt_at_utc, last_error,
        created_at_utc, sent_at_utc, ack_protected
 from sale_outbox
@@ -214,14 +217,15 @@ limit 1", _connection))
                 EventId = reader.GetString(0),
                 SourceKey = reader.GetString(1),
                 InvoiceId = Convert.ToInt64(reader[2], CultureInfo.InvariantCulture),
-                BodyJson = Unprotect((byte[])reader[3]),
-                Status = reader.GetString(4),
-                AttemptCount = Convert.ToInt32(reader[5], CultureInfo.InvariantCulture),
-                NextAttemptAtUtc = ParseUtc(reader, 6),
-                LastError = reader.IsDBNull(7) ? null : reader.GetString(7),
-                CreatedAtUtc = ParseUtc(reader, 8) ?? DateTime.MinValue,
-                SentAtUtc = ParseUtc(reader, 9),
-                AckJson = reader.IsDBNull(10) ? null : Unprotect((byte[])reader[10])
+                Revision = reader.GetString(3),
+                BodyJson = Unprotect((byte[])reader[4]),
+                Status = reader.GetString(5),
+                AttemptCount = Convert.ToInt32(reader[6], CultureInfo.InvariantCulture),
+                NextAttemptAtUtc = ParseUtc(reader, 7),
+                LastError = reader.IsDBNull(8) ? null : reader.GetString(8),
+                CreatedAtUtc = ParseUtc(reader, 9) ?? DateTime.MinValue,
+                SentAtUtc = ParseUtc(reader, 10),
+                AckJson = reader.IsDBNull(11) ? null : Unprotect((byte[])reader[11])
             };
         }
 
@@ -242,11 +246,28 @@ create table if not exists sale_source_watermarks (
   last_invoice_id integer not null,
   updated_at_utc text not null
 );
+");
 
-create table if not exists sale_outbox (
+            if (!TableExists("sale_outbox"))
+            {
+                CreateRevisionAwareOutbox();
+            }
+            else if (!ColumnExists("sale_outbox", "revision"))
+            {
+                MigrateLegacyOutbox();
+            }
+
+            ExecuteNonQuery("create index if not exists sale_outbox_pending_idx on sale_outbox(source_key,status,next_attempt_at_utc,created_at_utc);");
+        }
+
+        private void CreateRevisionAwareOutbox()
+        {
+            ExecuteNonQuery(@"
+create table sale_outbox (
   event_id text primary key,
   source_key text not null,
   invoice_id integer not null,
+  revision text not null,
   body_protected blob not null,
   status text not null,
   attempt_count integer not null default 0,
@@ -255,10 +276,72 @@ create table if not exists sale_outbox (
   created_at_utc text not null,
   sent_at_utc text null,
   ack_protected blob null,
-  unique(source_key, invoice_id)
+  unique(source_key, invoice_id, revision)
 );
-create index if not exists sale_outbox_pending_idx on sale_outbox(source_key,status,next_attempt_at_utc,created_at_utc);
 ");
+        }
+
+        private void MigrateLegacyOutbox()
+        {
+            using (var transaction = _connection.BeginTransaction())
+            {
+                using (var command = new SQLiteCommand(@"
+create table sale_outbox_v2 (
+  event_id text primary key,
+  source_key text not null,
+  invoice_id integer not null,
+  revision text not null,
+  body_protected blob not null,
+  status text not null,
+  attempt_count integer not null default 0,
+  next_attempt_at_utc text null,
+  last_error text null,
+  created_at_utc text not null,
+  sent_at_utc text null,
+  ack_protected blob null,
+  unique(source_key, invoice_id, revision)
+);
+
+insert into sale_outbox_v2(
+  event_id,source_key,invoice_id,revision,body_protected,status,attempt_count,
+  next_attempt_at_utc,last_error,created_at_utc,sent_at_utc,ack_protected
+)
+select
+  event_id,source_key,invoice_id,'legacy:' || invoice_id,body_protected,status,attempt_count,
+  next_attempt_at_utc,last_error,created_at_utc,sent_at_utc,ack_protected
+from sale_outbox;
+
+drop table sale_outbox;
+alter table sale_outbox_v2 rename to sale_outbox;
+", _connection, transaction))
+                {
+                    command.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+        }
+
+        private bool TableExists(string tableName)
+        {
+            using (var command = new SQLiteCommand("select count(*) from sqlite_master where type='table' and name=@name", _connection))
+            {
+                command.Parameters.AddWithValue("@name", tableName);
+                return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+            }
+        }
+
+        private bool ColumnExists(string tableName, string columnName)
+        {
+            using (var command = new SQLiteCommand("pragma table_info(" + tableName + ")", _connection))
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    if (string.Equals(Convert.ToString(reader[1], CultureInfo.InvariantCulture), columnName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            return false;
         }
 
         private void ExecuteNonQuery(string sql)
