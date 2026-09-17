@@ -14,6 +14,7 @@ import BusinessHome from '../domains/business/BusinessHome';
 import FinancialAccountsPage from '../domains/financial/FinancialAccountsPage';
 import FinancialHome from '../domains/financial/FinancialHome';
 import FinancialOperationIntakePage from '../domains/financial/FinancialOperationIntakePage';
+import FinancialTransactionDetailsPage from '../domains/financial/FinancialTransactionDetailsPage';
 import PersonalAccountingPage from '../domains/financial/PersonalAccountingPage';
 import AppShellV2 from './AppShellV2';
 import type { SanadPrimaryDomain } from './domainNavigation';
@@ -180,12 +181,17 @@ export default function SanadV2Root() {
     );
   }
 
+  const financialTransactionMatch = route.match(/^\/financial\/transaction\/([0-9a-fA-F-]{36})$/);
   let content: ReactNode;
   let showBottomNavigation = true;
 
   if (route === '/financial') content = <FinancialHome onNavigate={navigate} />;
   else if (route === '/financial/accounts') content = <FinancialAccountsPage onBack={() => navigate('/financial')} />;
-  else if (route === '/financial/accounting') content = <PersonalAccountingPage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} />;
+  else if (route === '/financial/accounting') content = <PersonalAccountingPage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} onOpenTransaction={(transactionId) => navigate(`/financial/transaction/${transactionId}`)} />;
+  else if (financialTransactionMatch) {
+    showBottomNavigation = false;
+    content = <FinancialTransactionDetailsPage transactionId={financialTransactionMatch[1]} onBack={() => navigate('/financial/accounting')} onOpenTransaction={(transactionId) => navigate(`/financial/transaction/${transactionId}`)} onOpenOperation={(token) => navigate(`/v/${token}`)} />;
+  }
   else if (route === '/financial/import') content = <FinancialOperationIntakePage onBack={() => navigate('/financial')} onManageAccounts={() => navigate('/financial/accounts')} onOpenOperation={(token) => navigate(`/v/${token}`)} />;
   else if (route === '/financial/operations') content = <MyOperations onNavigateToDetails={(token) => navigate(`/v/${token}`)} />;
   else if (route === '/financial/verify') {

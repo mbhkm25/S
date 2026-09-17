@@ -14,6 +14,7 @@ import {
 interface Props {
   onBack: () => void;
   onManageAccounts: () => void;
+  onOpenTransaction: (transactionId: string) => void;
 }
 
 type ComposerType = 'expense' | 'income' | 'transfer';
@@ -28,7 +29,7 @@ function dateTime(value: string): string {
   return new Intl.DateTimeFormat('ar-YE', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export default function PersonalAccountingPage({ onBack, onManageAccounts }: Props) {
+export default function PersonalAccountingPage({ onBack, onManageAccounts, onOpenTransaction }: Props) {
   const [accounts, setAccounts] = useState<PersonalFinanceAccount[]>([]);
   const [categories, setCategories] = useState<PersonalFinanceCategory[]>([]);
   const [activity, setActivity] = useState<PersonalFinanceActivityItem[]>([]);
@@ -191,7 +192,7 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
               const negative = item.transaction_type === 'expense';
               const transfer = item.transaction_type === 'transfer';
               return (
-                <article key={item.id} className="flex items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
+                <button key={item.id} type="button" onClick={() => onOpenTransaction(item.id)} className="flex w-full items-center justify-between gap-3 py-3.5 text-right first:pt-0 last:pb-0">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${positive ? 'bg-emerald-50 text-emerald-700' : negative ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-600'}`}>
                       {positive ? <ArrowDownLeft className="h-4 w-4" /> : negative ? <ArrowUpRight className="h-4 w-4" /> : transfer ? <ArrowLeftRight className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}
@@ -199,7 +200,7 @@ export default function PersonalAccountingPage({ onBack, onManageAccounts }: Pro
                     <div className="min-w-0"><p className="truncate text-[13px] font-black text-slate-900">{item.description || item.category_name || (positive ? 'دخل' : negative ? 'مصروف' : transfer ? 'تحويل' : 'تسوية')}</p><p className="mt-1 text-[10px] text-slate-400">{dateTime(item.transaction_at)}{item.category_name && item.description ? ` · ${item.category_name}` : ''}</p></div>
                   </div>
                   <p className={`shrink-0 text-[13px] font-black ${positive ? 'text-emerald-700' : negative ? 'text-rose-600' : 'text-slate-700'}`}>{positive ? '+' : negative ? '−' : ''}{money(item.amount, item.currency)}</p>
-                </article>
+                </button>
               );
             })}
           </div>
