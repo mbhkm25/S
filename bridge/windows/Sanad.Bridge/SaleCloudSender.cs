@@ -63,7 +63,8 @@ namespace Sanad.Bridge
                 var publicApiKey = Environment.GetEnvironmentVariable("SANAD_PUBLIC_API_KEY");
                 var sent = 0;
                 var failed = 0;
-                var skipped = 0;
+                var blocked = 0;
+                var quarantined = 0;
 
                 using (var state = new SaleStateStore())
                 using (var cloud = new BridgeCloudClient(apiUrl, identity, publicApiKey))
@@ -73,8 +74,9 @@ namespace Sanad.Bridge
                         string validationError;
                         if (!ValidateProductionEnvelope(item, out validationError))
                         {
-                            skipped++;
-                            Console.WriteLine("SKIP invoice " + item.InvoiceId + ": " + validationError);
+                            SaleOutboxTerminalState.MarkQuarantined(item.EventId, validationError);
+                            quarantined++;
+                            Console.WriteLine("QUARANTINED invoice " + item.InvoiceId + ": " + validationError);
                             continue;
                         }
 
@@ -97,9 +99,24 @@ namespace Sanad.Bridge
                         }
                         catch (BridgeCloudException ex)
                         {
-                            state.MarkFailed(item.EventId, ex.Message);
-                            failed++;
-                            Console.WriteLine("FAILED invoice " + item.InvoiceId + ": " + ex.Message + " (HTTP " + ex.StatusCode + ")");
+                            if (ex.StatusCode == 401 || ex.StatusCode == 403)
+                            {
+                                SaleOutboxTerminalState.MarkBlocked(item.EventId, ex.Message);
+                                blocked++;
+                                Console.WriteLine("BLOCKED invoice " + item.InvoiceId + ": " + ex.Message + " (HTTP " + ex.StatusCode + ")");
+                            }
+                            else if (ex.StatusCode == 400 || ex.StatusCode == 409)
+                            {
+                                SaleOutboxTerminalState.MarkQuarantined(item.EventId, ex.Message);
+                                quarantined++;
+                                Console.WriteLine("QUARANTINED invoice " + item.InvoiceId + ": " + ex.Message + " (HTTP " + ex.StatusCode + ")");
+                            }
+                            else
+                            {
+                                state.MarkFailed(item.EventId, ex.Message);
+                                failed++;
+                                Console.WriteLine("FAILED invoice " + item.InvoiceId + ": " + ex.Message + " (HTTP " + ex.StatusCode + ")");
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -114,13 +131,15 @@ namespace Sanad.Bridge
                 Console.WriteLine("Cloud sender summary");
                 Console.WriteLine("  Due selected : " + due.Count);
                 Console.WriteLine("  Sent/ACKed   : " + sent);
-                Console.WriteLine("  Failed       : " + failed);
-                Console.WriteLine("  Skipped      : " + skipped);
+                Console.WriteLine("  Retryable    : " + failed);
+                Console.WriteLine("  Blocked      : " + blocked);
+                Console.WriteLine("  Quarantined  : " + quarantined);
                 Console.WriteLine("  Pending now  : " + CountPending(discovery.SourceKey));
                 Console.WriteLine();
                 Console.WriteLine("No writes were performed against Edaa.");
 
-                return failed > 0 ? 7 : (skipped > 0 ? 24 : 0);
+                if (blocked > 0 || quarantined > 0) return 27;
+                return failed > 0 ? 7 : 0;
             }
             catch (Exception ex)
             {
