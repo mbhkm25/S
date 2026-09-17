@@ -37,6 +37,11 @@ namespace Sanad.Bridge
                 return EdaaTransactionEnvelopeV1.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--cloud-send", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await SaleCloudSender.RunAsync(args).ConfigureAwait(false);
+            }
+
             try
             {
                 Console.WriteLine("SANAD Bridge 0.2 — Edaa discovery and baseline sync");
