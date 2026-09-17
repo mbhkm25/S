@@ -37,6 +37,11 @@ namespace Sanad.Bridge
                 return EdaaTransactionEnvelopeV1.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--authorize-device", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await BridgeDeviceAuthorizationCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--cloud-send", StringComparison.OrdinalIgnoreCase)))
             {
                 return await SaleCloudSender.RunAsync(args).ConfigureAwait(false);
