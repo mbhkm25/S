@@ -62,7 +62,6 @@ export type FinancialTransactionDetail = {
 };
 
 export type ReverseFinancialTransactionResult = {
-  contract_version: number;
   original_transaction_id: string;
   reversal_transaction_id: string;
   reason: string;
@@ -167,7 +166,6 @@ export async function reverseFinancialTransaction(transactionId: string, reason:
   if (error) throw toUserSafeServiceError(error, 'تعذر عكس القيد المالي. راجع السبب وحاول مرة أخرى.');
   const payload = recordValue(data);
   return {
-    contract_version: numberValue(payload.contract_version) || 2,
     original_transaction_id: String(payload.original_transaction_id ?? ''),
     reversal_transaction_id: String(payload.reversal_transaction_id ?? ''),
     reason: String(payload.reason ?? reason),
