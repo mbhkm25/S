@@ -22,6 +22,7 @@ const PwaUpdatePrompt = lazy(() => import('./features/pwa/PwaUpdatePrompt'));
 const AndroidUpdatePrompt = lazy(() => import('./features/android/AndroidUpdatePrompt'));
 const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
 const PublicInteractiveReport = lazy(() => import('./features/reports/PublicInteractiveReport'));
+const FinancialWorkspaceRoute = lazy(() => import('./features/financial/FinancialWorkspaceRoute'));
 
 const isCapacitorNative = Capacitor.isNativePlatform() ||
                           window.location.origin.includes('capacitor') ||
@@ -30,13 +31,18 @@ const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNati
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
+const isFinancialWorkspaceRoute = /\/(financial|commercial|account-center|sanad-ai)\/?$/.test(window.location.pathname);
 
 if (isAndroidNative && !import.meta.env.DEV) initializeAndroidNativePush();
-if (!isPublicInteractiveReport) installDeviceLedgerRuntime();
+if (!isPublicInteractiveReport && !isFinancialWorkspaceRoute) installDeviceLedgerRuntime();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isPublicInteractiveReport ? (
+    {isFinancialWorkspaceRoute ? (
+      <Suspense fallback={null}>
+        <FinancialWorkspaceRoute />
+      </Suspense>
+    ) : isPublicInteractiveReport ? (
       <Suspense fallback={null}>
         <PublicInteractiveReport />
       </Suspense>
