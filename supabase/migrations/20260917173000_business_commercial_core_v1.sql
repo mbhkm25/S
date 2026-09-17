@@ -1,21 +1,12 @@
-create table if not exists public.business_catalog_items (
-  id uuid primary key default gen_random_uuid(),
-  business_id uuid not null references public.business_profiles(id) on delete cascade,
-  item_type text not null check (item_type in ('product','service')),
-  name text not null,
-  sku text,
-  unit_name text,
-  default_price numeric(24,6),
-  default_currency text check (default_currency is null or default_currency ~ '^[A-Z]{3}$'),
-  status text not null default 'active' check (status in ('active','archived')),
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  check (char_length(trim(name)) between 1 and 160),
-  check (default_price is null or default_price >= 0)
-);
-create unique index if not exists uq_business_catalog_items_sku on public.business_catalog_items(business_id, sku) where sku is not null and status='active';
-create index if not exists idx_business_catalog_items_business_status on public.business_catalog_items(business_id, status, item_type);
+alter table public.business_catalog_items
+  add column if not exists sku text,
+  add column if not exists unit_name text;
+
+create unique index if not exists uq_business_catalog_items_sku
+  on public.business_catalog_items(business_id, sku)
+  where sku is not null and status='active';
+create index if not exists idx_business_catalog_items_business_status
+  on public.business_catalog_items(business_id, status, item_type);
 
 create table if not exists public.business_commercial_documents (
   id uuid primary key default gen_random_uuid(),
@@ -42,10 +33,16 @@ create table if not exists public.business_commercial_documents (
   check (due_date is null or due_date >= document_date),
   check (paid_amount <= total_amount or document_type in ('receipt','payment'))
 );
-create unique index if not exists uq_business_commercial_document_number on public.business_commercial_documents(business_id, document_type, document_number) where document_number is not null;
-create index if not exists idx_business_commercial_documents_party on public.business_commercial_documents(business_id, party_id, document_date desc);
-create index if not exists idx_business_commercial_documents_status on public.business_commercial_documents(business_id, status, document_type, document_date desc);
-create index if not exists idx_business_commercial_documents_due on public.business_commercial_documents(business_id, due_date) where due_date is not null and status='posted' and payment_status in ('unpaid','partial');
+create unique index if not exists uq_business_commercial_document_number
+  on public.business_commercial_documents(business_id, document_type, document_number)
+  where document_number is not null;
+create index if not exists idx_business_commercial_documents_party
+  on public.business_commercial_documents(business_id, party_id, document_date desc);
+create index if not exists idx_business_commercial_documents_status
+  on public.business_commercial_documents(business_id, status, document_type, document_date desc);
+create index if not exists idx_business_commercial_documents_due
+  on public.business_commercial_documents(business_id, due_date)
+  where due_date is not null and status='posted' and payment_status in ('unpaid','partial');
 
 create table if not exists public.business_commercial_document_lines (
   id uuid primary key default gen_random_uuid(),
@@ -63,7 +60,8 @@ create table if not exists public.business_commercial_document_lines (
   created_at timestamptz not null default now(),
   check (char_length(trim(description)) between 1 and 500)
 );
-create index if not exists idx_business_commercial_document_lines_doc on public.business_commercial_document_lines(document_id, sort_order, id);
+create index if not exists idx_business_commercial_document_lines_doc
+  on public.business_commercial_document_lines(document_id, sort_order, id);
 
 create table if not exists public.business_party_ledger_entries (
   id uuid primary key default gen_random_uuid(),
@@ -80,10 +78,13 @@ create table if not exists public.business_party_ledger_entries (
   created_by_user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
-create index if not exists idx_business_party_ledger_statement on public.business_party_ledger_entries(business_id, party_id, currency, occurred_at, id) where status='active';
-create unique index if not exists uq_business_party_ledger_doc_entry on public.business_party_ledger_entries(source_document_id, entry_type) where source_document_id is not null and status='active';
+create index if not exists idx_business_party_ledger_statement
+  on public.business_party_ledger_entries(business_id, party_id, currency, occurred_at, id)
+  where status='active';
+create unique index if not exists uq_business_party_ledger_doc_entry
+  on public.business_party_ledger_entries(source_document_id, entry_type)
+  where source_document_id is not null and status='active';
 
-alter table public.business_catalog_items enable row level security;
 alter table public.business_commercial_documents enable row level security;
 alter table public.business_commercial_document_lines enable row level security;
 alter table public.business_party_ledger_entries enable row level security;
@@ -91,7 +92,7 @@ alter table public.business_party_ledger_entries enable row level security;
 do $policies$
 declare t text;
 begin
-  foreach t in array array['business_catalog_items','business_commercial_documents','business_commercial_document_lines','business_party_ledger_entries'] loop
+  foreach t in array array['business_commercial_documents','business_commercial_document_lines','business_party_ledger_entries'] loop
     execute format('drop policy if exists %I on public.%I', t || '_select_member', t);
     execute format('create policy %I on public.%I for select using (private.user_is_business_owner(business_id,(select auth.uid())) or private.user_is_active_business_member(business_id,(select auth.uid())))', t || '_select_member', t);
     execute format('drop policy if exists %I on public.%I', t || '_owner_insert', t);
@@ -129,9 +130,11 @@ begin
     'balances', coalesce((
       select jsonb_agg(jsonb_build_object('currency',x.currency,'balance',x.balance) order by x.currency)
       from (
-        select e.currency, sum(case when e.entry_type='debit' then e.amount when e.entry_type='credit' then -e.amount else 0 end) balance
+        select e.currency,
+               sum(case when e.entry_type='debit' then e.amount when e.entry_type='credit' then -e.amount else 0 end) balance
         from public.business_party_ledger_entries e
-        where e.business_id=p_business_id and e.party_id=p_party_id and e.status='active' and (p_currency is null or e.currency=p_currency)
+        where e.business_id=p_business_id and e.party_id=p_party_id and e.status='active'
+          and (p_currency is null or e.currency=p_currency)
         group by e.currency
       ) x
     ), '[]'::jsonb),
@@ -140,7 +143,8 @@ begin
       from (
         select e.id,e.entry_type,e.amount,e.currency,e.occurred_at,e.description,e.source_document_id
         from public.business_party_ledger_entries e
-        where e.business_id=p_business_id and e.party_id=p_party_id and e.status='active' and (p_currency is null or e.currency=p_currency)
+        where e.business_id=p_business_id and e.party_id=p_party_id and e.status='active'
+          and (p_currency is null or e.currency=p_currency)
         order by e.occurred_at desc,e.id desc
         limit v_limit
       ) q
@@ -153,7 +157,6 @@ $function$;
 
 revoke all on function public.get_business_party_statement_v1(uuid,uuid,text,integer) from public;
 grant execute on function public.get_business_party_statement_v1(uuid,uuid,text,integer) to authenticated;
-grant select,insert,update,delete on public.business_catalog_items to authenticated;
 grant select,insert,update,delete on public.business_commercial_documents to authenticated;
 grant select,insert,update,delete on public.business_commercial_document_lines to authenticated;
 grant select,insert,update,delete on public.business_party_ledger_entries to authenticated;
