@@ -57,6 +57,10 @@ from sale_outbox";
                             Console.WriteLine("Created UTC    : " + DbText(reader, 8));
                             Console.WriteLine("Sent UTC       : " + DbText(reader, 9));
                             Console.WriteLine("ACK present    : " + (!reader.IsDBNull(10) ? "yes" : "no"));
+                            if (!reader.IsDBNull(10))
+                            {
+                                Console.WriteLine("ACK JSON       : " + Unprotect((byte[])reader[10]));
+                            }
                             Console.WriteLine();
                             Console.WriteLine("Bundle JSON:");
                             Console.WriteLine(Unprotect((byte[])reader[3]));
