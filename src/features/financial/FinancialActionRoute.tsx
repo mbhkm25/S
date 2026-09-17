@@ -17,7 +17,6 @@ export default function FinancialActionRoute() {
   const [error, setError] = useState('');
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessId] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +43,7 @@ export default function FinancialActionRoute() {
 
   const backPath = commercial ? 'commercial' : 'financial';
   const Icon = commercial ? BriefcaseBusiness : WalletCards;
+  const onChanged = () => undefined;
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] font-arabic text-slate-900" dir="rtl">
@@ -63,10 +63,10 @@ export default function FinancialActionRoute() {
         {!loading && !error && commercial ? (
           <>
             {businesses.length ? <label className="block rounded-[1.4rem] bg-white p-4 shadow-sm"><span className="mb-2 block text-[10px] font-bold text-slate-500">المنشأة</span><select value={businessId} onChange={event => setBusinessId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold outline-none">{businesses.map(item => <option key={item.id} value={item.id}>{item.name || 'نشاط بدون اسم'}</option>)}</select></label> : <div className="rounded-[1.4rem] bg-amber-50 p-4 text-xs leading-6 text-amber-800">لا توجد منشأة مملوكة لهذا الحساب.</div>}
-            {businessId ? <CommercialActions key={`${businessId}-${refreshKey}`} businessId={businessId} onChanged={() => setRefreshKey(value => value + 1)} /> : null}
+            {businessId ? <CommercialActions businessId={businessId} onChanged={onChanged} /> : null}
           </>
         ) : null}
-        {!loading && !error && !commercial ? <PersonalFinanceActions key={refreshKey} onChanged={() => setRefreshKey(value => value + 1)} /> : null}
+        {!loading && !error && !commercial ? <PersonalFinanceActions onChanged={onChanged} /> : null}
       </main>
     </div>
   );
