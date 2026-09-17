@@ -82,12 +82,17 @@ function Invoke-SelectScalar {
 function Normalize-PathValue {
     param([string] $Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
-    try {
-        return [System.IO.Path]::GetFullPath($Path).TrimEnd('\').ToLowerInvariant()
+
+    # SQL Server 2000 sysaltfiles can return legacy/padded metadata containing
+    # control characters that modern Path.GetFullPath rejects. Discovery only
+    # needs a stable case-insensitive comparison, so sanitize the SQL metadata
+    # without resolving, touching, or rewriting any file-system path.
+    $clean = $Path -replace '[\x00-\x1F]', ''
+    $clean = $clean.Trim().Replace('/', '\')
+    while ($clean.EndsWith('\')) {
+        $clean = $clean.Substring(0, $clean.Length - 1)
     }
-    catch {
-        return $Path.Trim().TrimEnd('\').ToLowerInvariant()
-    }
+    return $clean.ToLowerInvariant()
 }
 
 function Get-Sha256Hex {
@@ -107,7 +112,7 @@ Write-Host '=== SANAD / Edaa Soft READ-ONLY DISCOVERY ===' -ForegroundColor Cyan
 Write-Host 'No ERP writes, no cloud calls, no Registry changes, no DB attach/detach.' -ForegroundColor Yellow
 
 $result = [ordered]@{
-    probe_version = '1.0'
+    probe_version = '1.1'
     captured_at_utc = [DateTime]::UtcNow.ToString('o')
     machine_name = $env:COMPUTERNAME
     windows_user = [Environment]::UserName
