@@ -32,6 +32,11 @@ namespace Sanad.Bridge
                 return SaleOutboxLifecycleProbe.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--transaction-envelope", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaTransactionEnvelopeV1.Run(args);
+            }
+
             try
             {
                 Console.WriteLine("SANAD Bridge 0.2 — Edaa discovery and baseline sync");
