@@ -57,7 +57,7 @@ Integrity rules:
 
 ### `reverse_personal_finance_transaction_v1(command)`
 
-`SECURITY INVOKER` and authenticated-only.
+`SECURITY INVOKER` and authenticated-only. The final implementation returns contract version 2.
 
 The command requires:
 
