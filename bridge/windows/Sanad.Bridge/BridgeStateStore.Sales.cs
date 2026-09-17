@@ -14,10 +14,10 @@ namespace Sanad.Bridge
                 sales.InitializeWatermark(sourceKey, invoiceId);
         }
 
-        public static bool QueueSaleBundle(this BridgeStateStore state, string sourceKey, long invoiceId, string eventId, string bodyJson)
+        public static bool QueueSaleBundle(this BridgeStateStore state, string sourceKey, long invoiceId, string revision, string eventId, string bodyJson)
         {
             using (var sales = new SaleStateStore())
-                return sales.QueueBundle(sourceKey, invoiceId, eventId, bodyJson);
+                return sales.QueueBundle(sourceKey, invoiceId, revision, eventId, bodyJson);
         }
 
         public static int CountPendingSaleEvents(this BridgeStateStore state, string sourceKey)
