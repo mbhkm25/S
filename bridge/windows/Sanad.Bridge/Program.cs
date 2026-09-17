@@ -42,6 +42,11 @@ namespace Sanad.Bridge
                 return await BridgeDeviceAuthorizationCommand.RunAsync(args).ConfigureAwait(false);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--heartbeat", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await BridgeHeartbeatCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--cloud-send", StringComparison.OrdinalIgnoreCase)))
             {
                 return await SaleCloudSender.RunAsync(args).ConfigureAwait(false);
