@@ -22,7 +22,7 @@ namespace Sanad.Bridge
         public string AckJson { get; set; }
     }
 
-    internal sealed class SaleStateStore : IDisposable
+    internal sealed partial class SaleStateStore : IDisposable
     {
         private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SANAD.Bridge.SaleOutbox.v1");
         private readonly SQLiteConnection _connection;
