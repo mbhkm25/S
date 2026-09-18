@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { CommercialActions, PersonalFinanceActions } from './FinancialWorkspaceActions';
 import { BusinessMasterDataActions, PersonalMasterDataActions } from './FinancialMasterDataActions';
 import CommercialSettlementPanel from './CommercialSettlementPanel';
+import PersonalFinanceCorrectionPanel from './PersonalFinanceCorrectionPanel';
 import { getOwnedBusinesses } from './api/financialApi';
 import type { AccountBusiness } from './api/financialTypes';
 
@@ -68,7 +69,7 @@ export default function FinancialActionRoute() {
             {businessId ? <div key={`${businessId}-${revision}`} className="space-y-4"><BusinessMasterDataActions businessId={businessId} onChanged={onChanged} /><CommercialActions businessId={businessId} onChanged={onChanged} /><CommercialSettlementPanel businessId={businessId} onChanged={onChanged} /></div> : null}
           </>
         ) : null}
-        {!loading && !error && !commercial ? <div key={revision} className="space-y-4"><PersonalMasterDataActions onChanged={onChanged} /><PersonalFinanceActions onChanged={onChanged} /></div> : null}
+        {!loading && !error && !commercial ? <div key={revision} className="space-y-4"><PersonalMasterDataActions onChanged={onChanged} /><PersonalFinanceActions onChanged={onChanged} /><PersonalFinanceCorrectionPanel onChanged={onChanged} /></div> : null}
       </main>
     </div>
   );
