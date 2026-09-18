@@ -23,7 +23,6 @@ const AndroidUpdatePrompt = lazy(() => import('./features/android/AndroidUpdateP
 const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
 const PublicInteractiveReport = lazy(() => import('./features/reports/PublicInteractiveReport'));
 const FinancialWorkspaceShell = lazy(() => import('./features/financial/FinancialWorkspaceShell'));
-const FinancialWorkspaceLauncher = lazy(() => import('./features/financial/FinancialWorkspaceLauncher'));
 
 const isCapacitorNative = Capacitor.isNativePlatform() ||
                           window.location.origin.includes('capacitor') ||
@@ -58,7 +57,6 @@ createRoot(document.getElementById('root')!).render(
         <OperationDocumentPreviewEnhancer />
         <Suspense fallback={null}>
           <KnowledgeAdminRoute />
-          <FinancialWorkspaceLauncher />
         </Suspense>
         {enablePwaUpdates && (
           <Suspense fallback={null}>
