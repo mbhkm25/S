@@ -1,10 +1,12 @@
-name: ERP cloud replica quality
+name: ERP cloud UI beta quality
 
 on:
   pull_request:
+    branches:
+      - main
     paths:
       - '.github/workflows/erp-cloud-replica-quality.yml'
-      - 'bridge/windows/Sanad.Bridge/**'
+      - 'src/components/business/BusinessAccountingSystem.tsx'
       - 'src/components/business/BusinessErp*.tsx'
       - 'src/lib/businessAccountingApi.ts'
       - 'supabase/migrations/2026091813*.sql'
@@ -18,7 +20,7 @@ on:
       - main
     paths:
       - '.github/workflows/erp-cloud-replica-quality.yml'
-      - 'bridge/windows/Sanad.Bridge/**'
+      - 'src/components/business/BusinessAccountingSystem.tsx'
       - 'src/components/business/BusinessErp*.tsx'
       - 'src/lib/businessAccountingApi.ts'
       - 'supabase/migrations/2026091813*.sql'
@@ -32,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: erp-cloud-replica-quality-${{ github.ref }}
+  group: erp-cloud-ui-beta-quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,14 +49,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Parse ERP SQL with PostgreSQL grammar
+      - name: Parse ERP beta SQL with PostgreSQL grammar
         shell: bash
         run: |
           set -euo pipefail
@@ -85,28 +83,22 @@ jobs:
           });
           NODE
 
-      - name: Verify ERP safety invariants
+      - name: Verify ERP cloud beta safety invariants
         shell: bash
         run: |
           set -euo pipefail
-          grep -Eq "negative source .*Amount.* = debit" docs/integrations/edaa/cloud-replica-and-backup-v1.md
-          grep -q "No writes were performed against Edaa" bridge/windows/Sanad.Bridge/EdaaLogicalSnapshotCommand.cs
-          grep -q "Mode: READ-ONLY" bridge/windows/Sanad.Bridge/EdaaLogicalSnapshotCommand.cs
           grep -q "raw_erp_rows_exposed" supabase/migrations/20260918160000_ai_erp_read_contract_v1.sql
+          grep -q "enabled boolean not null default false" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
           grep -q "revoke all on function public.prune_business_erp_snapshots_v1" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
           ! grep -q "grant execute on function public.prune_business_erp_snapshots_v1.*authenticated" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
+          grep -q "business_owner_required" supabase/migrations/20260918150500_erp_replica_read_surface_hardening_v1.sql
+          grep -q "هذه ليست حتى الآن نسخة SQL Server" src/components/business/BusinessErpCloudReplica.tsx
 
       - name: Application type check
         run: npm run lint
 
       - name: Production PWA build
         run: npm run build
-
-      - name: Build Windows Bridge
-        shell: bash
-        run: |
-          dotnet restore bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj
-          dotnet build bridge/windows/Sanad.Bridge/Sanad.Bridge.csproj -c Release --no-restore
 
       - name: Check whitespace
         run: git diff --check
@@ -125,7 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test_root="${RUNNER_TEMP}/sanad-erp-replica-contract"
+          test_root="${RUNNER_TEMP}/sanad-erp-cloud-ui-beta-contract"
           mkdir -p "${test_root}/supabase/migrations"
           cp supabase/config.toml "${test_root}/supabase/config.toml"
           OPENAI_API_KEY=disabled supabase start             --workdir "${test_root}"             -x studio,imgproxy,inbucket,logflare,vector,supavisor
@@ -155,5 +147,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          test_root="${RUNNER_TEMP}/sanad-erp-replica-contract"
+          test_root="${RUNNER_TEMP}/sanad-erp-cloud-ui-beta-contract"
           OPENAI_API_KEY=disabled supabase stop --workdir "${test_root}" --no-backup
