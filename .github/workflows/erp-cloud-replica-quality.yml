@@ -1,0 +1,151 @@
+name: ERP cloud UI beta quality
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/erp-cloud-replica-quality.yml'
+      - 'src/components/business/BusinessAccountingSystem.tsx'
+      - 'src/components/business/BusinessErp*.tsx'
+      - 'src/lib/businessAccountingApi.ts'
+      - 'supabase/migrations/2026091813*.sql'
+      - 'supabase/migrations/2026091814*.sql'
+      - 'supabase/migrations/2026091815*.sql'
+      - 'supabase/migrations/2026091816*.sql'
+      - 'supabase/tests/erp_cloud_replica_contract*.sql'
+      - 'docs/integrations/edaa/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/erp-cloud-replica-quality.yml'
+      - 'src/components/business/BusinessAccountingSystem.tsx'
+      - 'src/components/business/BusinessErp*.tsx'
+      - 'src/lib/businessAccountingApi.ts'
+      - 'supabase/migrations/2026091813*.sql'
+      - 'supabase/migrations/2026091814*.sql'
+      - 'supabase/migrations/2026091815*.sql'
+      - 'supabase/migrations/2026091816*.sql'
+      - 'supabase/tests/erp_cloud_replica_contract*.sql'
+      - 'docs/integrations/edaa/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: erp-cloud-ui-beta-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Parse ERP beta SQL with PostgreSQL grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts pgsql-parser@17.9.9
+          node <<'NODE'
+          const fs = require('fs');
+          const parser = require('pgsql-parser');
+          (async () => {
+            await parser.loadModule();
+            const files = [
+              'supabase/migrations/20260918133000_erp_logical_cloud_replica_v1.sql',
+              'supabase/migrations/20260918141500_erp_customer_statement_read_model_v1.sql',
+              'supabase/migrations/20260918150500_erp_replica_read_surface_hardening_v1.sql',
+              'supabase/migrations/20260918153000_erp_sales_purchase_read_models_v1.sql',
+              'supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql',
+              'supabase/migrations/20260918160000_ai_erp_read_contract_v1.sql',
+              'supabase/tests/erp_cloud_replica_contract_baseline.sql',
+              'supabase/tests/erp_cloud_replica_contract.sql',
+            ];
+            for (const file of files) {
+              const tree = parser.parseSync(fs.readFileSync(file, 'utf8'));
+              if (!tree.stmts.length) throw new Error(`No SQL statements parsed: ${file}`);
+              console.log(`PASS ${file} (${tree.stmts.length} statements)`);
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Verify ERP cloud beta safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "raw_erp_rows_exposed" supabase/migrations/20260918160000_ai_erp_read_contract_v1.sql
+          grep -q "enabled boolean not null default false" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
+          grep -q "revoke all on function public.prune_business_erp_snapshots_v1" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
+          ! grep -q "grant execute on function public.prune_business_erp_snapshots_v1.*authenticated" supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
+          grep -q "business_owner_required" supabase/migrations/20260918150500_erp_replica_read_surface_hardening_v1.sql
+          grep -q "هذه ليست حتى الآن نسخة SQL Server" src/components/business/BusinessErpCloudReplica.tsx
+
+      - name: Application type check
+        run: npm run lint
+
+      - name: Production PWA build
+        run: npm run build
+
+      - name: Check whitespace
+        run: git diff --check
+
+  semantic-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated local Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_root="${RUNNER_TEMP}/sanad-erp-cloud-ui-beta-contract"
+          mkdir -p "${test_root}/supabase/migrations"
+          cp supabase/config.toml "${test_root}/supabase/config.toml"
+          OPENAI_API_KEY=disabled supabase start             --workdir "${test_root}"             -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          docker exec supabase_db_sanad pg_isready -U postgres -d postgres
+
+      - name: Apply synthetic baseline and semantic migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_sql() {
+            docker exec -i supabase_db_sanad psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          }
+          run_sql < supabase/tests/erp_cloud_replica_contract_baseline.sql
+          run_sql < supabase/migrations/20260918141500_erp_customer_statement_read_model_v1.sql
+          run_sql < supabase/migrations/20260918150500_erp_replica_read_surface_hardening_v1.sql
+          run_sql < supabase/migrations/20260918153000_erp_sales_purchase_read_models_v1.sql
+          run_sql < supabase/migrations/20260918154500_erp_replica_retention_policy_v1.sql
+          run_sql < supabase/migrations/20260918160000_ai_erp_read_contract_v1.sql
+
+      - name: Execute synthetic ERP contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i supabase_db_sanad             psql -U postgres -d postgres -v ON_ERROR_STOP=1             < supabase/tests/erp_cloud_replica_contract.sql
+
+      - name: Stop isolated Supabase
+        if: always()
+        shell: bash
+        run: |
+          test_root="${RUNNER_TEMP}/sanad-erp-cloud-ui-beta-contract"
+          OPENAI_API_KEY=disabled supabase stop --workdir "${test_root}" --no-backup
