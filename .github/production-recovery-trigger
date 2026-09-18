@@ -1,4 +1,4 @@
-reason=deploy-current-main-for-user-preview
-requested_at=2026-09-16T16:12:00Z
-source_merge_sha=81a8f3ac67b5672eed1286883bc5208d47e325b6
-scope=production-app-and-apk
+reason=deploy-sanad-domains-v1
+requested_at=2026-09-18T08:35:00Z
+source_merge_sha=61ca77a8ff3d79fcbfa7efa9bb12ed0cae4ce9f1
+scope=production-pwa
