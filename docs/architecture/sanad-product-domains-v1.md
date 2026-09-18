@@ -80,3 +80,24 @@ New work should be documented and delivered by domain. A change that spans domai
 - idempotency/reversal behavior;
 - test evidence;
 - production rollout state.
+
+
+## Navigation and information architecture v2
+
+The four domains are also the primary navigation model. There is no separate user-facing “مساحات سند” layer and no duplicate domain switcher inside each workspace.
+
+The persistent bottom navigation uses these user-facing labels:
+
+- **مساعد سند** → SANAD AI.
+- **سند المالي** → SANAD Financial.
+- **سند للأعمال** → SANAD Commercial.
+- **حسابي** → My Account.
+
+Placement follows ownership rather than historical screen location:
+
+- SANAD Financial contains capture/QR financial intake, personal operation history, accounts, categories, parties, budgets, goals, obligations and personal financial controls.
+- SANAD for Business contains owned-business management, commercial documents and settlements, customers, team/roles, catalog, working hours, reports, complaints, ERP/accounting-system integration and business activity.
+- My Account contains personal identity, security/sign-in, notifications, subscription, devices and account-level support/settings. It must not become a second entry point for business operations or personal ledger management.
+- SANAD Assistant is the AI entry point and consumes authorized read models from Financial and Business without owning canonical financial truth.
+
+Legacy routes remain supported while capabilities are moved to their owning domain. The navigation shell should expose one clear route to each capability, avoiding duplicated cards across Account, Financial and Business.

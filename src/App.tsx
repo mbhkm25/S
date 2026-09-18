@@ -25,7 +25,7 @@ const BusinessWhatsAppCatalog = lazy(() => import('./components/business/Busines
 const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
 const NotificationCenter = lazy(() => import('./components/notifications/NotificationCenter'));
 const PlatformAdmin = lazy(() => import('./components/admin/PlatformAdmin'));
-import { Home as HomeIcon, Upload, QrCode, User, ShieldAlert, Loader2 } from 'lucide-react';
+import { ShieldAlert, Loader2 } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import { getUserAvatarUrl } from './lib/userAvatar';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
@@ -53,6 +53,7 @@ import {
 
 import { ShellSkeleton, ContentSkeleton } from './components/Skeletons';
 import ProfileLoadFailure from './components/ProfileLoadFailure';
+import ProductBottomNav from './components/navigation/ProductBottomNav';
 
 const PROFILE_LOAD_TIMEOUT_MS = 12_000;
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -169,6 +170,10 @@ export default function App() {
     if (path.includes('/platform-admin')) {
       return { type: 'platform-admin' };
     }
+    if (path.includes('/upload')) return { type: 'upload' };
+    if (path.includes('/scan-qr')) return { type: 'scan-qr' };
+    if (path.includes('/my-operations')) return { type: 'my-operations' };
+    if (path.includes('/verify-notice')) return { type: 'verify-notice' };
     if (!path.includes('/business/') && /\/profile(?:\/|$)/.test(path)) {
       return { type: 'profile' };
     }
@@ -238,7 +243,19 @@ export default function App() {
     const base = import.meta.env.VITE_APP_BASE_PATH || '/';
     const cleanBase = base.endsWith('/') ? base : `${base}/`;
 
-    if (page === 'details' && token) {
+    if (page === 'upload') {
+      window.history.pushState({}, '', `${cleanBase}upload`);
+      setCurrentPage('upload');
+    } else if (page === 'scan-qr') {
+      window.history.pushState({}, '', `${cleanBase}scan-qr`);
+      setCurrentPage('scan-qr');
+    } else if (page === 'my-operations') {
+      window.history.pushState({}, '', `${cleanBase}my-operations`);
+      setCurrentPage('my-operations');
+    } else if (page === 'verify-notice') {
+      window.history.pushState({}, '', `${cleanBase}verify-notice`);
+      setCurrentPage('verify-notice');
+    } else if (page === 'details' && token) {
       const src = source || 'link';
       window.history.pushState({}, '', `${cleanBase}v/${token}${src !== 'link' ? `?src=${src}` : ''}`);
       setActiveToken(token);
@@ -406,7 +423,15 @@ export default function App() {
       }
 
       const parsed = parsePath();
-      if (parsed.type === 'profile') {
+      if (parsed.type === 'upload') {
+        setCurrentPage('upload');
+      } else if (parsed.type === 'scan-qr') {
+        setCurrentPage('scan-qr');
+      } else if (parsed.type === 'my-operations') {
+        setCurrentPage('my-operations');
+      } else if (parsed.type === 'verify-notice') {
+        setCurrentPage('verify-notice');
+      } else if (parsed.type === 'profile') {
         setActiveToken(null);
         setActiveSource('link');
         setCurrentPage('profile');
@@ -479,7 +504,15 @@ export default function App() {
     }
 
     const parsed = parsePath();
-    if (parsed.type === 'profile') {
+    if (parsed.type === 'upload') {
+      setCurrentPage('upload');
+    } else if (parsed.type === 'scan-qr') {
+      setCurrentPage('scan-qr');
+    } else if (parsed.type === 'my-operations') {
+      setCurrentPage('my-operations');
+    } else if (parsed.type === 'verify-notice') {
+      setCurrentPage('verify-notice');
+    } else if (parsed.type === 'profile') {
       setActiveToken(null);
       setActiveSource('link');
       setCurrentPage('profile');
@@ -1281,71 +1314,8 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Sticky Tab Navigation */}
       {isAuthenticated && currentPage !== 'scan-qr' && currentPage !== 'platform-admin' && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 py-2 px-3 shadow-md z-50 animate-fade-in" id="bottom_nav">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            {/* Tab: Home */}
-            <button
-              onClick={() => navigateTo('home')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'home'
-                  ? 'bg-[#111111] text-white'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <HomeIcon className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">الرئيسية</span>
-              </div>
-            </button>
-
-            {/* Tab: Scan QR */}
-            <button
-              onClick={() => navigateTo('scan-qr')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'scan-qr'
-                  ? 'bg-[#111111] text-white'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <QrCode className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">مسح QR</span>
-              </div>
-            </button>
-
-            {/* Tab: Upload */}
-            <button
-              onClick={() => navigateTo('upload')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'upload'
-                  ? 'bg-[#111111] text-white'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <Upload className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">إضافة عملية</span>
-              </div>
-            </button>
-
-            {/* Tab: Profile */}
-            <button
-              onClick={() => navigateTo('profile')}
-              className="flex-1 flex flex-col items-center justify-center transition-all"
-            >
-              <div className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-full transition-all ${
-                currentPage === 'profile'
-                  ? 'bg-[#111111] text-white'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}>
-                <User className="w-4 h-4" />
-                <span className="text-[9px] font-bold font-arabic mt-0.5">حسابي</span>
-              </div>
-            </button>
-          </div>
-        </nav>
+        <ProductBottomNav legacyPage={currentPage} />
       )}
 
       <ProfileCompletionGateModal

@@ -76,6 +76,11 @@ const TABS: TabMeta[] = [
   { id: 'complaints', label: 'الشكاوى', description: 'الملاحظات والمتابعة والحلول', icon: MessageSquare, group: 'monitoring' }
 ];
 
+function initialTabFromLocation(): Tab {
+  const requested = new URLSearchParams(window.location.search).get('section');
+  return TABS.some((item) => item.id === requested) ? requested as Tab : 'overview';
+}
+
 function statusLabel(status?: string | null) {
   if (status === 'published') return 'منشور';
   if (status === 'pending_review') return 'قيد المراجعة';
@@ -87,7 +92,7 @@ export default function BusinessManageV3({ onNavigate }: Props) {
   const reduceMotion = useReducedMotion();
   const [business, setBusiness] = useState<ManagementBusinessProfile | null>(null);
   const [dashboard, setDashboard] = useState<BusinessDashboardSummary | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTabFromLocation);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -161,6 +166,10 @@ export default function BusinessManageV3({ onNavigate }: Props) {
     setMenuOpen(false);
     setError(null);
     setSuccess(null);
+    const url = new URL(window.location.href);
+    if (next === 'overview') url.searchParams.delete('section');
+    else url.searchParams.set('section', next);
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
 
@@ -226,7 +235,7 @@ export default function BusinessManageV3({ onNavigate }: Props) {
         <Store className="mx-auto h-9 w-9 text-slate-400" />
         <p className="mt-3 text-sm font-bold">لا يوجد نشاط مملوك لإدارته.</p>
         <button type="button" onClick={() => onNavigate('profile')} className="mt-4 rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold text-white">
-          العودة إلى حسابي
+          العودة إلى سند للأعمال
         </button>
       </div>
     );
