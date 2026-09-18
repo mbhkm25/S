@@ -3,6 +3,7 @@ param([string]$BridgeExe = "C:\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\n
 $ErrorActionPreference = "Stop"
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$Utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [Console]::OutputEncoding = $Utf8NoBom
 $OutputEncoding = $Utf8NoBom
 
@@ -11,6 +12,12 @@ $LogDir = Join-Path $Base "logs"
 $Log = Join-Path $LogDir "agent-cycle.log"
 $MaxBytes = 5MB
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+# Windows PowerShell 5.1 auto-detects UTF-8 reliably when the file starts with a BOM.
+# Keep subsequent appends BOM-free so only one BOM exists at the beginning of the log.
+if (-not (Test-Path $Log)) {
+  [System.IO.File]::WriteAllText($Log, "", $Utf8Bom)
+}
 
 if (Test-Path $Log) {
   if ((Get-Item $Log).Length -ge $MaxBytes) {
