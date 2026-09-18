@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,6 +13,7 @@ namespace Sanad.Bridge
 
         private static async Task<int> Main(string[] args)
         {
+            ConfigureConsoleEncoding();
             if (args != null && Array.Exists(args, value => string.Equals(value, "--local-probe", StringComparison.OrdinalIgnoreCase)))
             {
                 return EdaaSaleLocalProbe.Run(args);
@@ -275,6 +277,21 @@ namespace Sanad.Bridge
             }
 
             throw new OperationCanceledException("Authorization session ended before completion.");
+        }
+
+        private static void ConfigureConsoleEncoding()
+        {
+            try
+            {
+                var utf8 = new UTF8Encoding(false);
+                Console.OutputEncoding = utf8;
+                Console.InputEncoding = utf8;
+            }
+            catch
+            {
+                // Encoding hardening is best-effort; Bridge execution must not fail because
+                // a non-interactive Windows host does not expose a configurable console.
+            }
         }
 
         private static void OpenBrowser(string url)
