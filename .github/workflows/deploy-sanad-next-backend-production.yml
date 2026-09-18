@@ -86,7 +86,13 @@ jobs:
               20260915070037_sanad_next_desktop_identity_authorization_v1.sql|\
               20260915071625_sanad_next_desktop_identity_performance_hardening_v1.sql|\
               20260915075016_sanad_next_edaa_baseline_lifecycle_v1.sql|\
-              20260915080116_sanad_next_edaa_baseline_performance_hardening_v1.sql)
+              20260915080116_sanad_next_edaa_baseline_performance_hardening_v1.sql|\
+              20260918133000_erp_logical_cloud_replica_v1.sql|\
+              20260918141500_erp_customer_statement_read_model_v1.sql|\
+              20260918150500_erp_replica_read_surface_hardening_v1.sql|\
+              20260918153000_erp_sales_purchase_read_models_v1.sql|\
+              20260918154500_erp_replica_retention_policy_v1.sql|\
+              20260918160000_ai_erp_read_contract_v1.sql)
                 ;;
               *)
                 echo "Unexpected pending migration: $migration" >&2
@@ -136,7 +142,13 @@ jobs:
             20260915070037 \
             20260915071625 \
             20260915075016 \
-            20260915080116; do
+            20260915080116 \
+            20260918133000 \
+            20260918141500 \
+            20260918150500 \
+            20260918153000 \
+            20260918154500 \
+            20260918160000; do
             grep -q "$version" <<<"$migration_list"
           done
 
