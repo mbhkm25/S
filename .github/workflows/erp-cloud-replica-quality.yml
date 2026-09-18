@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "negative source Amount = debit" docs/integrations/edaa/cloud-replica-and-backup-v1.md
+          grep -Eq "negative source .*Amount.* = debit" docs/integrations/edaa/cloud-replica-and-backup-v1.md
           grep -q "No writes were performed against Edaa" bridge/windows/Sanad.Bridge/EdaaLogicalSnapshotCommand.cs
           grep -q "Mode: READ-ONLY" bridge/windows/Sanad.Bridge/EdaaLogicalSnapshotCommand.cs
           grep -q "raw_erp_rows_exposed" supabase/migrations/20260918160000_ai_erp_read_contract_v1.sql
