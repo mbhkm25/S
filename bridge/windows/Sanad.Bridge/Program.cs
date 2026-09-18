@@ -29,6 +29,11 @@ namespace Sanad.Bridge
                 return EdaaSemanticSchemaCommand.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--relationship-audit", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaRelationshipAuditCommand.Run(args);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--local-scan", StringComparison.OrdinalIgnoreCase)))
             {
                 return EdaaSaleChangeDetector.Run(args);
