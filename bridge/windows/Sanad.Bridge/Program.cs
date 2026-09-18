@@ -54,6 +54,11 @@ namespace Sanad.Bridge
                 return BridgeAgentHealthCommand.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-snapshot", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await EdaaLogicalSnapshotCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-cycle", StringComparison.OrdinalIgnoreCase)))
             {
                 return await BridgeAgentCycleCommand.RunAsync(args).ConfigureAwait(false);
