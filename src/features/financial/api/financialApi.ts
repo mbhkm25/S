@@ -4,6 +4,7 @@ import type {
   BusinessParty,
   PersonalAccount,
   PersonalCategory,
+  PersonalCorrectionCandidates,
   PersonalParty,
   RpcResult,
   SettlementCandidates,
@@ -118,6 +119,29 @@ export async function createPersonalGoal(command: {
 }) {
   return await supabase.rpc('create_personal_finance_goal_v1', {
     p_command: { ...command, metadata: { ui_surface: 'financial_actions' } },
+  });
+}
+
+export async function getPersonalCorrectionCandidates(): Promise<RpcResult<PersonalCorrectionCandidates>> {
+  const { data, error } = await supabase.rpc('get_personal_finance_correction_candidates_v1');
+  return { data: (data || null) as PersonalCorrectionCandidates | null, error };
+}
+
+export async function settlePersonalObligation(obligationId: string, transactionId: string, amount: string) {
+  return await supabase.rpc('settle_personal_finance_obligation_v1', {
+    p_obligation_id: obligationId,
+    p_transaction_id: transactionId,
+    p_amount: amount,
+  });
+}
+
+export async function reversePersonalTransaction(transactionId: string, reason: string) {
+  return await supabase.rpc('reverse_personal_finance_transaction_v1', {
+    p_command: {
+      transaction_id: transactionId,
+      reason,
+      metadata: { ui_surface: 'financial_actions' },
+    },
   });
 }
 
