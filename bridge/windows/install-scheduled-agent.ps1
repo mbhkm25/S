@@ -11,7 +11,7 @@ if (-not (Test-Path $RunnerPath)) {
 
 $UserId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $RunnerPath + '"'
+$Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $RunnerPath + '"'
 
 $Action = New-ScheduledTaskAction -Execute $PowerShell -Argument $Arguments
 
