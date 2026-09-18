@@ -18,6 +18,7 @@ import {
 } from '../../lib/businessAccountingApi';
 import BusinessErpCloudReplica from './BusinessErpCloudReplica';
 import BusinessErpCustomerStatement from './BusinessErpCustomerStatement';
+import BusinessErpDocuments from './BusinessErpDocuments';
 
 interface Props {
   businessId: string;
@@ -296,6 +297,10 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
 
       {!error && active.length > 0 && (
         <BusinessErpCustomerStatement businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && (
+        <BusinessErpDocuments businessId={businessId} />
       )}
 
       <section className="rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-4">
