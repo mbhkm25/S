@@ -79,8 +79,27 @@ namespace Sanad.Bridge
                         continue;
                     }
 
+                    var observedRevision = state.GetObservedSaleRevision(discovery.SourceKey, invoiceId);
+
+                    if (!isNew && string.IsNullOrWhiteSpace(observedRevision))
+                    {
+                        state.RecordObservedSaleRevision(discovery.SourceKey, invoiceId, built.Revision);
+                        unchanged++;
+                        Console.WriteLine("Observed historical invoice " + invoiceId +
+                                          " revision " + built.Revision.Substring(0, 12) + " as reconciliation baseline; not queued.");
+                        continue;
+                    }
+
+                    if (!isNew && string.Equals(observedRevision, built.Revision, StringComparison.OrdinalIgnoreCase))
+                    {
+                        unchanged++;
+                        continue;
+                    }
+
                     var json = serializer.Serialize(built.Envelope);
                     var inserted = state.QueueSaleBundle(discovery.SourceKey, invoiceId, built.Revision, built.EventId, json);
+                    state.RecordObservedSaleRevision(discovery.SourceKey, invoiceId, built.Revision);
+
                     if (inserted)
                     {
                         queued++;
