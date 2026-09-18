@@ -130,3 +130,94 @@ A request such as "اعطني كشف حساب العميل فلان" must query 
 - A partial snapshot is never presented as complete.
 - A logical snapshot is never described as a physical/restorable SQL backup.
 - Semantic mappings are introduced only after exact source relationships are verified from the real Edaa schema/fixtures.
+
+
+## Home-safe implementation batch: semantic access, retention and AI
+
+The cloud replica is intentionally not exposed as a generic ERP database browser. User-facing access is through governed semantic read models.
+
+### Customer statements
+
+`get_business_erp_customer_candidates_v1` resolves customer search candidates from proven sale/account evidence.
+
+`get_business_erp_customer_statement_v1` reads the account ledger from `tblEntries` + `tblEntriesDetails`, preserves currencies independently and returns:
+
+- opening balance per currency;
+- debit/credit movement;
+- running balance;
+- closing balance;
+- source document type/id/number/date;
+- entry/detail provenance identifiers.
+
+The sign convention is based on the live aggregate audit from the authorized Edaa source:
+
+- negative source `Amount` = debit;
+- positive source `Amount` = credit.
+
+Ambiguous customer names are never silently merged.
+
+### Sales and purchases
+
+`get_business_erp_documents_v1` lists sales or purchase headers with source line counts and the sum of source `TotalAmount` detail fields.
+
+`get_business_erp_document_detail_v1` returns the header plus verified detail joins to classes and units.
+
+The field named `source_line_total` is deliberately not called invoice grand total: it is the sum of the source detail `TotalAmount` values and remains semantically conservative until final totals are verified against live Edaa examples.
+
+### Raw replica diagnostics
+
+Raw source-row reading is not a normal product surface.
+
+- ordinary business members use semantic screens;
+- raw table-row diagnostics are owner-only;
+- authentication/security/operational Edaa tables are denied from the raw-row RPC;
+- AI contracts never receive raw ERP rows.
+
+### Retention
+
+`business_erp_replica_retention_policies` defines replica retention per business.
+
+Defaults:
+
+- policy disabled;
+- retain at least 8 completed snapshots;
+- retain snapshot materialization for at least 90 days;
+- retain raw event evidence for at least 365 days.
+
+The cleanup executor is service-role only. Owner configuration does not perform deletion synchronously.
+
+Retention stays disabled until the first live logical snapshot and subsequent validation have passed on the authorized shop workstation.
+
+### SANAD Assistant
+
+`get_ai_erp_read_context_v1` is the audited assistant gateway for ERP information.
+
+Supported v1 query kinds:
+
+- `replica_status`;
+- `customer_statement`;
+- `sales`;
+- `purchases`.
+
+The gateway:
+
+- requires business authorization;
+- logs every context request;
+- caps returned result size;
+- consumes semantic read models only;
+- declares read-only behavior;
+- never exposes raw ERP rows;
+- never posts, edits, settles or reverses Edaa/SANAD accounting records.
+
+### Synthetic contracts
+
+`supabase/tests/erp_cloud_replica_contract.sql` uses synthetic Edaa-shaped rows to verify:
+
+- customer identity resolution;
+- debit/credit sign orientation;
+- per-currency customer closing balance;
+- sales and purchases list/detail reads;
+- retention defaults;
+- audited AI semantic reads.
+
+`.github/workflows/erp-cloud-replica-quality.yml` provides the dedicated static and isolated semantic quality gate once available on the workflow base branch.
