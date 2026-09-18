@@ -19,6 +19,11 @@ namespace Sanad.Bridge
                 return EdaaSaleLocalProbe.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-discovery", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaLogicalDiscoveryCommand.Run(args);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--local-scan", StringComparison.OrdinalIgnoreCase)))
             {
                 return EdaaSaleChangeDetector.Run(args);
