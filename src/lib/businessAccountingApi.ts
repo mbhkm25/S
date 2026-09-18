@@ -140,3 +140,139 @@ export async function getBusinessErpSnapshotTableRows(
     contract_version: payload.contract_version
   };
 }
+
+
+export type BusinessErpCustomerCandidate = {
+  customer_name: string;
+  account_id: number;
+  sale_count: number;
+  account_count: number;
+  account_name?: string | null;
+  account_number?: string | null;
+  account_type?: string | null;
+  customer_number?: string | null;
+  mobile?: string | null;
+  work_phone?: string | null;
+  address?: string | null;
+  resolution_status: 'resolved_unique_sale_account' | 'ambiguous_multiple_sale_accounts' | string;
+};
+
+export type BusinessErpCustomerCandidatesResponse = {
+  items: BusinessErpCustomerCandidate[];
+  snapshot_public_id: string | null;
+  status: string;
+  contract_version?: number;
+};
+
+export type BusinessErpCustomerStatementItem = {
+  detail_id: number;
+  entry_id: number;
+  entry_number?: number | null;
+  doc_type?: string | null;
+  doc_id?: number | null;
+  doc_number?: string | null;
+  date?: string | null;
+  description?: string | null;
+  currency_id?: number | null;
+  currency_name?: string | null;
+  arabic_code?: string | null;
+  english_code?: string | null;
+  debit: number;
+  credit: number;
+  signed_source_amount?: number | null;
+  mc_amount?: number | null;
+  running_balance: number;
+};
+
+export type BusinessErpCustomerStatement = {
+  status: string;
+  snapshot_public_id?: string | null;
+  account?: {
+    account_id: number;
+    account_name?: string | null;
+    account_number?: string | null;
+    account_type?: string | null;
+  };
+  identity?: {
+    customer_name?: string | null;
+    sale_count?: number;
+    distinct_names_on_account?: number;
+    identity_status?: string;
+    customer_number?: string | null;
+    mobile?: string | null;
+    work_phone?: string | null;
+    address?: string | null;
+  };
+  from_date?: string | null;
+  to_date?: string | null;
+  opening_by_currency?: Array<{
+    currency_id?: number | null;
+    currency_name?: string | null;
+    arabic_code?: string | null;
+    english_code?: string | null;
+    debit?: number;
+    credit?: number;
+    balance?: number;
+  }>;
+  totals_by_currency?: Array<{
+    currency_id?: number | null;
+    currency_name?: string | null;
+    arabic_code?: string | null;
+    english_code?: string | null;
+    debit: number;
+    credit: number;
+    movement_balance: number;
+    opening_balance: number;
+    closing_balance: number;
+  }>;
+  items: BusinessErpCustomerStatementItem[];
+  sign_convention?: Record<string, unknown>;
+  contract_version?: number;
+};
+
+export async function searchBusinessErpCustomers(
+  businessId: string,
+  query: string,
+  limit = 50
+): Promise<BusinessErpCustomerCandidatesResponse> {
+  const { data, error } = await supabase.rpc('get_business_erp_customer_candidates_v1', {
+    p_business_id: businessId,
+    p_query: query || null,
+    p_limit: limit
+  });
+
+  if (error) throw new Error(error.message || 'تعذر البحث في عملاء النظام المحاسبي.');
+
+  const payload = (data || {}) as Partial<BusinessErpCustomerCandidatesResponse>;
+  return {
+    items: Array.isArray(payload.items) ? payload.items : [],
+    snapshot_public_id: payload.snapshot_public_id || null,
+    status: payload.status || 'unknown',
+    contract_version: payload.contract_version
+  };
+}
+
+export async function getBusinessErpCustomerStatement(
+  businessId: string,
+  accountId: number,
+  fromDate?: string | null,
+  toDate?: string | null
+): Promise<BusinessErpCustomerStatement> {
+  const { data, error } = await supabase.rpc('get_business_erp_customer_statement_v1', {
+    p_business_id: businessId,
+    p_account_id: accountId,
+    p_from_date: fromDate || null,
+    p_to_date: toDate || null
+  });
+
+  if (error) throw new Error(error.message || 'تعذر تحميل كشف حساب العميل.');
+
+  const payload = (data || {}) as Partial<BusinessErpCustomerStatement>;
+  return {
+    ...payload,
+    status: payload.status || 'unknown',
+    items: Array.isArray(payload.items) ? payload.items : [],
+    opening_by_currency: Array.isArray(payload.opening_by_currency) ? payload.opening_by_currency : [],
+    totals_by_currency: Array.isArray(payload.totals_by_currency) ? payload.totals_by_currency : []
+  } as BusinessErpCustomerStatement;
+}
