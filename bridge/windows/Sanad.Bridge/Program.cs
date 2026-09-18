@@ -42,6 +42,11 @@ namespace Sanad.Bridge
                 return await BridgeDeviceAuthorizationCommand.RunAsync(args).ConfigureAwait(false);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--repair-overlap-bootstrap", StringComparison.OrdinalIgnoreCase)))
+            {
+                return SaleOverlapBootstrapRepairCommand.Run(args);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-cycle", StringComparison.OrdinalIgnoreCase)))
             {
                 return await BridgeAgentCycleCommand.RunAsync(args).ConfigureAwait(false);
