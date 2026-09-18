@@ -25,5 +25,17 @@ namespace Sanad.Bridge
             using (var sales = new SaleStateStore())
                 return sales.CountPending(sourceKey);
         }
+
+        public static string GetObservedSaleRevision(this BridgeStateStore state, string sourceKey, long invoiceId)
+        {
+            using (var sales = new SaleStateStore())
+                return sales.GetObservedRevision(sourceKey, invoiceId);
+        }
+
+        public static void RecordObservedSaleRevision(this BridgeStateStore state, string sourceKey, long invoiceId, string revision)
+        {
+            using (var sales = new SaleStateStore())
+                sales.RecordObservedRevision(sourceKey, invoiceId, revision);
+        }
     }
 }
