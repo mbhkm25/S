@@ -1,4 +1,4 @@
-reason=deploy-sanad-domains-v1
-requested_at=2026-09-18T08:35:00Z
-source_merge_sha=61ca77a8ff3d79fcbfa7efa9bb12ed0cae4ce9f1
+reason=deploy-erp-cloud-ui-beta-v1
+requested_at=2026-09-18T15:05:00Z
+source_merge_sha=770ae8c55a6388e82162975577359c9b3c89ed58
 scope=production-pwa
