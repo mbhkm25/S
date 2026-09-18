@@ -276,3 +276,138 @@ export async function getBusinessErpCustomerStatement(
     totals_by_currency: Array.isArray(payload.totals_by_currency) ? payload.totals_by_currency : []
   } as BusinessErpCustomerStatement;
 }
+
+
+export type BusinessErpDocumentKind = 'sale' | 'purchase';
+
+export type BusinessErpDocumentSummary = {
+  document_id: number;
+  document_number?: string | null;
+  document_date?: string | null;
+  payment_method?: string | null;
+  account_id?: number | null;
+  currency_id?: number | null;
+  exchange_price?: number | null;
+  party_name?: string | null;
+  entry_id?: number | null;
+  notes?: string | null;
+  deleted: boolean;
+  locked: boolean;
+  captured_at?: string | null;
+  currency_name?: string | null;
+  arabic_code?: string | null;
+  english_code?: string | null;
+  line_count: number;
+  source_line_total: number;
+};
+
+export type BusinessErpDocumentsResponse = {
+  status: string;
+  document_kind: BusinessErpDocumentKind;
+  snapshot_public_id?: string | null;
+  items: BusinessErpDocumentSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  amount_semantics?: Record<string, unknown>;
+  contract_version?: number;
+};
+
+export type BusinessErpDocumentDetail = {
+  status: string;
+  snapshot_public_id?: string | null;
+  header?: {
+    document_id: number;
+    document_kind: BusinessErpDocumentKind;
+    document_number?: string | null;
+    document_date?: string | null;
+    payment_method?: string | null;
+    party_name?: string | null;
+    account_id?: string | null;
+    currency_id?: string | null;
+    currency_name?: string | null;
+    arabic_code?: string | null;
+    english_code?: string | null;
+    exchange_price?: string | null;
+    discount?: string | null;
+    services_amount?: string | null;
+    entry_id?: string | null;
+    notes?: string | null;
+    deleted?: string | null;
+    locked?: string | null;
+    captured_at?: string | null;
+  };
+  lines: Array<{
+    line_id: number;
+    class_id?: number | null;
+    class_name?: string | null;
+    class_number?: string | null;
+    unit_id?: number | null;
+    unit_name?: string | null;
+    quantity?: string | null;
+    unit_price?: string | null;
+    line_discount?: string | null;
+    source_total_amount?: string | null;
+    serial_number?: string | null;
+    class_notes?: string | null;
+  }>;
+  contract_version?: number;
+};
+
+export async function getBusinessErpDocuments(
+  businessId: string,
+  documentKind: BusinessErpDocumentKind,
+  options: {
+    query?: string;
+    fromDate?: string | null;
+    toDate?: string | null;
+    limit?: number;
+    offset?: number;
+  } = {}
+): Promise<BusinessErpDocumentsResponse> {
+  const { data, error } = await supabase.rpc('get_business_erp_documents_v1', {
+    p_business_id: businessId,
+    p_document_kind: documentKind,
+    p_query: options.query || null,
+    p_from_date: options.fromDate || null,
+    p_to_date: options.toDate || null,
+    p_limit: options.limit ?? 50,
+    p_offset: options.offset ?? 0
+  });
+
+  if (error) throw new Error(error.message || 'تعذر تحميل مستندات النظام المحاسبي.');
+
+  const payload = (data || {}) as Partial<BusinessErpDocumentsResponse>;
+  return {
+    status: payload.status || 'unknown',
+    document_kind: documentKind,
+    snapshot_public_id: payload.snapshot_public_id || null,
+    items: Array.isArray(payload.items) ? payload.items : [],
+    total: Number(payload.total || 0),
+    limit: Number(payload.limit || options.limit || 50),
+    offset: Number(payload.offset || options.offset || 0),
+    amount_semantics: payload.amount_semantics,
+    contract_version: payload.contract_version
+  };
+}
+
+export async function getBusinessErpDocumentDetail(
+  businessId: string,
+  documentKind: BusinessErpDocumentKind,
+  documentId: number
+): Promise<BusinessErpDocumentDetail> {
+  const { data, error } = await supabase.rpc('get_business_erp_document_detail_v1', {
+    p_business_id: businessId,
+    p_document_kind: documentKind,
+    p_document_id: documentId
+  });
+
+  if (error) throw new Error(error.message || 'تعذر تحميل تفاصيل المستند.');
+
+  const payload = (data || {}) as Partial<BusinessErpDocumentDetail>;
+  return {
+    ...payload,
+    status: payload.status || 'unknown',
+    lines: Array.isArray(payload.lines) ? payload.lines : []
+  } as BusinessErpDocumentDetail;
+}
