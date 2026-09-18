@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Bell,
   Bot,
   BriefcaseBusiness,
+  Camera,
   CircleDollarSign,
+  Database,
+  FileText,
   Landmark,
   Loader2,
+  Lock,
+  Package,
+  QrCode,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   UserRound,
+  Users,
   WalletCards,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -68,12 +77,32 @@ type AiContext = {
   context?: Record<string, unknown>;
 };
 
-const sections: Array<{ kind: WorkspaceKind; path: string; label: string; icon: typeof WalletCards }> = [
-  { kind: 'financial', path: 'financial', label: 'سند المالي', icon: WalletCards },
-  { kind: 'commercial', path: 'commercial', label: 'سند التجاري', icon: BriefcaseBusiness },
-  { kind: 'account', path: 'account-center', label: 'حسابي', icon: UserRound },
-  { kind: 'ai', path: 'sanad-ai', label: 'SANAD AI', icon: Bot },
-];
+const META: Record<WorkspaceKind, { label: string; eyebrow: string; description: string; icon: typeof WalletCards }> = {
+  financial: {
+    label: 'سند المالي',
+    eyebrow: 'أموالك وعملياتك الشخصية',
+    description: 'الإشعارات والعمليات والحسابات والميزانيات والالتزامات في مساحة مالية واحدة.',
+    icon: WalletCards,
+  },
+  commercial: {
+    label: 'سند للأعمال',
+    eyebrow: 'تشغيل نشاطك التجاري',
+    description: 'الإدارة والعمليات والعملاء والكتالوج والفريق والنظام المحاسبي والتقارير.',
+    icon: BriefcaseBusiness,
+  },
+  account: {
+    label: 'حسابي',
+    eyebrow: 'هويتك وإعداداتك',
+    description: 'البيانات الشخصية والأمان والإشعارات والاشتراك والأجهزة فقط، دون خلطها بتشغيل الأعمال أو السجل المالي.',
+    icon: UserRound,
+  },
+  ai: {
+    label: 'مساعد سند',
+    eyebrow: 'المساعد الذكي',
+    description: 'مساعد يفهم سياقك المصرح به ويقرأ البيانات دون أن يصبح سجلًا ماليًا موازيًا.',
+    icon: Bot,
+  },
+};
 
 function resolveKind(pathname: string): WorkspaceKind {
   if (/\/commercial\/?$/.test(pathname)) return 'commercial';
@@ -119,6 +148,18 @@ function StatCard({ label, value, hint }: { label: string; value: string | numbe
       <p className="mt-2 text-xl font-black text-slate-950">{value}</p>
       {hint ? <p className="mt-1 text-[10px] leading-5 text-slate-500">{hint}</p> : null}
     </div>
+  );
+}
+
+function LaunchCard({ title, description, icon: Icon, onClick }: { title: string; description: string; icon: typeof WalletCards; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-[104px] flex-col items-start justify-between rounded-[1.35rem] border border-slate-200 bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition active:scale-[.985]">
+      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-800"><Icon className="h-4.5 w-4.5" /></span>
+      <span className="mt-4">
+        <strong className="block text-xs font-black text-slate-950">{title}</strong>
+        <span className="mt-1 block text-[9px] leading-5 text-slate-500">{description}</span>
+      </span>
+    </button>
   );
 }
 
@@ -177,8 +218,7 @@ export default function FinancialWorkspaceRoute() {
         setAi((data || {}) as AiContext);
       }
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'حدث خطأ غير متوقع أثناء تحميل المساحة.';
-      setError(message);
+      setError(cause instanceof Error ? cause.message : 'حدث خطأ غير متوقع أثناء تحميل المساحة.');
     } finally {
       setLoading(false);
     }
@@ -186,7 +226,7 @@ export default function FinancialWorkspaceRoute() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const current = sections.find((section) => section.kind === kind) || sections[0];
+  const current = META[kind];
   const CurrentIcon = current.icon;
   const businesses = Array.isArray(account?.businesses) ? account.businesses : [];
 
@@ -194,13 +234,13 @@ export default function FinancialWorkspaceRoute() {
     <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
-          <button onClick={() => go()} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة للرئيسية">
+          <button onClick={() => go()} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
             <ArrowRight className="h-5 w-5" />
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
             <div className="min-w-0">
-              <p className="text-[9px] font-bold text-slate-400">مساحات سند</p>
+              <p className="text-[9px] font-bold text-slate-400">{current.eyebrow}</p>
               <h1 className="truncate text-base font-black">{current.label}</h1>
             </div>
           </div>
@@ -210,22 +250,49 @@ export default function FinancialWorkspaceRoute() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-5 pb-28">
-        <section className="grid grid-cols-4 gap-2 rounded-[1.4rem] bg-white p-2 shadow-sm">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            const active = section.kind === kind;
-            return (
-              <button key={section.kind} onClick={() => go(section.path)} className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-[1rem] px-1 text-center transition ${active ? 'bg-slate-950 text-white' : 'text-slate-500'}`}>
-                <Icon className="h-4 w-4" />
-                <span className="text-[9px] font-bold">{section.label}</span>
-              </button>
-            );
-          })}
+      <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-5 pb-32">
+        <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+          <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
         </section>
 
+        {kind === 'financial' ? (
+          <section>
+            <div className="mb-3 px-1"><p className="text-[10px] font-bold text-emerald-700">أدواتك المالية</p><h2 className="mt-1 text-base font-black">ابدأ من المهمة التي تريدها</h2></div>
+            <div className="grid grid-cols-2 gap-3">
+              <LaunchCard title="تصوير إشعار" description="التقط إشعارًا ماليًا وحوّله إلى عملية منظمة." icon={Camera} onClick={() => go('upload')} />
+              <LaunchCard title="مسح QR" description="افتح عملية مالية أو تحقق منها عبر رمز QR." icon={QrCode} onClick={() => go('scan-qr')} />
+              <LaunchCard title="عملياتي" description="السجل الشخصي للعمليات والإشعارات السابقة." icon={FileText} onClick={() => go('my-operations')} />
+              <LaunchCard title="الإدارة المالية" description="الحسابات والتصنيفات والأطراف والميزانيات والأهداف." icon={WalletCards} onClick={() => go('financial/actions')} />
+            </div>
+          </section>
+        ) : null}
+
+        {kind === 'commercial' ? (
+          <section>
+            <div className="mb-3 px-1"><p className="text-[10px] font-bold text-sky-700">تشغيل النشاط</p><h2 className="mt-1 text-base font-black">كل ما يخص العمل في مكان واحد</h2></div>
+            <div className="grid grid-cols-2 gap-3">
+              <LaunchCard title="إدارة النشاط" description="ملف النشاط وساعات العمل والإعدادات التشغيلية." icon={BriefcaseBusiness} onClick={() => go('business/manage')} />
+              <LaunchCard title="النظام المحاسبي" description="الربط والمزامنة وحالة إبداع سوفت." icon={Database} onClick={() => go('business/manage?section=accounting')} />
+              <LaunchCard title="العملاء والفريق" description="العملاء والأعضاء والأدوار والصلاحيات." icon={Users} onClick={() => go('business/manage?section=customers')} />
+              <LaunchCard title="الكتالوج" description="المنتجات والخدمات والوسائط التجارية." icon={Package} onClick={() => go('business/manage?section=catalog')} />
+            </div>
+          </section>
+        ) : null}
+
+        {kind === 'account' ? (
+          <section>
+            <div className="mb-3 px-1"><p className="text-[10px] font-bold text-slate-600">إعداداتك الشخصية</p><h2 className="mt-1 text-base font-black">الحساب والخصوصية والاشتراك</h2></div>
+            <div className="grid grid-cols-2 gap-3">
+              <LaunchCard title="بياناتي" description="الاسم والصورة ورقم الجوال والبيانات الشخصية." icon={UserRound} onClick={() => go('profile/personal')} />
+              <LaunchCard title="الأمان" description="تسجيل الدخول ووسائل حماية الحساب." icon={Lock} onClick={() => go('profile/security')} />
+              <LaunchCard title="الإشعارات" description="مركز التنبيهات وإعدادات الوصول." icon={Bell} onClick={() => go('notifications')} />
+              <LaunchCard title="الخطة والاشتراك" description="سند Pro وحالة الاشتراك وطلبات التفعيل." icon={Sparkles} onClick={() => go('profile/subscription')} />
+            </div>
+          </section>
+        ) : null}
+
         {loading ? (
-          <div className="flex min-h-60 items-center justify-center rounded-[1.75rem] bg-white"><Loader2 className="h-7 w-7 animate-spin text-slate-400" /></div>
+          <div className="flex min-h-52 items-center justify-center rounded-[1.75rem] bg-white"><Loader2 className="h-7 w-7 animate-spin text-slate-400" /></div>
         ) : error ? <ErrorCard message={error} onRetry={() => void load()} /> : null}
 
         {!loading && !error && kind === 'financial' && finance ? (
@@ -257,18 +324,26 @@ export default function FinancialWorkspaceRoute() {
         {!loading && !error && kind === 'commercial' ? (
           <>
             <section className="rounded-[1.7rem] bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3"><BriefcaseBusiness className="h-6 w-6 text-sky-700" /><div><p className="text-[10px] font-bold text-sky-700">سند التجاري</p><h2 className="text-lg font-black">مركز النشاط المالي والتجاري</h2></div></div>
+              <div className="flex items-center gap-3"><BriefcaseBusiness className="h-6 w-6 text-sky-700" /><div><p className="text-[10px] font-bold text-sky-700">سند للأعمال</p><h2 className="text-lg font-black">مركز النشاط المالي والتجاري</h2></div></div>
               {businesses.length ? (
                 <select value={selectedBusinessId} onChange={(event) => setSelectedBusinessId(event.target.value)} className="mt-5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-bold outline-none">
                   {businesses.map((business) => <option key={business.id} value={business.id}>{business.name || 'نشاط بدون اسم'}</option>)}
                 </select>
-              ) : <p className="mt-4 rounded-xl bg-amber-50 p-4 text-xs leading-6 text-amber-800">لا توجد منشأة مملوكة لهذا الحساب بعد. أنشئ نشاطًا في سند التجاري أولًا.</p>}
+              ) : (
+                <div className="mt-4 space-y-3 rounded-xl bg-amber-50 p-4 text-xs leading-6 text-amber-800">
+                  <p>لا توجد منشأة مملوكة لهذا الحساب بعد.</p>
+                  <button type="button" onClick={() => go('business/create')} className="rounded-xl bg-slate-950 px-4 py-2 font-bold text-white">إنشاء نشاط</button>
+                </div>
+              )}
             </section>
             {commercial ? (
               <>
                 <div className="grid grid-cols-2 gap-3"><StatCard label="فواتير متأخرة" value={commercial.overdue_count || 0} /><StatCard label="المنشأة" value={businesses.find((item) => item.id === selectedBusinessId)?.name || '—'} /></div>
                 {(commercial.totals_by_currency || []).map((row) => (
-                  <section key={row.currency || 'commercial-currency'} className="rounded-[1.6rem] bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h3 className="font-black">الحركة التجارية</h3><span className="text-xs font-bold text-slate-500">{row.currency}</span></div><div className="mt-4 grid grid-cols-2 gap-3"><StatCard label="المبيعات" value={formatAmount(row.sales, row.currency)} /><StatCard label="المشتريات" value={formatAmount(row.purchases, row.currency)} /><StatCard label="المقبوضات" value={formatAmount(row.receipts, row.currency)} /><StatCard label="المدفوعات" value={formatAmount(row.payments, row.currency)} /></div></section>
+                  <section key={row.currency || 'commercial-currency'} className="rounded-[1.6rem] bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between"><h3 className="font-black">الحركة التجارية</h3><span className="text-xs font-bold text-slate-500">{row.currency}</span></div>
+                    <div className="mt-4 grid grid-cols-2 gap-3"><StatCard label="المبيعات" value={formatAmount(row.sales, row.currency)} /><StatCard label="المشتريات" value={formatAmount(row.purchases, row.currency)} /><StatCard label="المقبوضات" value={formatAmount(row.receipts, row.currency)} /><StatCard label="المدفوعات" value={formatAmount(row.payments, row.currency)} /></div>
+                  </section>
                 ))}
                 <section className="grid grid-cols-2 gap-3">
                   <div className="rounded-[1.5rem] bg-emerald-50 p-4"><p className="text-[10px] font-bold text-emerald-700">الذمم المدينة</p>{(commercial.receivables_by_currency || []).map((row) => <p key={row.currency} className="mt-2 text-base font-black">{formatAmount(row.outstanding, row.currency)}</p>)}</div>
@@ -282,10 +357,13 @@ export default function FinancialWorkspaceRoute() {
         {!loading && !error && kind === 'account' && account ? (
           <>
             <section className="rounded-[1.8rem] bg-slate-950 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
-              <div className="flex items-center gap-3"><UserRound className="h-6 w-6" /><div><p className="text-[10px] font-bold text-white/60">حسابي</p><h2 className="text-lg font-black">مركز الحساب الموحد</h2></div></div>
-              <p className="mt-4 text-xs leading-6 text-white/70">الملف، الاشتراك، الأجهزة، الإشعارات، المنشآت والحالة المالية في شاشة واحدة.</p>
+              <div className="flex items-center gap-3"><UserRound className="h-6 w-6" /><div><p className="text-[10px] font-bold text-white/60">حسابي</p><h2 className="text-lg font-black">مركز الحساب الشخصي</h2></div></div>
+              <p className="mt-4 text-xs leading-6 text-white/70">حسابي يختص بهويتك وإعداداتك واشتراكك وأجهزتك. تشغيل النشاط انتقل إلى سند للأعمال، وإدارة المال انتقلت إلى سند المالي.</p>
             </section>
-            <div className="grid grid-cols-2 gap-3"><StatCard label="إشعارات غير مقروءة" value={account.notifications?.unread || 0} /><StatCard label="أجهزة Push النشطة" value={account.devices?.active_push || 0} /><StatCard label="المنشآت" value={businesses.length} /><StatCard label="التزامات مفتوحة" value={account.finance?.open_obligations || 0} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard label="إشعارات غير مقروءة" value={account.notifications?.unread || 0} />
+              <StatCard label="أجهزة Push النشطة" value={account.devices?.active_push || 0} />
+            </div>
             <section className="rounded-[1.6rem] bg-white p-5 shadow-sm"><p className="text-[10px] font-bold text-slate-400">الخطة الحالية</p><p className="mt-2 text-lg font-black">{String(account.subscription?.plan_code || 'بدون اشتراك')}</p><p className="mt-1 text-xs text-slate-500">الحالة: {String(account.subscription?.status || 'غير محددة')}</p></section>
           </>
         ) : null}
@@ -293,12 +371,11 @@ export default function FinancialWorkspaceRoute() {
         {!loading && !error && kind === 'ai' && ai ? (
           <>
             <section className="overflow-hidden rounded-[1.8rem] bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
-              <div className="flex items-center gap-3"><Bot className="h-7 w-7 text-indigo-200" /><div><p className="text-[10px] font-bold text-indigo-200">SANAD AI</p><h2 className="text-lg font-black">سياق مالي للقراءة فقط</h2></div></div>
-              <p className="mt-4 text-xs leading-6 text-white/70">يقرأ SANAD AI بياناتك ضمن الصلاحيات الحالية، مع تسجيل كل طلب سياق مالي في سجل تدقيق مستقل.</p>
+              <div className="flex items-center gap-3"><Bot className="h-7 w-7 text-indigo-200" /><div><p className="text-[10px] font-bold text-indigo-200">مساعد سند</p><h2 className="text-lg font-black">مساعد يفهم سياقك المصرح به</h2></div></div>
+              <p className="mt-4 text-xs leading-6 text-white/70">يقرأ مساعد سند بياناتك ضمن الصلاحيات الحالية مع تسجيل طلبات السياق الحساسة في سجل تدقيق مستقل.</p>
               <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[10px] font-bold"><ShieldCheck className="h-4 w-4" /> لا ينشئ أو يرحّل عمليات مالية في هذه المرحلة</div>
             </section>
-            <div className="grid grid-cols-2 gap-3"><StatCard label="نسخة العقد" value={ai.contract_version || 0} /><StatCard label="Audit ID" value={ai.access_log_id ? 'مسجل' : 'غير مسجل'} /></div>
-            <section className="rounded-[1.6rem] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><CircleDollarSign className="h-5 w-5 text-indigo-700" /><h3 className="font-black">السياق الحالي</h3></div><pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-left text-[10px] leading-5 text-slate-600" dir="ltr">{JSON.stringify(ai.context || {}, null, 2)}</pre></section>
+            <div className="grid grid-cols-2 gap-3"><StatCard label="نسخة العقد" value={ai.contract_version || 0} /><StatCard label="سجل التدقيق" value={ai.access_log_id ? 'مسجل' : 'غير مسجل'} /></div>
           </>
         ) : null}
       </main>
