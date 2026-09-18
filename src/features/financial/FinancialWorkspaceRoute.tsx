@@ -21,6 +21,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
 
 type WorkspaceKind = 'financial' | 'commercial' | 'account' | 'ai';
 
@@ -118,6 +119,11 @@ function basePath(): string {
 
 function go(path = '') {
   window.location.assign(`${basePath()}${path}`);
+}
+
+function openDirectCapture() {
+  try { sessionStorage.setItem('sanad_direct_capture_once', String(Date.now())); } catch { }
+  go('upload');
 }
 
 function formatAmount(value: unknown, currency?: string): string {
@@ -259,10 +265,11 @@ export default function FinancialWorkspaceRoute() {
           <section>
             <div className="mb-3 px-1"><p className="text-[10px] font-bold text-emerald-700">أدواتك المالية</p><h2 className="mt-1 text-base font-black">ابدأ من المهمة التي تريدها</h2></div>
             <div className="grid grid-cols-2 gap-3">
-              <LaunchCard title="تصوير إشعار" description="التقط إشعارًا ماليًا وحوّله إلى عملية منظمة." icon={Camera} onClick={() => go('upload')} />
+              <LaunchCard title="تصوير إشعار" description="التقط إشعارًا ماليًا وحوّله إلى عملية منظمة." icon={Camera} onClick={openDirectCapture} />
               <LaunchCard title="مسح QR" description="افتح عملية مالية أو تحقق منها عبر رمز QR." icon={QrCode} onClick={() => go('scan-qr')} />
               <LaunchCard title="عملياتي" description="السجل الشخصي للعمليات والإشعارات السابقة." icon={FileText} onClick={() => go('my-operations')} />
               <LaunchCard title="الإدارة المالية" description="الحسابات والتصنيفات والأطراف والميزانيات والأهداف." icon={WalletCards} onClick={() => go('financial/actions')} />
+              <LaunchCard title="التقاط الإشعارات" description="إعداد الوصول للتطبيقات المالية والتقاط إشعاراتها على Android." icon={Bell} onClick={openLocalRuntimeSettings} />
             </div>
           </section>
         ) : null}
