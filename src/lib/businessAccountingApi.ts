@@ -411,3 +411,82 @@ export async function getBusinessErpDocumentDetail(
     lines: Array.isArray(payload.lines) ? payload.lines : []
   } as BusinessErpDocumentDetail;
 }
+
+
+export type BusinessErpRetentionPolicy = {
+  business_id: string;
+  enabled: boolean;
+  retain_completed_snapshots: number;
+  retain_days: number;
+  retain_raw_event_days: number;
+  configured: boolean;
+  updated_at?: string | null;
+  metadata?: Record<string, unknown>;
+  contract_version?: number;
+};
+
+export type BusinessErpPrunePlan = {
+  enabled: boolean;
+  retain_completed_snapshots?: number;
+  retain_days?: number;
+  retain_raw_event_days?: number;
+  items: Array<{
+    snapshot_public_id: string;
+    completed_at?: string | null;
+    recency_rank?: number;
+    materialized_row_count?: number;
+  }>;
+  dry_run?: boolean;
+  reason?: string;
+  contract_version?: number;
+};
+
+export async function getBusinessErpRetentionPolicy(
+  businessId: string
+): Promise<BusinessErpRetentionPolicy> {
+  const { data, error } = await supabase.rpc('get_business_erp_retention_policy_v1', {
+    p_business_id: businessId
+  });
+  if (error) throw new Error(error.message || 'تعذر تحميل سياسة الاحتفاظ بالنسخ.');
+  return data as BusinessErpRetentionPolicy;
+}
+
+export async function setBusinessErpRetentionPolicy(
+  businessId: string,
+  policy: {
+    enabled: boolean;
+    retainCompletedSnapshots: number;
+    retainDays: number;
+    retainRawEventDays: number;
+  }
+): Promise<BusinessErpRetentionPolicy> {
+  const { data, error } = await supabase.rpc('set_business_erp_retention_policy_v1', {
+    p_business_id: businessId,
+    p_enabled: policy.enabled,
+    p_retain_completed_snapshots: policy.retainCompletedSnapshots,
+    p_retain_days: policy.retainDays,
+    p_retain_raw_event_days: policy.retainRawEventDays
+  });
+  if (error) throw new Error(error.message || 'تعذر حفظ سياسة الاحتفاظ بالنسخ.');
+  return data as BusinessErpRetentionPolicy;
+}
+
+export async function planBusinessErpSnapshotPrune(
+  businessId: string
+): Promise<BusinessErpPrunePlan> {
+  const { data, error } = await supabase.rpc('plan_business_erp_snapshot_prune_v1', {
+    p_business_id: businessId
+  });
+  if (error) throw new Error(error.message || 'تعذر حساب خطة تنظيف النسخ القديمة.');
+  const payload = (data || {}) as Partial<BusinessErpPrunePlan>;
+  return {
+    enabled: Boolean(payload.enabled),
+    retain_completed_snapshots: payload.retain_completed_snapshots,
+    retain_days: payload.retain_days,
+    retain_raw_event_days: payload.retain_raw_event_days,
+    items: Array.isArray(payload.items) ? payload.items : [],
+    dry_run: payload.dry_run,
+    reason: payload.reason,
+    contract_version: payload.contract_version
+  };
+}
