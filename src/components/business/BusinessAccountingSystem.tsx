@@ -16,6 +16,10 @@ import {
   type BusinessAccountingConnection,
   type BusinessAccountingConnectionStatus
 } from '../../lib/businessAccountingApi';
+import BusinessErpCloudReplica from './BusinessErpCloudReplica';
+import BusinessErpCustomerStatement from './BusinessErpCustomerStatement';
+import BusinessErpDocuments from './BusinessErpDocuments';
+import BusinessErpRetentionPolicy from './BusinessErpRetentionPolicy';
 
 interface Props {
   businessId: string;
@@ -287,6 +291,22 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
           <ConnectionCard connection={connection} />
         </div>
       ))}
+
+      {!error && active.length > 0 && (
+        <BusinessErpCloudReplica businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && (
+        <BusinessErpCustomerStatement businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && (
+        <BusinessErpDocuments businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && (
+        <BusinessErpRetentionPolicy businessId={businessId} />
+      )}
 
       <section className="rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-4">
         <div className="flex items-start gap-3">
