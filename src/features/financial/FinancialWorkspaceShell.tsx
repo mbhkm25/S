@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react';
 import FinancialActionRoute from './FinancialActionRoute';
 import FinancialWorkspaceRoute from './FinancialWorkspaceRoute';
+import ProductBottomNav from '../../components/navigation/ProductBottomNav';
 
 function basePath(): string {
   const value = import.meta.env.VITE_APP_BASE_PATH || '/';
@@ -18,6 +19,7 @@ export default function FinancialWorkspaceShell() {
   return (
     <>
       <FinancialWorkspaceRoute />
+      <ProductBottomNav activeArea={personal ? 'financial' : commercial ? 'business' : /\/sanad-ai\/?$/.test(pathname) ? 'assistant' : 'account'} />
       {(personal || commercial) ? (
         <button
           type="button"
