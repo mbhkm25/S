@@ -1,6 +1,12 @@
 param([string]$BridgeExe = "C:\\SANAD-DEV\\bridge\\windows\\Sanad.Bridge\\bin\\Debug\\net48\\Sanad.Bridge.exe")
 
 $ErrorActionPreference = "Stop"
+
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding = $Utf8NoBom
+try { & "$env:SystemRoot\System32\chcp.com" 65001 | Out-Null } catch { }
+
 $Base = Join-Path $env:ProgramData "SANAD\\Bridge"
 $LogDir = Join-Path $Base "logs"
 $Log = Join-Path $LogDir "agent-cycle.log"
