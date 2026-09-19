@@ -618,6 +618,209 @@ async function logTool(
   }
 }
 
+
+function streamAgentResponse(
+  req: Request,
+  message: string,
+  history: HistoryTurn[],
+  businessId: string | null,
+  thinkingLevel: "low" | "medium" | "high",
+  requestId: string,
+  authUserId: string,
+  userClient: SupabaseClient,
+  adminClient: SupabaseClient,
+) {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+
+      void (async () => {
+        const started = Date.now();
+        const toolTrace: ToolTrace[] = [];
+        const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+        let totalToolCalls = 0;
+        let interaction: Json | null = null;
+
+        try {
+          send("run.started", {
+            request_id: requestId,
+            runtime_version: RUNTIME_VERSION,
+            model: MODEL,
+            thinking_level: thinkingLevel,
+          });
+          send("agent.status", { status: "planning", label: "أفهم الطلب وأحدد الأدوات المناسبة…" });
+
+          interaction = await geminiInteraction({
+            model: MODEL,
+            system_instruction: SYSTEM_INSTRUCTION,
+            input: userInput(message, history, businessId),
+            tools: TOOLS,
+            generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
+          });
+
+          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            const calls = extractToolCalls(interaction);
+            if (!calls.length) break;
+            if (totalToolCalls + calls.length > MAX_TOOL_CALLS) throw new Error("tool_call_limit_exceeded");
+            if (calls.length > MAX_PARALLEL_TOOLS) throw new Error("parallel_tool_limit_exceeded");
+            totalToolCalls += calls.length;
+
+            send("agent.status", {
+              status: "tools",
+              label: calls.length > 1 ? "أنفذ الأدوات المطلوبة بالتوازي…" : "أنفذ الأداة المطلوبة…",
+              count: calls.length,
+              round: round + 1,
+            });
+
+            const executed = await Promise.all(calls.map(async (tool) => {
+              send("tool.started", { name: tool.name, source: sourceForTool(tool.name) });
+              const item = await logTool(
+                adminClient,
+                tool,
+                () => executeTool(tool.name, tool.arguments, userClient, adminClient),
+              );
+              send("tool.completed", item.trace);
+              return item;
+            }));
+
+            const results = executed.map((item, index) => {
+              toolTrace.push(item.trace);
+              toolOutputs.push({ name: calls[index].name, args: calls[index].arguments, output: item.output });
+              return {
+                type: "function_result",
+                name: calls[index].name,
+                call_id: calls[index].id,
+                result: [{ type: "text", text: JSON.stringify(item.output) }],
+              };
+            });
+
+            const previousId = cleanText(interaction.id, 200);
+            if (!previousId) throw new Error("missing_interaction_id");
+
+            send("agent.status", { status: "reasoning", label: "أربط النتائج وأحدد الخطوة التالية…" });
+            interaction = await geminiInteraction({
+              model: MODEL,
+              previous_interaction_id: previousId,
+              input: results,
+              tools: TOOLS,
+              generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
+            });
+          }
+
+          const remainingCalls = interaction ? extractToolCalls(interaction) : [];
+          if (remainingCalls.length) throw new Error("tool_round_limit_exceeded");
+
+          const finalText = interaction ? extractText(interaction) : "";
+          if (!finalText) throw new Error("empty_model_answer");
+
+          send("agent.status", { status: "verifying", label: "أراجع العملات والفترة والمصادر قبل الإجابة…" });
+
+          const verified = verifyAndRepair(finalText, toolOutputs);
+          const usage = mapUsage(interaction?.usage);
+          const latency = Date.now() - started;
+
+          await bestEffortRpc(adminClient, "record_ai_usage", {
+            p_request_id: requestId,
+            p_operation_id: null,
+            p_source: "sanad_ai_agent_v1_stream",
+            p_purpose: "assistant_turn",
+            p_model: MODEL,
+            p_billing_mode: "standard",
+            p_status: "completed",
+            p_latency_ms: latency,
+            p_usage_metadata: usage,
+            p_metadata: {
+              user_id: authUserId,
+              runtime_version: RUNTIME_VERSION,
+              thinking_level: thinkingLevel,
+              tool_calls: totalToolCalls,
+              tool_names: toolTrace.map((item) => item.name),
+              transport: "sse",
+            },
+          });
+
+          const result = {
+            ok: true,
+            request_id: requestId,
+            runtime_version: RUNTIME_VERSION,
+            model: MODEL,
+            thinking_level: thinkingLevel,
+            response: {
+              text: verified.text,
+              scope: toolOutputs.some((row) => row.name.startsWith("erp_") || row.name.startsWith("business_"))
+                ? "business"
+                : toolOutputs.length > 0 && toolOutputs.every((row) => row.name === "sanad_search_knowledge")
+                  ? "product"
+                  : "personal",
+              period: verified.period,
+              currencies: verified.currencies,
+              source_refs: toolTrace
+                .filter((row) => row.status === "completed")
+                .map((row) => ({ tool: row.name, source: row.source })),
+              needs_clarification: /وضح|توضيح|أي حساب|أي نشاط|تقصد/.test(verified.text),
+            },
+            verification: verified.verification,
+            tool_trace: toolTrace,
+            usage,
+            latency_ms: latency,
+          };
+
+          send("answer.final", { text: verified.text });
+          send("run.completed", result);
+        } catch (cause) {
+          const latency = Date.now() - started;
+          const messageText = cleanText(cause instanceof Error ? cause.message : cause, 1000);
+
+          await bestEffortRpc(adminClient, "record_ai_usage", {
+            p_request_id: requestId,
+            p_operation_id: null,
+            p_source: "sanad_ai_agent_v1_stream",
+            p_purpose: "assistant_turn",
+            p_model: MODEL,
+            p_billing_mode: "standard",
+            p_status: "failed",
+            p_latency_ms: latency,
+            p_usage_metadata: mapUsage(interaction?.usage),
+            p_metadata: {
+              user_id: authUserId,
+              runtime_version: RUNTIME_VERSION,
+              thinking_level: thinkingLevel,
+              tool_calls: totalToolCalls,
+              error: messageText,
+              transport: "sse",
+            },
+          });
+
+          send("run.error", {
+            request_id: requestId,
+            error: messageText.startsWith("gemini_") ? "model_runtime_error" : messageText,
+            tool_trace: toolTrace,
+            latency_ms: latency,
+          });
+        } finally {
+          send("done", { request_id: requestId });
+          controller.close();
+        }
+      })();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...corsHeaders(req),
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return respond(req, { ok: false, error: "method_not_allowed" }, 405);
@@ -655,6 +858,21 @@ Deno.serve(async (req) => {
   const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
   let totalToolCalls = 0;
   let interaction: Json | null = null;
+
+  const wantsStream = body.stream === true || (req.headers.get("Accept") || "").includes("text/event-stream");
+  if (wantsStream) {
+    return streamAgentResponse(
+      req,
+      message,
+      history,
+      businessId,
+      thinkingLevel,
+      requestId,
+      authData.user.id,
+      userClient,
+      adminClient,
+    );
+  }
 
   try {
     interaction = await geminiInteraction({
