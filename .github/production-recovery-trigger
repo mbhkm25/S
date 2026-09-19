@@ -1,4 +1,4 @@
-reason=deploy-desktop-workspaces-financial-ai-fix-v1
-requested_at=2026-09-19T09:50:00Z
-source_merge_sha=566b16c0faa8ee43c2947cf8a91456500d874653
+reason=deploy-workspace-loading-account-center-fix-v2
+requested_at=2026-09-19T10:18:00Z
+source_merge_sha=aded7d3d9a6a2e5c3c9ce62c61b3ef180131c8f3
 scope=production-pwa
