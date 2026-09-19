@@ -239,7 +239,7 @@ export default function FinancialWorkspaceRoute() {
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 lg:pl-28">
           <button onClick={() => go()} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
             <ArrowRight className="h-5 w-5" />
           </button>
@@ -256,7 +256,7 @@ export default function FinancialWorkspaceRoute() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-5 pb-32">
+      <main className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 pb-32 lg:pl-28 lg:pb-10">
         <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
           <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
         </section>
@@ -264,7 +264,7 @@ export default function FinancialWorkspaceRoute() {
         {kind === 'financial' ? (
           <section>
             <div className="mb-3 px-1"><p className="text-[10px] font-bold text-emerald-700">أدواتك المالية</p><h2 className="mt-1 text-base font-black">ابدأ من المهمة التي تريدها</h2></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <LaunchCard title="تصوير إشعار" description="التقط إشعارًا ماليًا وحوّله إلى عملية منظمة." icon={Camera} onClick={openDirectCapture} />
               <LaunchCard title="مسح QR" description="افتح عملية مالية أو تحقق منها عبر رمز QR." icon={QrCode} onClick={() => go('scan-qr')} />
               <LaunchCard title="عملياتي" description="السجل الشخصي للعمليات والإشعارات السابقة." icon={FileText} onClick={() => go('my-operations')} />
@@ -277,7 +277,7 @@ export default function FinancialWorkspaceRoute() {
         {kind === 'commercial' ? (
           <section>
             <div className="mb-3 px-1"><p className="text-[10px] font-bold text-sky-700">تشغيل النشاط</p><h2 className="mt-1 text-base font-black">كل ما يخص العمل في مكان واحد</h2></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <LaunchCard title="إدارة النشاط" description="ملف النشاط وساعات العمل والإعدادات التشغيلية." icon={BriefcaseBusiness} onClick={() => go('business/manage')} />
               <LaunchCard title="النظام المحاسبي" description="الربط والمزامنة وحالة إبداع سوفت." icon={Database} onClick={() => go('business/manage?section=accounting')} />
               <LaunchCard title="العملاء والفريق" description="العملاء والأعضاء والأدوار والصلاحيات." icon={Users} onClick={() => go('business/manage?section=customers')} />
@@ -289,7 +289,7 @@ export default function FinancialWorkspaceRoute() {
         {kind === 'account' ? (
           <section>
             <div className="mb-3 px-1"><p className="text-[10px] font-bold text-slate-600">إعداداتك الشخصية</p><h2 className="mt-1 text-base font-black">الحساب والخصوصية والاشتراك</h2></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <LaunchCard title="بياناتي" description="الاسم والصورة ورقم الجوال والبيانات الشخصية." icon={UserRound} onClick={() => go('profile/personal')} />
               <LaunchCard title="الأمان" description="تسجيل الدخول ووسائل حماية الحساب." icon={Lock} onClick={() => go('profile/security')} />
               <LaunchCard title="الإشعارات" description="مركز التنبيهات وإعدادات الوصول." icon={Bell} onClick={() => go('notifications')} />
@@ -306,7 +306,7 @@ export default function FinancialWorkspaceRoute() {
           <>
             <section className="rounded-[1.8rem] bg-gradient-to-l from-emerald-100 via-white to-white p-5 shadow-sm">
               <div className="flex items-center gap-3"><CircleDollarSign className="h-6 w-6 text-emerald-700" /><div><p className="text-[10px] font-bold text-emerald-700">ملخصك المالي</p><h2 className="text-lg font-black">صورة مالية موحدة</h2></div></div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatCard label="الحسابات النشطة" value={finance.accounts || 0} />
                 <StatCard label="الميزانيات النشطة" value={finance.active_budgets || 0} />
                 <StatCard label="أهداف الادخار" value={finance.active_goals || 0} />
@@ -316,7 +316,7 @@ export default function FinancialWorkspaceRoute() {
             {(finance.cashflow_by_currency || []).map((row) => (
               <section key={row.currency || 'currency'} className="rounded-[1.6rem] bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between"><h3 className="font-black">التدفق النقدي</h3><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold">{row.currency}</span></div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center"><StatCard label="دخل" value={formatAmount(row.income, row.currency)} /><StatCard label="مصروف" value={formatAmount(row.expense, row.currency)} /><StatCard label="الصافي" value={formatAmount(row.net, row.currency)} /></div>
+                <div className="mt-4 grid grid-cols-1 gap-2 text-center sm:grid-cols-3"><StatCard label="دخل" value={formatAmount(row.income, row.currency)} /><StatCard label="مصروف" value={formatAmount(row.expense, row.currency)} /><StatCard label="الصافي" value={formatAmount(row.net, row.currency)} /></div>
               </section>
             ))}
             {(finance.open_obligations || []).map((row) => (
@@ -345,7 +345,7 @@ export default function FinancialWorkspaceRoute() {
             </section>
             {commercial ? (
               <>
-                <div className="grid grid-cols-2 gap-3"><StatCard label="فواتير متأخرة" value={commercial.overdue_count || 0} /><StatCard label="المنشأة" value={businesses.find((item) => item.id === selectedBusinessId)?.name || '—'} /></div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3"><StatCard label="فواتير متأخرة" value={commercial.overdue_count || 0} /><StatCard label="المنشأة" value={businesses.find((item) => item.id === selectedBusinessId)?.name || '—'} /></div>
                 {(commercial.totals_by_currency || []).map((row) => (
                   <section key={row.currency || 'commercial-currency'} className="rounded-[1.6rem] bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between"><h3 className="font-black">الحركة التجارية</h3><span className="text-xs font-bold text-slate-500">{row.currency}</span></div>
@@ -367,7 +367,7 @@ export default function FinancialWorkspaceRoute() {
               <div className="flex items-center gap-3"><UserRound className="h-6 w-6" /><div><p className="text-[10px] font-bold text-white/60">حسابي</p><h2 className="text-lg font-black">مركز الحساب الشخصي</h2></div></div>
               <p className="mt-4 text-xs leading-6 text-white/70">حسابي يختص بهويتك وإعداداتك واشتراكك وأجهزتك. تشغيل النشاط انتقل إلى سند للأعمال، وإدارة المال انتقلت إلى سند المالي.</p>
             </section>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <StatCard label="إشعارات غير مقروءة" value={account.notifications?.unread || 0} />
               <StatCard label="أجهزة Push النشطة" value={account.devices?.active_push || 0} />
             </div>
@@ -382,7 +382,7 @@ export default function FinancialWorkspaceRoute() {
               <p className="mt-4 text-xs leading-6 text-white/70">يقرأ مساعد سند بياناتك ضمن الصلاحيات الحالية مع تسجيل طلبات السياق الحساسة في سجل تدقيق مستقل.</p>
               <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[10px] font-bold"><ShieldCheck className="h-4 w-4" /> لا ينشئ أو يرحّل عمليات مالية في هذه المرحلة</div>
             </section>
-            <div className="grid grid-cols-2 gap-3"><StatCard label="نسخة العقد" value={ai.contract_version || 0} /><StatCard label="سجل التدقيق" value={ai.access_log_id ? 'مسجل' : 'غير مسجل'} /></div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3"><StatCard label="نسخة العقد" value={ai.contract_version || 0} /><StatCard label="سجل التدقيق" value={ai.access_log_id ? 'مسجل' : 'غير مسجل'} /></div>
           </>
         ) : null}
       </main>
