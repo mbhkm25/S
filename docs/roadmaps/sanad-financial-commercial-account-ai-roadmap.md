@@ -112,4 +112,12 @@ Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. Th
 
 ## Current implementation boundary
 
-All changes in this roadmap are being developed on `feat/unified-financial-core-v1` and tested against the Supabase `develop` branch. They are not production changes yet. The branch starts from the current Bridge integration branch so database migration history stays aligned; it should be reviewed/merged only after its parent Bridge branch is resolved.
+This roadmap is now partly historical and partly active. Do not treat the old `feat/unified-financial-core-v1` branch as the current implementation source.
+
+As of 2026-09-19:
+- the four-domain navigation model is active in the repository;
+- ERP Cloud/UI read surfaces and customer statement/sales/purchases contracts have been released;
+- the verified Bridge field implementation and periodic logical snapshot support were consolidated into `main`;
+- current implementation work must start from live `main` and actual Production Supabase state.
+
+Remaining unchecked roadmap items are product backlog, not evidence that checked items are necessarily deployed in every surface. Verify current production state before execution.
