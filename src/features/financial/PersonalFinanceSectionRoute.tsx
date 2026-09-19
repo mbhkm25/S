@@ -62,6 +62,17 @@ function resolveSection(pathname: string): SectionKey {
   return (match?.[1] as SectionKey | undefined) || 'accounts';
 }
 
+function actionFocus(section: SectionKey): string {
+  return ({
+    accounts: 'account',
+    transactions: 'transaction',
+    obligations: 'obligation',
+    budgets: 'budget',
+    goals: 'goal',
+    parties: 'party',
+  } as const)[section];
+}
+
 function formatAmount(value: unknown, currency?: string): string {
   const amount = Number(value || 0);
   const formatted = new Intl.NumberFormat('ar-YE-u-nu-latn', { maximumFractionDigits: 2 }).format(amount);
@@ -168,7 +179,7 @@ export default function PersonalFinanceSectionRoute() {
             <p className="text-[9px] font-bold text-emerald-700">{meta.eyebrow}</p>
             <h1 className="truncate text-base font-black">{meta.label}</h1>
           </div>
-          <button type="button" onClick={() => go('financial/actions')} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-black text-white">
+          <button type="button" onClick={() => go(`financial/actions?focus=${actionFocus(section)}`)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-black text-white">
             <Plus className="h-4 w-4" /> إضافة / إدارة
           </button>
         </div>

@@ -32,8 +32,8 @@ function ActionSection({ title, description, children }: { title: string; descri
   );
 }
 
-export function PersonalFinanceActions({ onChanged }: { onChanged: () => void }) {
-  const [mode, setMode] = useState<'transaction' | 'budget' | 'obligation' | 'goal'>('transaction');
+export function PersonalFinanceActions({ onChanged, initialMode = 'transaction' }: { onChanged: () => void; initialMode?: 'transaction' | 'budget' | 'obligation' | 'goal' }) {
+  const [mode, setMode] = useState<'transaction' | 'budget' | 'obligation' | 'goal'>(initialMode);
   const [accounts, setAccounts] = useState<PersonalAccount[]>([]);
   const [categories, setCategories] = useState<PersonalCategory[]>([]);
   const [parties, setParties] = useState<PersonalParty[]>([]);

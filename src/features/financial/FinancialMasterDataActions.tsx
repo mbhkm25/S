@@ -21,8 +21,8 @@ async function execute(task: () => Promise<{ error: { message?: string } | null 
   if (result.error) throw new Error(result.error.message || 'تعذر تنفيذ العملية');
 }
 
-export function PersonalMasterDataActions({ onChanged }: { onChanged: () => void }) {
-  const [mode, setMode] = useState<'account' | 'category' | 'party'>('account');
+export function PersonalMasterDataActions({ onChanged, initialMode = 'account' }: { onChanged: () => void; initialMode?: 'account' | 'category' | 'party' }) {
+  const [mode, setMode] = useState<'account' | 'category' | 'party'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [accountName, setAccountName] = useState('');
