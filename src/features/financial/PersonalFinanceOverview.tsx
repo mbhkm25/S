@@ -149,14 +149,14 @@ export default function PersonalFinanceOverview({ dashboard }: { dashboard: Fina
       <section>
         <SectionHeader eyebrow="الوصول السريع" title="أدوات المحاسب الشخصي" />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {[
+          {([
             ['الحسابات', `${dashboard.accounts || 0} حساب`, CreditCard, 'financial/actions'],
             ['العمليات', 'الدخل والمصروف والتحويلات', ReceiptText, 'my-operations'],
             ['الالتزامات', `${obligations.length} مفتوح`, Landmark, 'financial/actions'],
             ['الميزانيات', `${dashboard.active_budgets || 0} نشطة`, PiggyBank, 'financial/actions'],
             ['الأهداف', `${dashboard.active_goals || 0} نشط`, Target, 'financial/actions'],
             ['التقارير', 'تحليل ومشاركة', FileText, 'reports'],
-          ].map(([title, subtitle, Icon, path]) => (
+          ] as const).map(([title, subtitle, Icon, path]) => (
             <button key={String(title)} type="button" onClick={() => go(String(path))} className="min-h-[112px] rounded-[1.4rem] border border-slate-200 bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition active:scale-[.985]">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><Icon className="h-4.5 w-4.5" /></span>
               <strong className="mt-3 block text-xs font-black text-slate-950">{title}</strong>
