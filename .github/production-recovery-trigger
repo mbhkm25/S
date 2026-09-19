@@ -1,4 +1,4 @@
-reason=deploy-erp-cloud-ui-beta-v1
-requested_at=2026-09-18T15:05:00Z
-source_merge_sha=770ae8c55a6388e82162975577359c9b3c89ed58
+reason=deploy-desktop-workspaces-financial-ai-fix-v1
+requested_at=2026-09-19T09:50:00Z
+source_merge_sha=566b16c0faa8ee43c2947cf8a91456500d874653
 scope=production-pwa
