@@ -1,5 +1,7 @@
 # ERP shop-workstation resume checkpoint — 2026-09-18
 
+> **Historical checkpoint.** The deferred field gates recorded below were resumed on 2026-09-19. The first full logical snapshot, cloud materialization verification, real customer-statement comparison and production-agent activation all succeeded. Use this file as audit history, not as the current operational instruction. Current operating guidance is in `docs/operations/SANAD_MOHAMMED_BAHKUM_OPERATING_PLAYBOOK.md`.
+
 ## Purpose
 
 Freeze the exact point where development split into:
