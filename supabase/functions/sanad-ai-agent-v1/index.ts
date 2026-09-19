@@ -365,6 +365,14 @@ async function rpc<T = unknown>(client: SupabaseClient, name: string, args: Json
   return data as T;
 }
 
+async function bestEffortRpc(client: SupabaseClient, name: string, args: Json) {
+  try { await client.rpc(name, args); } catch { /* telemetry must never fail the user turn */ }
+}
+
+function safeSearchTerm(value: unknown, max = 120) {
+  return cleanText(value, max).replace(/[,()%_*]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
     finance_get_overview: "get_ai_financial_context_v2",
@@ -423,7 +431,7 @@ async function executeTool(
   }
 
   if (name === "finance_search_parties") {
-    const query = cleanText(args.query, 120);
+    const query = safeSearchTerm(args.query, 120);
     if (!query) throw new Error("party_query_required");
     const partyLimit = boundedInt(args.limit, 20, 50);
     const { data, error } = await userClient
@@ -580,28 +588,28 @@ async function logTool(
     const output = await run();
     const latency = Date.now() - started;
     if (executionId) {
-      await adminClient.rpc("finish_sanad_assistant_tool_execution", {
+      await bestEffortRpc(adminClient, "finish_sanad_assistant_tool_execution", {
         p_execution_id: executionId,
         p_status: "completed",
         p_output: output ?? {},
         p_error_code: null,
         p_error_message: null,
         p_latency_ms: latency,
-      }).catch(() => undefined);
+      });
     }
     return { output, trace: { name: tool.name, status: "completed", latency_ms: latency, source: sourceForTool(tool.name) } };
   } catch (cause) {
     const latency = Date.now() - started;
     const message = cleanText(cause instanceof Error ? cause.message : cause, 600);
     if (executionId) {
-      await adminClient.rpc("finish_sanad_assistant_tool_execution", {
+      await bestEffortRpc(adminClient, "finish_sanad_assistant_tool_execution", {
         p_execution_id: executionId,
         p_status: "failed",
         p_output: {},
         p_error_code: message.split(":")[0].slice(0, 120),
         p_error_message: message,
         p_latency_ms: latency,
-      }).catch(() => undefined);
+      });
     }
     return {
       output: { error: message, tool: tool.name },
@@ -701,7 +709,7 @@ Deno.serve(async (req) => {
     const usage = mapUsage(interaction?.usage);
     const latency = Date.now() - started;
 
-    await adminClient.rpc("record_ai_usage", {
+    await bestEffortRpc(adminClient, "record_ai_usage", {
       p_request_id: requestId,
       p_operation_id: null,
       p_source: "sanad_ai_agent_v1",
@@ -718,7 +726,7 @@ Deno.serve(async (req) => {
         tool_calls: totalToolCalls,
         tool_names: toolTrace.map((item) => item.name),
       },
-    }).catch(() => undefined);
+    });
 
     return respond(req, {
       ok: true,
@@ -728,7 +736,11 @@ Deno.serve(async (req) => {
       thinking_level: thinkingLevel,
       response: {
         text: verified.text,
-        scope: toolOutputs.some((row) => row.name.startsWith("erp_") || row.name.startsWith("business_")) ? "business" : "personal",
+        scope: toolOutputs.some((row) => row.name.startsWith("erp_") || row.name.startsWith("business_"))
+          ? "business"
+          : toolOutputs.length > 0 && toolOutputs.every((row) => row.name === "sanad_search_knowledge")
+            ? "product"
+            : "personal",
         period: verified.period,
         currencies: verified.currencies,
         source_refs: toolTrace
@@ -745,7 +757,7 @@ Deno.serve(async (req) => {
     const latency = Date.now() - started;
     const message = cleanText(cause instanceof Error ? cause.message : cause, 1000);
 
-    await adminClient.rpc("record_ai_usage", {
+    await bestEffortRpc(adminClient, "record_ai_usage", {
       p_request_id: requestId,
       p_operation_id: null,
       p_source: "sanad_ai_agent_v1",
@@ -762,7 +774,7 @@ Deno.serve(async (req) => {
         tool_calls: totalToolCalls,
         error: message,
       },
-    }).catch(() => undefined);
+    });
 
     return respond(req, {
       ok: false,
