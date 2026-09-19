@@ -191,3 +191,170 @@ export async function settleCommercialDocument(invoiceId: string, paymentId: str
     p_amount: amount,
   });
 }
+
+
+export type PersonalFinanceBalanceItem = {
+  id: string;
+  name: string;
+  account_type: string;
+  currency: string;
+  system_role?: string | null;
+  status: string;
+  balance: number;
+};
+
+export type PersonalBudgetProgressItem = {
+  id: string;
+  name: string;
+  category_id?: string | null;
+  period_start: string;
+  period_end: string;
+  currency: string;
+  budget_amount: number;
+  spent_amount: number;
+  remaining_amount: number;
+  usage_percent: number;
+  is_over_budget: boolean;
+};
+
+export type PersonalRecentTransactionItem = {
+  id: string;
+  transaction_type: string;
+  transaction_at: string;
+  description?: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  party_id?: string | null;
+  party_name?: string | null;
+};
+
+export type PersonalObligationOverviewItem = {
+  id: string;
+  obligation_type: 'payable' | 'receivable';
+  title: string;
+  outstanding_amount: number;
+  currency: string;
+  due_date?: string | null;
+  status: string;
+  party_id?: string | null;
+  party_name?: string | null;
+};
+
+export type PersonalGoalOverviewItem = {
+  id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  currency: string;
+  target_date?: string | null;
+  status: string;
+};
+
+export type PersonalPartyOverviewItem = {
+  id: string;
+  display_name: string;
+  party_type?: string | null;
+  phone?: string | null;
+};
+
+export type PersonalFinanceOverviewData = {
+  balances: PersonalFinanceBalanceItem[];
+  budgets: PersonalBudgetProgressItem[];
+  recent_transactions: PersonalRecentTransactionItem[];
+  obligations: PersonalObligationOverviewItem[];
+  goals: PersonalGoalOverviewItem[];
+  parties: PersonalPartyOverviewItem[];
+};
+
+export async function getPersonalFinanceOverview(): Promise<RpcResult<PersonalFinanceOverviewData>> {
+  const [balanceResult, budgetResult, transactionResult, obligationResult, goalResult, partyResult] = await Promise.all([
+    supabase.rpc('get_my_finance_balances_v1'),
+    supabase.rpc('get_my_budget_progress_v1'),
+    supabase
+      .from('personal_finance_transactions')
+      .select('id,transaction_type,transaction_at,description,amount,currency,status,party_id,personal_finance_parties(display_name)')
+      .eq('status', 'posted')
+      .order('transaction_at', { ascending: false })
+      .limit(8),
+    supabase
+      .from('personal_finance_obligations')
+      .select('id,obligation_type,title,outstanding_amount,currency,due_date,status,party_id,personal_finance_parties(display_name)')
+      .in('status', ['open', 'partial'])
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(12),
+    supabase
+      .from('personal_finance_goals')
+      .select('id,name,target_amount,current_amount,currency,target_date,status')
+      .eq('status', 'active')
+      .order('target_date', { ascending: true, nullsFirst: false })
+      .limit(12),
+    supabase
+      .from('personal_finance_parties')
+      .select('id,display_name,party_type,phone')
+      .eq('status', 'active')
+      .order('display_name')
+      .limit(20),
+  ]);
+
+  const error = balanceResult.error
+    || budgetResult.error
+    || transactionResult.error
+    || obligationResult.error
+    || goalResult.error
+    || partyResult.error;
+
+  if (error) return { data: null, error };
+
+  const transactionRows = (transactionResult.data || []) as Array<Record<string, unknown>>;
+  const obligationRows = (obligationResult.data || []) as Array<Record<string, unknown>>;
+
+  return {
+    data: {
+      balances: (((balanceResult.data || {}) as { accounts?: PersonalFinanceBalanceItem[] }).accounts || []),
+      budgets: (((budgetResult.data || {}) as { budgets?: PersonalBudgetProgressItem[] }).budgets || []),
+      recent_transactions: transactionRows.map((row) => ({
+        id: String(row.id || ''),
+        transaction_type: String(row.transaction_type || ''),
+        transaction_at: String(row.transaction_at || ''),
+        description: typeof row.description === 'string' ? row.description : null,
+        amount: Number(row.amount || 0),
+        currency: String(row.currency || ''),
+        status: String(row.status || ''),
+        party_id: typeof row.party_id === 'string' ? row.party_id : null,
+        party_name: Array.isArray(row.personal_finance_parties)
+          ? String((row.personal_finance_parties[0] as Record<string, unknown> | undefined)?.display_name || '')
+          : String((row.personal_finance_parties as Record<string, unknown> | null)?.display_name || ''),
+      })),
+      obligations: obligationRows.map((row) => ({
+        id: String(row.id || ''),
+        obligation_type: row.obligation_type === 'receivable' ? 'receivable' : 'payable',
+        title: String(row.title || ''),
+        outstanding_amount: Number(row.outstanding_amount || 0),
+        currency: String(row.currency || ''),
+        due_date: typeof row.due_date === 'string' ? row.due_date : null,
+        status: String(row.status || ''),
+        party_id: typeof row.party_id === 'string' ? row.party_id : null,
+        party_name: Array.isArray(row.personal_finance_parties)
+          ? String((row.personal_finance_parties[0] as Record<string, unknown> | undefined)?.display_name || '')
+          : String((row.personal_finance_parties as Record<string, unknown> | null)?.display_name || ''),
+      })),
+      goals: (goalResult.data || []).map((row) => ({
+        id: String(row.id || ''),
+        name: String(row.name || ''),
+        target_amount: Number(row.target_amount || 0),
+        current_amount: Number(row.current_amount || 0),
+        currency: String(row.currency || ''),
+        target_date: row.target_date || null,
+        status: String(row.status || ''),
+      })),
+      parties: (partyResult.data || []).map((row) => ({
+        id: String(row.id || ''),
+        display_name: String(row.display_name || ''),
+        party_type: row.party_type || null,
+        phone: row.phone || null,
+      })),
+    },
+    error: null,
+  };
+}
