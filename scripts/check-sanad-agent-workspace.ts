@@ -6,7 +6,7 @@ const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx',
 const api = readFileSync('src/features/assistant/assistantAgentApi.ts', 'utf8');
 
 for (const required of [
-  'runSanadAiAgentTurn',
+  'streamSanadAiAgentTurn',
   'get_my_account_center_v1',
   'محادثة جديدة',
   'خطوات التنفيذ والمصادر',
