@@ -42,11 +42,19 @@ namespace Sanad.Bridge
                 var scanCode = EdaaSaleChangeDetector.Run(args);
 
                 var senderCode = 0;
+                var snapshotCode = 0;
                 if (heartbeatCode == 0)
                 {
                     Console.WriteLine();
                     Console.WriteLine("=== CLOUD DELIVERY ===");
                     senderCode = await SaleCloudSender.RunAsync(args).ConfigureAwait(false);
+
+                    if (senderCode == 0)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("=== LOGICAL ERP SNAPSHOT ===");
+                        snapshotCode = await EdaaLogicalSnapshotCommand.RunAsync(args).ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -60,11 +68,13 @@ namespace Sanad.Bridge
                 Console.WriteLine("  Heartbeat : " + heartbeatCode);
                 Console.WriteLine("  Scan      : " + scanCode);
                 Console.WriteLine("  Sender    : " + (heartbeatCode == 0 ? senderCode.ToString() : "skipped"));
+                Console.WriteLine("  Snapshot  : " + (heartbeatCode == 0 && senderCode == 0 ? snapshotCode.ToString() : "skipped"));
                 Console.WriteLine("  Lock      : released at cycle end");
 
                 if (heartbeatCode != 0) return heartbeatCode;
                 if (scanCode != 0 && scanCode != 24) return scanCode;
                 if (senderCode != 0) return senderCode;
+                if (snapshotCode != 0) return snapshotCode;
                 return scanCode;
             }
             catch (Exception ex)
