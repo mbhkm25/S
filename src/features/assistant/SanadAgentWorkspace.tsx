@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import {
   Bot,
   BriefcaseBusiness,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
-  runSanadAiAgentTurn,
+  streamSanadAiAgentTurn,
   type SanadAiAgentTurnResult,
   type SanadAiHistoryTurn,
   type SanadAiToolTrace,
@@ -200,32 +200,15 @@ export default function SanadAgentWorkspace() {
   const [businessLoading, setBusinessLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
-  const [progressIndex, setProgressIndex] = useState(0);
+  const [liveStatus, setLiveStatus] = useState('');
+  const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const progressLabels = useMemo(() => [
-    'أفهم طلبك وأحدد النطاق…',
-    'أختار الأدوات المناسبة…',
-    'أقرأ البيانات المصرح بها…',
-    'أراجع النتيجة قبل الإجابة…',
-  ], []);
 
   useEffect(() => {
     saveMessages(messages);
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
-
-  useEffect(() => {
-    if (!sending) {
-      setProgressIndex(0);
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setProgressIndex((value) => Math.min(value + 1, progressLabels.length - 1));
-    }, 1800);
-    return () => window.clearInterval(timer);
-  }, [sending, progressLabels.length]);
 
   useEffect(() => {
     let alive = true;
@@ -266,12 +249,39 @@ export default function SanadAgentWorkspace() {
     setDraft('');
     setSending(true);
     setLastUserPrompt(prompt);
+    setLiveStatus('بدأت معالجة الطلب…');
+    setLiveTools([]);
 
     try {
-      const result = await runSanadAiAgentTurn({
+      const result = await streamSanadAiAgentTurn({
         message: prompt,
         business_id: businessId || null,
         history: historyFrom(priorMessages),
+      }, (event) => {
+        if (event.type === 'run.started') {
+          setLiveStatus('بدأ مساعد سند المعالجة…');
+          return;
+        }
+        if (event.type === 'agent.status') {
+          setLiveStatus(event.data.label);
+          return;
+        }
+        if (event.type === 'tool.started') {
+          setLiveStatus(`${toolLabel(event.data.name)}…`);
+          return;
+        }
+        if (event.type === 'tool.completed') {
+          setLiveTools((current) => [...current, event.data]);
+          setLiveStatus(
+            event.data.status === 'completed'
+              ? `اكتملت: ${toolLabel(event.data.name)}`
+              : `تعذرت: ${toolLabel(event.data.name)}`,
+          );
+          return;
+        }
+        if (event.type === 'answer.final') {
+          setLiveStatus('تم التحقق، أجهز الإجابة…');
+        }
       });
 
       const answer = result.response?.text?.trim() || 'أكملت معالجة الطلب، لكن لم يصل نص الإجابة.';
@@ -301,6 +311,8 @@ export default function SanadAgentWorkspace() {
       ]);
     } finally {
       setSending(false);
+      setLiveStatus('');
+      setLiveTools([]);
       window.setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }
@@ -425,10 +437,26 @@ export default function SanadAgentWorkspace() {
                       <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
                     </span>
                     <div>
-                      <p className="text-[10px] font-black text-slate-700">{progressLabels[progressIndex]}</p>
-                      <div className="mt-2 flex gap-1">
-                        {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-300" style={{ animationDelay: `${dot * 180}ms` }} />)}
-                      </div>
+                      <p className="text-[10px] font-black text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
+                      {liveTools.length ? (
+                        <div className="mt-2 flex max-w-[70vw] flex-wrap gap-1.5">
+                          {liveTools.slice(-4).map((item, index) => (
+                            <span
+                              key={`${item.name}-${index}`}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-bold ${
+                                item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                              }`}
+                            >
+                              {item.status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                              {toolLabel(item.name)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex gap-1">
+                          {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-300" style={{ animationDelay: `${dot * 180}ms` }} />)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

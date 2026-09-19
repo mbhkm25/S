@@ -52,6 +52,8 @@ if (metaEnv.DEV) {
 }
 
 export const hasSupabaseConfig = !!supabaseKey && supabaseKey !== '';
+export const supabaseApiUrl = supabaseUrl;
+export const supabasePublicKey = supabaseKey;
 
 // Keep one stable auth storage key even when the API hostname changes from the
 // default Supabase project URL to the SANAD custom domain. Without this explicit
