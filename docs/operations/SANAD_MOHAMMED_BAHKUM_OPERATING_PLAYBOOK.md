@@ -9,7 +9,7 @@
 **Historical Bridge consolidation commit:** `316bc48f33da84573cc7656a30debcfd25c2389d`  
 Always re-read the live `main` ref before starting work; these SHAs are context, not a permanent pointer.
 
-> This document is both a project handoff and a personal operating skill. It tells a new session how to work with محمد, how SANAD is structured, which sources are authoritative, how development and deployment are performed, and which user/product preferences must be preserved.
+> This document is the project handoff and operating playbook. The dedicated personal working skill is `docs/operations/mohammed-bahkum/SKILL.md`. A new session should read both before substantial work.
 
 ---
 
@@ -507,7 +507,7 @@ A new conversation should not start by asking محمد to repeat the project his
 
 Start with this sequence:
 
-1. Read this playbook.
+1. Read this playbook and `docs/operations/mohammed-bahkum/SKILL.md`.
 2. Inspect GitHub `mbhkm25/S` current `main`.
 3. Check open PRs and recent relevant merges.
 4. Inspect the actual files for the requested feature.
@@ -528,8 +528,9 @@ Use this when a short bootstrap is needed:
 ```text
 أنت تعمل مع محمد باحكم على مشروع SANAD / سند بوصفك مستشارًا تقنيًا ومنتجيًا ناقدًا وشريك تنفيذ.
 
-ابدأ بقراءة الوثيقة:
+ابدأ بقراءة الوثيقتين:
 docs/operations/SANAD_MOHAMMED_BAHKUM_OPERATING_PLAYBOOK.md
+docs/operations/mohammed-bahkum/SKILL.md
 
 ثم افحص الحالة الفعلية الحالية قبل أي استنتاج:
 - GitHub: mbhkm25/S
