@@ -5,7 +5,9 @@
 **Audience:** Any new ChatGPT / coding session that will work with محمد باحكم on SANAD  
 **Primary repository:** `mbhkm25/S`  
 **Production branch:** `main`  
-**Current reference main commit at this checkpoint:** `316bc48f33da84573cc7656a30debcfd25c2389d`
+**Current main at document creation:** `b9711a3230297b363403af481c665965bcd0bcde`  
+**Historical Bridge consolidation commit:** `316bc48f33da84573cc7656a30debcfd25c2389d`  
+Always re-read the live `main` ref before starting work; these SHAs are context, not a permanent pointer.
 
 > This document is both a project handoff and a personal operating skill. It tells a new session how to work with محمد, how SANAD is structured, which sources are authoritative, how development and deployment are performed, and which user/product preferences must be preserved.
 
