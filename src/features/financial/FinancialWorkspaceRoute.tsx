@@ -22,6 +22,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
 import PersonalFinanceOverview from './PersonalFinanceOverview';
+import SanadAgentWorkspace from '../assistant/SanadAgentWorkspace';
 
 type WorkspaceKind = 'financial' | 'commercial' | 'account' | 'ai';
 
@@ -72,11 +73,6 @@ type CommercialDashboard = {
   overdue_count?: number;
 };
 
-type AiContext = {
-  contract_version?: number;
-  access_log_id?: string;
-  context?: Record<string, unknown>;
-};
 
 const META: Record<WorkspaceKind, { label: string; eyebrow: string; description: string; icon: typeof WalletCards }> = {
   financial: {
@@ -188,7 +184,6 @@ export default function FinancialWorkspaceRoute() {
   const [account, setAccount] = useState<AccountCenter | null>(null);
   const [finance, setFinance] = useState<FinanceDashboard | null>(null);
   const [commercial, setCommercial] = useState<CommercialDashboard | null>(null);
-  const [ai, setAi] = useState<AiContext | null>(null);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
 
   const load = useCallback(async () => {
@@ -229,15 +224,6 @@ export default function FinancialWorkspaceRoute() {
         }
       }
 
-      if (kind === 'ai') {
-        const { data, error: rpcError } = await supabase.rpc('get_ai_financial_context_v2', {
-          p_scope_kind: 'personal',
-          p_purpose: 'financial_workspace',
-          p_limit: 20,
-        });
-        if (rpcError) throw rpcError;
-        setAi((data || {}) as AiContext);
-      }
     } catch (cause) {
       setError(workspaceErrorMessage(cause));
     } finally {
@@ -373,16 +359,7 @@ export default function FinancialWorkspaceRoute() {
           </>
         ) : null}
 
-        {!loading && !error && kind === 'ai' && ai ? (
-          <>
-            <section className="overflow-hidden rounded-[1.8rem] bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
-              <div className="flex items-center gap-3"><Bot className="h-7 w-7 text-indigo-200" /><div><p className="text-[10px] font-bold text-indigo-200">مساعد سند</p><h2 className="text-lg font-black">مساعد يفهم سياقك المصرح به</h2></div></div>
-              <p className="mt-4 text-xs leading-6 text-white/70">يقرأ مساعد سند بياناتك ضمن الصلاحيات الحالية مع تسجيل طلبات السياق الحساسة في سجل تدقيق مستقل.</p>
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[10px] font-bold"><ShieldCheck className="h-4 w-4" /> لا ينشئ أو يرحّل عمليات مالية في هذه المرحلة</div>
-            </section>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3"><StatCard label="نسخة العقد" value={ai.contract_version || 0} /><StatCard label="سجل التدقيق" value={ai.access_log_id ? 'مسجل' : 'غير مسجل'} /></div>
-          </>
-        ) : null}
+        {!loading && !error && kind === 'ai' ? <SanadAgentWorkspace /> : null}
       </main>
     </div>
   );
