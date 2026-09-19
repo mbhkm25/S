@@ -1,4 +1,4 @@
-reason=deploy-personal-finance-sections
-requested_at=2026-09-19T16:15:00Z
-source_merge_sha=e0f13ddb19a7f6a878bc2b5edcb6729a0c724c4a
+reason=deploy-contextual-finance-actions
+requested_at=2026-09-19T16:25:00Z
+source_merge_sha=4785fe4867c7e57061e304c616e29e989dc2371d
 scope=production-pwa
