@@ -1,6 +1,8 @@
 # Edaa Cloud Replica and Backup Architecture v1
 
-Status: implementation in progress on `feat/erp-cloud-replica-v1`.
+Status: **Active production/field baseline** as of 2026-09-19.
+
+The original implementation branch has been superseded. Cloud/UI capabilities were released and the verified field Bridge was consolidated into `main`. Always inspect current `main` and production runtime rather than reviving the historical feature branch.
 
 ## Product requirement
 
@@ -89,14 +91,13 @@ Authenticated business owners and active members can read the latest completed s
 - `get_business_erp_snapshot_status_v1`
 - `get_business_erp_snapshot_table_rows_v1`
 
-The accounting-system screen shows:
+The accounting-system screen shows governed status and semantic accounting surfaces such as customer statements and sales/purchases.
 
-- last completed logical copy;
-- table count;
-- snapshot type;
-- a technical source-table browser.
-
-The raw table browser is intentionally transitional. End users should not need to understand legacy table names.
+Raw ERP table-row access is a diagnostic surface, not a normal end-user feature:
+- ordinary business members consume semantic read models;
+- raw row diagnostics are owner-only and restricted;
+- security/operational source tables are denied from the raw-row RPC;
+- AI contracts never receive raw ERP rows.
 
 ## Semantic accounting read models
 
@@ -221,3 +222,18 @@ The gateway:
 - audited AI semantic reads.
 
 `.github/workflows/erp-cloud-replica-quality.yml` provides the dedicated static and isolated semantic quality gate once available on the workflow base branch.
+
+
+## Field validation checkpoint — 2026-09-19
+
+The architecture has passed its first real field validation on the authorized Edaa workstation:
+
+- first full logical snapshot completed successfully;
+- 142 / 142 user tables received;
+- 20,526 rows materialized;
+- 234 chunks acknowledged;
+- a real customer statement for account 122063 matched the Edaa PDF line-by-line;
+- total debit 4,540 SAR, total credit 1,920 SAR, closing balance 2,620 SAR;
+- the production scheduled agent was upgraded from `main` and correctly skipped a premature duplicate snapshot until the 360-minute interval becomes due.
+
+This validates Layer B as an operational read replica. It still does not convert Layer B into a physical SQL Server disaster-recovery backup.
