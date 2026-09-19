@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, Bell, BookOpen, Building2, CheckCircle2, ChevronDown,
+  Activity, AlertTriangle, Bell, BookOpen, Bot, Building2, CheckCircle2, ChevronDown,
   ClipboardList, CreditCard, FileClock, LayoutDashboard, LogOut, Menu,
   MessageCircle, Search, Settings2, ShieldCheck, Users, X
 } from 'lucide-react';
@@ -21,6 +21,7 @@ const navigation: NavigationItem[] = [
   { id: 'overview', label: 'النظرة العامة', icon: LayoutDashboard },
   { id: 'users', label: 'المستخدمون', icon: Users },
   { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle },
+  { id: 'assistant_quality', label: 'جودة مساعد سند', icon: Bot },
   { id: 'operations', label: 'العمليات', icon: ClipboardList },
   { id: 'businesses', label: 'الأنشطة', icon: Building2 },
   { id: 'pro', label: 'سند Pro', icon: CreditCard },
@@ -117,7 +118,13 @@ export default function AdminWorkspace({ onNavigate, onSignOut, adminEmail }: Pr
 
         <section className="sanad-admin-content">
           <div className="sanad-admin-context-strip">
-            <div><Activity /><span>{showKnowledge ? 'مصادر المعرفة الرسمية التي يعتمد عليها مساعد سند' : 'بيانات تشغيلية مباشرة من قاعدة بيانات سند'}</span></div>
+            <div><Activity /><span>{
+              showKnowledge
+                ? 'مصادر المعرفة الرسمية التي يعتمد عليها مساعد سند'
+                : activeSection === 'assistant_quality'
+                  ? 'Golden Evals حية للنموذج والأدوات باستخدام بيانات صناعية'
+                  : 'بيانات تشغيلية مباشرة من قاعدة بيانات سند'
+            }</span></div>
             <span>التحديث الحالي عند فتح القسم أو طلب التحديث يدويًا</span>
           </div>
 
