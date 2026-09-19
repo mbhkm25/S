@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
+import PersonalFinanceOverview from './PersonalFinanceOverview';
 
 type WorkspaceKind = 'financial' | 'commercial' | 'account' | 'ai';
 
@@ -282,7 +283,9 @@ export default function FinancialWorkspaceRoute() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <LaunchCard title="تصوير إشعار" description="التقط إشعارًا ماليًا وحوّله إلى عملية منظمة." icon={Camera} onClick={openDirectCapture} />
               <LaunchCard title="مسح QR" description="افتح عملية مالية أو تحقق منها عبر رمز QR." icon={QrCode} onClick={() => go('scan-qr')} />
+              <LaunchCard title="تحقق من إشعار" description="أدخل رمزًا أو رابطًا وتحقق من العملية دون تصوير جديد." icon={ShieldCheck} onClick={() => go('verify-notice')} />
               <LaunchCard title="عملياتي" description="السجل الشخصي للعمليات والإشعارات السابقة." icon={FileText} onClick={() => go('my-operations')} />
+              <LaunchCard title="التقارير" description="أنشئ واقرأ التقارير المالية القابلة للمشاركة." icon={Landmark} onClick={() => go('reports')} />
               <LaunchCard title="الإدارة المالية" description="الحسابات والتصنيفات والأطراف والميزانيات والأهداف." icon={WalletCards} onClick={() => go('financial/actions')} />
               <LaunchCard title="التقاط الإشعارات" description="إعداد الوصول للتطبيقات المالية والتقاط إشعاراتها على Android." icon={Bell} onClick={openLocalRuntimeSettings} />
             </div>
@@ -318,29 +321,7 @@ export default function FinancialWorkspaceRoute() {
         ) : error ? <ErrorCard message={error} onRetry={() => void load()} /> : null}
 
         {!loading && !error && kind === 'financial' && finance ? (
-          <>
-            <section className="rounded-[1.8rem] bg-gradient-to-l from-emerald-100 via-white to-white p-5 shadow-sm">
-              <div className="flex items-center gap-3"><CircleDollarSign className="h-6 w-6 text-emerald-700" /><div><p className="text-[10px] font-bold text-emerald-700">ملخصك المالي</p><h2 className="text-lg font-black">صورة مالية موحدة</h2></div></div>
-              <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatCard label="الحسابات النشطة" value={finance.accounts || 0} />
-                <StatCard label="الميزانيات النشطة" value={finance.active_budgets || 0} />
-                <StatCard label="أهداف الادخار" value={finance.active_goals || 0} />
-                <StatCard label="استحقاقات خلال 7 أيام" value={finance.due_soon_count || 0} />
-              </div>
-            </section>
-            {(finance.cashflow_by_currency || []).map((row) => (
-              <section key={row.currency || 'currency'} className="rounded-[1.6rem] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between"><h3 className="font-black">التدفق النقدي</h3><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold">{row.currency}</span></div>
-                <div className="mt-4 grid grid-cols-1 gap-2 text-center sm:grid-cols-3"><StatCard label="دخل" value={formatAmount(row.income, row.currency)} /><StatCard label="مصروف" value={formatAmount(row.expense, row.currency)} /><StatCard label="الصافي" value={formatAmount(row.net, row.currency)} /></div>
-              </section>
-            ))}
-            {(finance.open_obligations || []).map((row) => (
-              <section key={`ob-${row.currency}`} className="rounded-[1.6rem] border border-amber-100 bg-amber-50/70 p-5">
-                <div className="flex items-center gap-2"><Landmark className="h-5 w-5 text-amber-700" /><h3 className="font-black">الالتزامات المفتوحة — {row.currency}</h3></div>
-                <div className="mt-4 grid grid-cols-2 gap-3"><StatCard label="عليك" value={formatAmount(row.payable, row.currency)} /><StatCard label="لك" value={formatAmount(row.receivable, row.currency)} /></div>
-              </section>
-            ))}
-          </>
+          <PersonalFinanceOverview dashboard={finance} />
         ) : null}
 
         {!loading && !error && kind === 'commercial' ? (
