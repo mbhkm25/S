@@ -91,8 +91,26 @@ export default function SanadAgentQualityAdmin({
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
   }, [overview?.latest_results]);
 
+  const waitForBackgroundRun = async (previousRunId: string | null, timeoutMs = 150_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_000));
+      const next = await getAdminAgentEvalOverview(20);
+      setOverview(next);
+      const run = next.runs?.[0] || null;
+      if (!run || run.id === previousRunId) continue;
+      if (run.status === 'running') {
+        setSuccess('بدأ Golden Eval ويستمر في الخلفية؛ جارٍ انتظار النتيجة النهائية…');
+        continue;
+      }
+      return run;
+    }
+    return null;
+  };
+
   const runEval = async () => {
     if (running) return;
+    const previousRunId = overview?.runs?.[0]?.id || null;
     setRunning(true);
     setError(null);
     setSuccess(null);
@@ -105,7 +123,23 @@ export default function SanadAgentQualityAdmin({
       );
       await load(true);
     } catch {
-      setError('تعذر تشغيل Golden Eval. راجع اتصال النموذج وسجل الوظيفة ثم أعد المحاولة.');
+      setSuccess('انقطع انتظار الطلب، لكن قد يكون Golden Eval ما زال يعمل في الخلفية. جارٍ التحقق من حالته…');
+      try {
+        const completed = await waitForBackgroundRun(previousRunId);
+        if (!completed) {
+          setSuccess(null);
+          setError('لم يظهر تشغيل جديد مكتمل خلال مهلة المتابعة. لا تعِد التشغيل قبل مراجعة السجل.');
+        } else {
+          setSuccess(
+            completed.release_gate_passed
+              ? `اكتمل Golden Eval في الخلفية بنجاح: ${nf.format(Number(completed.pass_rate || 0))}%، دون إخفاقات حرجة.`
+              : `اكتمل Golden Eval في الخلفية، لكن Release Gate لم ينجح: ${nf.format(Number(completed.pass_rate || 0))}%، إخفاقات حرجة ${completed.critical_failures}.`
+          );
+        }
+      } catch {
+        setSuccess(null);
+        setError('تعذر متابعة تشغيل Golden Eval من قاعدة البيانات. لا تعِد التشغيل قبل مراجعة الحالة.');
+      }
     } finally {
       setRunning(false);
     }
