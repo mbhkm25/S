@@ -406,11 +406,12 @@ export default function SanadAgentWorkspace() {
             ) : (
               <>
                 {messages.map((message, index) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    onRetry={message.failed && lastUserPrompt && index === messages.length - 1 ? () => void sendPrompt(lastUserPrompt) : undefined}
-                  />
+                  <div key={message.id}>
+                    <MessageBubble
+                      message={message}
+                      onRetry={message.failed && lastUserPrompt && index === messages.length - 1 ? () => void sendPrompt(lastUserPrompt) : undefined}
+                    />
+                  </div>
                 ))}
               </>
             )}
