@@ -300,6 +300,7 @@ export default function FinancialWorkspaceRoute() {
               <LaunchCard title="النظام المحاسبي" description="الربط والمزامنة وحالة إبداع سوفت." icon={Database} onClick={() => go('business/manage?section=accounting')} />
               <LaunchCard title="العملاء والفريق" description="العملاء والأعضاء والأدوار والصلاحيات." icon={Users} onClick={() => go('business/manage?section=customers')} />
               <LaunchCard title="الكتالوج" description="المنتجات والخدمات والوسائط التجارية." icon={Package} onClick={() => go('business/manage?section=catalog')} />
+              <LaunchCard title="مجتمع الأعمال" description="استعرض الأنشطة والكتالوجات العامة والتواصل التجاري." icon={Users} onClick={() => go('business-community')} />
             </div>
           </section>
         ) : null}
