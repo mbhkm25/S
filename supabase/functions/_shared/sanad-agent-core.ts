@@ -404,5 +404,5 @@ export function inferScope(toolNames: string[]): "personal" | "business" | "prod
 }
 
 export function detectClarification(text: string): boolean {
-  return /وضح|توضيح|أي حساب|أي نشاط|تقصد|حدد|اختر/.test(text);
+  return /وضح|توضيح|يرجى\s+تحديد|يُرجى\s+تحديد|تحديد\s+(?:العميل|الحساب|النشاط|المحل)|أي\s+(?:حساب|نشاط|عميل|محل)|تقصد|حدد|اختر/.test(text);
 }
