@@ -33,12 +33,18 @@ namespace Sanad.Bridge
 
         public Task<BaselineLifecycleResponse> StartBaselineAsync(LocalBaselineRun run, CancellationToken cancellationToken)
         {
+            return StartBaselineAsync(run, "initial", cancellationToken);
+        }
+
+        public Task<BaselineLifecycleResponse> StartBaselineAsync(LocalBaselineRun run, string baselineKind, CancellationToken cancellationToken)
+        {
             if (run == null) throw new ArgumentNullException(nameof(run));
+            if (string.IsNullOrWhiteSpace(baselineKind)) baselineKind = "initial";
             var request = new Dictionary<string, object>
             {
                 ["action"] = "start",
                 ["baseline_public_id"] = run.BaselinePublicId,
-                ["baseline_kind"] = "initial",
+                ["baseline_kind"] = baselineKind,
                 ["adapter_code"] = "edaa_v5",
                 ["adapter_version"] = "v1",
                 ["schema_fingerprint"] = run.SchemaFingerprint,

@@ -19,6 +19,26 @@ namespace Sanad.Bridge
                 return EdaaSaleLocalProbe.Run(args);
             }
 
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-discovery", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaLogicalDiscoveryCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--semantic-schema", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaSemanticSchemaCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--relationship-audit", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaRelationshipAuditCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--customer-ledger-audit", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaCustomerLedgerAuditCommand.Run(args);
+            }
+
             if (args != null && Array.Exists(args, value => string.Equals(value, "--local-scan", StringComparison.OrdinalIgnoreCase)))
             {
                 return EdaaSaleChangeDetector.Run(args);
@@ -52,6 +72,11 @@ namespace Sanad.Bridge
             if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-health", StringComparison.OrdinalIgnoreCase)))
             {
                 return BridgeAgentHealthCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-snapshot", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await EdaaLogicalSnapshotCommand.RunAsync(args).ConfigureAwait(false);
             }
 
             if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-cycle", StringComparison.OrdinalIgnoreCase)))
