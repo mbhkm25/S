@@ -1,4 +1,4 @@
 SANAD NEXT backend production reconciliation trigger.
-ERP cloud/UI beta v1 production deploy.
-source_merge_sha=770ae8c55a6388e82162975577359c9b3c89ed58
-requested_at=2026-09-18T15:05:00Z
+ERP snapshot status resilience v2 production deploy.
+source_merge_sha=1209e9f71f07460c912456e78ff99c1a613461b2
+requested_at=2026-09-19T15:08:00Z
