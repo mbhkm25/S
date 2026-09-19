@@ -1,4 +1,4 @@
-reason=deploy-sanad-agent-workspace-v1
-requested_at=2026-09-19T23:07:00+03:00
-source_merge_sha=d3b1f9a1b500578be52fab8807012b84c8c035ee
+reason=deploy-sanad-agent-streaming-v1
+requested_at=2026-09-19T23:20:00+03:00
+source_merge_sha=dba7b6c461ef778e62fcd98502694a6e700c28c1
 scope=production-pwa
