@@ -135,6 +135,18 @@ function formatAmount(value: unknown, currency?: string): string {
   return `${formatted} ${currency}`;
 }
 
+function workspaceErrorMessage(cause: unknown, fallback = 'حدث خطأ غير متوقع أثناء تحميل المساحة.'): string {
+  if (cause instanceof Error && cause.message) return cause.message;
+  if (cause && typeof cause === 'object') {
+    const record = cause as Record<string, unknown>;
+    const parts = [record.message, record.details, record.hint]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    if (parts.length) return parts.join(' — ');
+    if (typeof record.code === 'string' && record.code.trim()) return `${fallback} (${record.code})`;
+  }
+  return fallback;
+}
+
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <section className="rounded-[1.5rem] border border-rose-100 bg-rose-50 p-5 text-right">
@@ -190,10 +202,13 @@ export default function FinancialWorkspaceRoute() {
         return;
       }
 
-      const { data: accountData, error: accountError } = await supabase.rpc('get_my_account_center_v1');
-      if (accountError) throw accountError;
-      const nextAccount = (accountData || {}) as AccountCenter;
-      setAccount(nextAccount);
+      let nextAccount: AccountCenter | null = null;
+      if (kind === 'commercial' || kind === 'account') {
+        const { data: accountData, error: accountError } = await supabase.rpc('get_my_account_center_v1');
+        if (accountError) throw accountError;
+        nextAccount = (accountData || {}) as AccountCenter;
+        setAccount(nextAccount);
+      }
 
       if (kind === 'financial') {
         const { data, error: rpcError } = await supabase.rpc('get_my_finance_dashboard_v1');
@@ -202,7 +217,7 @@ export default function FinancialWorkspaceRoute() {
       }
 
       if (kind === 'commercial') {
-        const businesses = Array.isArray(nextAccount.businesses) ? nextAccount.businesses : [];
+        const businesses = Array.isArray(nextAccount?.businesses) ? nextAccount.businesses : [];
         const businessId = selectedBusinessId || businesses.find((item) => item.id)?.id || '';
         setSelectedBusinessId(businessId);
         if (businessId) {
@@ -224,7 +239,7 @@ export default function FinancialWorkspaceRoute() {
         setAi((data || {}) as AiContext);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'حدث خطأ غير متوقع أثناء تحميل المساحة.');
+      setError(workspaceErrorMessage(cause));
     } finally {
       setLoading(false);
     }
