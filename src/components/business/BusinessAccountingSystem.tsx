@@ -286,37 +286,37 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
         </section>
       )}
 
-      {!error && active.map(connection => (
-        <div key={connection.connection_id}>
-          <ConnectionCard connection={connection} />
-        </div>
-      ))}
-
       {!error && active.length > 0 && (
-        <BusinessErpCloudReplica businessId={businessId} />
-      )}
-
-      {!error && active.length > 0 && (
-        <BusinessErpCustomerStatement businessId={businessId} />
-      )}
-
-      {!error && active.length > 0 && (
-        <BusinessErpDocuments businessId={businessId} />
-      )}
-
-      {!error && active.length > 0 && (
-        <BusinessErpRetentionPolicy businessId={businessId} />
-      )}
-
-      <section className="rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-4">
-        <div className="flex items-start gap-3">
-          <ServerCog className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
-          <div>
-            <h3 className="text-xs font-black text-sky-950">ما الذي يمكن عمله من هذا الجهاز؟</h3>
-            <p className="mt-1 text-[10px] leading-5 text-sky-800">يمكن متابعة حالة الربط وآخر مزامنة من أي هاتف أو لابتوب. أما اكتشاف قاعدة إبداع وتنفيذ المزامنة فيتم فقط من الكمبيوتر الذي يعمل عليه النظام المحاسبي.</p>
+        <>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="space-y-4">
+              {active.map(connection => (
+                <div key={connection.connection_id}>
+                  <ConnectionCard connection={connection} />
+                </div>
+              ))}
+            </div>
+            <BusinessErpCloudReplica businessId={businessId} />
           </div>
-        </div>
-      </section>
+
+          <BusinessErpCustomerStatement businessId={businessId} />
+          <BusinessErpDocuments businessId={businessId} />
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
+            <BusinessErpRetentionPolicy businessId={businessId} />
+            <section className="rounded-[1.6rem] border border-sky-100 bg-sky-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <ServerCog className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
+                <div>
+                  <h3 className="text-xs font-black text-sky-950">ما الذي يمكن عمله من هذا الجهاز؟</h3>
+                  <p className="mt-1 text-[10px] leading-5 text-sky-800">يمكن متابعة حالة الربط وآخر مزامنة من أي هاتف أو لابتوب. أما اكتشاف قاعدة إبداع وتنفيذ المزامنة فيتم فقط من الكمبيوتر الذي يعمل عليه النظام المحاسبي.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </>
+      )}
+
     </div>
   );
 }

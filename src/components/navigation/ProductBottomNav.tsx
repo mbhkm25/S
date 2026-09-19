@@ -37,11 +37,11 @@ export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-24 lg:-translate-y-1/2 lg:rounded-[1.75rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_18px_50px_rgba(15,23,42,0.10)]"
       aria-label="أقسام سند الرئيسية"
       dir="rtl"
     >
-      <div className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-1">
+      <div className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-1 lg:grid-cols-1 lg:gap-2">
         {items.map((item) => {
           const Icon = item.icon;
           const selected = active === item.id;
@@ -50,7 +50,7 @@ export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
               key={item.id}
               href={`${base}${item.path}`}
               aria-current={selected ? 'page' : undefined}
-              className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98]"
+              className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5"
             >
               <span className={`flex h-9 w-11 items-center justify-center rounded-2xl transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-400'}`}>
                 <Icon className="h-4.5 w-4.5" />

@@ -24,7 +24,7 @@ export default function FinancialWorkspaceShell() {
         <button
           type="button"
           onClick={() => window.location.assign(`${basePath()}${commercial ? 'commercial' : 'financial'}/actions`)}
-          className="fixed bottom-[86px] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-[11px] font-black text-white shadow-[0_18px_45px_rgba(15,23,42,0.25)] active:scale-[0.98]"
+          className="fixed bottom-[86px] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-[11px] font-black text-white shadow-[0_18px_45px_rgba(15,23,42,0.25)] active:scale-[0.98] lg:bottom-6 lg:left-1/2"
           aria-label={commercial ? 'فتح إجراءات سند التجاري' : 'فتح إجراءات سند المالي'}
         >
           <Plus className="h-4 w-4" />
