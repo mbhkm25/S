@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight,
   Bell,
   Bot,
   BriefcaseBusiness,
@@ -95,7 +94,7 @@ const META: Record<WorkspaceKind, { label: string; eyebrow: string; description:
   account: {
     label: 'حسابي',
     eyebrow: 'هويتك وإعداداتك',
-    description: 'البيانات الشخصية والأمان والإشعارات والاشتراك والأجهزة فقط، دون خلطها بتشغيل الأعمال أو السجل المالي.',
+    description: 'البيانات الشخصية والأمان والإشعارات والاشتراك، دون خلطها بتشغيل الأعمال أو السجل المالي.',
     icon: UserRound,
   },
   ai: {
@@ -256,9 +255,6 @@ export default function FinancialWorkspaceRoute() {
     <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
-          <button onClick={() => go()} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
-            <ArrowRight className="h-5 w-5" />
-          </button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
             <div className="min-w-0">
@@ -266,9 +262,12 @@ export default function FinancialWorkspaceRoute() {
               <h1 className="truncate text-base font-black">{current.label}</h1>
             </div>
           </div>
-          <button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm" aria-label="تحديث">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="hidden rounded-full bg-slate-100 px-3 py-1.5 text-[9px] font-black tracking-[0.16em] text-slate-500 sm:inline-flex">SANAD</span>
+            <button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm" aria-label="تحديث">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 
