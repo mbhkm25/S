@@ -182,6 +182,146 @@ where event_id=@id", _connection))
                 new SQLiteParameter("@id", baselinePublicId));
         }
 
+        public LocalBaselineRun GetLatestLogicalSnapshot(string sourceKey)
+        {
+            const string sql = @"
+select snapshot_public_id, source_key, schema_fingerprint, status, manifest_json, expected_counts_json, started_at_utc, completed_at_utc
+from logical_snapshot_runs
+where source_key = @source_key
+order by started_at_utc desc
+limit 1";
+            using (var command = new SQLiteCommand(sql, _connection))
+            {
+                command.Parameters.AddWithValue("@source_key", sourceKey);
+                using (var reader = command.ExecuteReader())
+                {
+                    if (!reader.Read()) return null;
+                    return ReadBaseline(reader);
+                }
+            }
+        }
+
+        public void CreateLogicalSnapshot(EdaaBaselinePackage package)
+        {
+            if (package == null) throw new ArgumentNullException(nameof(package));
+            using (var transaction = _connection.BeginTransaction())
+            {
+                using (var command = new SQLiteCommand(@"
+insert into logical_snapshot_runs (
+  snapshot_public_id, source_key, schema_fingerprint, status, manifest_json, expected_counts_json, started_at_utc
+) values (@id,@source,@schema,'prepared',@manifest,@counts,@started)", _connection, transaction))
+                {
+                    command.Parameters.AddWithValue("@id", package.BaselinePublicId);
+                    command.Parameters.AddWithValue("@source", package.SourceKey);
+                    command.Parameters.AddWithValue("@schema", package.SchemaFingerprint);
+                    command.Parameters.AddWithValue("@manifest", package.ManifestJson);
+                    command.Parameters.AddWithValue("@counts", package.ExpectedCountsJson);
+                    command.Parameters.AddWithValue("@started", UtcNowText());
+                    command.ExecuteNonQuery();
+                }
+
+                foreach (var seed in package.Events)
+                {
+                    using (var command = new SQLiteCommand(@"
+insert into logical_snapshot_outbox (
+  event_id, snapshot_public_id, body_protected, status, attempt_count, created_at_utc
+) values (@event_id,@snapshot,@body,'pending',0,@created)", _connection, transaction))
+                    {
+                        command.Parameters.AddWithValue("@event_id", seed.EventId);
+                        command.Parameters.AddWithValue("@snapshot", package.BaselinePublicId);
+                        command.Parameters.Add("@body", System.Data.DbType.Binary).Value = Protect(seed.BodyJson);
+                        command.Parameters.AddWithValue("@created", UtcNowText());
+                        command.ExecuteNonQuery();
+                    }
+                }
+                transaction.Commit();
+            }
+        }
+
+        public void MarkLogicalSnapshotUploading(string snapshotPublicId)
+        {
+            ExecuteNonQuery("update logical_snapshot_runs set status='uploading' where snapshot_public_id=@id and status <> 'completed'",
+                new SQLiteParameter("@id", snapshotPublicId));
+        }
+
+        public List<LocalOutboxItem> GetPendingLogicalSnapshotEvents(string snapshotPublicId)
+        {
+            var items = new List<LocalOutboxItem>();
+            const string sql = @"
+select event_id, body_protected, attempt_count
+from logical_snapshot_outbox
+where snapshot_public_id=@snapshot
+  and status in ('pending','failed')
+  and (next_attempt_at_utc is null or next_attempt_at_utc <= @now)
+order by created_at_utc, event_id";
+            using (var command = new SQLiteCommand(sql, _connection))
+            {
+                command.Parameters.AddWithValue("@snapshot", snapshotPublicId);
+                command.Parameters.AddWithValue("@now", UtcNowText());
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        items.Add(new LocalOutboxItem
+                        {
+                            EventId = reader.GetString(0),
+                            BodyJson = Unprotect((byte[])reader[1]),
+                            AttemptCount = reader.GetInt32(2)
+                        });
+                    }
+                }
+            }
+            return items;
+        }
+
+        public int CountUnsentLogicalSnapshotEvents(string snapshotPublicId)
+        {
+            using (var command = new SQLiteCommand("select count(*) from logical_snapshot_outbox where snapshot_public_id=@id and status <> 'sent'", _connection))
+            {
+                command.Parameters.AddWithValue("@id", snapshotPublicId);
+                return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+            }
+        }
+
+        public void MarkLogicalSnapshotEventSent(string eventId, string ackJson)
+        {
+            using (var command = new SQLiteCommand(@"
+update logical_snapshot_outbox
+set status='sent', sent_at_utc=@sent, last_error=null, next_attempt_at_utc=null, ack_protected=@ack
+where event_id=@id", _connection))
+            {
+                command.Parameters.AddWithValue("@sent", UtcNowText());
+                command.Parameters.AddWithValue("@id", eventId);
+                command.Parameters.Add("@ack", System.Data.DbType.Binary).Value = Protect(ackJson ?? "{}");
+                command.ExecuteNonQuery();
+            }
+        }
+
+        public void MarkLogicalSnapshotEventFailed(string eventId, string errorCode, int currentAttemptCount)
+        {
+            var attempt = currentAttemptCount + 1;
+            var seconds = Math.Min(300, Math.Max(5, (int)Math.Pow(2, Math.Min(attempt, 8))));
+            var next = DateTime.UtcNow.AddSeconds(seconds).ToString("o", CultureInfo.InvariantCulture);
+            using (var command = new SQLiteCommand(@"
+update logical_snapshot_outbox
+set status='failed', attempt_count=@attempt, last_error=@error, next_attempt_at_utc=@next
+where event_id=@id", _connection))
+            {
+                command.Parameters.AddWithValue("@attempt", attempt);
+                command.Parameters.AddWithValue("@error", (errorCode ?? "send_failed").Substring(0, Math.Min((errorCode ?? "send_failed").Length, 240)));
+                command.Parameters.AddWithValue("@next", next);
+                command.Parameters.AddWithValue("@id", eventId);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        public void MarkLogicalSnapshotCompleted(string snapshotPublicId)
+        {
+            ExecuteNonQuery("update logical_snapshot_runs set status='completed', completed_at_utc=@completed where snapshot_public_id=@id",
+                new SQLiteParameter("@completed", UtcNowText()),
+                new SQLiteParameter("@id", snapshotPublicId));
+        }
+
         private void EnsureSchema()
         {
             ExecuteNonQuery(@"
@@ -210,6 +350,32 @@ create table if not exists outbox_events (
   ack_protected blob null
 );
 create index if not exists outbox_events_pending_idx on outbox_events(status, next_attempt_at_utc, created_at_utc);
+
+create table if not exists logical_snapshot_runs (
+  snapshot_public_id text primary key,
+  source_key text not null,
+  schema_fingerprint text not null,
+  status text not null,
+  manifest_json text not null,
+  expected_counts_json text not null,
+  started_at_utc text not null,
+  completed_at_utc text null
+);
+create index if not exists logical_snapshot_runs_source_idx on logical_snapshot_runs(source_key, started_at_utc);
+
+create table if not exists logical_snapshot_outbox (
+  event_id text primary key,
+  snapshot_public_id text not null references logical_snapshot_runs(snapshot_public_id) on delete cascade,
+  body_protected blob not null,
+  status text not null,
+  attempt_count integer not null default 0,
+  next_attempt_at_utc text null,
+  last_error text null,
+  created_at_utc text not null,
+  sent_at_utc text null,
+  ack_protected blob null
+);
+create index if not exists logical_snapshot_outbox_pending_idx on logical_snapshot_outbox(status, next_attempt_at_utc, created_at_utc);
 ");
         }
 
