@@ -1,4 +1,4 @@
-reason=deploy-sanad-ai-quality-admin-v1
-requested_at=2026-09-20T00:25:00+03:00
-source_merge_sha=da0f3533be1a26bf0b01455185f6a96fada2a547
+reason=deploy-sanad-agent-eval-reliability-v1
+requested_at=2026-09-20T01:45:00+03:00
+source_merge_sha=d156faf2a6166eb7fa70f32217bcb590cc948732
 scope=production-pwa
