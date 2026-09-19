@@ -4,11 +4,15 @@ import {
   CheckCircle2,
   CircleDot,
   Database,
+  FileText,
   Laptop,
+  LayoutDashboard,
   Loader2,
   RefreshCw,
   ServerCog,
   ShieldCheck,
+  ShoppingCart,
+  SlidersHorizontal,
   Unplug
 } from 'lucide-react';
 import {
@@ -23,6 +27,34 @@ import BusinessErpRetentionPolicy from './BusinessErpRetentionPolicy';
 
 interface Props {
   businessId: string;
+}
+
+
+type ErpView = 'overview' | 'statement' | 'documents' | 'connection';
+
+const ERP_VIEWS: Array<{
+  id: ErpView;
+  label: string;
+  description: string;
+  icon: typeof Database;
+}> = [
+  { id: 'overview', label: 'نظرة عامة', description: 'حالة المصدر والنسخة السحابية', icon: LayoutDashboard },
+  { id: 'statement', label: 'كشف الحساب', description: 'بحث العميل وعرض ومشاركة الكشف', icon: FileText },
+  { id: 'documents', label: 'المبيعات والمشتريات', description: 'المستندات والبنود والتصدير', icon: ShoppingCart },
+  { id: 'connection', label: 'الربط والإعدادات', description: 'حالة Bridge والاحتفاظ والاتصال', icon: SlidersHorizontal },
+];
+
+function initialErpView(): ErpView {
+  const requested = new URLSearchParams(window.location.search).get('erp');
+  return ERP_VIEWS.some((item) => item.id === requested) ? requested as ErpView : 'overview';
+}
+
+function updateErpQuery(view: ErpView) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('section', 'accounting');
+  if (view === 'overview') url.searchParams.delete('erp');
+  else url.searchParams.set('erp', view);
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 const STATUS_META: Record<BusinessAccountingConnectionStatus, {
@@ -177,6 +209,7 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ErpView>(() => initialErpView());
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -194,6 +227,11 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
 
   useEffect(() => { void load(); }, [load]);
 
+  const selectView = (next: ErpView) => {
+    setView(next);
+    updateErpQuery(next);
+  };
+
   const active = useMemo(
     () => connections.filter(item => item.status !== 'disconnected'),
     [connections]
@@ -210,16 +248,16 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-[1.8rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-start justify-between gap-3">
+      <section className="overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-start justify-between gap-3 p-4 sm:p-5">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
               <Database className="h-6 w-6" />
             </span>
             <div className="min-w-0">
-              <span className="text-[10px] font-bold text-emerald-700">ربط الأنظمة</span>
-              <h2 className="mt-0.5 text-lg font-black text-slate-950">النظام المحاسبي</h2>
-              <p className="mt-1 text-[11px] leading-5 text-slate-500">متابعة ربط إبداع سوفت وحالة الجهاز والمزامنة مع سند.</p>
+              <span className="text-[10px] font-bold text-emerald-700">سند للأعمال · البيانات المحاسبية</span>
+              <h2 className="mt-0.5 text-lg font-black text-slate-950">مركز إبداع السحابي</h2>
+              <p className="mt-1 max-w-2xl text-[11px] leading-5 text-slate-500">اقرأ حسابات العملاء والمبيعات والمشتريات من النسخة السحابية المكتملة، وافصل مهام القراءة اليومية عن إعدادات الربط التقنية.</p>
             </div>
           </div>
           <button
@@ -232,6 +270,29 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        <nav className="border-t border-slate-100 bg-slate-50/70 p-2" aria-label="مساحات النظام المحاسبي">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {ERP_VIEWS.map((item) => {
+              const ItemIcon = item.icon;
+              const selected = item.id === view;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => selectView(item.id)}
+                  className={`min-h-[66px] rounded-2xl px-3 py-2.5 text-right transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <ItemIcon className={`h-4 w-4 shrink-0 ${selected ? 'text-emerald-300' : 'text-slate-500'}`} />
+                    <strong className="text-[11px]">{item.label}</strong>
+                  </span>
+                  <span className={`mt-1 block text-[9px] leading-4 ${selected ? 'text-white/55' : 'text-slate-400'}`}>{item.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </section>
 
       {error && (
@@ -286,9 +347,39 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
         </section>
       )}
 
-      {!error && active.length > 0 && (
-        <>
-          <div className="grid gap-4 xl:grid-cols-2">
+      {!error && active.length > 0 && view === 'overview' && (
+        <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+          <div className="space-y-4">
+            {active.map(connection => (
+              <div key={connection.connection_id}>
+                <ConnectionCard connection={connection} />
+              </div>
+            ))}
+            <section className="rounded-[1.6rem] border border-emerald-100 bg-emerald-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                <div>
+                  <h3 className="text-xs font-black text-emerald-950">القراءة اليومية منفصلة عن إعدادات الربط</h3>
+                  <p className="mt-1 text-[10px] leading-5 text-emerald-800">استخدم «كشف الحساب» و«المبيعات والمشتريات» للعمل اليومي. تبقى معلومات Bridge والاحتفاظ وإعدادات المصدر في مساحة الربط والإعدادات.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+          <BusinessErpCloudReplica businessId={businessId} />
+        </div>
+      )}
+
+      {!error && active.length > 0 && view === 'statement' && (
+        <BusinessErpCustomerStatement businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && view === 'documents' && (
+        <BusinessErpDocuments businessId={businessId} />
+      )}
+
+      {!error && active.length > 0 && view === 'connection' && (
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
             <div className="space-y-4">
               {active.map(connection => (
                 <div key={connection.connection_id}>
@@ -297,11 +388,6 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
               ))}
             </div>
             <BusinessErpCloudReplica businessId={businessId} />
-          </div>
-
-          <div className="grid gap-4 2xl:grid-cols-2 2xl:items-start">
-            <BusinessErpCustomerStatement businessId={businessId} />
-            <BusinessErpDocuments businessId={businessId} />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
@@ -316,7 +402,7 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
               </div>
             </section>
           </div>
-        </>
+        </div>
       )}
 
     </div>

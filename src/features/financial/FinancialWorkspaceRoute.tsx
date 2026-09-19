@@ -297,7 +297,9 @@ export default function FinancialWorkspaceRoute() {
             <div className="mb-3 px-1"><p className="text-[10px] font-bold text-sky-700">تشغيل النشاط</p><h2 className="mt-1 text-base font-black">كل ما يخص العمل في مكان واحد</h2></div>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               <LaunchCard title="إدارة النشاط" description="ملف النشاط وساعات العمل والإعدادات التشغيلية." icon={BriefcaseBusiness} onClick={() => go('business/manage')} />
-              <LaunchCard title="النظام المحاسبي" description="الربط والمزامنة وحالة إبداع سوفت." icon={Database} onClick={() => go('business/manage?section=accounting')} />
+              <LaunchCard title="كشف حساب عميل" description="ابحث عن العميل واعرض كشفًا قابلًا للطباعة والمشاركة." icon={FileText} onClick={() => go('business/manage?section=accounting&erp=statement')} />
+              <LaunchCard title="المبيعات والمشتريات" description="اقرأ مستندات إبداع وبنودها وشاركها أو اطبعها." icon={CircleDollarSign} onClick={() => go('business/manage?section=accounting&erp=documents')} />
+              <LaunchCard title="النظام المحاسبي" description="حالة المصدر والنسخة السحابية والربط والمزامنة." icon={Database} onClick={() => go('business/manage?section=accounting')} />
               <LaunchCard title="العملاء والفريق" description="العملاء والأعضاء والأدوار والصلاحيات." icon={Users} onClick={() => go('business/manage?section=customers')} />
               <LaunchCard title="الكتالوج" description="المنتجات والخدمات والوسائط التجارية." icon={Package} onClick={() => go('business/manage?section=catalog')} />
               <LaunchCard title="مجتمع الأعمال" description="استعرض الأنشطة والكتالوجات العامة والتواصل التجاري." icon={Users} onClick={() => go('business-community')} />
