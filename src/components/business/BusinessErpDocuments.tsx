@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { CalendarRange, FileText, Loader2, Search, ShoppingCart, Truck } from 'lucide-react';
+import { CalendarRange, CheckCircle2, Copy, FileText, Loader2, MessageCircle, Printer, Search, Share2, ShoppingCart, Truck } from 'lucide-react';
 import {
   getBusinessErpDocumentDetail,
   getBusinessErpDocuments,
@@ -26,6 +26,106 @@ function currencyLabel(doc: { arabic_code?: string | null; english_code?: string
   return doc.arabic_code || doc.english_code || doc.currency_name || '';
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function documentKindLabel(kind: BusinessErpDocumentKind): string {
+  return kind === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء';
+}
+
+function buildDocumentSummary(detail: BusinessErpDocumentDetail, kind: BusinessErpDocumentKind): string {
+  if (!detail.header) return '';
+  const sourceLineTotal = detail.lines.reduce((sum, line) => sum + Number(line.source_total_amount || 0), 0);
+  const currency = currencyLabel(detail.header) || 'عملة المصدر';
+  const lines = [
+    `${documentKindLabel(kind)} — سند`,
+    `الطرف: ${detail.header.party_name || '—'}`,
+    `رقم المستند: ${detail.header.document_number || detail.header.document_id || '—'}`,
+    `التاريخ: ${dateLabel(detail.header.document_date)}`,
+    `العملة: ${currency}`,
+    `عدد البنود: ${detail.lines.length}`,
+    `مجموع قيم البنود من المصدر: ${fmt(sourceLineTotal)} ${currency}`,
+  ];
+  if (detail.header.payment_method) lines.push(`طريقة الدفع: ${detail.header.payment_method}`);
+  if (detail.header.notes) lines.push(`ملاحظات: ${detail.header.notes}`);
+  lines.push('', 'المصدر: قراءة من النسخة السحابية لنظام إبداع عبر سند. مجموع البنود ليس استنتاجًا لصافي الفاتورة.');
+  return lines.join('\n');
+}
+
+function buildPrintableDocumentHtml(detail: BusinessErpDocumentDetail, kind: BusinessErpDocumentKind): string {
+  const header = detail.header;
+  if (!header) return '';
+  const currency = currencyLabel(header) || 'عملة المصدر';
+  const sourceLineTotal = detail.lines.reduce((sum, line) => sum + Number(line.source_total_amount || 0), 0);
+  const rows = detail.lines.map((line, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(line.class_name || line.class_number || line.class_id || '—')}</td>
+      <td>${escapeHtml(line.unit_name || '—')}</td>
+      <td class="num">${escapeHtml(line.quantity || '—')}</td>
+      <td class="num">${escapeHtml(line.unit_price || '—')}</td>
+      <td class="num">${escapeHtml(line.line_discount || '—')}</td>
+      <td class="num strong">${escapeHtml(line.source_total_amount || '—')}</td>
+    </tr>`).join('');
+
+  return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(`${documentKindLabel(kind)} - ${header.document_number || header.document_id}`)}</title>
+<style>
+  @page { size:A4; margin:12mm; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:#0f172a; font-family:"IBM Plex Sans Arabic",Tahoma,Arial,sans-serif; font-size:11px; direction:rtl; }
+  .brand { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f172a; padding-bottom:10px; margin-bottom:14px; }
+  .brand h1 { margin:0; font-size:20px; }
+  .muted { color:#64748b; font-size:9px; }
+  .meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .card { border:1px solid #e2e8f0; border-radius:10px; padding:9px 11px; }
+  .label { color:#64748b; font-size:9px; margin-bottom:4px; }
+  .value { font-weight:700; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th { background:#f1f5f9; color:#475569; padding:7px 6px; border:1px solid #e2e8f0; font-size:9px; text-align:right; }
+  td { padding:7px 6px; border:1px solid #e2e8f0; vertical-align:top; }
+  .num { direction:ltr; text-align:left; white-space:nowrap; }
+  .strong { font-weight:800; }
+  .total { margin-top:10px; display:flex; justify-content:flex-end; }
+  .total-box { min-width:230px; border:1px solid #cbd5e1; border-radius:10px; padding:10px 12px; }
+  .footer { margin-top:14px; padding-top:8px; border-top:1px solid #e2e8f0; color:#64748b; font-size:8px; line-height:1.8; }
+  tr { break-inside:avoid; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <div><h1>سند | SANAD</h1><div class="muted">${escapeHtml(documentKindLabel(kind))} — قراءة من إبداع</div></div>
+    <div style="text-align:left"><strong>#${escapeHtml(header.document_number || header.document_id || '—')}</strong><br><span class="muted">${escapeHtml(dateLabel(header.document_date))}</span></div>
+  </div>
+  <div class="meta">
+    <div class="card"><div class="label">الطرف</div><div class="value">${escapeHtml(header.party_name || '—')}</div></div>
+    <div class="card"><div class="label">العملة</div><div class="value">${escapeHtml(currency)}</div></div>
+    <div class="card"><div class="label">طريقة الدفع</div><div class="value">${escapeHtml(header.payment_method || '—')}</div></div>
+    <div class="card"><div class="label">رقم القيد</div><div class="value">${escapeHtml(header.entry_id || '—')}</div></div>
+  </div>
+  ${header.notes ? `<div class="card"><div class="label">ملاحظات</div><div class="value">${escapeHtml(header.notes)}</div></div>` : ''}
+  <table>
+    <thead><tr><th>#</th><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>الخصم</th><th>إجمالي المصدر</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7">لا توجد بنود.</td></tr>'}</tbody>
+  </table>
+  <div class="total"><div class="total-box"><div class="label">مجموع قيم البنود من المصدر</div><div class="value">${escapeHtml(fmt(sourceLineTotal))} ${escapeHtml(currency)}</div></div></div>
+  <div class="footer">
+    هذه الوثيقة للقراءة والمشاركة فقط، ومبنية على النسخة السحابية المكتملة المتاحة من نظام إبداع. لا يغيّر سند بيانات إبداع. مجموع قيم البنود هو جمع حقل TotalAmount من المصدر، ولا يمثل بالضرورة صافي الفاتورة بعد الخصومات أو الخدمات أو أي معالجات أخرى ما لم ينص المصدر على ذلك صراحة.
+  </div>
+  <script>window.addEventListener('load',()=>setTimeout(()=>window.print(),250));</script>
+</body>
+</html>`;
+}
+
 export default function BusinessErpDocuments({ businessId }: Props) {
   const [kind, setKind] = useState<BusinessErpDocumentKind>('sale');
   const [query, setQuery] = useState('');
@@ -37,6 +137,7 @@ export default function BusinessErpDocuments({ businessId }: Props) {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const load = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -61,6 +162,54 @@ export default function BusinessErpDocuments({ businessId }: Props) {
   };
 
   useEffect(() => { void load(); }, [kind, businessId]);
+
+  const copyDocumentSummary = async () => {
+    if (!selected?.header) return;
+    try {
+      await navigator.clipboard.writeText(buildDocumentSummary(selected, kind));
+      setActionNotice('تم نسخ ملخص المستند.');
+    } catch {
+      setActionNotice('تعذر النسخ تلقائيًا. استخدم المشاركة أو الطباعة.');
+    }
+  };
+
+  const shareDocument = async () => {
+    if (!selected?.header) return;
+    const text = buildDocumentSummary(selected, kind);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${documentKindLabel(kind)} #${selected.header.document_number || selected.header.document_id || ''}`,
+          text,
+        });
+        setActionNotice('تم فتح خيارات المشاركة.');
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setActionNotice('المشاركة المباشرة غير متاحة؛ تم نسخ الملخص بدلًا منها.');
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setActionNotice('تعذر فتح المشاركة. يمكنك استخدام واتساب أو نسخ الملخص.');
+    }
+  };
+
+  const shareDocumentWhatsApp = () => {
+    if (!selected?.header) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent(buildDocumentSummary(selected, kind))}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const printDocument = () => {
+    if (!selected?.header) return;
+    const popup = window.open('', '_blank', 'width=1100,height=850');
+    if (!popup) {
+      setActionNotice('المتصفح منع نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.');
+      return;
+    }
+    popup.document.open();
+    popup.document.write(buildPrintableDocumentHtml(selected, kind));
+    popup.document.close();
+    setActionNotice('تم تجهيز نسخة الطباعة. اختر «حفظ كملف PDF» عند الحاجة.');
+  };
 
   const openDocument = async (item: BusinessErpDocumentSummary) => {
     setDetailLoading(true);
@@ -128,7 +277,21 @@ export default function BusinessErpDocuments({ businessId }: Props) {
         {detailLoading && <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />تحميل التفاصيل…</div>}
 
         {selected?.status==='ok' && selected.header && (
-          <div className="mt-5 rounded-2xl border border-slate-200 p-3">
+          <div className="mt-5 space-y-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="إجراءات المستند">
+              <button type="button" onClick={printDocument} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-bold text-white"><Printer className="h-4 w-4" />PDF / طباعة</button>
+              <button type="button" onClick={() => void shareDocument()} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-700"><Share2 className="h-4 w-4" />مشاركة</button>
+              <button type="button" onClick={shareDocumentWhatsApp} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-800"><MessageCircle className="h-4 w-4" />واتساب</button>
+              <button type="button" onClick={() => void copyDocumentSummary()} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-bold text-slate-700"><Copy className="h-4 w-4" />نسخ ملخص</button>
+            </div>
+
+            {actionNotice && (
+              <button type="button" onClick={() => setActionNotice(null)} className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-right text-[10px] leading-5 text-emerald-800">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> {actionNotice}
+              </button>
+            )}
+
+            <div className="rounded-2xl border border-slate-200 p-3">
             <div className="flex items-start justify-between">
               <div><p className="text-[9px] text-slate-400">المستند</p><strong className="text-xs">{selected.header.party_name || '—'} · #{selected.header.document_number || selected.header.document_id}</strong></div>
               <span className="text-[9px] text-slate-500">{dateLabel(selected.header.document_date)}</span>
@@ -138,6 +301,7 @@ export default function BusinessErpDocuments({ businessId }: Props) {
                 <thead className="bg-slate-50 text-slate-500"><tr><th className="p-2 text-right">الصنف</th><th className="p-2">الوحدة</th><th className="p-2">الكمية</th><th className="p-2">سعر الوحدة</th><th className="p-2">الإجمالي المصدر</th></tr></thead>
                 <tbody>{selected.lines.map(line=><tr key={line.line_id} className="border-t border-slate-100"><td className="p-2">{line.class_name || line.class_number || line.class_id || '—'}</td><td className="p-2 text-center">{line.unit_name || '—'}</td><td className="p-2 text-center">{line.quantity || '—'}</td><td className="p-2 text-center">{line.unit_price || '—'}</td><td className="p-2 text-center font-bold">{line.source_total_amount || '—'}</td></tr>)}</tbody>
               </table>
+            </div>
             </div>
           </div>
         )}
