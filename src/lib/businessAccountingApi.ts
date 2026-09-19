@@ -48,6 +48,21 @@ export async function getBusinessAccountingConnections(
 }
 
 
+export type BusinessErpSnapshotRunStatus = {
+  snapshot_public_id: string;
+  status: string;
+  started_at?: string | null;
+  last_seen_at?: string | null;
+  completed_at?: string | null;
+  error_code?: string | null;
+  expected_table_count?: number;
+  expected_row_count?: number;
+  received_table_count?: number;
+  received_row_count?: number;
+  progress_percent?: number | null;
+  latest_chunk_received_at?: string | null;
+};
+
 export type BusinessErpSnapshotStatus = {
   available: boolean;
   snapshot_public_id: string | null;
@@ -56,6 +71,7 @@ export type BusinessErpSnapshotStatus = {
   completed_at?: string | null;
   expected_counts?: Record<string, number>;
   received_counts?: Record<string, number>;
+  latest_run?: BusinessErpSnapshotRunStatus | null;
   manifest?: {
     table_count?: number;
     full_schema_fingerprint?: string;

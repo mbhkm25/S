@@ -5,6 +5,8 @@ declare
   v_user uuid := '11111111-1111-1111-1111-111111111111';
   v_business uuid := '22222222-2222-2222-2222-222222222222';
   v_snapshot uuid := '33333333-3333-3333-3333-333333333333';
+  v_refresh uuid := '44444444-4444-4444-4444-444444444444';
+  v_source uuid := '55555555-5555-5555-5555-555555555555';
 begin
   insert into public.business_profiles(id,owner_user_id) values(v_business,v_user);
   insert into public.business_erp_baseline_runs(
@@ -13,6 +15,28 @@ begin
     v_snapshot,v_business,'logical_backup','completed',now(),
     '{"tblAccounts":1,"tblCustomersInfo":1,"tblCurrencies":1,"tblEntries":2,"tblEntriesDetails":2,"tblSellInvoice":1,"tblSellInvoiceDetailes":1,"tblBuyInvoice":1,"tblBuyInvoiceDetailes":1,"tblClasses":1,"tblUnits":1}'::jsonb,
     '{"table_count":11}'::jsonb
+  );
+
+  insert into public.business_erp_baseline_runs(
+    baseline_public_id,business_id,source_instance_id,baseline_kind,status,started_at,last_seen_at,
+    schema_fingerprint,expected_counts,received_counts,manifest
+  ) values(
+    v_refresh,v_business,v_source,'logical_backup','uploading',now()+interval '1 minute',now()+interval '1 minute',
+    'test','{"tblAccounts":200,"tblSellInvoice":100}'::jsonb,'{}'::jsonb,
+    '{"table_count":2}'::jsonb
+  );
+
+  insert into public.business_erp_raw_events(
+    business_id,source_instance_id,entity_type,integrity,received_at
+  ) values(
+    v_business,v_source,'erp_logical_snapshot_chunk',
+    jsonb_build_object(
+      'baseline_public_id',v_refresh::text,
+      'schema_fingerprint','test',
+      'table_name','tblAccounts',
+      'row_count',50
+    ),
+    now()+interval '1 minute'
   );
 
   insert into public.business_erp_snapshot_rows(snapshot_public_id,business_id,table_name,row_key,row_hash,row_data,captured_at) values
@@ -37,6 +61,7 @@ select set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111'
 do $$
 declare
   v_business uuid := '22222222-2222-2222-2222-222222222222';
+  v_status jsonb;
   v_candidates jsonb;
   v_statement jsonb;
   v_sales jsonb;
@@ -46,6 +71,26 @@ declare
   v_plan jsonb;
   v_ai jsonb;
 begin
+  v_status := public.get_business_erp_snapshot_status_v1(v_business);
+  if not (v_status->>'available')::boolean then
+    raise exception 'completed snapshot must remain available during refresh: %',v_status;
+  end if;
+  if v_status->>'snapshot_public_id' <> '33333333-3333-3333-3333-333333333333' then
+    raise exception 'status must expose latest completed snapshot: %',v_status;
+  end if;
+  if v_status->'latest_run'->>'status' <> 'uploading' then
+    raise exception 'latest refresh state missing: %',v_status;
+  end if;
+  if (v_status->'latest_run'->>'received_row_count')::bigint <> 50 then
+    raise exception 'refresh received row count failed: %',v_status;
+  end if;
+  if (v_status->'latest_run'->>'expected_row_count')::bigint <> 300 then
+    raise exception 'refresh expected row count failed: %',v_status;
+  end if;
+  if (v_status->>'contract_version')::integer <> 2 then
+    raise exception 'snapshot status contract version failed: %',v_status;
+  end if;
+
   v_candidates := public.get_business_erp_customer_candidates_v1(v_business,'العميل',20);
   if jsonb_array_length(v_candidates->'items') <> 1 then
     raise exception 'customer candidate contract failed: %',v_candidates;
