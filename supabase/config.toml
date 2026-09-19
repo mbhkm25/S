@@ -416,3 +416,7 @@ enabled = true
 
 [functions.sanad-ai-agent-v1]
 verify_jwt = true
+
+
+[functions.sanad-ai-agent-eval-v1]
+verify_jwt = true
