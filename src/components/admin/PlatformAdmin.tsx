@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, BadgeCheck, Building2, CheckCircle2,
-  ClipboardList, CreditCard, ExternalLink, Eye, FileClock, FileText, Loader2,
+  Bot, ClipboardList, CreditCard, ExternalLink, Eye, FileClock, FileText, Loader2,
   MapPin, MessageCircle, RefreshCw, Save, Search, Settings2, ShieldCheck, Users, XCircle
 } from 'lucide-react';
 import {
@@ -12,8 +12,9 @@ import {
   type AdminPaymentRequestDetails, type AdminUser, type PlatformAdminSnapshot
 } from '../../lib/platformAdminApi';
 import WhatsAppAdminSection from './WhatsAppAdminSection';
+import SanadAgentQualityAdmin from './SanadAgentQualityAdmin';
 
-export type PlatformAdminTab = 'overview' | 'users' | 'whatsapp' | 'operations' | 'businesses' | 'pro' | 'settings' | 'audit';
+export type PlatformAdminTab = 'overview' | 'users' | 'whatsapp' | 'assistant_quality' | 'operations' | 'businesses' | 'pro' | 'settings' | 'audit';
 
 interface Props {
   onNavigate: (page: string, token?: string) => void;
@@ -35,6 +36,7 @@ const tabs: Array<{ id: PlatformAdminTab; label: string; icon: typeof Activity }
   { id: 'overview', label: 'النظرة العامة', icon: Activity },
   { id: 'users', label: 'المستخدمون', icon: Users },
   { id: 'whatsapp', label: 'مستخدمو واتساب', icon: MessageCircle },
+  { id: 'assistant_quality', label: 'جودة مساعد سند', icon: Bot },
   { id: 'operations', label: 'العمليات', icon: ClipboardList },
   { id: 'businesses', label: 'الأنشطة', icon: Building2 },
   { id: 'pro', label: 'سند Pro', icon: CreditCard },
@@ -218,6 +220,7 @@ export default function PlatformAdmin({ onNavigate, activeTab, onTabChange, embe
         <div className="space-y-2">{users.map((user) => <div key={user.id}><UserCard user={user} onStatus={requestUserStatus} /></div>)}{!users.length && <Empty text="لا توجد نتائج مطابقة." />}</div>
       </ListSection>}
       {tab === 'whatsapp' && <WhatsAppAdminSection setError={setError} setSuccess={setSuccess} />}
+      {tab === 'assistant_quality' && <SanadAgentQualityAdmin setError={setError} setSuccess={setSuccess} />}
       {tab === 'operations' && <ListSection title="آخر العمليات" search={search} setSearch={setSearch}>
         <div className="space-y-2">{operations.map((operation) => <article key={operation.id} className="rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-bold">{latinText(operation.financial_entity || 'جهة غير محددة')}</h3><p className="mt-1 text-[10px] text-slate-500">{latinText(operation.transaction_type || 'عملية مالية')} • {latinText(operation.submitted_by_name || operation.submitted_by_phone || 'مستخدم')}</p></div><div className="flex gap-1"><Badge tone={statusTone(operation.ai_status)}>{operation.ai_status}</Badge>{operation.possible_fraud && <Badge tone="red">اشتباه</Badge>}</div></div><div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3"><div><p className="text-sm font-bold">{operation.amount == null ? '—' : numberFormat.format(operation.amount)} <span className="text-[10px] text-slate-400">{operation.currency || ''}</span></p><p className="mt-1 text-[9px] text-slate-400">{formatDate(operation.created_at)}</p></div><Badge tone={statusTone(operation.sanad_risk_level)}>{operation.sanad_risk_level}</Badge></div></article>)}{!operations.length && <Empty text="لا توجد عمليات مطابقة." />}</div>
       </ListSection>}

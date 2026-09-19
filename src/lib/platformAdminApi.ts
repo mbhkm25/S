@@ -356,6 +356,72 @@ export interface AdminAssistantOverview {
   generated_at: string;
 }
 
+
+export interface AdminAgentEvalRun {
+  id: string;
+  assistant_version: string;
+  runner_version: string | null;
+  status: 'running' | 'passed' | 'failed' | 'cancelled';
+  total_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  critical_failures: number;
+  pass_rate: number | null;
+  release_gate_passed: boolean | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface AdminAgentEvalResult {
+  case_key: string;
+  title: string;
+  severity: 'normal' | 'high' | 'critical';
+  passed: boolean;
+  actual_response: string | null;
+  actual_tool_names: string[];
+  latency_ms: number | null;
+  failures: Array<Record<string, unknown>>;
+  created_at: string;
+}
+
+export interface AdminAgentEvalOverview {
+  generated_at: string;
+  suite: {
+    total_cases: number;
+    critical_cases: number;
+    strict_cases: number;
+  };
+  runs: AdminAgentEvalRun[];
+  latest_run_id: string | null;
+  latest_results: AdminAgentEvalResult[];
+}
+
+export interface AdminAgentEvalExecution {
+  ok: boolean;
+  run_id: string;
+  assistant_version: string;
+  runner_version: string;
+  model: string;
+  gate: {
+    run_id: string;
+    total_cases: number;
+    passed_cases: number;
+    failed_cases: number;
+    critical_failures: number;
+    pass_rate: number;
+    release_gate_passed: boolean;
+  };
+  cases: Array<{
+    case_key: string;
+    status: string;
+    latency_ms?: number;
+    tools?: string[];
+    error?: string;
+  }>;
+}
+
 export interface AdminAssistantThread {
   conversation: AdminAssistantConversation & { summary: string | null };
   contact: AdminWhatsAppContact;
@@ -601,4 +667,22 @@ export async function updateAdminAssistantSettings(
     p_reason: reason
   });
   throwIfError(error);
+}
+
+
+export async function getAdminAgentEvalOverview(limit = 20): Promise<AdminAgentEvalOverview> {
+  const { data, error } = await supabase.rpc('platform_admin_get_agent_eval_overview', { p_limit: limit });
+  throwIfError(error);
+  return data as AdminAgentEvalOverview;
+}
+
+export async function runAdminAgentGoldenEval(
+  model: 'gemini-3.8-flash' | 'gemini-3.1-pro-preview' = 'gemini-3.8-flash'
+): Promise<AdminAgentEvalExecution> {
+  const { data, error } = await supabase.functions.invoke<AdminAgentEvalExecution>('sanad-ai-agent-eval-v1', {
+    body: { model }
+  });
+  throwIfError(error);
+  if (!data?.ok) throw new Error('agent_eval_failed');
+  return data;
 }
