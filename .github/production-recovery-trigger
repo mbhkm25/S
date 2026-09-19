@@ -1,4 +1,4 @@
-reason=deploy-erp-snapshot-status-v2
-requested_at=2026-09-19T15:05:00Z
-source_merge_sha=1209e9f71f07460c912456e78ff99c1a613461b2
+reason=deploy-four-domain-personal-finance-os
+requested_at=2026-09-19T15:45:00Z
+source_merge_sha=d7266fe459e600a5cb2b4af84b868dc25fb91335
 scope=production-pwa
