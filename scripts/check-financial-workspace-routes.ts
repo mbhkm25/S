@@ -2,13 +2,24 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const main = readFileSync('src/main.tsx', 'utf8');
+const home = readFileSync('src/components/Home.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
+const workspace = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
+const productNav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 const actionRoute = readFileSync('src/features/financial/FinancialActionRoute.tsx', 'utf8');
 const sectionRoute = readFileSync('src/features/financial/PersonalFinanceSectionRoute.tsx', 'utf8');
 const overview = readFileSync('src/features/financial/PersonalFinanceOverview.tsx', 'utf8');
 const masterActions = readFileSync('src/features/financial/FinancialMasterDataActions.tsx', 'utf8');
 const financeActions = readFileSync('src/features/financial/FinancialWorkspaceActions.tsx', 'utf8');
 const api = readFileSync('src/features/financial/api/financialApi.ts', 'utf8');
+
+
+assert.match(home, /window\.location\.replace\(financialUrl\(\)\)/, 'authenticated root must hand off into a product workspace');
+assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
+assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
+for (const label of ['مساعد سند', 'سند المالي', 'سند للأعمال', 'حسابي']) {
+  assert.match(productNav, new RegExp(label), `four-domain navigation must include ${label}`);
+}
 
 for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai']) {
   assert.match(main, new RegExp(route.replace('-', '\\-')), `main.tsx must recognize /${route}`);
