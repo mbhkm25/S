@@ -14,6 +14,8 @@ import {
   extractText,
   extractToolCalls,
   geminiInteraction,
+  inferScope,
+  detectClarification,
   mapUsage,
   sanitizeHistory,
   userInput,
@@ -409,17 +411,13 @@ function streamAgentResponse(
             thinking_level: thinkingLevel,
             response: {
               text: verified.text,
-              scope: toolOutputs.some((row) => row.name.startsWith("erp_") || row.name.startsWith("business_"))
-                ? "business"
-                : toolOutputs.length > 0 && toolOutputs.every((row) => row.name === "sanad_search_knowledge")
-                  ? "product"
-                  : "personal",
+              scope: inferScope(toolOutputs.map((row) => row.name)),
               period: verified.period,
               currencies: verified.currencies,
               source_refs: toolTrace
                 .filter((row) => row.status === "completed")
                 .map((row) => ({ tool: row.name, source: row.source })),
-              needs_clarification: /وضح|توضيح|أي حساب|أي نشاط|تقصد/.test(verified.text),
+              needs_clarification: detectClarification(verified.text),
             },
             verification: verified.verification,
             tool_trace: toolTrace,
@@ -612,17 +610,13 @@ Deno.serve(async (req) => {
       thinking_level: thinkingLevel,
       response: {
         text: verified.text,
-        scope: toolOutputs.some((row) => row.name.startsWith("erp_") || row.name.startsWith("business_"))
-          ? "business"
-          : toolOutputs.length > 0 && toolOutputs.every((row) => row.name === "sanad_search_knowledge")
-            ? "product"
-            : "personal",
+        scope: inferScope(toolOutputs.map((row) => row.name)),
         period: verified.period,
         currencies: verified.currencies,
         source_refs: toolTrace
           .filter((row) => row.status === "completed")
           .map((row) => ({ tool: row.name, source: row.source })),
-        needs_clarification: /وضح|توضيح|أي حساب|أي نشاط|تقصد/.test(verified.text),
+        needs_clarification: detectClarification(verified.text),
       },
       verification: verified.verification,
       tool_trace: toolTrace,
