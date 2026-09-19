@@ -51,14 +51,22 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
     scope: 'personal',
     risk: 'read_only',
     authoritativeSource: 'get_ai_financial_context_v2',
-    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    parameters: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'Optional ISO date YYYY-MM-DD.' },
+        to: { type: 'string', description: 'Optional ISO date YYYY-MM-DD.' },
+        limit: { type: 'integer', description: 'Bounded recent item count.' },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'finance_search_transactions',
     description: 'Read recent personal financial transactions for a bounded period and optional semantic query.',
     scope: 'personal',
     risk: 'read_only',
-    authoritativeSource: 'personal finance semantic read layer',
+    authoritativeSource: 'get_ai_financial_context_v2',
     parameters: {
       type: 'object',
       properties: {
@@ -91,7 +99,13 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
     scope: 'personal',
     risk: 'read_only',
     authoritativeSource: 'get_my_budget_progress_v1',
-    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    parameters: {
+      type: 'object',
+      properties: {
+        on_date: { type: 'string', description: 'Optional ISO date YYYY-MM-DD.' },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'finance_get_goals',
