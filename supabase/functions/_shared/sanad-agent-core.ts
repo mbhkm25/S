@@ -288,7 +288,10 @@ export function mapUsage(usage: unknown) {
   };
 }
 
-export async function geminiInteraction(body: Json, apiKey: string): Promise<Json> {
+export async function geminiInteraction(
+  body: Json,
+  apiKey = Deno.env.get("GEMINI_API_KEY") ?? "",
+): Promise<Json> {
   const response = await fetch(GEMINI_URL, {
     method: "POST",
     headers: {
