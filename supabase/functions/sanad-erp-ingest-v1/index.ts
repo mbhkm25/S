@@ -58,7 +58,7 @@ serve(async (req) => {
   try {
     const { data: device, error: deviceError } = await supabase
       .from("business_bridge_devices")
-      .select("id, device_public_id, status")
+      .select("id, device_public_id, business_id, connection_id, source_instance_id, status")
       .eq("device_public_id", devicePublicId)
       .eq("status", "active")
       .maybeSingle();
@@ -184,10 +184,41 @@ serve(async (req) => {
       }
     }
 
-    await supabase
-      .from("business_bridge_device_credentials")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", credential.id);
+    const syncTime = new Date().toISOString();
+
+    const [credentialTouch, connectionTouch, sourceTouch, deviceTouch] = await Promise.all([
+      supabase
+        .from("business_bridge_device_credentials")
+        .update({ last_used_at: syncTime })
+        .eq("id", credential.id),
+      supabase
+        .from("business_accounting_connections")
+        .update({
+          last_sync_at: syncTime,
+          last_error_code: null,
+          last_error_at: null,
+          updated_at: syncTime,
+        })
+        .eq("id", device.connection_id),
+      supabase
+        .from("business_erp_source_instances")
+        .update({ last_seen_at: syncTime, updated_at: syncTime })
+        .eq("id", device.source_instance_id),
+      supabase
+        .from("business_bridge_devices")
+        .update({ last_heartbeat_at: syncTime, updated_at: syncTime })
+        .eq("id", device.id),
+    ]);
+
+    const touchError =
+      credentialTouch.error || connectionTouch.error || sourceTouch.error || deviceTouch.error;
+    if (touchError) {
+      console.warn("erp_ingest_sync_health_update_failed", {
+        code: touchError.code,
+        event_id: eventId,
+        device_id: devicePublicId,
+      });
+    }
 
     return jsonResponse({ ok: true, ...ackRecord, normalization }, 200);
   } catch (error) {
