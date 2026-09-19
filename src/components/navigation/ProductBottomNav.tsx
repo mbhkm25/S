@@ -16,7 +16,7 @@ function inferArea(pathname: string, legacyPage?: string): ProductArea {
   if (/\/(sanad-ai)\/?$/.test(pathname)) return 'assistant';
   if (/\/(commercial)(?:\/actions)?\/?$/.test(pathname) || pathname.includes('/business/')) return 'business';
   if (/\/(account-center)\/?$/.test(pathname) || pathname.includes('/profile') || pathname.includes('/notifications')) return 'account';
-  if (/\/(financial)(?:\/actions)?\/?$/.test(pathname)) return 'financial';
+  if (/\/(financial)(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?\/?$/.test(pathname)) return 'financial';
 
   if (legacyPage && ['business-create', 'business-manage', 'business-operations', 'business-team', 'business-manage-profile', 'business-whatsapp-catalog', 'business-customers', 'business-community'].includes(legacyPage)) return 'business';
   if (legacyPage && ['profile', 'notifications'].includes(legacyPage)) return 'account';

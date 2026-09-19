@@ -148,13 +148,14 @@ export default function PersonalFinanceOverview({ dashboard }: { dashboard: Fina
 
       <section>
         <SectionHeader eyebrow="الوصول السريع" title="أدوات المحاسب الشخصي" />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           {([
-            ['الحسابات', `${dashboard.accounts || 0} حساب`, CreditCard, 'financial/actions'],
-            ['العمليات', 'الدخل والمصروف والتحويلات', ReceiptText, 'my-operations'],
-            ['الالتزامات', `${obligations.length} مفتوح`, Landmark, 'financial/actions'],
-            ['الميزانيات', `${dashboard.active_budgets || 0} نشطة`, PiggyBank, 'financial/actions'],
-            ['الأهداف', `${dashboard.active_goals || 0} نشط`, Target, 'financial/actions'],
+            ['الحسابات', `${dashboard.accounts || 0} حساب`, CreditCard, 'financial/accounts'],
+            ['العمليات', 'الدخل والمصروف والتحويلات', ReceiptText, 'financial/transactions'],
+            ['الالتزامات', `${obligations.length} مفتوح`, Landmark, 'financial/obligations'],
+            ['الميزانيات', `${dashboard.active_budgets || 0} نشطة`, PiggyBank, 'financial/budgets'],
+            ['الأهداف', `${dashboard.active_goals || 0} نشط`, Target, 'financial/goals'],
+            ['الأطراف', `${parties.length} طرف`, UsersRound, 'financial/parties'],
             ['التقارير', 'تحليل ومشاركة', FileText, 'reports'],
           ] as const).map(([title, subtitle, Icon, path]) => (
             <button key={String(title)} type="button" onClick={() => go(String(path))} className="min-h-[112px] rounded-[1.4rem] border border-slate-200 bg-white p-4 text-right shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition active:scale-[.985]">
@@ -172,7 +173,7 @@ export default function PersonalFinanceOverview({ dashboard }: { dashboard: Fina
       {!loading && !error ? (
         <>
           <section>
-            <SectionHeader eyebrow="حساباتي" title="الأرصدة حسب الحساب" action={<button type="button" onClick={() => go('financial/actions')} className="text-[10px] font-bold text-emerald-700">إدارة الحسابات</button>} />
+            <SectionHeader eyebrow="حساباتي" title="الأرصدة حسب الحساب" action={<button type="button" onClick={() => go('financial/accounts')} className="text-[10px] font-bold text-emerald-700">عرض الحسابات</button>} />
             {(overview?.balances || []).filter((account) => !account.system_role && account.status === 'active').length ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {(overview?.balances || []).filter((account) => !account.system_role && account.status === 'active').map((account) => (
@@ -193,7 +194,7 @@ export default function PersonalFinanceOverview({ dashboard }: { dashboard: Fina
 
           <div className="grid gap-5 xl:grid-cols-2">
             <section>
-              <SectionHeader eyebrow="آخر الحركة" title="العمليات المالية الأخيرة" action={<button type="button" onClick={() => go('financial/actions')} className="text-[10px] font-bold text-emerald-700">إضافة عملية</button>} />
+              <SectionHeader eyebrow="آخر الحركة" title="العمليات المالية الأخيرة" action={<button type="button" onClick={() => go('financial/transactions')} className="text-[10px] font-bold text-emerald-700">عرض العمليات</button>} />
               <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
                 {recentTransactions.length ? recentTransactions.map((item, index) => (
                   <div key={item.id} className={`flex items-center gap-3 p-4 ${index ? 'border-t border-slate-100' : ''}`}>

@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react';
 import FinancialActionRoute from './FinancialActionRoute';
 import FinancialWorkspaceRoute from './FinancialWorkspaceRoute';
+import PersonalFinanceSectionRoute from './PersonalFinanceSectionRoute';
 import ProductBottomNav from '../../components/navigation/ProductBottomNav';
 
 function basePath(): string {
@@ -12,6 +13,9 @@ export default function FinancialWorkspaceShell() {
   const pathname = window.location.pathname;
   const isActionRoute = /\/(financial|commercial)\/actions\/?$/.test(pathname);
   if (isActionRoute) return <FinancialActionRoute />;
+
+  const isPersonalSectionRoute = /\/financial\/(accounts|transactions|obligations|budgets|goals|parties)\/?$/.test(pathname);
+  if (isPersonalSectionRoute) return <PersonalFinanceSectionRoute />;
 
   const personal = /\/financial\/?$/.test(pathname);
   const commercial = /\/commercial\/?$/.test(pathname);

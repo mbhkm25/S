@@ -358,3 +358,181 @@ export async function getPersonalFinanceOverview(): Promise<RpcResult<PersonalFi
     error: null,
   };
 }
+
+
+export type PersonalTransactionListItem = {
+  id: string;
+  transaction_type: string;
+  transaction_at: string;
+  description?: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  source?: string | null;
+  reference_code?: string | null;
+  category_name?: string | null;
+  party_name?: string | null;
+};
+
+export type PersonalObligationListItem = {
+  id: string;
+  obligation_type: 'payable' | 'receivable';
+  title: string;
+  original_amount: number;
+  outstanding_amount: number;
+  currency: string;
+  due_date?: string | null;
+  status: string;
+  party_name?: string | null;
+};
+
+export type PersonalBudgetListItem = {
+  id: string;
+  name: string;
+  period_start: string;
+  period_end: string;
+  amount: number;
+  currency: string;
+  status: string;
+  category_name?: string | null;
+};
+
+export type PersonalGoalListItem = {
+  id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  currency: string;
+  target_date?: string | null;
+  status: string;
+};
+
+export type PersonalPartyListItem = {
+  id: string;
+  display_name: string;
+  party_type?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  status: string;
+};
+
+function relatedName(value: unknown, key: string): string | null {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    if (first && typeof first === 'object' && key in first) return String((first as Record<string, unknown>)[key] || '') || null;
+    return null;
+  }
+  if (value && typeof value === 'object' && key in value) return String((value as Record<string, unknown>)[key] || '') || null;
+  return null;
+}
+
+export async function getPersonalTransactions(limit = 100): Promise<RpcResult<PersonalTransactionListItem[]>> {
+  const { data, error } = await supabase
+    .from('personal_finance_transactions')
+    .select('id,transaction_type,transaction_at,description,amount,currency,status,source,reference_code,personal_finance_categories(name),personal_finance_parties(display_name)')
+    .order('transaction_at', { ascending: false })
+    .limit(limit);
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map((row) => ({
+      id: String(row.id),
+      transaction_type: String(row.transaction_type || ''),
+      transaction_at: String(row.transaction_at || ''),
+      description: row.description || null,
+      amount: Number(row.amount || 0),
+      currency: String(row.currency || ''),
+      status: String(row.status || ''),
+      source: row.source || null,
+      reference_code: row.reference_code || null,
+      category_name: relatedName(row.personal_finance_categories, 'name'),
+      party_name: relatedName(row.personal_finance_parties, 'display_name'),
+    })),
+    error: null,
+  };
+}
+
+export async function getPersonalObligations(limit = 100): Promise<RpcResult<PersonalObligationListItem[]>> {
+  const { data, error } = await supabase
+    .from('personal_finance_obligations')
+    .select('id,obligation_type,title,original_amount,outstanding_amount,currency,due_date,status,personal_finance_parties(display_name)')
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .limit(limit);
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map((row) => ({
+      id: String(row.id),
+      obligation_type: row.obligation_type === 'receivable' ? 'receivable' : 'payable',
+      title: String(row.title || ''),
+      original_amount: Number(row.original_amount || 0),
+      outstanding_amount: Number(row.outstanding_amount || 0),
+      currency: String(row.currency || ''),
+      due_date: row.due_date || null,
+      status: String(row.status || ''),
+      party_name: relatedName(row.personal_finance_parties, 'display_name'),
+    })),
+    error: null,
+  };
+}
+
+export async function getPersonalBudgets(limit = 100): Promise<RpcResult<PersonalBudgetListItem[]>> {
+  const { data, error } = await supabase
+    .from('personal_finance_budgets')
+    .select('id,name,period_start,period_end,amount,currency,status,personal_finance_categories(name)')
+    .order('period_start', { ascending: false })
+    .limit(limit);
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map((row) => ({
+      id: String(row.id),
+      name: String(row.name || ''),
+      period_start: String(row.period_start || ''),
+      period_end: String(row.period_end || ''),
+      amount: Number(row.amount || 0),
+      currency: String(row.currency || ''),
+      status: String(row.status || ''),
+      category_name: relatedName(row.personal_finance_categories, 'name'),
+    })),
+    error: null,
+  };
+}
+
+export async function getPersonalGoals(limit = 100): Promise<RpcResult<PersonalGoalListItem[]>> {
+  const { data, error } = await supabase
+    .from('personal_finance_goals')
+    .select('id,name,target_amount,current_amount,currency,target_date,status')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return {
+    data: error ? null : (data || []).map((row) => ({
+      id: String(row.id),
+      name: String(row.name || ''),
+      target_amount: Number(row.target_amount || 0),
+      current_amount: Number(row.current_amount || 0),
+      currency: String(row.currency || ''),
+      target_date: row.target_date || null,
+      status: String(row.status || ''),
+    })),
+    error,
+  };
+}
+
+export async function getPersonalParties(limit = 100): Promise<RpcResult<PersonalPartyListItem[]>> {
+  const { data, error } = await supabase
+    .from('personal_finance_parties')
+    .select('id,display_name,party_type,phone,email,notes,status')
+    .order('display_name')
+    .limit(limit);
+  return {
+    data: error ? null : (data || []).map((row) => ({
+      id: String(row.id),
+      display_name: String(row.display_name || ''),
+      party_type: row.party_type || null,
+      phone: row.phone || null,
+      email: row.email || null,
+      notes: row.notes || null,
+      status: String(row.status || ''),
+    })),
+    error,
+  };
+}
