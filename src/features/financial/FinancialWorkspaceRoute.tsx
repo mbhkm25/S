@@ -254,7 +254,7 @@ export default function FinancialWorkspaceRoute() {
   return (
     <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 lg:pl-28">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
           <button onClick={() => go()} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
             <ArrowRight className="h-5 w-5" />
           </button>
@@ -271,7 +271,7 @@ export default function FinancialWorkspaceRoute() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 pb-32 lg:pl-28 lg:pb-10">
+      <main className="mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10">
         <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
           <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
         </section>
