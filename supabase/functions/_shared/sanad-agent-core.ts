@@ -333,6 +333,29 @@ function currencyMentioned(text: string, currency: string) {
   return (aliases[currency] ?? [currency]).some((token) => text.includes(token));
 }
 
+function extractPeriodFromOutput(value: unknown): { from?: string; to?: string } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Json;
+
+  const period = row.period;
+  if (period && typeof period === "object" && !Array.isArray(period)) {
+    const p = period as Json;
+    const from = typeof p.from === "string" ? p.from : undefined;
+    const to = typeof p.to === "string" ? p.to : undefined;
+    if (from || to) return { from, to };
+  }
+
+  const fromDate = typeof row.from_date === "string" ? row.from_date : undefined;
+  const toDate = typeof row.to_date === "string" ? row.to_date : undefined;
+  if (fromDate || toDate) return { from: fromDate, to: toDate };
+
+  for (const key of ["context", "dashboard", "data"]) {
+    const nested = extractPeriodFromOutput(row[key]);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 export function verifyAndRepair(
   text: string,
   toolOutputs: Array<{ name: string; args: Json; output: unknown }>,
@@ -343,8 +366,15 @@ export function verifyAndRepair(
   const missingCurrencies = financial ? currencies.filter((currency) => !currencyMentioned(answer, currency)) : [];
 
   const periods = toolOutputs
-    .map((row) => ({ from: String(row.args.from ?? ""), to: String(row.args.to ?? "") }))
-    .filter((period) => /^\d{4}-\d{2}-\d{2}$/.test(period.from) || /^\d{4}-\d{2}-\d{2}$/.test(period.to));
+    .map((row) => {
+      const from = String(row.args.from ?? "");
+      const to = String(row.args.to ?? "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(from) || /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        return { from: from || undefined, to: to || undefined };
+      }
+      return extractPeriodFromOutput(row.output);
+    })
+    .filter((period): period is { from?: string; to?: string } => Boolean(period?.from || period?.to));
   const period = periods[0];
   const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
 
