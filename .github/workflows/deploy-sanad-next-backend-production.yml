@@ -92,7 +92,8 @@ jobs:
               20260918150500_erp_replica_read_surface_hardening_v1.sql|\
               20260918153000_erp_sales_purchase_read_models_v1.sql|\
               20260918154500_erp_replica_retention_policy_v1.sql|\
-              20260918160000_ai_erp_read_contract_v1.sql)
+              20260918160000_ai_erp_read_contract_v1.sql|\
+              20260919150000_erp_snapshot_status_resilience_v2.sql)
                 ;;
               *)
                 echo "Unexpected pending migration: $migration" >&2
@@ -148,7 +149,8 @@ jobs:
             20260918150500 \
             20260918153000 \
             20260918154500 \
-            20260918160000; do
+            20260918160000 \
+            20260919150000; do
             grep -q "$version" <<<"$migration_list"
           done
 
