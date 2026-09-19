@@ -192,7 +192,9 @@ jobs:
           mkdir -p "${test_root}/supabase/migrations"
           mkdir -p "${test_root}/supabase/functions"
           cp supabase/config.toml "${test_root}/supabase/config.toml"
+          cp -R supabase/functions/_shared "${test_root}/supabase/functions/_shared"
           cp -R supabase/functions/sanad-ai-agent-v1 "${test_root}/supabase/functions/sanad-ai-agent-v1"
+          cp -R supabase/functions/sanad-ai-agent-eval-v1 "${test_root}/supabase/functions/sanad-ai-agent-eval-v1"
           OPENAI_API_KEY=disabled supabase start \
             --workdir "${test_root}" \
             -x studio,imgproxy,inbucket,logflare,vector,supavisor
