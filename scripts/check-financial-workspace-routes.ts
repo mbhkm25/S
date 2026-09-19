@@ -6,6 +6,8 @@ const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx',
 const actionRoute = readFileSync('src/features/financial/FinancialActionRoute.tsx', 'utf8');
 const sectionRoute = readFileSync('src/features/financial/PersonalFinanceSectionRoute.tsx', 'utf8');
 const overview = readFileSync('src/features/financial/PersonalFinanceOverview.tsx', 'utf8');
+const masterActions = readFileSync('src/features/financial/FinancialMasterDataActions.tsx', 'utf8');
+const financeActions = readFileSync('src/features/financial/FinancialWorkspaceActions.tsx', 'utf8');
 const api = readFileSync('src/features/financial/api/financialApi.ts', 'utf8');
 
 for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai']) {
@@ -24,6 +26,11 @@ for (const section of ['accounts', 'transactions', 'obligations', 'budgets', 'go
 }
 
 assert.match(actionRoute, /PersonalMasterDataActions/, 'personal actions must expose master-data management');
+assert.match(actionRoute, /personalFocus/, 'personal action route must support contextual focus');
+assert.match(actionRoute, /FOCUS_META/, 'personal action route must return to the originating section');
+assert.match(sectionRoute, /financial\/actions\?focus=/, 'personal finance sections must deep-link focused actions');
+assert.match(masterActions, /initialMode/, 'personal master-data actions must accept an initial focused mode');
+assert.match(financeActions, /initialMode/, 'personal finance actions must accept an initial focused mode');
 assert.match(actionRoute, /BusinessMasterDataActions/, 'commercial actions must expose party management');
 assert.match(actionRoute, /CommercialSettlementPanel/, 'commercial actions must use compatibility-filtered settlement panel');
 
