@@ -14,7 +14,7 @@ for (const required of [
   'قراءة فقط',
   'tool_trace',
 ]) {
-  assert.match(workspace, new RegExp(required.replace(/[.*+?^$\\{\\}()|[\\]\\\\]/g, '\\\\$&')), `workspace missing ${required}`);
+  assert.ok(workspace.includes(required), `workspace missing ${required}`);
 }
 
 assert.match(route, /SanadAgentWorkspace/);
