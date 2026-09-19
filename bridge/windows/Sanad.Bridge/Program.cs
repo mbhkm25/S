@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,6 +13,87 @@ namespace Sanad.Bridge
 
         private static async Task<int> Main(string[] args)
         {
+            ConfigureConsoleEncoding();
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--local-probe", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaSaleLocalProbe.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-discovery", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaLogicalDiscoveryCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--semantic-schema", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaSemanticSchemaCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--relationship-audit", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaRelationshipAuditCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--customer-ledger-audit", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaCustomerLedgerAuditCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--local-scan", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaSaleChangeDetector.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--outbox-inspect", StringComparison.OrdinalIgnoreCase)))
+            {
+                return SaleOutboxInspector.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--outbox-lifecycle", StringComparison.OrdinalIgnoreCase)))
+            {
+                return SaleOutboxLifecycleProbe.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--transaction-envelope", StringComparison.OrdinalIgnoreCase)))
+            {
+                return EdaaTransactionEnvelopeV1.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--authorize-device", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await BridgeDeviceAuthorizationCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--repair-overlap-bootstrap", StringComparison.OrdinalIgnoreCase)))
+            {
+                return SaleOverlapBootstrapRepairCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-health", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BridgeAgentHealthCommand.Run(args);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--logical-snapshot", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await EdaaLogicalSnapshotCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--agent-cycle", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await BridgeAgentCycleCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--heartbeat", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await BridgeHeartbeatCommand.RunAsync(args).ConfigureAwait(false);
+            }
+
+            if (args != null && Array.Exists(args, value => string.Equals(value, "--cloud-send", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await SaleCloudSender.RunAsync(args).ConfigureAwait(false);
+            }
+
             try
             {
                 Console.WriteLine("SANAD Bridge 0.2 — Edaa discovery and baseline sync");
@@ -225,6 +307,21 @@ namespace Sanad.Bridge
             }
 
             throw new OperationCanceledException("Authorization session ended before completion.");
+        }
+
+        private static void ConfigureConsoleEncoding()
+        {
+            try
+            {
+                var utf8 = new UTF8Encoding(false);
+                Console.OutputEncoding = utf8;
+                Console.InputEncoding = utf8;
+            }
+            catch
+            {
+                // Encoding hardening is best-effort; Bridge execution must not fail because
+                // a non-interactive Windows host does not expose a configurable console.
+            }
         }
 
         private static void OpenBrowser(string url)
