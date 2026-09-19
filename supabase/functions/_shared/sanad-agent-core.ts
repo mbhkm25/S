@@ -365,3 +365,14 @@ export function verifyAndRepair(
     },
   };
 }
+
+
+export function inferScope(toolNames: string[]): "personal" | "business" | "product" {
+  if (toolNames.some((name) => name.startsWith("erp_") || name.startsWith("business_"))) return "business";
+  if (toolNames.length > 0 && toolNames.every((name) => name === "sanad_search_knowledge")) return "product";
+  return "personal";
+}
+
+export function detectClarification(text: string): boolean {
+  return /وضح|توضيح|أي حساب|أي نشاط|تقصد|حدد|اختر/.test(text);
+}
