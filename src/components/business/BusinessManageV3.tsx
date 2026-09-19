@@ -451,7 +451,7 @@ export default function BusinessManageV3({ onNavigate }: Props) {
         </a>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl space-y-3 px-3 py-4 sm:px-4 lg:px-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-3 px-3 py-4 sm:px-4 lg:px-6 xl:px-8">
         {success && (
           <div role="status" className="flex gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-700">
             <CheckCircle2 className="h-4 w-4 shrink-0" />{success}

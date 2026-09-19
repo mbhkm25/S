@@ -299,8 +299,10 @@ export default function BusinessAccountingSystem({ businessId }: Props) {
             <BusinessErpCloudReplica businessId={businessId} />
           </div>
 
-          <BusinessErpCustomerStatement businessId={businessId} />
-          <BusinessErpDocuments businessId={businessId} />
+          <div className="grid gap-4 2xl:grid-cols-2 2xl:items-start">
+            <BusinessErpCustomerStatement businessId={businessId} />
+            <BusinessErpDocuments businessId={businessId} />
+          </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
             <BusinessErpRetentionPolicy businessId={businessId} />
