@@ -13,8 +13,28 @@ function basePath(): string {
   return value.endsWith('/') ? value : `${value}/`;
 }
 
+type PersonalActionFocus = 'account' | 'category' | 'party' | 'transaction' | 'budget' | 'obligation' | 'goal' | null;
+
+function personalFocus(): PersonalActionFocus {
+  const value = new URLSearchParams(window.location.search).get('focus');
+  return ['account', 'category', 'party', 'transaction', 'budget', 'obligation', 'goal'].includes(value || '')
+    ? value as Exclude<PersonalActionFocus, null>
+    : null;
+}
+
+const FOCUS_META: Record<Exclude<PersonalActionFocus, null>, { title: string; back: string }> = {
+  account: { title: 'إدارة الحسابات', back: 'financial/accounts' },
+  category: { title: 'إدارة التصنيفات', back: 'financial' },
+  party: { title: 'إدارة الأطراف', back: 'financial/parties' },
+  transaction: { title: 'عملية مالية جديدة', back: 'financial/transactions' },
+  budget: { title: 'إدارة الميزانيات', back: 'financial/budgets' },
+  obligation: { title: 'إدارة الالتزامات', back: 'financial/obligations' },
+  goal: { title: 'إدارة الأهداف', back: 'financial/goals' },
+};
+
 export default function FinancialActionRoute() {
   const commercial = /\/commercial\/actions\/?$/.test(window.location.pathname);
+  const focus = commercial ? null : personalFocus();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [businesses, setBusinesses] = useState<AccountBusiness[]>([]);
@@ -44,9 +64,12 @@ export default function FinancialActionRoute() {
     return () => { active = false; };
   }, [commercial]);
 
-  const backPath = commercial ? 'commercial' : 'financial';
+  const backPath = commercial ? 'commercial' : focus ? FOCUS_META[focus].back : 'financial';
+  const title = commercial ? 'إجراءات سند التجاري' : focus ? FOCUS_META[focus].title : 'إجراءات سند المالي';
   const Icon = commercial ? BriefcaseBusiness : WalletCards;
   const onChanged = () => setRevision(value => value + 1);
+  const masterFocus = focus === 'account' || focus === 'category' || focus === 'party' ? focus : null;
+  const financeFocus = focus === 'transaction' || focus === 'budget' || focus === 'obligation' || focus === 'goal' ? focus : null;
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] font-arabic text-slate-900" dir="rtl">
@@ -56,7 +79,7 @@ export default function FinancialActionRoute() {
             <ArrowRight className="h-5 w-5" />
           </button>
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white"><Icon className="h-5 w-5" /></span>
-          <div><p className="text-[9px] font-bold text-slate-400">إجراءات موثقة</p><h1 className="text-base font-black">{commercial ? 'إجراءات سند التجاري' : 'إجراءات سند المالي'}</h1></div>
+          <div><p className="text-[9px] font-bold text-slate-400">إجراءات موثقة</p><h1 className="text-base font-black">{title}</h1></div>
         </div>
       </header>
 
@@ -69,7 +92,19 @@ export default function FinancialActionRoute() {
             {businessId ? <div key={`${businessId}-${revision}`} className="space-y-4"><BusinessMasterDataActions businessId={businessId} onChanged={onChanged} /><CommercialActions businessId={businessId} onChanged={onChanged} /><CommercialSettlementPanel businessId={businessId} onChanged={onChanged} /></div> : null}
           </>
         ) : null}
-        {!loading && !error && !commercial ? <div key={revision} className="space-y-4"><PersonalMasterDataActions onChanged={onChanged} /><PersonalFinanceActions onChanged={onChanged} /><PersonalFinanceCorrectionPanel onChanged={onChanged} /></div> : null}
+        {!loading && !error && !commercial ? (
+          <div key={revision} className="space-y-4">
+            {masterFocus ? <PersonalMasterDataActions onChanged={onChanged} initialMode={masterFocus} /> : null}
+            {financeFocus ? <PersonalFinanceActions onChanged={onChanged} initialMode={financeFocus} /> : null}
+            {!focus ? (
+              <>
+                <PersonalMasterDataActions onChanged={onChanged} />
+                <PersonalFinanceActions onChanged={onChanged} />
+                <PersonalFinanceCorrectionPanel onChanged={onChanged} />
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </main>
     </div>
   );
