@@ -1036,6 +1036,15 @@ export default function App() {
     }
   };
 
+  const isWideDesktopPage = [
+    'business-manage',
+    'business-manage-profile',
+    'business-whatsapp-catalog',
+    'business-customers',
+    'business-team',
+    'business-operations'
+  ].includes(currentPage);
+
   const profileFallback = profileStatus === 'degraded' || profileStatus === 'missing' ? (
     <ProfileLoadFailure
       message={profileError}
@@ -1054,7 +1063,7 @@ export default function App() {
       {/* Top Brand Navbar */}
       {currentPage !== 'scan-qr' && (
         <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 px-4 py-3 shadow-sm" id="global_header">
-          <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+          <div className={`mx-auto flex items-center justify-between gap-3 ${isWideDesktopPage ? 'max-w-7xl' : 'max-w-2xl'}`}>
             <div className="flex items-center gap-2">
               <div className="flex flex-col items-start">
                 <img
@@ -1111,7 +1120,7 @@ export default function App() {
       )}
 
       {/* Main Container Area */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 pb-24" id="app_main">
+      <main className={`mx-auto w-full flex-1 py-5 pb-24 ${isWideDesktopPage ? 'max-w-7xl px-3 sm:px-4 lg:px-6' : 'max-w-2xl px-4'}`} id="app_main">
         {shouldShowAuth ? (
           <Auth onAuthSuccess={handleAuthSuccess} />
         ) : (
