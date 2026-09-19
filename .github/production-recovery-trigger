@@ -1,4 +1,4 @@
-reason=deploy-erp-workspace-navigation
-requested_at=2026-09-19T17:05:00Z
-source_merge_sha=80ddb7950a82130c3c6f133c61c15deaabb1053b
+reason=deploy-four-domain-stable-audit
+requested_at=2026-09-19T19:58:00+03:00
+source_merge_sha=a45073e5829e4c25331ea48eb96b3fd1a502428d
 scope=production-pwa
