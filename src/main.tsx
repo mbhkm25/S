@@ -31,7 +31,7 @@ const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNati
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
-const isFinancialWorkspaceRoute = /\/(financial(?:\/actions)?|commercial(?:\/actions)?|account-center|sanad-ai)\/?$/.test(window.location.pathname);
+const isFinancialWorkspaceRoute = /\/(financial(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?|commercial(?:\/actions)?|account-center|sanad-ai)\/?$/.test(window.location.pathname);
 
 if (isAndroidNative && !import.meta.env.DEV) initializeAndroidNativePush();
 if (!isPublicInteractiveReport && !isFinancialWorkspaceRoute) installDeviceLedgerRuntime();
