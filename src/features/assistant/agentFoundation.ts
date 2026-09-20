@@ -14,6 +14,19 @@ export const SANAD_ASSISTANT_MODEL_POLICY = {
   externalConversationState: 'stateless' as const,
 } as const;
 
+export const SANAD_ASSISTANT_INTELLIGENCE_POLICY = {
+  version: 'sanad-insights-v2',
+  deterministicFactsOnly: true,
+  modelMayExplainButNotCreateAlerts: true,
+  maxInsightsPerTurn: 8,
+  staleReplicaInfoHours: 12,
+  staleReplicaWarningHours: 24,
+  obligationDueSoonDays: 7,
+  goalDueSoonDays: 30,
+  budgetNearLimitPercent: 80,
+  preserveCurrenciesSeparately: true,
+} as const;
+
 export const SANAD_ASSISTANT_EXECUTION_POLICY = {
   maxToolCallsPerTurn: 8,
   maxSequentialToolRounds: 5,
@@ -47,7 +60,7 @@ export type SanadAssistantToolDefinition = {
 export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   {
     name: 'finance_get_overview',
-    description: 'Read the authenticated user personal financial overview, preserving every currency separately.',
+    description: 'Read the authenticated user personal financial overview, preserving every currency separately. Use for broad personal reviews; pair with finance_get_budgets when the user asks what needs attention.',
     scope: 'personal',
     risk: 'read_only',
     authoritativeSource: 'get_ai_financial_context_v2',
@@ -141,7 +154,7 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   },
   {
     name: 'business_get_dashboard',
-    description: 'Read a business commercial dashboard using the authorized business scope.',
+    description: 'Read a business commercial dashboard using the authorized business scope, including open receivables/payables by currency and overdue document count. Use for broad business attention reviews.',
     scope: 'business',
     risk: 'read_only',
     authoritativeSource: 'get_business_commercial_dashboard_v1',
@@ -309,6 +322,12 @@ export type SanadAssistantAttention = {
   severity: 'info' | 'warning' | 'critical';
   title: string;
   body: string;
+  category?: 'obligation' | 'budget' | 'goal' | 'business' | 'sync' | 'document' | 'currency' | 'data_quality';
+  priority?: number;
+  source_tool?: string;
+  source_label?: string;
+  source_fact?: string;
+  rule_id?: string;
 };
 
 export type SanadAssistantResponseContract = {
@@ -319,6 +338,10 @@ export type SanadAssistantResponseContract = {
   cards?: SanadAssistantAnswerCard[];
   entities?: SanadAssistantEntity[];
   attention?: SanadAssistantAttention[];
+  insight_meta?: {
+    version?: string;
+    deterministic_count?: number;
+  };
   copy_text?: string;
   source_refs: Array<{
     tool: string;
@@ -339,6 +362,8 @@ export const SANAD_ASSISTANT_SYSTEM_PRINCIPLES = [
   'State the relevant period and currency when answering financial questions.',
   'Current production mode is read-only. Do not create, post, settle, reverse, or mutate financial records.',
   'Do not expose private chain-of-thought. User-visible progress may describe tool activity or concise reasoning summaries only.',
+  'Proactive alerts must come from deterministic rules over trusted tool outputs; the model must not invent overdue, over-budget, stale-sync, or risk states.',
+  'A non-zero balance or open receivable/payable is a fact, not automatically a warning.',
 ] as const;
 
 export function toolByName(name: string): SanadAssistantToolDefinition | undefined {

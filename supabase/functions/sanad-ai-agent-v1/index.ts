@@ -25,6 +25,7 @@ import {
   type ToolCall,
 } from "../_shared/sanad-agent-core.ts";
 import { buildAgentPresentation } from "../_shared/sanad-agent-presentation.ts";
+import { buildAgentInsights, mergeAgentAttention } from "../_shared/sanad-agent-insights.ts";
 
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
 
@@ -622,6 +623,7 @@ function streamAgentResponse(
           });
 
           const presentation = buildAgentPresentation(toolOutputs);
+          const deterministicInsights = buildAgentInsights(toolOutputs);
           const responsePayload = {
             text: verified.text,
             scope: inferScope(toolOutputs.map((row) => row.name)),
@@ -629,7 +631,13 @@ function streamAgentResponse(
             currencies: verified.currencies,
             cards: cloud.preferences.response_cards_enabled ? presentation.cards : [],
             entities: presentation.entities,
-            attention: cloud.preferences.proactive_insights_enabled ? presentation.attention : [],
+            attention: cloud.preferences.proactive_insights_enabled
+              ? mergeAgentAttention(presentation.attention, deterministicInsights)
+              : [],
+            insight_meta: {
+              version: "sanad-insights-v2",
+              deterministic_count: deterministicInsights.length,
+            },
             copy_text: cloud.preferences.response_cards_enabled ? presentation.copy_text : undefined,
             source_refs: toolTrace
               .filter((row) => row.status === "completed")
@@ -849,6 +857,7 @@ Deno.serve(async (req) => {
     });
 
     const presentation = buildAgentPresentation(toolOutputs);
+    const deterministicInsights = buildAgentInsights(toolOutputs);
     const responsePayload = {
       text: verified.text,
       scope: inferScope(toolOutputs.map((row) => row.name)),
@@ -856,7 +865,13 @@ Deno.serve(async (req) => {
       currencies: verified.currencies,
       cards: cloud.preferences.response_cards_enabled ? presentation.cards : [],
       entities: presentation.entities,
-      attention: cloud.preferences.proactive_insights_enabled ? presentation.attention : [],
+      attention: cloud.preferences.proactive_insights_enabled
+        ? mergeAgentAttention(presentation.attention, deterministicInsights)
+        : [],
+      insight_meta: {
+        version: "sanad-insights-v2",
+        deterministic_count: deterministicInsights.length,
+      },
       copy_text: cloud.preferences.response_cards_enabled ? presentation.copy_text : undefined,
       source_refs: toolTrace
         .filter((row) => row.status === "completed")

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { buildAgentInsights } from '../supabase/functions/_shared/sanad-agent-insights.ts';
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
@@ -23,6 +24,7 @@ const attachmentMigration = readFileSync('supabase/migrations/20260920103000_san
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts', 'utf8');
 const attachmentComposer = readFileSync('src/features/assistant/SanadAttachmentComposer.tsx', 'utf8');
 const attachmentFunction = readFileSync('supabase/functions/sanad-ai-attachment-analyze-v1/index.ts', 'utf8');
+const insights = readFileSync('supabase/functions/_shared/sanad-agent-insights.ts', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -206,3 +208,96 @@ assert.match(runtime, /p_attachment_ids/);
 assert.match(api, /attachment_ids/);
 
 console.log('SANAD Attachments v1 contract passed.');
+
+
+for (const required of [
+  'buildAgentInsights',
+  'obligation_overdue_v1',
+  'budget_over_v1',
+  'goal_past_due_v1',
+  'business_overdue_documents_v1',
+  'erp_replica_stale_24h_v1',
+  'mergeAgentAttention',
+]) {
+  assert.ok(insights.includes(required), `Insight Engine missing ${required}`);
+}
+
+assert.match(runtime, /buildAgentInsights/);
+assert.match(runtime, /mergeAgentAttention/);
+assert.match(runtime, /sanad-insights-v2/);
+assert.match(core, /inferAgentRoutingHint/);
+assert.match(core, /finance_get_overview وfinance_get_budgets/);
+assert.match(responseBlocks, /إشارة محسوبة/);
+assert.match(responseBlocks, /المصدر:/);
+
+const fixedNow = Date.parse('2026-09-20T09:00:00Z');
+const insightFixture = buildAgentInsights([
+  {
+    name: 'finance_get_obligations',
+    args: {},
+    output: {
+      items: [
+        { id:'p1', obligation_type:'payable', outstanding_amount:10000, currency:'YER', due_date:'2026-09-18' },
+        { id:'r1', obligation_type:'receivable', outstanding_amount:50, currency:'SAR', due_date:'2026-09-25' },
+      ],
+    },
+  },
+  {
+    name: 'finance_get_budgets',
+    args: {},
+    output: {
+      budgets: [
+        { id:'b1', name:'البيت', currency:'YER', budget_amount:100000, spent_amount:110000, usage_percent:110, is_over_budget:true },
+        { id:'b2', name:'الوقود', currency:'SAR', budget_amount:1000, spent_amount:850, usage_percent:85, is_over_budget:false },
+      ],
+    },
+  },
+  {
+    name: 'finance_get_goals',
+    args: {},
+    output: {
+      items: [
+        { id:'g1', name:'احتياطي', target_amount:1000, current_amount:400, currency:'SAR', target_date:'2026-09-19' },
+      ],
+    },
+  },
+  {
+    name: 'business_get_dashboard',
+    args: { business_id:'b' },
+    output: {
+      overdue_count:2,
+      receivables_by_currency:[
+        { currency:'SAR', outstanding:500 },
+        { currency:'YER', outstanding:200000 },
+      ],
+      payables_by_currency:[],
+    },
+  },
+  {
+    name: 'erp_get_replica_status',
+    args: { business_id:'b' },
+    output: {
+      context:{
+        available:true,
+        snapshot_public_id:'snap',
+        completed_at:'2026-09-19T07:00:00Z',
+      },
+    },
+  },
+], fixedNow);
+
+assert.ok(insightFixture.some((item) => item.rule_id === 'obligation_overdue_v1' && item.body.includes('YER')));
+assert.ok(insightFixture.some((item) => item.rule_id === 'obligation_due_soon_v1' && item.body.includes('SAR')));
+assert.ok(insightFixture.some((item) => item.rule_id === 'budget_over_v1'));
+assert.ok(insightFixture.some((item) => item.rule_id === 'budget_near_limit_v1'));
+assert.ok(insightFixture.some((item) => item.rule_id === 'goal_past_due_v1'));
+assert.ok(insightFixture.some((item) => item.rule_id === 'business_overdue_documents_v1'));
+assert.ok(insightFixture.some((item) => item.rule_id === 'erp_replica_stale_24h_v1'));
+assert.ok(insightFixture.every((item) => Boolean(item.source_label)));
+assert.ok(insightFixture.every((item) => !item.body.includes('SAR + YER')));
+
+assert.match(core, /broadAttention[\s\S]*finance_get_overview وfinance_get_budgets/);
+assert.match(core, /broadAttention && businessId[\s\S]*business_get_dashboard/);
+assert.match(core, /if \(replica\)[\s\S]*erp_get_replica_status/);
+
+console.log('SANAD Agent Intelligence v2 contract passed.');
