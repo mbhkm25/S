@@ -38,6 +38,8 @@ import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadMessageActions from './SanadMessageActions';
 import SanadPulseMark from './SanadPulseMark';
 import SanadVoiceDictationButton from './SanadVoiceDictationButton';
+import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
+import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 
 type BusinessOption = { id: string; name: string };
 
@@ -51,6 +53,7 @@ type WorkspaceMessage = {
   persisted?: boolean;
   isStarred?: boolean;
   rating?: -1 | 1 | null;
+  attachments?: SanadAgentAttachment[];
 };
 
 const QUICK_PROMPTS = [
