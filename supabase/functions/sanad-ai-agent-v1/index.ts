@@ -395,6 +395,7 @@ function sourceForTool(name: string) {
     finance_get_categories: "personal_finance_categories",
     business_list_accessible: "get_my_account_center_v1",
     business_get_dashboard: "get_business_commercial_dashboard_v1",
+    business_get_payment_inbox: "get_business_payment_inbox_v3",
     business_search_parties: "business_parties",
     action_prepare_personal_transaction: "sanad_agent_actions:review_only",
     action_prepare_commercial_document: "sanad_agent_actions:review_only",
@@ -527,6 +528,50 @@ async function executeTool(
       p_from: from,
       p_to: to,
     });
+  }
+
+  if (name === "business_get_payment_inbox") {
+    const businessId = cleanText(args.business_id,80);
+    if (!businessId) throw new Error("business_id_required");
+    if (actionContext.businessId && businessId !== actionContext.businessId) {
+      throw new Error("payment_inbox_business_context_mismatch");
+    }
+    const allowedViews = new Set(["new","mine","team_active","review","completed","all"]);
+    const requestedView = cleanText(args.view,30) || "new";
+    const view = allowedViews.has(requestedView) ? requestedView : "new";
+    const payload = await rpc<Json>(userClient,"get_business_payment_inbox_v3",{
+      p_business_id:businessId,
+      p_view:view,
+      p_limit:boundedInt(args.limit,20,30),
+      p_before_created_at:null,
+      p_before_id:null,
+    });
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    return {
+      contract_version: payload.contract_version,
+      business_id: businessId,
+      view,
+      has_more: payload.has_more === true,
+      items: items.slice(0,30).flatMap((value) => {
+        if (!value || typeof value !== "object") return [];
+        const row = value as Json;
+        return [{
+          id: cleanText(row.id,80),
+          operation_id: cleanText(row.operation_id,80),
+          public_token: cleanText(row.public_token,180),
+          status: cleanText(row.status,60),
+          amount: Number(row.amount ?? 0) || 0,
+          currency: cleanText(row.currency,20),
+          financial_entity: cleanText(row.financial_entity,160) || null,
+          receiver_name: cleanText(row.receiver_name,200) || null,
+          reference_number: cleanText(row.reference_number,160) || null,
+          transaction_datetime: cleanText(row.transaction_datetime,80) || null,
+          claimed_by_name: cleanText(row.claimed_by_name,200) || null,
+          completed_by_name: cleanText(row.completed_by_name,200) || null,
+          created_at: cleanText(row.created_at,80) || null,
+        }];
+      }),
+    };
   }
 
   if (name === "erp_search_customers") {
