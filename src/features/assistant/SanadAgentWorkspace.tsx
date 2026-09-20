@@ -788,6 +788,16 @@ export default function SanadAgentWorkspace() {
 
           <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-3 md:p-4">
             <div className="mx-auto max-w-4xl rounded-[1.4rem] border border-slate-200 bg-slate-50 p-2 shadow-inner focus-within:border-slate-400">
+              <SanadAttachmentComposer
+                threadId={selectedThreadId}
+                businessId={businessId || null}
+                disabled={sending}
+                attachments={pendingAttachments}
+                onChange={setPendingAttachments}
+                onRequestThread={ensureThread}
+                onError={(message) => setWorkspaceError(message)}
+              />
+
               <textarea
                 ref={textareaRef}
                 value={draft}
@@ -816,7 +826,11 @@ export default function SanadAgentWorkspace() {
                 </div>
                 <button
                   type="submit"
-                  disabled={sending || !draft.trim()}
+                  disabled={
+                    sending
+                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                  }
                   className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
@@ -825,7 +839,7 @@ export default function SanadAgentWorkspace() {
               </div>
             </div>
             <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • الميكروفون يحوّل كلامك إلى نص قابل للمراجعة.
+              Enter للإرسال • Shift + Enter لسطر جديد • الصوت والمرفقات يبقيان للمراجعة قبل أي إرسال أو إجراء.
             </p>
           </form>
         </div>
