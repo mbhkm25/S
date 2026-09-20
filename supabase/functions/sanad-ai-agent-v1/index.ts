@@ -30,9 +30,11 @@ import { buildAgentInsights, mergeAgentAttention } from "../_shared/sanad-agent-
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
 type ActionToolContext = {
   threadId: string | null;
+  businessId: string | null;
   requestId: string;
   toolCallId: string;
   attachmentIds: string[];
+  priorToolOutputs: Array<{ name: string; args: Json; output: unknown }>;
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -313,6 +315,74 @@ function safeSearchTerm(value: unknown, max = 120) {
   return cleanText(value, max).replace(/[,()%_*]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function objectValue(value: unknown): Json {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Json : {};
+}
+
+function resolvedIdsFromToolOutputs(
+  rows: Array<{ name: string; output: unknown }>,
+  toolName: string,
+  field: string,
+) {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.name !== toolName) continue;
+    const root = objectValue(row.output);
+    const items = Array.isArray(root.items)
+      ? root.items
+      : Array.isArray(row.output) ? row.output : [];
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const id = cleanText((item as Json)[field],80);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+function assertActionPreparationResolved(
+  name: string,
+  args: Json,
+  actionContext: ActionToolContext,
+) {
+  if (name === "action_prepare_personal_transaction") {
+    const accounts = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"finance_get_accounts","id");
+    if (!accounts.size) throw new Error("action_requires_finance_accounts_resolution");
+
+    const type = cleanText(args.transaction_type,20);
+    const accountId = cleanText(args.account_id,80);
+    const sourceId = cleanText(args.source_account_id,80);
+    const destinationId = cleanText(args.destination_account_id,80);
+
+    if ((type === "income" || type === "expense") && (!accountId || !accounts.has(accountId))) {
+      throw new Error("action_account_not_resolved_in_turn");
+    }
+    if (type === "transfer" && (!sourceId || !destinationId || !accounts.has(sourceId) || !accounts.has(destinationId))) {
+      throw new Error("action_transfer_accounts_not_resolved_in_turn");
+    }
+
+    const categoryId = cleanText(args.category_id,80);
+    if (categoryId) {
+      const categories = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"finance_get_categories","id");
+      if (!categories.has(categoryId)) throw new Error("action_category_not_resolved_in_turn");
+    }
+    return;
+  }
+
+  if (name === "action_prepare_commercial_document") {
+    const businessId = cleanText(args.business_id,80);
+    if (!businessId || (actionContext.businessId && businessId !== actionContext.businessId)) {
+      throw new Error("action_business_context_mismatch");
+    }
+
+    const partyId = cleanText(args.party_id,80);
+    if (partyId) {
+      const parties = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"business_search_parties","id");
+      if (!parties.has(partyId)) throw new Error("action_party_not_resolved_in_turn");
+    }
+  }
+}
+
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
     finance_get_overview: "get_ai_financial_context_v2",
@@ -435,6 +505,7 @@ async function executeTool(
 
   if (name === "action_prepare_personal_transaction" || name === "action_prepare_commercial_document") {
     if (!actionContext.threadId) throw new Error("action_thread_required");
+    assertActionPreparationResolved(name,args,actionContext);
     const actionType = name === "action_prepare_personal_transaction"
       ? "personal_transaction"
       : "commercial_document_draft";
@@ -624,9 +695,11 @@ function streamAgentResponse(
                 tool,
                 () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
                   threadId: cloud.threadId,
+                  businessId: cloud.businessId,
                   requestId,
                   toolCallId: tool.id,
                   attachmentIds: attachmentContext.ids,
+                  priorToolOutputs: toolOutputs,
                 }),
               );
               send("tool.completed", item.trace);
@@ -870,9 +943,11 @@ Deno.serve(async (req) => {
       const executed = await Promise.all(calls.map((tool) =>
         logTool(adminClient, tool, () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
           threadId: cloud.threadId,
+          businessId: cloud.businessId,
           requestId,
           toolCallId: tool.id,
           attachmentIds: attachmentContext.ids,
+          priorToolOutputs: toolOutputs,
         }))
       ));
 
