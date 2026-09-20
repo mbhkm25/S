@@ -10,6 +10,7 @@ export type AgentInsight = {
   title: string;
   body: string;
   source_tool: string;
+  source_label: string;
   source_fact: string;
   rule_id: string;
 };
@@ -319,7 +320,13 @@ export function buildAgentInsights(
   const insights: AgentInsight[] = [];
 
   for (const row of toolOutputs) {
-    if (row.name === "finance_get_obligations") insights.push(...obligationInsights(row, nowMs));
+    if (row.name === "finance_get_overview") {
+      const root = object(row.output);
+      const context = object(root.context);
+      const ctx = Object.keys(context).length ? context : root;
+      insights.push(...obligationInsights({ name:"finance_get_obligations",args:row.args,output:{ items:ctx.open_obligations ?? [] } },nowMs));
+      insights.push(...goalInsights({ name:"finance_get_goals",args:row.args,output:{ items:ctx.active_goals ?? [] } },nowMs));
+    } else if (row.name === "finance_get_obligations") insights.push(...obligationInsights(row, nowMs));
     else if (row.name === "finance_get_budgets") insights.push(...budgetInsights(row));
     else if (row.name === "finance_get_goals") insights.push(...goalInsights(row, nowMs));
     else if (row.name === "business_get_dashboard") insights.push(...businessDashboardInsights(row));
