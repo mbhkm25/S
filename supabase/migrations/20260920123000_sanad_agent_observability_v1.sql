@@ -215,29 +215,28 @@ begin
     'window_days',v_days,
     'generated_at',now(),
     'scopes',coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'scope',scope,
-        'count',count(*),
-        'failure_count',count(*) filter(where status='failed'),
-        'failure_rate',round((count(*) filter(where status='failed'))::numeric/nullif(count(*),0),4),
-        'p50_total_ms',round(percentile_cont(0.50) within group(order by total_latency_ms) filter(where total_latency_ms is not null))::integer,
-        'p95_total_ms',round(percentile_cont(0.95) within group(order by total_latency_ms) filter(where total_latency_ms is not null))::integer,
-        'p50_first_progress_ms',round(percentile_cont(0.50) within group(order by first_progress_ms) filter(where first_progress_ms is not null))::integer,
-        'p95_first_progress_ms',round(percentile_cont(0.95) within group(order by first_progress_ms) filter(where first_progress_ms is not null))::integer,
-        'p50_first_answer_ms',round(percentile_cont(0.50) within group(order by first_answer_ms) filter(where first_answer_ms is not null))::integer,
-        'p95_first_answer_ms',round(percentile_cont(0.95) within group(order by first_answer_ms) filter(where first_answer_ms is not null))::integer,
-        'avg_tool_calls',round(avg(tool_calls)::numeric,2),
-        'avg_failed_tool_calls',round(avg(failed_tool_calls)::numeric,2),
-        'avg_retry_count',round(avg(retry_count)::numeric,2),
-        'cache_ratio',round(sum(cached_tokens)::numeric/nullif(sum(input_tokens),0),4)
-      ) order by scope)
+      select jsonb_agg(to_jsonb(s) order by s.scope)
       from (
-        select *
+        select
+          scope,
+          count(*)::bigint as count,
+          count(*) filter(where status='failed')::bigint as failure_count,
+          round((count(*) filter(where status='failed'))::numeric/nullif(count(*),0),4) as failure_rate,
+          round(percentile_cont(0.50) within group(order by total_latency_ms) filter(where total_latency_ms is not null))::integer as p50_total_ms,
+          round(percentile_cont(0.95) within group(order by total_latency_ms) filter(where total_latency_ms is not null))::integer as p95_total_ms,
+          round(percentile_cont(0.50) within group(order by first_progress_ms) filter(where first_progress_ms is not null))::integer as p50_first_progress_ms,
+          round(percentile_cont(0.95) within group(order by first_progress_ms) filter(where first_progress_ms is not null))::integer as p95_first_progress_ms,
+          round(percentile_cont(0.50) within group(order by first_answer_ms) filter(where first_answer_ms is not null))::integer as p50_first_answer_ms,
+          round(percentile_cont(0.95) within group(order by first_answer_ms) filter(where first_answer_ms is not null))::integer as p95_first_answer_ms,
+          round(avg(tool_calls)::numeric,2) as avg_tool_calls,
+          round(avg(failed_tool_calls)::numeric,2) as avg_failed_tool_calls,
+          round(avg(retry_count)::numeric,2) as avg_retry_count,
+          round(sum(cached_tokens)::numeric/nullif(sum(input_tokens),0),4) as cache_ratio
         from public.sanad_agent_performance_metrics
         where user_id=v_uid
           and created_at >= now() - make_interval(days=>v_days)
-      ) m
-      group by user_id
+        group by scope
+      ) s
     ),'[]'::jsonb)
   );
 end;
