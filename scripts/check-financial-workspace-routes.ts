@@ -28,7 +28,7 @@ assert.match(productHeader, /payment-inbox\.html/, 'shared product header must e
 assert.match(productHeader, /وارد المدفوعات/, 'shared product header must label Payment Inbox access');
 assert.match(app, /payment-inbox\.html/, 'global app header must expose Payment Inbox');
 assert.match(styles, /noto-sans-arabic-arabic-wght-normal\.woff2/, 'Noto Sans Arabic Arabic variable subset must be self-hosted');
-assert.match(styles, /noto-sans-arabic-latin-wght-normal\\.woff2/, 'Noto Sans Arabic Latin variable subset must be self-hosted');
+assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/, 'Noto Sans Arabic Latin variable subset must be self-hosted');
 assert.match(styles, /font-display:\s*swap/, 'self-hosted Noto Sans Arabic must use font-display swap');
 assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'primary SANAD typography must not depend on Google Fonts at runtime');
 
