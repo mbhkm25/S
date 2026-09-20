@@ -461,7 +461,8 @@ assert.match(styles, /font-display:\s*swap/);
 assert.match(styles, /font-weight:\s*100 900/);
 assert.match(styles, /Noto Sans Arabic/);
 assert.match(workspace, /id="sanad-agent-workspace"/);
-assert.match(workspace, /sticky bottom-0/);
+assert.match(workspace, /data-workspace-slot="composer"/);
+assert.doesNotMatch(workspace, /sticky bottom-0/, 'Viewport contract keeps the composer in normal layout flow');
 assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
 for (const source of [workspace, sidebar, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
   assert.doesNotMatch(source, /font-black/, 'Phase 2 must remove black font weight from Agent UI');
