@@ -58,6 +58,16 @@ import ProductBottomNav from './components/navigation/ProductBottomNav';
 const PROFILE_LOAD_TIMEOUT_MS = 12_000;
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
 
+function redirectAuthenticatedHomeToSanad(): boolean {
+  const configuredBase = import.meta.env.VITE_APP_BASE_PATH || '/';
+  const cleanBase = configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
+  const rootPath = cleanBase === '/' ? '/' : cleanBase.slice(0, -1);
+  const pathname = window.location.pathname;
+  if (pathname !== cleanBase && pathname !== rootPath) return false;
+  window.location.replace(`${cleanBase}sanad-ai`);
+  return true;
+}
+
 function withTimeout<T>(operation: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -704,6 +714,8 @@ export default function App() {
       setUser(sessionUser);
       setAuthState('authenticated');
 
+      if (redirectAuthenticatedHomeToSanad()) return;
+
       if (loadedProfileUserIdRef.current !== sessionUser.id
           && profileLoadingUserIdRef.current !== sessionUser.id) {
         void loadProfileBackground(sessionUser.id, sessionUser.user_metadata);
@@ -1003,6 +1015,7 @@ export default function App() {
     setProfileError(null);
     setAuthState('authenticated');
     setPasskeyEnrollmentUser(sessionUser);
+    if (redirectAuthenticatedHomeToSanad()) return;
     const notificationIntent = new URL(window.location.href).searchParams.get('notification');
     if (!isValidNotificationId(notificationIntent)) navigateTo('home');
   };
