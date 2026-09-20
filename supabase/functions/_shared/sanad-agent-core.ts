@@ -520,7 +520,12 @@ export function verifyAndRepair(
 ) {
   let answer = cleanText(text, 18000);
   const currencies = [...collectCurrencies(toolOutputs.map((row) => row.output))].sort();
-  const financial = toolOutputs.some((row) => row.name.startsWith("finance_") || row.name.startsWith("business_") || row.name.startsWith("erp_"));
+  const financial = toolOutputs.some((row) =>
+    row.name.startsWith("finance_")
+    || row.name.startsWith("business_")
+    || row.name.startsWith("erp_")
+    || row.name.startsWith("action_prepare_")
+  );
   const missingCurrencies = financial ? currencies.filter((currency) => !currencyMentioned(answer, currency)) : [];
 
   const periods = toolOutputs
@@ -556,7 +561,11 @@ export function verifyAndRepair(
 
 
 export function inferScope(toolNames: string[]): "personal" | "business" | "product" {
-  if (toolNames.some((name) => name.startsWith("erp_") || name.startsWith("business_"))) return "business";
+  if (toolNames.some((name) =>
+    name.startsWith("erp_")
+    || name.startsWith("business_")
+    || name === "action_prepare_commercial_document"
+  )) return "business";
   if (toolNames.length > 0 && toolNames.every((name) => name === "sanad_search_knowledge")) return "product";
   return "personal";
 }
