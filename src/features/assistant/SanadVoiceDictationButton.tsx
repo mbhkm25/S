@@ -182,7 +182,7 @@ export default function SanadVoiceDictationButton({ disabled, onTranscript, onEr
           <button
             type="button"
             onClick={() => finish(false)}
-            className="flex h-9 items-center gap-2 rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white shadow-sm"
+            className="flex h-9 items-center gap-2 rounded-xl bg-rose-600 px-3 text-[13px] font-medium text-white shadow-sm"
             title="إيقاف وتحويل إلى نص"
           >
             <Square className="h-3.5 w-3.5" fill="currentColor" />
@@ -210,7 +210,7 @@ export default function SanadVoiceDictationButton({ disabled, onTranscript, onEr
         </button>
       )}
       {notice ? (
-        <span className={`hidden max-w-[230px] truncate text-sm font-medium sm:inline ${recording ? 'text-rose-600' : 'text-slate-400'}`}>
+        <span className={`hidden max-w-[230px] truncate text-[11px] font-medium sm:inline ${recording ? 'text-rose-600' : 'text-slate-400'}`}>
           {notice}
         </span>
       ) : null}
