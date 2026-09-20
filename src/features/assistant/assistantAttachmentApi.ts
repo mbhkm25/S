@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 export type SanadAgentAttachmentStatus = 'uploaded' | 'analyzing' | 'ready' | 'failed' | 'deleted';
 
@@ -152,6 +153,7 @@ export async function uploadSanadAgentAttachment(
   threadId: string,
   businessId: string | null,
 ): Promise<SanadAgentAttachment> {
+  const uploadStartedAt = performance.now();
   validateSanadAttachmentFile(file);
   const userId = await currentUserId();
   const safeName = cleanFileName(file.name);
@@ -166,7 +168,18 @@ export async function uploadSanadAgentAttachment(
       upsert: false,
     });
 
-  if (uploadError) throw new Error(uploadError.message || 'تعذر رفع المرفق.');
+  if (uploadError) {
+    void recordSanadAgentClientMetric({
+      scope: 'attachment_upload',
+      threadId,
+      status: 'failed',
+      transport: 'storage',
+      totalLatencyMs: performance.now() - uploadStartedAt,
+      itemCount: 1,
+      byteCount: file.size,
+    });
+    throw new Error(uploadError.message || 'تعذر رفع المرفق.');
+  }
 
   let attachmentId = '';
   try {
@@ -186,8 +199,27 @@ export async function uploadSanadAgentAttachment(
   }
 
   try {
-    return await analyzeSanadAgentAttachment(attachmentId);
+    const analyzed = await analyzeSanadAgentAttachment(attachmentId);
+    void recordSanadAgentClientMetric({
+      scope: 'attachment_upload',
+      threadId,
+      status: analyzed.status === 'failed' ? 'failed' : 'completed',
+      transport: 'storage',
+      totalLatencyMs: performance.now() - uploadStartedAt,
+      itemCount: 1,
+      byteCount: file.size,
+    });
+    return analyzed;
   } catch (cause) {
+    void recordSanadAgentClientMetric({
+      scope: 'attachment_upload',
+      threadId,
+      status: 'failed',
+      transport: 'storage',
+      totalLatencyMs: performance.now() - uploadStartedAt,
+      itemCount: 1,
+      byteCount: file.size,
+    });
     // Keep the failed attachment so the user can see the failure and retry analysis.
     const failed = await getSanadAgentAttachment(attachmentId).catch(() => null);
     if (failed) return failed;
