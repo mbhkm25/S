@@ -444,3 +444,19 @@ assert.match(productionDeploy, /supabase migration list --linked/);
 assert.match(productionDeploy, /supabase functions list/);
 
 console.log('SANAD Production runtime release guard contract passed.');
+
+
+// Phase 2 — Typography & Conversation Layout
+assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'SANAD primary typography must not depend on Google Fonts at runtime');
+assert.match(styles, /noto-sans-arabic-arabic-wght-normal\.woff2/);
+assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/);
+assert.match(styles, /font-display:\s*swap/);
+assert.match(styles, /font-weight:\s*100 900/);
+assert.match(styles, /Noto Sans Arabic Variable/);
+assert.match(workspace, /id="sanad-agent-workspace"/);
+assert.match(workspace, /sticky bottom-0/);
+assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
+for (const source of [workspace, sidebar, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
+  assert.doesNotMatch(source, /font-black/, 'Phase 2 must remove black font weight from Agent UI');
+}
+console.log('SANAD Phase 2 typography and conversation layout contract passed.');
