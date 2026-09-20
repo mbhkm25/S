@@ -301,6 +301,7 @@ export default function SanadAgentWorkspace() {
   const [orbState, setOrbState] = useState<SanadOrbState>('idle');
 
   const endRef = useRef<HTMLDivElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const orbSuccessTimeoutRef = useRef<number | null>(null);
 
@@ -328,7 +329,9 @@ export default function SanadAgentWorkspace() {
   useEffect(() => () => clearOrbSuccessTimeout(), [clearOrbSuccessTimeout]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
   const refreshThreads = async (preferred?: string | null) => {
@@ -700,7 +703,7 @@ export default function SanadAgentWorkspace() {
   const empty = messages.length === 0;
 
   return (
-    <section id="sanad-agent-workspace" className="flex h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[58rem] flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
+    <section id="sanad-agent-workspace" className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
       <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-3 md:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -772,7 +775,11 @@ export default function SanadAgentWorkspace() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 md:px-7 md:py-6">
+          <div
+            ref={timelineRef}
+            data-scroll-owner="timeline"
+            className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 [scrollbar-gutter:stable] md:px-7 md:py-6"
+          >
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
@@ -866,7 +873,11 @@ export default function SanadAgentWorkspace() {
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={handleSubmit} className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:p-4">
+          <form
+            data-workspace-slot="composer"
+            onSubmit={handleSubmit}
+            className="shrink-0 border-t border-slate-200/80 bg-white/95 p-3 backdrop-blur-xl md:p-4"
+          >
             <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
