@@ -160,6 +160,49 @@ async function loadAgentCloudContext(
   };
 }
 
+function attachmentIdsFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.flatMap((item) => {
+    const id = cleanText(item, 80);
+    return /^[0-9a-f-]{36}$/i.test(id) ? [id] : [];
+  }))].slice(0, 5);
+}
+
+async function loadAttachmentContext(
+  userClient: SupabaseClient,
+  threadId: string | null,
+  attachmentIds: string[],
+) {
+  if (!attachmentIds.length) return { ids: [] as string[], summaries: [] as string[] };
+  if (!threadId) throw new Error("attachment_thread_required");
+
+  const rows = await Promise.all(attachmentIds.map((id) =>
+    rpc<Json>(userClient, "get_my_sanad_agent_attachment_v1", { p_attachment_id: id })
+  ));
+
+  const summaries: string[] = [];
+  for (const row of rows) {
+    if (cleanText(row.thread_id, 80) !== threadId) throw new Error("attachment_thread_mismatch");
+    if (cleanText(row.status, 40) !== "ready") throw new Error("attachment_not_ready");
+
+    const analysis = row.analysis && typeof row.analysis === "object" ? row.analysis as Json : {};
+    const suggestion = row.suggestion && typeof row.suggestion === "object" ? row.suggestion as Json : {};
+    const pieces = [
+      `الملف: ${cleanText(row.file_name, 300) || "مرفق"}`,
+      `النوع المستخرج: ${cleanText(analysis.document_type, 80) || "غير محدد"}`,
+      `الملخص: ${cleanText(analysis.summary, 1200) || "لا يوجد"}`,
+      cleanText(analysis.document_number, 160) ? `رقم المستند المستخرج: ${cleanText(analysis.document_number, 160)}` : "",
+      cleanText(analysis.counterparty_name, 300) ? `الطرف المستخرج: ${cleanText(analysis.counterparty_name, 300)}` : "",
+      analysis.amount !== null && analysis.amount !== undefined ? `المبلغ المستخرج: ${String(analysis.amount)} ${cleanText(analysis.currency, 20)}` : "",
+      `اقتراح المطابقة: ${cleanText(suggestion.kind, 80) || "review_required"}`,
+      suggestion.write_performed === false ? "لم تُنفذ أي كتابة أو عملية مالية." : "",
+    ].filter(Boolean);
+    summaries.push(pieces.join(" | "));
+  }
+
+  return { ids: attachmentIds, summaries };
+}
+
 function explicitMemoryFrom(message: string): { key: string; value: string } | null {
   const match = message.match(/^(?:تذكر|تذكّر|احفظ|احتفظ)\s+(?:أن|بأن)?\s*(.{3,800})$/i);
   if (!match) return null;
