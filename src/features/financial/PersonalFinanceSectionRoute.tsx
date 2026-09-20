@@ -14,7 +14,7 @@ import {
   UsersRound,
   WalletCards,
 } from 'lucide-react';
-import ProductBottomNav from '../../components/navigation/ProductBottomNav';
+import { navigateProduct } from '../../lib/productNavigation';
 import {
   getPersonalBudgets,
   getPersonalFinanceOverview,
@@ -48,13 +48,8 @@ const SECTIONS: Record<SectionKey, SectionMeta> = {
   parties: { label: 'الأطراف', eyebrow: 'العلاقات المالية', description: 'الأشخاص والجهات المرتبطة بعملياتك والتزاماتك.', icon: UsersRound },
 };
 
-function basePath(): string {
-  const value = import.meta.env.VITE_APP_BASE_PATH || '/';
-  return value.endsWith('/') ? value : `${value}/`;
-}
-
 function go(path: string) {
-  window.location.assign(`${basePath()}${path}`);
+  navigateProduct(path);
 }
 
 function resolveSection(pathname: string): SectionKey {
@@ -194,9 +189,9 @@ export default function PersonalFinanceSectionRoute() {
               const ItemIcon = item.icon;
               const selected = key === section;
               return (
-                <a key={key} href={`${basePath()}financial/${key}`} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[10px] font-bold transition ${selected ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                <button key={key} type="button" onClick={() => go(`financial/${key}`)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[12px] font-medium transition ${selected ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   <ItemIcon className="h-4 w-4" /> {item.label}
-                </a>
+                </button>
               );
             })}
           </div>
@@ -310,13 +305,12 @@ export default function PersonalFinanceSectionRoute() {
           </div> : <Empty text={query ? 'لا توجد أطراف مطابقة للبحث.' : 'لم تضف أشخاصًا أو جهات مالية بعد.'} />
         )}
 
-        <a href={`${basePath()}financial`} className="flex items-center justify-between rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3 text-[10px] font-bold text-slate-600 shadow-sm">
+        <button type="button" onClick={() => go('financial')} className="flex w-full items-center justify-between rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3 text-[12px] font-medium text-slate-600 shadow-sm">
           <span className="flex items-center gap-2"><FileText className="h-4 w-4" /> العودة إلى الموقف المالي العام</span>
           <ArrowRight className="h-4 w-4 rotate-180" />
-        </a>
+        </button>
       </main>
-
-      <ProductBottomNav activeArea="financial" />
+ 
     </div>
   );
 }

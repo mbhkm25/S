@@ -28,6 +28,9 @@ function resolveVendorChunk(id: string): string | undefined {
   if (id.includes('/motion/') || id.includes('/framer-motion/')) return 'vendor-motion';
   if (id.includes('/@capacitor/')) return 'vendor-capacitor';
   if (id.includes('/html5-qrcode/') || id.includes('/qrcode/')) return 'vendor-qr';
+  // Route-local icon imports tree-shake better when Rollup can keep them with
+  // their consumer chunks instead of forcing every SANAD icon into one shared vendor.
+  if (id.includes('/lucide-react/')) return undefined;
   return 'vendor';
 }
 

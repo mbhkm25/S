@@ -1,9 +1,11 @@
+import type { MouseEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { Inbox, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SANAD_APP_VERSION } from '../../lib/appVersion';
 import { getUserAvatarUrl } from '../../lib/userAvatar';
 import NotificationBell from '../notifications/NotificationBell';
+import { navigateProduct, productHref, shouldHandleProductLinkClick } from '../../lib/productNavigation';
 
 type Props = {
   userId: string | null;
@@ -17,6 +19,12 @@ type HeaderProfile = {
 function basePath(): string {
   const value = import.meta.env.VITE_APP_BASE_PATH || '/';
   return value.endsWith('/') ? value : `${value}/`;
+}
+
+function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
+  if (!shouldHandleProductLinkClick(event)) return;
+  event.preventDefault();
+  navigateProduct('sanad-ai');
 }
 
 export default function ProductAppHeader({ userId }: Props) {
@@ -56,14 +64,14 @@ export default function ProductAppHeader({ userId }: Props) {
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
-        <a href={`${base}sanad-ai`} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
+        <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
           <div className="flex flex-col items-start">
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="سند"
               className="h-9 w-auto object-contain sm:h-10"
             />
-            <span className="-mt-1 self-center font-mono text-[7px] font-bold tracking-wider text-slate-400" dir="ltr">
+            <span className="-mt-1 self-center font-mono text-[11px] font-medium tracking-wider text-slate-400" dir="ltr">
               V{SANAD_APP_VERSION}
             </span>
           </div>
@@ -97,10 +105,10 @@ export default function ProductAppHeader({ userId }: Props) {
                     decoding="async"
                   />
                 ) : (
-                  <span className="text-xs font-black">{profile?.full_name?.slice(0, 1) || 'س'}</span>
+                  <span className="text-xs font-semibold">{profile?.full_name?.slice(0, 1) || 'س'}</span>
                 )}
               </span>
-              <span className="hidden max-w-28 truncate text-[10px] font-black text-slate-700 md:block">
+              <span className="hidden max-w-28 truncate text-[12px] font-medium text-slate-700 md:block">
                 {profile?.full_name || 'حسابي'}
               </span>
             </a>

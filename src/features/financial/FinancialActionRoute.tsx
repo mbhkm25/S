@@ -7,11 +7,7 @@ import CommercialSettlementPanel from './CommercialSettlementPanel';
 import PersonalFinanceCorrectionPanel from './PersonalFinanceCorrectionPanel';
 import { getOwnedBusinesses } from './api/financialApi';
 import type { AccountBusiness } from './api/financialTypes';
-
-function basePath(): string {
-  const value = import.meta.env.VITE_APP_BASE_PATH || '/';
-  return value.endsWith('/') ? value : `${value}/`;
-}
+import { navigateProduct } from '../../lib/productNavigation';
 
 type PersonalActionFocus = 'account' | 'category' | 'party' | 'transaction' | 'budget' | 'obligation' | 'goal' | null;
 
@@ -75,7 +71,7 @@ export default function FinancialActionRoute() {
     <div className="min-h-screen bg-[#F7F7F5] font-arabic text-slate-900" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <button type="button" onClick={() => window.location.assign(`${basePath()}${backPath}`)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
+          <button type="button" onClick={() => navigateProduct(backPath)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة">
             <ArrowRight className="h-5 w-5" />
           </button>
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white"><Icon className="h-5 w-5" /></span>

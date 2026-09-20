@@ -27,7 +27,10 @@ for (const label of ['سند', 'سند المالي', 'سند للأعمال', '
 assert.match(productHeader, /payment-inbox\.html/, 'shared product header must expose Payment Inbox');
 assert.match(productHeader, /وارد المدفوعات/, 'shared product header must label Payment Inbox access');
 assert.match(app, /payment-inbox\.html/, 'global app header must expose Payment Inbox');
-assert.match(styles, /Noto\+Sans\+Arabic:wght@100;200;300;400;500;600;700;800;900/, 'Noto Sans Arabic full weight range must remain loaded');
+assert.match(styles, /noto-sans-arabic-arabic-wght-normal\.woff2/, 'Noto Sans Arabic Arabic variable subset must be self-hosted');
+assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/, 'Noto Sans Arabic Latin variable subset must be self-hosted');
+assert.match(styles, /font-display:\s*swap/, 'self-hosted Noto Sans Arabic must use font-display swap');
+assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'primary SANAD typography must not depend on Google Fonts at runtime');
 
 for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai']) {
   assert.match(main, new RegExp(route.replace('-', '\\-')), `main.tsx must recognize /${route}`);

@@ -13,7 +13,7 @@ const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts', 'utf
 const presentation = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260920071058_sanad_agent_workspace_v2.sql', 'utf8');
 const visualMigration = readFileSync('supabase/migrations/20260920121801_sanad_agent_message_feedback_v1.sql', 'utf8');
-const pulse = readFileSync('src/features/assistant/SanadPulseMark.tsx', 'utf8');
+const orb = readFileSync('src/features/assistant/SanadFluidOrb.tsx', 'utf8');
 const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButton.tsx', 'utf8');
@@ -41,7 +41,7 @@ for (const required of [
   'AssistantWorkspaceSidebar',
   'SanadAgentResponseBlocks',
   'SanadMessageActions',
-  'SanadPulseMark',
+  'SanadFluidOrb',
 ]) {
   assert.ok(workspace.includes(required), `workspace missing ${required}`);
 }
@@ -123,11 +123,12 @@ assert.match(visualMigration, /rating smallint/);
 assert.match(visualMigration, /update_my_sanad_agent_message_feedback_v1/);
 assert.match(visualMigration, /security definer/i);
 assert.match(visualMigration, /auth\.uid\(\)/);
-assert.match(pulse, /sanad-pulse-path/);
-assert.match(styles, /sanad-pulse-working/);
+assert.match(orb, /SanadOrbState/);
+assert.match(orb, /canvas\.getContext\('2d'/);
+assert.match(styles, /sanad-orb-executing/);
 assert.match(styles, /prefers-reduced-motion/);
 
-console.log('SANAD Agent Visual v3 contract passed.');
+console.log('SANAD Agent Visual v4 contract passed.');
 
 
 for (const required of [
@@ -444,3 +445,19 @@ assert.match(productionDeploy, /supabase migration list --linked/);
 assert.match(productionDeploy, /supabase functions list/);
 
 console.log('SANAD Production runtime release guard contract passed.');
+
+
+// Phase 2 — Typography & Conversation Layout
+assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'SANAD primary typography must not depend on Google Fonts at runtime');
+assert.match(styles, /noto-sans-arabic-arabic-wght-normal\.woff2/);
+assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/);
+assert.match(styles, /font-display:\s*swap/);
+assert.match(styles, /font-weight:\s*100 900/);
+assert.match(styles, /Noto Sans Arabic/);
+assert.match(workspace, /id="sanad-agent-workspace"/);
+assert.match(workspace, /sticky bottom-0/);
+assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
+for (const source of [workspace, sidebar, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
+  assert.doesNotMatch(source, /font-black/, 'Phase 2 must remove black font weight from Agent UI');
+}
+console.log('SANAD Phase 2 typography and conversation layout contract passed.');

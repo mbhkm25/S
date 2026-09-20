@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   CheckCircle2,
@@ -36,8 +36,8 @@ import {
 import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadMessageActions from './SanadMessageActions';
-import SanadPulseMark from './SanadPulseMark';
-import SanadVoiceDictationButton from './SanadVoiceDictationButton';
+import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
+import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDictationButton';
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
@@ -136,17 +136,17 @@ function MessageBubble({
         <div
           className={
             assistant
-              ? `rounded-[1.45rem] rounded-tr-md border p-4 shadow-sm md:p-5 ${message.failed ? 'border-rose-100 bg-rose-50' : 'border-slate-200 bg-white'}`
-              : 'rounded-[1.45rem] rounded-tl-md bg-slate-950 px-4 py-3 text-white shadow-sm md:px-5 md:py-4'
+              ? `${message.failed ? 'rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3' : 'py-1'}`
+              : 'rounded-2xl bg-slate-100 px-4 py-3 text-slate-900 md:px-5'
           }
         >
           {assistant ? (
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black text-slate-500">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                <SanadPulseMark state="idle" size={17} />
+                <SanadFluidOrb state="idle" size={22} animated={false} />
               </span>
               سند
-              {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{result.model}</span> : null}
+              {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-500">{result.model}</span> : null}
             </div>
           ) : null}
 
@@ -160,7 +160,7 @@ function MessageBubble({
             </div>
           ) : null}
 
-          <p className={`whitespace-pre-wrap text-[13px] leading-7 md:text-sm ${assistant ? 'text-slate-800' : 'text-white'}`}>
+          <p className={`whitespace-pre-wrap text-sm leading-7 md:text-[15px] ${assistant ? 'text-slate-800' : 'text-slate-900'}`}>
             {message.content}
           </p>
 
@@ -170,7 +170,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-[10px] font-black text-rose-700"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-[13px] font-medium text-rose-700"
             >
               <RotateCcw className="h-3.5 w-3.5" /> إعادة الإرسال
             </button>
@@ -192,7 +192,7 @@ function MessageBubble({
 
         {assistant && result && !message.failed ? (
           <div className="mt-2 space-y-2">
-            <div className="flex flex-wrap items-center gap-2 px-1 text-[9px] font-bold text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] font-medium text-slate-400">
               {result.latency_ms !== undefined ? (
                 <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
               ) : null}
@@ -203,18 +203,18 @@ function MessageBubble({
 
             {trace.length ? (
               <details className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-                <summary className="cursor-pointer list-none text-[10px] font-black text-slate-600">خطوات التنفيذ والمصادر</summary>
+                <summary className="cursor-pointer list-none text-[13px] font-medium text-slate-600">خطوات التنفيذ والمصادر</summary>
                 <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                   {trace.map((item, index) => (
-                    <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3 text-[10px]">
+                    <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3 text-xs">
                       <div className="flex items-start gap-2">
                         {item.status === 'completed'
                           ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
                           : <XCircle className="mt-0.5 h-3.5 w-3.5 text-rose-600" />}
                         <div>
-                          <p className="font-black text-slate-700">{toolLabel(item.name)}</p>
-                          <p className="mt-0.5 text-[9px] text-slate-400">{item.source}</p>
-                          {item.error ? <p className="mt-1 text-[9px] text-rose-600">{item.error}</p> : null}
+                          <p className="font-semibold text-slate-700">{toolLabel(item.name)}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">{item.source}</p>
+                          {item.error ? <p className="mt-1 text-[11px] text-rose-600">{item.error}</p> : null}
                         </div>
                       </div>
                       <span className="shrink-0 text-slate-400">{formatLatency(item.latency_ms)}</span>
@@ -298,9 +298,34 @@ export default function SanadAgentWorkspace() {
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<SanadAgentAttachment[]>([]);
+  const [orbState, setOrbState] = useState<SanadOrbState>('idle');
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const orbSuccessTimeoutRef = useRef<number | null>(null);
+
+  const clearOrbSuccessTimeout = useCallback(() => {
+    if (orbSuccessTimeoutRef.current !== null) {
+      window.clearTimeout(orbSuccessTimeoutRef.current);
+      orbSuccessTimeoutRef.current = null;
+    }
+  }, []);
+
+  const markOrbSuccess = useCallback(() => {
+    clearOrbSuccessTimeout();
+    setOrbState('success');
+    orbSuccessTimeoutRef.current = window.setTimeout(() => {
+      setOrbState('idle');
+      orbSuccessTimeoutRef.current = null;
+    }, 900);
+  }, [clearOrbSuccessTimeout]);
+
+  const handleVoiceStateChange = useCallback((state: SanadVoiceState) => {
+    clearOrbSuccessTimeout();
+    setOrbState(state === 'listening' ? 'listening' : state === 'transcribing' ? 'thinking' : 'idle');
+  }, [clearOrbSuccessTimeout]);
+
+  useEffect(() => () => clearOrbSuccessTimeout(), [clearOrbSuccessTimeout]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -578,6 +603,8 @@ export default function SanadAgentWorkspace() {
     setMessages((current) => [...current, userMessage]);
     setDraft('');
     setSending(true);
+    clearOrbSuccessTimeout();
+    setOrbState('thinking');
     setLastUserPrompt(prompt);
     setLiveStatus('بدأت معالجة الطلب…');
     setLiveTools([]);
@@ -591,15 +618,25 @@ export default function SanadAgentWorkspace() {
         attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
       }, (event) => {
-        if (event.type === 'run.started') setLiveStatus('بدأ مساعد سند المعالجة…');
-        else if (event.type === 'agent.status') setLiveStatus(event.data.label);
-        else if (event.type === 'tool.started') setLiveStatus(`${toolLabel(event.data.name)}…`);
-        else if (event.type === 'tool.completed') {
+        if (event.type === 'run.started') {
+          setOrbState('thinking');
+          setLiveStatus('بدأ مساعد سند المعالجة…');
+        } else if (event.type === 'agent.status') {
+          setOrbState('thinking');
+          setLiveStatus(event.data.label);
+        } else if (event.type === 'tool.started') {
+          setOrbState('executing');
+          setLiveStatus(`${toolLabel(event.data.name)}…`);
+        } else if (event.type === 'tool.completed') {
+          setOrbState('executing');
           setLiveTools((current) => [...current, event.data]);
           setLiveStatus(event.data.status === 'completed'
             ? `اكتملت: ${toolLabel(event.data.name)}`
             : `تعذرت: ${toolLabel(event.data.name)}`);
-        } else if (event.type === 'answer.final') setLiveStatus('تم التحقق، أجهز الإجابة…');
+        } else if (event.type === 'answer.final') {
+          setOrbState('thinking');
+          setLiveStatus('تم التحقق، أجهز الإجابة…');
+        }
       });
 
       const answer = result.response?.text?.trim() || 'أكملت معالجة الطلب، لكن لم يصل نص الإجابة.';
@@ -611,6 +648,7 @@ export default function SanadAgentWorkspace() {
         result,
         persisted: false,
       }]);
+      markOrbSuccess();
 
       setPendingAttachments([]);
       await refreshThreads(threadId);
@@ -629,6 +667,8 @@ export default function SanadAgentWorkspace() {
         setMemories(context.memories);
       }
     } catch (cause) {
+      clearOrbSuccessTimeout();
+      setOrbState('idle');
       const message = cause instanceof Error && cause.message ? cause.message : 'تعذر إكمال الطلب الآن.';
       setMessages((current) => [...current, {
         id: createId(),
@@ -660,8 +700,8 @@ export default function SanadAgentWorkspace() {
   const empty = messages.length === 0;
 
   return (
-    <section className="overflow-hidden rounded-[1.8rem] border border-slate-200 bg-[#FAFAF8] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
-      <div className="border-b border-slate-200 bg-white px-3 py-3 md:px-5">
+    <section id="sanad-agent-workspace" className="flex h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[58rem] flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
+      <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-3 md:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
@@ -672,28 +712,28 @@ export default function SanadAgentWorkspace() {
             >
               <Menu className="h-4 w-4" />
             </button>
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
-              <SanadPulseMark state={sending ? 'working' : 'idle'} size={25} />
+            <span className="flex h-11 w-11 items-center justify-center">
+              <SanadFluidOrb state={orbState} size={38} />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-black text-slate-950">سند</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700">
+                <h2 className="text-xl font-semibold text-slate-950">سند</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
                   <ShieldCheck className="h-3 w-3" /> قراءة آمنة
                 </span>
               </div>
-              <p className="mt-1 text-[10px] text-slate-500">
+              <p className="mt-1 text-[13px] text-slate-500">
                 محادثات سحابية · ذاكرة طويلة · بيانات حية موثقة
               </p>
             </div>
           </div>
 
           {businessLoading ? (
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-[9px] font-bold text-slate-400">
+            <span className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-400">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> تحميل سياق النشاط…
             </span>
           ) : businessId ? (
-            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black text-slate-700">
+            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-700">
               <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
               <span className="truncate">{businesses.find((business) => business.id === businessId)?.name || 'نشاط مرتبط'}</span>
             </span>
@@ -701,7 +741,7 @@ export default function SanadAgentWorkspace() {
             <button
               type="button"
               onClick={() => setBusinessSelectionOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[10px] font-black text-amber-800"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[13px] font-medium text-amber-800"
             >
               <BriefcaseBusiness className="h-4 w-4" /> اختر نشاط المحادثة
             </button>
@@ -710,12 +750,12 @@ export default function SanadAgentWorkspace() {
       </div>
 
       {workspaceError ? (
-        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[10px] font-bold text-rose-700">
+        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700">
           {workspaceError}
         </div>
       ) : null}
 
-      <div className="grid min-h-[68vh] xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[300px_minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
           threads={threads}
           selectedThreadId={selectedThreadId}
@@ -731,18 +771,16 @@ export default function SanadAgentWorkspace() {
           onForgetMemory={(id) => void forgetMemory(id)}
         />
 
-        <div className="flex min-h-[68vh] min-w-0 flex-col">
-          <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 md:px-7 md:py-6">
             {threadLoading ? (
-              <div className="flex min-h-[360px] items-center justify-center gap-2 text-[10px] font-bold text-slate-400">
+              <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
               </div>
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
-                <span className="flex h-16 w-16 items-center justify-center rounded-[1.6rem] bg-gradient-to-br from-slate-950 to-indigo-900 text-white shadow-[0_18px_50px_rgba(49,46,129,0.22)]">
-                  <SanadPulseMark state="idle" size={34} />
-                </span>
-                <h3 className="mt-5 text-xl font-black text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
+                <SanadFluidOrb state="idle" size={74} label="سند جاهز" />
+                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
                 </p>
@@ -751,16 +789,16 @@ export default function SanadAgentWorkspace() {
                   <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
                     <div className="flex items-center gap-2">
                       <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-[11px] font-black text-amber-900">اختر النشاط لهذه المحادثة</p>
+                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
                     </div>
-                    <p className="mt-1 text-[9px] leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {businesses.map((business) => (
                         <button
                           key={business.id}
                           type="button"
                           onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[10px] font-black text-slate-800 shadow-sm transition hover:border-amber-300"
+                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
                         >
                           {business.name}
                         </button>
@@ -775,7 +813,7 @@ export default function SanadAgentWorkspace() {
                       key={prompt}
                       type="button"
                       onClick={() => void sendPrompt(prompt)}
-                      className="rounded-2xl border border-slate-200 bg-white p-4 text-right text-[11px] font-bold leading-6 text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow-md active:scale-[.99]"
+                      className="rounded-2xl border border-slate-200 bg-white p-4 text-right text-sm font-medium leading-6 text-slate-700 shadow-sm transition hover:border-slate-300 hover:shadow-md active:scale-[.99]"
                     >
                       {prompt}
                     </button>
@@ -800,20 +838,19 @@ export default function SanadAgentWorkspace() {
 
             {sending ? (
               <div className="flex justify-start">
-                <div className="rounded-[1.4rem] rounded-tr-md border border-indigo-100 bg-white px-4 py-3 shadow-sm">
+                <div role="status" aria-live="polite" className="rounded-[1.35rem] rounded-tr-md border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                      <SanadPulseMark state="working" size={18} />
-                      <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="flex h-9 w-9 items-center justify-center">
+                      <SanadFluidOrb state={orbState === 'idle' ? 'thinking' : orbState} size={32} />
                     </span>
                     <div>
-                      <p className="text-[10px] font-black text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
+                      <p className="text-[13px] font-medium text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
                       {liveTools.length ? (
                         <div className="mt-2 flex max-w-[70vw] flex-wrap gap-1.5">
                           {liveTools.slice(-4).map((item, index) => (
                             <span
                               key={`${item.name}-${index}`}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-bold ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
                             >
                               {item.status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                               {toolLabel(item.name)}
@@ -829,8 +866,8 @@ export default function SanadAgentWorkspace() {
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-3 md:p-4">
-            <div className="mx-auto max-w-4xl rounded-[1.4rem] border border-slate-200 bg-slate-50 p-2 shadow-inner focus-within:border-slate-400">
+          <form onSubmit={handleSubmit} className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:p-4">
+            <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
@@ -849,12 +886,13 @@ export default function SanadAgentWorkspace() {
                 disabled={sending}
                 rows={2}
                 placeholder="اسأل سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
-                className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60"
+                className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
               />
               <div className="flex items-center justify-between gap-3 px-1 pb-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <SanadVoiceDictationButton
                     disabled={sending}
+                    onStateChange={handleVoiceStateChange}
                     onTranscript={(text) => {
                       setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
                       setWorkspaceError(null);
@@ -862,7 +900,7 @@ export default function SanadAgentWorkspace() {
                     }}
                     onError={(message) => setWorkspaceError(message)}
                   />
-                  <div className="hidden items-center gap-2 text-[9px] font-bold text-slate-400 md:flex">
+                  <div className="hidden items-center gap-2 text-xs font-medium text-slate-400 md:flex">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     راجع النص الصوتي قبل الإرسال
                   </div>
@@ -874,14 +912,14 @@ export default function SanadAgentWorkspace() {
                     || pendingAttachments.some((attachment) => attachment.status !== 'ready')
                     || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
                   }
-                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                   <span className="hidden sm:inline">إرسال</span>
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
+            <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
               Enter للإرسال • Shift + Enter لسطر جديد • أي إجراء مالي ينشئ مسودة مراجعة أولًا ولا يُنفذ إلا بعد اعتمادك الصريح.
             </p>
           </form>

@@ -112,11 +112,11 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
             <FileCheck2 className="h-4.5 w-4.5" />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-black text-slate-950">{review.title || card.title}</p>
-            {review.summary ? <p className="mt-1 text-[9px] leading-5 text-slate-500">{review.summary}</p> : null}
+            <p className="text-[15px] font-semibold text-slate-950">{review.title || card.title}</p>
+            {review.summary ? <p className="mt-1 text-[13px] leading-6 text-slate-500">{review.summary}</p> : null}
           </div>
         </div>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[8px] font-black ${meta.cls}`}>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${meta.cls}`}>
           {meta.label}
         </span>
       </div>
@@ -124,9 +124,9 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
       <div className="space-y-3 p-4">
         <div className="grid gap-2 sm:grid-cols-2">
           {(review.fields || card.fields || []).map((field, index) => (
-            <div key={`${field.label}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2.5">
-              <p className="text-[8px] font-bold text-slate-400">{field.label || 'بيان'}</p>
-              <p className="mt-1 break-words text-[10px] font-black text-slate-800">{field.value || '—'}</p>
+            <div key={`${field.label}-${index}`} className="border-b border-slate-100 px-1 py-2.5 last:border-b-0">
+              <p className="text-[11px] font-medium text-slate-400">{field.label || 'بيان'}</p>
+              <p className="mt-1 break-words text-[13px] font-medium text-slate-800">{field.value || '—'}</p>
             </div>
           ))}
         </div>
@@ -135,8 +135,8 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
           <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-amber-900">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="text-[9px] font-black">ماذا سيحدث عند الاعتماد؟</p>
-              <p className="mt-1 text-[8px] leading-5 opacity-80">{review.approval_effect}</p>
+              <p className="text-xs font-semibold">ماذا سيحدث عند الاعتماد؟</p>
+              <p className="mt-1 text-xs leading-5 opacity-80">{review.approval_effect}</p>
             </div>
           </div>
         ) : null}
@@ -144,7 +144,7 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
         {review.writes_to_erp ? (
           <div className="flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-[8px] leading-5">هذه المسودة تشير إلى كتابة في ERP ولذلك تم تعطيل اعتمادها.</p>
+            <p className="text-xs leading-5">هذه المسودة تشير إلى كتابة في ERP ولذلك تم تعطيل اعتمادها.</p>
           </div>
         ) : null}
 
@@ -152,13 +152,13 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
           <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-emerald-800">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="text-[9px] font-black">
+              <p className="text-xs font-semibold">
                 {action?.action_type === 'commercial_document_draft'
                   ? 'تم إنشاء المستند كمسودة داخل سند — لم يتم ترحيله.'
                   : 'تم تنفيذ العملية المالية داخل سند بعد اعتمادك.'}
               </p>
               {target ? (
-                <a href={target.href} className="mt-2 inline-flex rounded-lg bg-white px-2.5 py-1.5 text-[8px] font-black shadow-sm">
+                <a href={target.href} className="mt-2 inline-flex rounded-lg bg-white px-2.5 py-1.5 text-sm font-semibold shadow-sm">
                   {target.label}
                 </a>
               ) : null}
@@ -169,14 +169,14 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
         {status === 'cancelled' ? (
           <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-3 text-slate-600">
             <XCircle className="h-4 w-4" />
-            <p className="text-[9px] font-bold">أُلغيت هذه المسودة ولا يمكن اعتمادها.</p>
+            <p className="text-xs font-medium">أُلغيت هذه المسودة ولا يمكن اعتمادها.</p>
           </div>
         ) : null}
 
         {(error || status === 'failed') ? (
           <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-[8px] leading-5">{error || action?.error_code || 'تعذر تنفيذ الإجراء.'}</p>
+            <p className="text-sm leading-5">{error || action?.error_code || 'تعذر تنفيذ الإجراء.'}</p>
           </div>
         ) : null}
 
@@ -186,7 +186,7 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
               type="button"
               disabled={locked}
               onClick={() => void approve()}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[9px] font-black text-white disabled:opacity-40"
+              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[13px] font-medium text-white disabled:opacity-40"
             >
               {busy === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
               اعتماد
@@ -195,7 +195,7 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
               type="button"
               disabled={locked}
               onClick={() => void cancel(true)}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[9px] font-black text-slate-700 disabled:opacity-40"
+              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
               تعديل
@@ -204,7 +204,7 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
               type="button"
               disabled={locked}
               onClick={() => void cancel(false)}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[9px] font-black text-rose-700 disabled:opacity-40"
+              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[13px] font-medium text-rose-700 disabled:opacity-40"
             >
               {busy === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
               إلغاء
@@ -212,7 +212,7 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
           </div>
         ) : null}
 
-        <p className="text-[7px] leading-4 text-slate-400">
+        <p className="text-[11px] leading-5 text-slate-400">
           الاعتماد ينفذ عقدًا محددًا على خادم سند بعد إعادة التحقق من الملكية والحالة والإصدار. لا يملك نموذج الذكاء الاصطناعي صلاحية تنفيذ هذا الزر.
         </p>
       </div>

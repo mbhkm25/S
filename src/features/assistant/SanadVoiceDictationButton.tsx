@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, Square, X } from 'lucide-react';
 import { transcribeSanadAudio } from './assistantVoiceApi';
 
+export type SanadVoiceState = 'idle' | 'listening' | 'transcribing';
+
 type Props = {
   disabled?: boolean;
   onTranscript: (text: string) => void;
   onError?: (message: string) => void;
+  onStateChange?: (state: SanadVoiceState) => void;
 };
 
 const MAX_RECORDING_MS = 90_000;
@@ -28,11 +31,15 @@ function formatElapsed(ms: number) {
   return `${minutes}:${seconds}`;
 }
 
-export default function SanadVoiceDictationButton({ disabled, onTranscript, onError }: Props) {
+export default function SanadVoiceDictationButton({ disabled, onTranscript, onError, onStateChange }: Props) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    onStateChange?.(recording ? 'listening' : transcribing ? 'transcribing' : 'idle');
+  }, [onStateChange, recording, transcribing]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -182,7 +189,7 @@ export default function SanadVoiceDictationButton({ disabled, onTranscript, onEr
           <button
             type="button"
             onClick={() => finish(false)}
-            className="flex h-9 items-center gap-2 rounded-xl bg-rose-600 px-3 text-[9px] font-black text-white shadow-sm"
+            className="flex h-9 items-center gap-2 rounded-xl bg-rose-600 px-3 text-[13px] font-medium text-white shadow-sm"
             title="إيقاف وتحويل إلى نص"
           >
             <Square className="h-3.5 w-3.5" fill="currentColor" />
@@ -210,7 +217,7 @@ export default function SanadVoiceDictationButton({ disabled, onTranscript, onEr
         </button>
       )}
       {notice ? (
-        <span className={`hidden max-w-[230px] truncate text-[8px] font-bold sm:inline ${recording ? 'text-rose-600' : 'text-slate-400'}`}>
+        <span className={`hidden max-w-[230px] truncate text-[11px] font-medium sm:inline ${recording ? 'text-rose-600' : 'text-slate-400'}`}>
           {notice}
         </span>
       ) : null}
