@@ -238,10 +238,17 @@ export default function FinancialWorkspaceRoute() {
   const current = META[kind];
   const CurrentIcon = current.icon;
   const businesses = Array.isArray(account?.businesses) ? account.businesses : [];
+  const viewportMode = kind === 'ai';
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
-      <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
+    <div
+      data-route-workspace-mode={viewportMode ? 'viewport' : 'document'}
+      className={viewportMode
+        ? 'flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F7F5] text-slate-900 font-arabic'
+        : 'min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic'}
+      dir="rtl"
+    >
+      <header className={`${viewportMode ? 'shrink-0' : 'sticky top-0'} z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md`}>
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
@@ -259,8 +266,11 @@ export default function FinancialWorkspaceRoute() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10">
-        <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+      <main className={viewportMode
+        ? 'mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col gap-5 overflow-hidden px-4 py-5 lg:px-6 lg:pl-32'
+        : 'mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10'}
+      >
+        <section className={`rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm ${viewportMode ? 'shrink-0' : ''}`}>
           <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
         </section>
 
@@ -364,9 +374,11 @@ export default function FinancialWorkspaceRoute() {
         ) : null}
 
         {!loading && !error && kind === 'ai' ? (
-          <Suspense fallback={<div className="min-h-[420px] rounded-[1.5rem] bg-white" aria-busy="true" />}>
-            <SanadAgentWorkspace />
-          </Suspense>
+          <div className="min-h-0 flex-1">
+            <Suspense fallback={<div className="h-full min-h-0 rounded-[1.5rem] bg-white" aria-busy="true" />}>
+              <SanadAgentWorkspace />
+            </Suspense>
+          </div>
         ) : null}
       </main>
     </div>
