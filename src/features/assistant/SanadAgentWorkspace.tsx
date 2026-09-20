@@ -547,6 +547,7 @@ export default function SanadAgentWorkspace() {
         message: prompt,
         business_id: businessId || null,
         thread_id: threadId,
+        attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
       }, (event) => {
         if (event.type === 'run.started') setLiveStatus('بدأ مساعد سند المعالجة…');
