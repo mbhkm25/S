@@ -45,7 +45,7 @@ export default function SanadMessageActions({
     }
   };
 
-  const base = 'inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[9px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40';
+  const base = 'inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40';
 
   return (
     <div className="sanad-message-actions flex flex-wrap items-center gap-1" aria-label="إجراءات الرسالة">
