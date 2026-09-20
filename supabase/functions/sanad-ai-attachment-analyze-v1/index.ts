@@ -263,13 +263,24 @@ async function readBusinessMatches(
 
 function buildSuggestion(analysis: Json, matches: Json, businessId: string | null): Json {
   const documents = array(matches.documents);
-  const exact = documents.find((row) => row.exact_document_number === true);
-  if (exact && businessId) {
+  const operationType = cleanText(analysis.operation_type,80);
+  const extractedParty = cleanText(analysis.counterparty_name,300);
+  const expectedKind = operationType === "sale" ? "sale" : operationType === "purchase" ? "purchase" : null;
+
+  const exactDocumentCandidates = documents.filter((row) => {
+    if (row.exact_document_number !== true) return false;
+    if (expectedKind && cleanText(row.document_kind,20) !== expectedKind) return false;
+    if (extractedParty && row.exact_party_name !== true) return false;
+    return numberOrNull(row.document_id) !== null;
+  });
+
+  if (exactDocumentCandidates.length === 1 && businessId) {
+    const exact = exactDocumentCandidates[0];
     const kind = cleanText(exact.document_kind,20) === "purchase" ? "purchase" : "sale";
     const id = numberOrNull(exact.document_id);
     return {
       kind: "link_existing",
-      title: "وجد سند مستندًا موجودًا قد يطابق المرفق.",
+      title: "وجد سند مستندًا واحدًا مطابقًا بصورة فريدة قد يرتبط بالمرفق.",
       target: {
         type: "erp_document",
         business_id: businessId,
@@ -281,7 +292,7 @@ function buildSuggestion(analysis: Json, matches: Json, businessId: string | nul
           ? `/business/manage?section=accounting&erp=documents&business_id=${encodeURIComponent(businessId)}&document_kind=${kind}&document_id=${id}`
           : null,
       },
-      confidence: Number(exact.score || 1),
+      confidence: 1,
       requires_explicit_review: true,
       write_performed: false,
     };
@@ -316,13 +327,13 @@ function buildSuggestion(analysis: Json, matches: Json, businessId: string | nul
   }
 
   const confidence = Number(analysis.confidence || 0);
-  const operationType = cleanText(analysis.operation_type,80) || "unknown";
-  if (confidence >= 0.72 && operationType !== "unknown") {
+  const draftOperationType = operationType || "unknown";
+  if (confidence >= 0.72 && draftOperationType !== "unknown") {
     return {
       kind: "draft_candidate",
       title: "يمكن تجهيز مسودة من البيانات المستخرجة بعد مراجعتك.",
       draft: {
-        operation_type: operationType,
+        operation_type: draftOperationType,
         direction: cleanText(analysis.direction,40) || "unknown",
         amount: numberOrNull(analysis.amount),
         currency: cleanText(analysis.currency,20) || null,
