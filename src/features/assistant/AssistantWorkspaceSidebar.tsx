@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import SanadPulseMark from './SanadPulseMark';
+import SanadFluidOrb from './SanadFluidOrb';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
 import type {
   SanadAgentMemory,
@@ -109,8 +109,8 @@ export default function AssistantWorkspaceSidebar(props: Props) {
     <Shell mobileOpen={props.mobileOpen} onCloseMobile={props.onCloseMobile}>
       <div className="flex items-center justify-between border-b border-slate-100 p-3 xl:hidden">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-950 text-white">
-            <SanadPulseMark size={18} />
+          <span className="flex h-8 w-8 items-center justify-center">
+            <SanadFluidOrb size={26} animated={false} />
           </span>
           <strong className="text-xs text-slate-900">سند</strong>
         </div>
