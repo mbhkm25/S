@@ -3,7 +3,6 @@ import {
   Bot,
   BriefcaseBusiness,
   CheckCircle2,
-  ChevronDown,
   Clock3,
   Loader2,
   Menu,
@@ -23,7 +22,6 @@ import {
 } from './assistantAgentApi';
 import {
   archiveSanadAgentThread,
-  bindSanadAgentThreadBusiness,
   createSanadAgentThread,
   forgetSanadAgentMemory,
   getSanadAgentContext,
@@ -213,6 +211,7 @@ export default function SanadAgentWorkspace() {
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
   const [businessLoading, setBusinessLoading] = useState(true);
+  const [businessSelectionOpen, setBusinessSelectionOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -252,10 +251,11 @@ export default function SanadAgentWorkspace() {
           listSanadAgentThreads(),
         ]);
         if (!alive) return;
+        let options: BusinessOption[] = [];
         if (!error && data && typeof data === 'object') {
           const record = data as Record<string, unknown>;
           const raw = Array.isArray(record.businesses) ? record.businesses : [];
-          const options = raw.flatMap((item) => {
+          options = raw.flatMap((item) => {
             if (!item || typeof item !== 'object') return [];
             const row = item as Record<string, unknown>;
             if (typeof row.id !== 'string' || !row.id) return [];
@@ -266,7 +266,15 @@ export default function SanadAgentWorkspace() {
         setPreferences(prefs);
         setThreads(loadedThreads);
         const first = loadedThreads.find((thread) => thread.status === 'active') || null;
-        if (first) setSelectedThreadId(first.id);
+        if (first) {
+          setSelectedThreadId(first.id);
+        } else if (options.length === 1) {
+          setBusinessId(options[0].id);
+          setBusinessSelectionOpen(false);
+        } else if (options.length > 1) {
+          setBusinessId('');
+          setBusinessSelectionOpen(true);
+        }
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
       } finally {
@@ -295,7 +303,8 @@ export default function SanadAgentWorkspace() {
           getSanadAgentContext(selectedThreadId),
         ]);
         if (!alive) return;
-        setBusinessId(detail.thread.business_id || '');
+        setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
+        setBusinessSelectionOpen(false);
         setMemories(context.memories);
         setMessages(detail.messages.map((message) => ({
           id: message.id,
@@ -313,24 +322,42 @@ export default function SanadAgentWorkspace() {
     return () => { alive = false; };
   }, [selectedThreadId]);
 
+  const createThreadForBusiness = async (nextBusinessId: string | null) => {
+    const id = await createSanadAgentThread(nextBusinessId);
+    setMessages([]);
+    setDraft('');
+    setBusinessId(nextBusinessId || '');
+    setSelectedThreadId(id);
+    setBusinessSelectionOpen(false);
+    setSidebarOpen(false);
+    await refreshThreads(id);
+    window.setTimeout(() => textareaRef.current?.focus(), 50);
+    return id;
+  };
+
   const ensureThread = async () => {
     if (selectedThreadId) return selectedThreadId;
-    const id = await createSanadAgentThread(businessId || null);
-    setSelectedThreadId(id);
-    await refreshThreads(id);
-    return id;
+    const defaultBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : null);
+    if (!defaultBusinessId && businesses.length > 1) {
+      setBusinessSelectionOpen(true);
+      throw new Error('اختر النشاط لهذه المحادثة أولًا.');
+    }
+    return createThreadForBusiness(defaultBusinessId);
   };
 
   const newThread = async () => {
     if (sending) return;
-    try {
-      const id = await createSanadAgentThread(businessId || null);
+    if (businesses.length > 1) {
       setMessages([]);
       setDraft('');
-      setSelectedThreadId(id);
+      setSelectedThreadId(null);
+      setBusinessId('');
+      setBusinessSelectionOpen(true);
       setSidebarOpen(false);
-      await refreshThreads(id);
-      window.setTimeout(() => textareaRef.current?.focus(), 50);
+      return;
+    }
+    try {
+      await createThreadForBusiness(businesses.length === 1 ? businesses[0].id : null);
     } catch (cause) {
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
     }
@@ -353,19 +380,6 @@ export default function SanadAgentWorkspace() {
       }
     } catch (cause) {
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر أرشفة المحادثة.');
-    }
-  };
-
-  const changeBusiness = async (nextBusinessId: string) => {
-    setBusinessId(nextBusinessId);
-    if (!selectedThreadId) return;
-    try {
-      await bindSanadAgentThreadBusiness(selectedThreadId, nextBusinessId || null);
-      setThreads((current) => current.map((thread) =>
-        thread.id === selectedThreadId ? { ...thread, business_id: nextBusinessId || null } : thread
-      ));
-    } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحديث سياق النشاط.');
     }
   };
 
@@ -398,6 +412,10 @@ export default function SanadAgentWorkspace() {
   async function sendPrompt(rawPrompt?: string) {
     const prompt = (rawPrompt ?? draft).trim();
     if (!prompt || sending) return;
+    if (!selectedThreadId && businesses.length > 1 && !businessId) {
+      setBusinessSelectionOpen(true);
+      return;
+    }
 
     let threadId: string;
     try {
@@ -515,22 +533,24 @@ export default function SanadAgentWorkspace() {
             </div>
           </div>
 
-          <label className="relative min-w-[190px]">
-            <BriefcaseBusiness className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <select
-              value={businessId}
-              onChange={(event) => void changeBusiness(event.target.value)}
-              disabled={businessLoading || sending}
-              className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pr-9 pl-8 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-400"
-              aria-label="سياق النشاط التجاري"
+          {businessLoading ? (
+            <span className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-[9px] font-bold text-slate-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> تحميل سياق النشاط…
+            </span>
+          ) : businessId ? (
+            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[10px] font-black text-slate-700">
+              <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
+              <span className="truncate">{businesses.find((business) => business.id === businessId)?.name || 'نشاط مرتبط'}</span>
+            </span>
+          ) : businesses.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setBusinessSelectionOpen(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[10px] font-black text-amber-800"
             >
-              <option value="">بدون نشاط محدد</option>
-              {businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
-            </select>
-            {businessLoading
-              ? <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
-              : <ChevronDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />}
-          </label>
+              <BriefcaseBusiness className="h-4 w-4" /> اختر نشاط المحادثة
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -571,6 +591,29 @@ export default function SanadAgentWorkspace() {
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
                 </p>
+
+                {(businessSelectionOpen || (!selectedThreadId && businesses.length > 1 && !businessId)) ? (
+                  <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
+                    <div className="flex items-center gap-2">
+                      <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
+                      <p className="text-[11px] font-black text-amber-900">اختر النشاط لهذه المحادثة</p>
+                    </div>
+                    <p className="mt-1 text-[9px] leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {businesses.map((business) => (
+                        <button
+                          key={business.id}
+                          type="button"
+                          onClick={() => void createThreadForBusiness(business.id)}
+                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[10px] font-black text-slate-800 shadow-sm transition hover:border-amber-300"
+                        >
+                          {business.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button
