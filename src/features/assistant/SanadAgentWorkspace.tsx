@@ -237,6 +237,14 @@ function storedResult(message: {
   };
 }
 
+function unsentAttachments(
+  messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages'],
+  attachments: SanadAgentAttachment[],
+) {
+  const referenced = new Set(messages.flatMap((message) => message.attachment_ids || []));
+  return attachments.filter((attachment) => !referenced.has(attachment.id) && attachment.status !== 'deleted');
+}
+
 function storedMessagesToWorkspace(
   messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages'],
   attachments: SanadAgentAttachment[] = [],
@@ -369,7 +377,7 @@ export default function SanadAgentWorkspace() {
         setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
         setBusinessSelectionOpen(false);
         setMemories(context.memories);
-        setPendingAttachments([]);
+        setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
@@ -578,6 +586,7 @@ export default function SanadAgentWorkspace() {
           getSanadAgentThread(threadId),
           listSanadAgentAttachments(threadId),
         ]);
+        setPendingAttachments(unsentAttachments(persistedThread.messages, persistedAttachments));
         setMessages(storedMessagesToWorkspace(persistedThread.messages, persistedAttachments));
       } catch {
         // The visible answer remains usable; feedback actions enable after the next successful thread reload.
