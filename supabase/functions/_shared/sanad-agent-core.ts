@@ -216,6 +216,21 @@ export const TOOLS = [
   },
   {
     type: "function",
+    name: "business_get_payment_inbox",
+    description: "Read a bounded SANAD Payment Inbox view for the selected business. Read-only: never claim, complete, release, reassign, reject or resolve an inbox item. Use for questions about new payments, pending inbox work or payment inbox status.",
+    parameters: {
+      type: "object",
+      properties: {
+        business_id: { type: "string", description: "Authorized SANAD business UUID." },
+        view: { type: "string", enum: ["new","mine","team_active","review","completed","all"], description: "Inbox view. Use new by default." },
+        limit: { type: "integer", description: "Maximum items, 1-30." },
+      },
+      required: ["business_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
     name: "business_search_parties",
     description: "Search SANAD business parties by name or phone. This is for SANAD commercial documents, not ERP customer identity.",
     parameters: {
@@ -339,7 +354,11 @@ export function inferAgentRoutingHint(message: string, businessId?: string | nul
   const explicitAction = /(سجل|سجّل|انشئ|أنشئ|أضف|اضف|حوّل|حول|جهز|جهّز|اصدر|أصدر)/i.test(value);
   const personalAction = explicitAction && /(مصروف|دخل|تحويل|حسابي|شخصي|العمقي|الكريمي|البصيري)/i.test(value);
   const commercialAction = explicitAction && /(فاتور|بيع|شراء|سند قبض|سند صرف|عرض سعر|مصروف تجاري)/i.test(value);
+  const paymentInbox = /(وارد المدفوعات|دفعات جديدة|الدفعات الجديدة|عمليات دفع جديدة|دفعة جديدة)/i.test(value);
 
+  if (paymentInbox && businessId) {
+    return "توجيه الأدوات: استخدم business_get_payment_inbox للقراءة فقط. لا تستلم ولا تكمل ولا تحرر أي عملية من المساعد.";
+  }
   if (personalAction) {
     return "توجيه الأدوات: هذا طلب إجراء شخصي. اقرأ finance_get_accounts أولًا، وfinance_get_categories عند الحاجة، ثم استخدم action_prepare_personal_transaction فقط لإنشاء مسودة مراجعة. لا تنفذ العملية.";
   }
