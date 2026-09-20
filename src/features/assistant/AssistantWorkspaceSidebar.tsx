@@ -3,6 +3,7 @@ import {
   Activity,
   Archive,
   Brain,
+  BriefcaseBusiness,
   Check,
   ChevronLeft,
   MessageSquare,
@@ -12,7 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import SanadFluidOrb from './SanadFluidOrb';
+import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
 import type {
   SanadAgentMemory,
@@ -21,6 +22,12 @@ import type {
 } from './assistantWorkspaceApi';
 
 type Props = {
+  assistantState: SanadOrbState;
+  assistantStatus: string;
+  businessLabel?: string | null;
+  businessLoading?: boolean;
+  canChooseBusiness?: boolean;
+  onChooseBusiness?: () => void;
   threads: SanadAgentThreadSummary[];
   selectedThreadId: string | null;
   loading?: boolean;
@@ -75,7 +82,8 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
         />
       ) : null}
       <aside
-        className={`fixed inset-y-0 right-0 z-50 flex w-[86vw] max-w-[340px] flex-col border-l border-slate-200/80 bg-[#FBFBFA] shadow-2xl transition-transform xl:static xl:z-auto xl:w-[308px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        data-sidebar-density="compact"
+        className={`fixed inset-y-0 right-0 z-50 flex w-[84vw] max-w-[320px] flex-col border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
@@ -107,19 +115,39 @@ export default function AssistantWorkspaceSidebar(props: Props) {
 
   return (
     <Shell mobileOpen={props.mobileOpen} onCloseMobile={props.onCloseMobile}>
-      <div className="flex items-center justify-between border-b border-slate-100 p-3 xl:hidden">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center">
-            <SanadFluidOrb size={26} animated={false} />
-          </span>
-          <strong className="text-xs text-slate-900">سند</strong>
+      <div className="border-b border-slate-100 px-3 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+              <SanadFluidOrb state={props.assistantState} size={30} />
+            </span>
+            <div className="min-w-0">
+              <strong className="block truncate text-[13px] font-semibold text-slate-950">مساعد سند</strong>
+              <p className="mt-0.5 truncate text-[11px] text-slate-400">{props.assistantStatus}</p>
+            </div>
+          </div>
+          <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500 xl:hidden" aria-label="إغلاق الشريط الجانبي">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <button type="button" onClick={props.onCloseMobile} className="rounded-xl p-2 text-slate-500">
-          <X className="h-4 w-4" />
-        </button>
+
+        <div className="mt-2 flex min-h-6 items-center gap-2 text-[11px] text-slate-500">
+          <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          {props.businessLoading ? (
+            <span>تحميل سياق النشاط…</span>
+          ) : props.businessLabel ? (
+            <span className="truncate">{props.businessLabel}</span>
+          ) : props.canChooseBusiness ? (
+            <button type="button" onClick={props.onChooseBusiness} className="font-medium text-slate-700 underline-offset-2 hover:underline">
+              اختر نشاط المحادثة
+            </button>
+          ) : (
+            <span>بدون سياق نشاط</span>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 border-b border-slate-100 p-2">
+      <div className="grid grid-cols-3 border-b border-slate-100 px-2">
         {[
           ['chats', MessageSquare, 'المحادثات'],
           ['memory', Brain, 'الذاكرة'],
@@ -132,7 +160,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               key={String(id)}
               type="button"
               onClick={() => setTab(id as SidebarTab)}
-              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition ${active ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70'}`}
+              className={`flex min-h-10 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium transition ${active ? 'border-slate-950 text-slate-950' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             >
               <Component className="h-3.5 w-3.5" />
               {String(label)}
@@ -143,11 +171,11 @@ export default function AssistantWorkspaceSidebar(props: Props) {
 
       {tab === 'chats' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="p-3">
+          <div className="px-3 py-2.5">
             <button
               type="button"
               onClick={props.onNew}
-              className="flex w-full items-center justify-center gap-2 rounded-[1.1rem] bg-slate-950 px-3 py-3 text-[13px] font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,.16)] transition active:scale-[.99]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
             >
               <MessageSquarePlus className="h-4 w-4" />
               محادثة جديدة
@@ -157,7 +185,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             {props.loading ? (
               <p className="p-4 text-center text-xs text-slate-400">جارٍ تحميل المحادثات…</p>
             ) : props.threads.length === 0 ? (
-              <div className="m-2 rounded-2xl bg-slate-50 p-4 text-center">
+              <div className="px-3 py-6 text-center">
                 <MessageSquare className="mx-auto h-5 w-5 text-slate-300" />
                 <p className="mt-2 text-xs leading-5 text-slate-400">ستظهر محادثاتك المحفوظة هنا.</p>
               </div>
@@ -165,11 +193,11 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               props.threads.filter((thread) => thread.status === 'active').map((thread) => {
                 const active = thread.id === props.selectedThreadId;
                 return (
-                  <div key={thread.id} className={`group mb-1.5 flex items-center rounded-2xl border transition ${active ? 'border-slate-200 bg-white shadow-sm' : 'border-transparent hover:border-slate-100 hover:bg-white/70'}`}>
+                  <div key={thread.id} className={`group flex items-center border-b border-slate-100 transition ${active ? 'bg-white' : 'hover:bg-white/60'}`}>
                     <button
                       type="button"
                       onClick={() => props.onSelect(thread.id)}
-                      className="min-w-0 flex-1 p-3 text-right"
+                      className="min-w-0 flex-1 px-2 py-3 text-right"
                     >
                       <p className={`truncate text-[13px] font-medium ${active ? 'text-slate-950' : 'text-slate-700'}`}>
                         {thread.title}
@@ -197,19 +225,19 @@ export default function AssistantWorkspaceSidebar(props: Props) {
 
       {tab === 'memory' ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="rounded-2xl bg-indigo-50 p-3">
-            <div className="flex items-center gap-2 text-indigo-800">
+          <div className="border-b border-slate-100 px-1 pb-3">
+            <div className="flex items-center gap-2 text-slate-800">
               <Brain className="h-4 w-4" />
               <p className="text-[13px] font-semibold">ذاكرة سند</p>
             </div>
-            <p className="mt-2 text-xs leading-5 text-indigo-700/70">
+            <p className="mt-2 text-xs leading-5 text-slate-500">
               تحفظ التفضيلات والسياق المستقر. الأرصدة والفواتير لا تعتمد على الذاكرة، بل يعاد قراءتها من النظام الحي.
             </p>
           </div>
 
           <div className="mt-3 space-y-2">
             {props.memories.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-center text-xs leading-5 text-slate-400">
+              <p className="px-2 py-5 text-center text-xs leading-5 text-slate-400">
                 لا توجد ذكريات محفوظة بعد. يمكنك قول: «تذكر أن…».
               </p>
             ) : props.memories.map((memory) => (
@@ -319,12 +347,12 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             )}
           </div>
 
-          <div className="mt-4 rounded-2xl bg-emerald-50 p-3 text-emerald-800">
+          <div className="mt-4 border-t border-slate-100 px-1 pt-3 text-slate-600">
             <div className="flex items-center gap-2">
               <Check className="h-4 w-4" />
               <p className="text-xs font-semibold">الحقائق المالية تبقى حية</p>
             </div>
-            <p className="mt-1 text-xs leading-5 opacity-75">حتى مع تشغيل الذاكرة، يعيد المساعد قراءة الأرصدة والمستندات من مصدرها عند كل طلب.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">حتى مع تشغيل الذاكرة، يعيد المساعد قراءة الأرصدة والمستندات من مصدرها عند كل طلب.</p>
           </div>
         </div>
       ) : null}
