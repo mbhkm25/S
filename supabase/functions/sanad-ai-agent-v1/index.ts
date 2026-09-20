@@ -94,6 +94,89 @@ async function bestEffortRpc(client: SupabaseClient, name: string, args: Json) {
   try { await client.rpc(name, args); } catch { /* telemetry must never fail the user turn */ }
 }
 
+type AgentUsage = ReturnType<typeof mapUsage>;
+
+function emptyAgentUsage(): AgentUsage {
+  return {
+    promptTokenCount: 0,
+    cachedContentTokenCount: 0,
+    candidatesTokenCount: 0,
+    thoughtsTokenCount: 0,
+    totalTokenCount: 0,
+  };
+}
+
+function addInteractionUsage(target: AgentUsage, interaction: Json | null) {
+  const usage = mapUsage(interaction?.usage);
+  target.promptTokenCount += usage.promptTokenCount;
+  target.cachedContentTokenCount += usage.cachedContentTokenCount;
+  target.candidatesTokenCount += usage.candidatesTokenCount;
+  target.thoughtsTokenCount += usage.thoughtsTokenCount;
+  target.totalTokenCount += usage.totalTokenCount;
+}
+
+function interactionRetryCount(interaction: Json | null) {
+  return Math.max(0, Number(interaction?.__sanad_retry_count || 0) || 0);
+}
+
+function interactionLatencyMs(interaction: Json | null) {
+  return Math.max(0, Number(interaction?.__sanad_http_latency_ms || 0) || 0);
+}
+
+async function recordAgentServerMetric(
+  adminClient: SupabaseClient,
+  input: {
+    userId: string;
+    threadId: string | null;
+    businessId: string | null;
+    requestId: string;
+    status: "completed" | "failed";
+    transport: "sse" | "json";
+    thinkingLevel: "low" | "medium" | "high";
+    totalLatencyMs: number;
+    contextLoadMs: number;
+    attachmentContextMs: number;
+    modelLatencyMs: number;
+    toolLatencyMs: number;
+    persistenceMs: number;
+    toolCalls: number;
+    failedToolCalls: number;
+    retryCount: number;
+    usage: AgentUsage;
+    attachmentCount: number;
+    errorCode?: string | null;
+  },
+) {
+  await bestEffortRpc(adminClient,"record_sanad_agent_server_metric_v1",{
+    p_user_id:input.userId,
+    p_thread_id:input.threadId,
+    p_business_id:input.businessId,
+    p_request_id:input.requestId,
+    p_scope:"agent_server_turn",
+    p_status:input.status,
+    p_transport:input.transport,
+    p_model:MODEL,
+    p_thinking_level:input.thinkingLevel,
+    p_total_latency_ms:Math.max(0,Math.round(input.totalLatencyMs)),
+    p_context_load_ms:Math.max(0,Math.round(input.contextLoadMs)),
+    p_attachment_context_ms:Math.max(0,Math.round(input.attachmentContextMs)),
+    p_model_latency_ms:Math.max(0,Math.round(input.modelLatencyMs)),
+    p_tool_latency_ms:Math.max(0,Math.round(input.toolLatencyMs)),
+    p_persistence_ms:Math.max(0,Math.round(input.persistenceMs)),
+    p_tool_calls:input.toolCalls,
+    p_failed_tool_calls:input.failedToolCalls,
+    p_retry_count:input.retryCount,
+    p_input_tokens:input.usage.promptTokenCount,
+    p_cached_tokens:input.usage.cachedContentTokenCount,
+    p_output_tokens:input.usage.candidatesTokenCount,
+    p_total_tokens:input.usage.totalTokenCount,
+    p_item_count:input.attachmentCount,
+    p_byte_count:null,
+    p_error_code:input.errorCode || null,
+    p_runtime_version:RUNTIME_VERSION,
+  });
+}
+
 type AgentCloudContext = {
   threadId: string | null;
   businessId: string | null;
