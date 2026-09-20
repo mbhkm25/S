@@ -62,12 +62,28 @@ export default function FinancialWorkspaceShell() {
 
   return (
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
-      <div className="min-h-screen bg-[#F8F8F6] text-slate-900">
+      <div
+        data-workspace-mode={assistant ? 'viewport' : 'document'}
+        className={assistant
+          ? 'flex h-dvh min-h-0 flex-col overflow-hidden bg-[#F8F8F6] text-slate-900'
+          : 'min-h-screen bg-[#F8F8F6] text-slate-900'}
+      >
         <ProductAppHeader userId={userId} />
-        <Suspense fallback={<RouteFallback />}>
-          {content}
-        </Suspense>
-        <ProductBottomNav activeArea={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'} />
+        {assistant ? (
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Suspense fallback={<RouteFallback />}>
+              {content}
+            </Suspense>
+          </div>
+        ) : (
+          <Suspense fallback={<RouteFallback />}>
+            {content}
+          </Suspense>
+        )}
+        <ProductBottomNav
+          activeArea={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'}
+          layoutMode={assistant ? 'viewport' : 'document'}
+        />
         {!isActionRoute && (personal || commercial) ? (
           <button
             type="button"
