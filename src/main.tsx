@@ -2,22 +2,17 @@ import './lib/runtimeCompatibility';
 import './lib/navigationScrollReset';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import OperationEntryGate from './features/operations/OperationEntryGate';
-import OperationDetailsRuntimeV2 from './features/operations/OperationDetailsRuntimeV2';
-import OperationIdentityDetailsBanner from './features/operations/OperationIdentityDetailsBanner';
-import OperationDetailsActionIntent from './features/operations/OperationDetailsActionIntent';
-import OperationDocumentPreviewEnhancer from './features/operations/OperationDocumentPreviewEnhancer';
-import LocalRuntimeController from './features/local-first/LocalRuntimeController';
-import CaptureFirstNavigationRuntime from './features/local-first/CaptureFirstNavigationRuntime';
-import { installDeviceLedgerRuntime } from './features/local-first/deviceLedgerRuntime';
 import './index.css';
 import './styles/local-first-connectivity.css';
-import './lib/publicBusinessProfileSwipe';
-import './lib/publicBusinessProfileShare';
-import { initializeAndroidNativePush } from './lib/androidNativePush';
-
 import { Capacitor } from '@capacitor/core';
 
+const OperationEntryGate = lazy(() => import('./features/operations/OperationEntryGate'));
+const OperationDetailsRuntimeV2 = lazy(() => import('./features/operations/OperationDetailsRuntimeV2'));
+const OperationIdentityDetailsBanner = lazy(() => import('./features/operations/OperationIdentityDetailsBanner'));
+const OperationDetailsActionIntent = lazy(() => import('./features/operations/OperationDetailsActionIntent'));
+const OperationDocumentPreviewEnhancer = lazy(() => import('./features/operations/OperationDocumentPreviewEnhancer'));
+const LocalRuntimeController = lazy(() => import('./features/local-first/LocalRuntimeController'));
+const CaptureFirstNavigationRuntime = lazy(() => import('./features/local-first/CaptureFirstNavigationRuntime'));
 const PwaUpdatePrompt = lazy(() => import('./features/pwa/PwaUpdatePrompt'));
 const AndroidUpdatePrompt = lazy(() => import('./features/android/AndroidUpdatePrompt'));
 const KnowledgeAdminRoute = lazy(() => import('./components/admin/KnowledgeAdminRoute'));
@@ -32,9 +27,29 @@ const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
 const isFinancialWorkspaceRoute = /\/(financial(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?|commercial(?:\/actions)?|account-center|sanad-ai)\/?$/.test(window.location.pathname);
+const isLegacyApplicationRoute = !isPublicInteractiveReport && !isFinancialWorkspaceRoute;
 
-if (isAndroidNative && !import.meta.env.DEV) initializeAndroidNativePush();
-if (!isPublicInteractiveReport && !isFinancialWorkspaceRoute) installDeviceLedgerRuntime();
+if (isAndroidNative && !import.meta.env.DEV) {
+  void import('./lib/androidNativePush')
+    .then(({ initializeAndroidNativePush }) => initializeAndroidNativePush())
+    .catch((error) => console.warn('SANAD Android push initialization failed', error));
+}
+
+if (isLegacyApplicationRoute) {
+  void import('./features/local-first/deviceLedgerRuntime')
+    .then(({ installDeviceLedgerRuntime }) => installDeviceLedgerRuntime())
+    .catch((error) => console.warn('SANAD device ledger initialization failed', error));
+  void import('./lib/publicBusinessProfileSwipe').catch(() => undefined);
+  void import('./lib/publicBusinessProfileShare').catch(() => undefined);
+}
+
+function LegacyAppFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#F7F7F5] text-xs text-slate-400" aria-busy="true">
+      جارٍ فتح سند…
+    </div>
+  );
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -48,26 +63,20 @@ createRoot(document.getElementById('root')!).render(
       </Suspense>
     ) : (
       <>
-        <LocalRuntimeController />
-        <CaptureFirstNavigationRuntime />
-        <OperationEntryGate />
-        <OperationDetailsRuntimeV2 />
-        <OperationIdentityDetailsBanner />
-        <OperationDetailsActionIntent />
-        <OperationDocumentPreviewEnhancer />
-        <Suspense fallback={null}>
-          <KnowledgeAdminRoute />
+        <Suspense fallback={<LegacyAppFallback />}>
+          <OperationEntryGate />
         </Suspense>
-        {enablePwaUpdates && (
-          <Suspense fallback={null}>
-            <PwaUpdatePrompt />
-          </Suspense>
-        )}
-        {enableAndroidUpdates && (
-          <Suspense fallback={null}>
-            <AndroidUpdatePrompt />
-          </Suspense>
-        )}
+        <Suspense fallback={null}>
+          <LocalRuntimeController />
+          <CaptureFirstNavigationRuntime />
+          <OperationDetailsRuntimeV2 />
+          <OperationIdentityDetailsBanner />
+          <OperationDetailsActionIntent />
+          <OperationDocumentPreviewEnhancer />
+          <KnowledgeAdminRoute />
+          {enablePwaUpdates && <PwaUpdatePrompt />}
+          {enableAndroidUpdates && <AndroidUpdatePrompt />}
+        </Suspense>
       </>
     )}
   </StrictMode>,
