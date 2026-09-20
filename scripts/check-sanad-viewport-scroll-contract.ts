@@ -48,8 +48,8 @@ assert.match(
 
 assert.match(route, /const viewportMode = kind === 'ai'/);
 assert.match(route, /flex h-full min-h-0 flex-col overflow-hidden/);
-assert.match(route, /flex-1 flex-col gap-5 overflow-hidden/);
-assert.match(route, /<div className="min-h-0 flex-1">\s*<Suspense/s);
+assert.match(route, /flex-1 flex-col overflow-hidden/);
+assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 assert.match(
   route,
   /: 'mx-auto w-full max-w-\[1440px\] space-y-5 px-4 py-5 pb-32/,
