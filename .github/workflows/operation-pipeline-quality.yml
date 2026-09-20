@@ -190,11 +190,11 @@ jobs:
           set -euo pipefail
           test_root="${RUNNER_TEMP}/sanad-pipeline-contract"
           mkdir -p "${test_root}/supabase/migrations"
-          mkdir -p "${test_root}/supabase/functions"
           cp supabase/config.toml "${test_root}/supabase/config.toml"
-          cp -R supabase/functions/_shared "${test_root}/supabase/functions/_shared"
-          cp -R supabase/functions/sanad-ai-agent-v1 "${test_root}/supabase/functions/sanad-ai-agent-v1"
-          cp -R supabase/functions/sanad-ai-agent-eval-v1 "${test_root}/supabase/functions/sanad-ai-agent-eval-v1"
+          # Keep the isolated Supabase fixture aligned with every function section
+          # referenced by config.toml. Copying only two historical Agent functions
+          # made `supabase start` fail as soon as newer configured functions were added.
+          cp -R supabase/functions "${test_root}/supabase/functions"
           OPENAI_API_KEY=disabled supabase start \
             --workdir "${test_root}" \
             -x studio,imgproxy,inbucket,logflare,vector,supavisor
