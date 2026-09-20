@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarRange,
@@ -186,6 +186,46 @@ export default function BusinessErpCustomerStatement({ businessId }: Props) {
     () => selected && selected.resolution_status !== 'resolved_unique_sale_account',
     [selected]
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const accountId = Number(params.get('account_id') || 0);
+    if (!Number.isInteger(accountId) || accountId <= 0) return;
+
+    const name = params.get('customer_name')?.trim() || 'حساب عميل';
+    let alive = true;
+    setLoadingStatement(true);
+    setError(null);
+    setQuery(name);
+
+    void getBusinessErpCustomerStatement(businessId, accountId, null, null)
+      .then((result) => {
+        if (!alive) return;
+        setSelected({
+          customer_name: result.identity?.customer_name || name,
+          account_id: accountId,
+          sale_count: Number(result.identity?.sale_count || 0),
+          account_count: 1,
+          account_name: result.account?.account_name || null,
+          account_number: result.account?.account_number || null,
+          customer_number: result.identity?.customer_number || null,
+          mobile: result.identity?.mobile || null,
+          work_phone: result.identity?.work_phone || null,
+          address: result.identity?.address || null,
+          resolution_status: 'resolved_unique_sale_account',
+        });
+        setStatement(result);
+        setCandidates([]);
+      })
+      .catch((caught) => {
+        if (alive) setError(caught instanceof Error ? caught.message : 'تعذر فتح كشف الحساب المطلوب.');
+      })
+      .finally(() => {
+        if (alive) setLoadingStatement(false);
+      });
+
+    return () => { alive = false; };
+  }, [businessId]);
 
   const runSearch = async (event?: FormEvent) => {
     event?.preventDefault();

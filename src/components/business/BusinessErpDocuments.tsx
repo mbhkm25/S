@@ -126,8 +126,12 @@ function buildPrintableDocumentHtml(detail: BusinessErpDocumentDetail, kind: Bus
 </html>`;
 }
 
+function initialDocumentKind(): BusinessErpDocumentKind {
+  return new URLSearchParams(window.location.search).get('document_kind') === 'purchase' ? 'purchase' : 'sale';
+}
+
 export default function BusinessErpDocuments({ businessId }: Props) {
-  const [kind, setKind] = useState<BusinessErpDocumentKind>('sale');
+  const [kind, setKind] = useState<BusinessErpDocumentKind>(() => initialDocumentKind());
   const [query, setQuery] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -162,6 +166,29 @@ export default function BusinessErpDocuments({ businessId }: Props) {
   };
 
   useEffect(() => { void load(); }, [kind, businessId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const documentId = Number(params.get('document_id') || 0);
+    const requestedKind = params.get('document_kind') === 'purchase' ? 'purchase' : 'sale';
+    if (!Number.isInteger(documentId) || documentId <= 0) return;
+
+    let alive = true;
+    setKind(requestedKind);
+    setDetailLoading(true);
+    setError(null);
+    void getBusinessErpDocumentDetail(businessId, requestedKind, documentId)
+      .then((detail) => {
+        if (alive) setSelected(detail);
+      })
+      .catch((caught) => {
+        if (alive) setError(caught instanceof Error ? caught.message : 'تعذر فتح المستند المطلوب.');
+      })
+      .finally(() => {
+        if (alive) setDetailLoading(false);
+      });
+    return () => { alive = false; };
+  }, [businessId]);
 
   const copyDocumentSummary = async () => {
     if (!selected?.header) return;

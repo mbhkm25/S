@@ -5,16 +5,14 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
-  Database,
   Loader2,
-  MessageSquarePlus,
+  Menu,
   RotateCcw,
   SendHorizontal,
   ShieldCheck,
   Sparkles,
   Wrench,
   XCircle,
-  Zap,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
@@ -23,6 +21,22 @@ import {
   type SanadAiHistoryTurn,
   type SanadAiToolTrace,
 } from './assistantAgentApi';
+import {
+  archiveSanadAgentThread,
+  bindSanadAgentThreadBusiness,
+  createSanadAgentThread,
+  forgetSanadAgentMemory,
+  getSanadAgentContext,
+  getSanadAgentPreferences,
+  getSanadAgentThread,
+  listSanadAgentThreads,
+  updateSanadAgentPreferences,
+  type SanadAgentMemory,
+  type SanadAgentPreferences,
+  type SanadAgentThreadSummary,
+} from './assistantWorkspaceApi';
+import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
+import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 
 type BusinessOption = { id: string; name: string };
 
@@ -35,8 +49,6 @@ type WorkspaceMessage = {
   failed?: boolean;
 };
 
-const STORAGE_KEY = 'sanad.ai.workspace.thread.v1';
-
 const QUICK_PROMPTS = [
   'أعطني نظرة على وضعي المالي الشخصي',
   'اعرض الأنشطة التجارية التي أستطيع الوصول إليها',
@@ -48,32 +60,10 @@ function createId() {
   return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function loadStoredMessages(): WorkspaceMessage[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.slice(-40).filter((item) =>
-      item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string'
-    );
-  } catch {
-    return [];
-  }
-}
-
-function saveMessages(messages: WorkspaceMessage[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)));
-  } catch {
-    // Local persistence is optional; the assistant must remain usable if storage is blocked.
-  }
-}
-
 function historyFrom(messages: WorkspaceMessage[]): SanadAiHistoryTurn[] {
   return messages
     .filter((message) => !message.failed)
-    .slice(-8)
+    .slice(-24)
     .map((message) => ({ role: message.role, content: message.content }));
 }
 
@@ -116,18 +106,16 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
 
   return (
     <article className={`flex w-full ${assistant ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[92%] md:max-w-[78%] xl:max-w-[68%] ${assistant ? '' : 'text-right'}`}>
+      <div className={`max-w-[96%] md:max-w-[86%] 2xl:max-w-[78%] ${assistant ? '' : 'text-right'}`}>
         <div
           className={
             assistant
-              ? `rounded-[1.45rem] rounded-tr-md border p-4 shadow-sm md:p-5 ${
-                  message.failed ? 'border-rose-100 bg-rose-50' : 'border-slate-200 bg-white'
-                }`
+              ? `rounded-[1.45rem] rounded-tr-md border p-4 shadow-sm md:p-5 ${message.failed ? 'border-rose-100 bg-rose-50' : 'border-slate-200 bg-white'}`
               : 'rounded-[1.45rem] rounded-tl-md bg-slate-950 px-4 py-3 text-white shadow-sm md:px-5 md:py-4'
           }
         >
           {assistant ? (
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-black text-slate-500">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
                 <Bot className="h-3.5 w-3.5" />
               </span>
@@ -139,6 +127,8 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
           <p className={`whitespace-pre-wrap text-[13px] leading-7 md:text-sm ${assistant ? 'text-slate-800' : 'text-white'}`}>
             {message.content}
           </p>
+
+          {assistant && result?.response ? <SanadAgentResponseBlocks response={result.response} /> : null}
 
           {message.failed && onRetry ? (
             <button
@@ -154,18 +144,17 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
         {assistant && result && !message.failed ? (
           <div className="mt-2 space-y-2">
             <div className="flex flex-wrap items-center gap-2 px-1 text-[9px] font-bold text-slate-400">
-              <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
-              <span>•</span>
-              <span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" /> {toolSummary(trace)}</span>
+              {result.latency_ms !== undefined ? (
+                <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
+              ) : null}
+              {trace.length ? <><span>•</span><span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" /> {toolSummary(trace)}</span></> : null}
               {result.thinking_level ? <><span>•</span><span>تفكير {result.thinking_level}</span></> : null}
               {result.verification?.passed ? <><span>•</span><span className="text-emerald-600">تم التحقق</span></> : null}
             </div>
 
             {trace.length ? (
               <details className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-                <summary className="cursor-pointer list-none text-[10px] font-black text-slate-600">
-                  خطوات التنفيذ والمصادر
-                </summary>
+                <summary className="cursor-pointer list-none text-[10px] font-black text-slate-600">خطوات التنفيذ والمصادر</summary>
                 <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                   {trace.map((item, index) => (
                     <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3 text-[10px]">
@@ -192,8 +181,34 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
   );
 }
 
+function storedResult(message: {
+  request_id?: string | null;
+  response?: SanadAiAgentTurnResult['response'] | null;
+  tool_trace?: SanadAiToolTrace[];
+  model?: string | null;
+  thinking_level?: 'low' | 'medium' | 'high' | null;
+}): SanadAiAgentTurnResult | undefined {
+  if (!message.response) return undefined;
+  return {
+    ok: true,
+    request_id: message.request_id || createId(),
+    response: message.response,
+    tool_trace: message.tool_trace || [],
+    model: message.model || undefined,
+    thinking_level: message.thinking_level || undefined,
+  };
+}
+
 export default function SanadAgentWorkspace() {
-  const [messages, setMessages] = useState<WorkspaceMessage[]>(() => loadStoredMessages());
+  const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
+  const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [preferences, setPreferences] = useState<SanadAgentPreferences | null>(null);
+  const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
@@ -202,40 +217,195 @@ export default function SanadAgentWorkspace() {
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
-    saveMessages(messages);
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+  }, [messages, sending]);
+
+  const refreshThreads = async (preferred?: string | null) => {
+    const next = await listSanadAgentThreads();
+    setThreads(next);
+    const active = next.filter((thread) => thread.status === 'active');
+    const target = preferred && active.some((thread) => thread.id === preferred)
+      ? preferred
+      : selectedThreadId && active.some((thread) => thread.id === selectedThreadId)
+        ? selectedThreadId
+        : active[0]?.id || null;
+    if (target !== selectedThreadId) setSelectedThreadId(target);
+    return { threads: next, target };
+  };
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       setBusinessLoading(true);
-      const { data, error } = await supabase.rpc('get_my_account_center_v1');
-      if (!alive) return;
-      if (!error && data && typeof data === 'object') {
-        const record = data as Record<string, unknown>;
-        const raw = Array.isArray(record.businesses) ? record.businesses : [];
-        const options = raw.flatMap((item) => {
-          if (!item || typeof item !== 'object') return [];
-          const row = item as Record<string, unknown>;
-          if (typeof row.id !== 'string' || !row.id) return [];
-          return [{ id: row.id, name: typeof row.name === 'string' && row.name ? row.name : 'نشاط بدون اسم' }];
-        });
-        setBusinesses(options);
-        if (options.length === 1) setBusinessId(options[0].id);
+      setThreadsLoading(true);
+      setWorkspaceError(null);
+      try {
+        const [{ data, error }, prefs, loadedThreads] = await Promise.all([
+          supabase.rpc('get_my_account_center_v1'),
+          getSanadAgentPreferences(),
+          listSanadAgentThreads(),
+        ]);
+        if (!alive) return;
+        if (!error && data && typeof data === 'object') {
+          const record = data as Record<string, unknown>;
+          const raw = Array.isArray(record.businesses) ? record.businesses : [];
+          const options = raw.flatMap((item) => {
+            if (!item || typeof item !== 'object') return [];
+            const row = item as Record<string, unknown>;
+            if (typeof row.id !== 'string' || !row.id) return [];
+            return [{ id: row.id, name: typeof row.name === 'string' && row.name ? row.name : 'نشاط بدون اسم' }];
+          });
+          setBusinesses(options);
+        }
+        setPreferences(prefs);
+        setThreads(loadedThreads);
+        const first = loadedThreads.find((thread) => thread.status === 'active') || null;
+        if (first) setSelectedThreadId(first.id);
+      } catch (cause) {
+        if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
+      } finally {
+        if (alive) {
+          setBusinessLoading(false);
+          setThreadsLoading(false);
+        }
       }
-      setBusinessLoading(false);
     })();
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if (!selectedThreadId) {
+      setMessages([]);
+      setMemories([]);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      setThreadLoading(true);
+      setWorkspaceError(null);
+      try {
+        const [detail, context] = await Promise.all([
+          getSanadAgentThread(selectedThreadId),
+          getSanadAgentContext(selectedThreadId),
+        ]);
+        if (!alive) return;
+        setBusinessId(detail.thread.business_id || '');
+        setMemories(context.memories);
+        setMessages(detail.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt: new Date(message.created_at).getTime(),
+          result: message.role === 'assistant' ? storedResult(message) : undefined,
+        })));
+      } catch (cause) {
+        if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
+      } finally {
+        if (alive) setThreadLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [selectedThreadId]);
+
+  const ensureThread = async () => {
+    if (selectedThreadId) return selectedThreadId;
+    const id = await createSanadAgentThread(businessId || null);
+    setSelectedThreadId(id);
+    await refreshThreads(id);
+    return id;
+  };
+
+  const newThread = async () => {
+    if (sending) return;
+    try {
+      const id = await createSanadAgentThread(businessId || null);
+      setMessages([]);
+      setDraft('');
+      setSelectedThreadId(id);
+      setSidebarOpen(false);
+      await refreshThreads(id);
+      window.setTimeout(() => textareaRef.current?.focus(), 50);
+    } catch (cause) {
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
+    }
+  };
+
+  const selectThread = (threadId: string) => {
+    if (sending) return;
+    setSelectedThreadId(threadId);
+    setSidebarOpen(false);
+  };
+
+  const archiveThread = async (threadId: string) => {
+    if (sending) return;
+    try {
+      await archiveSanadAgentThread(threadId);
+      const result = await refreshThreads(threadId === selectedThreadId ? null : selectedThreadId);
+      if (threadId === selectedThreadId) {
+        setSelectedThreadId(result.target);
+        if (!result.target) setMessages([]);
+      }
+    } catch (cause) {
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر أرشفة المحادثة.');
+    }
+  };
+
+  const changeBusiness = async (nextBusinessId: string) => {
+    setBusinessId(nextBusinessId);
+    if (!selectedThreadId) return;
+    try {
+      await bindSanadAgentThreadBusiness(selectedThreadId, nextBusinessId || null);
+      setThreads((current) => current.map((thread) =>
+        thread.id === selectedThreadId ? { ...thread, business_id: nextBusinessId || null } : thread
+      ));
+    } catch (cause) {
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحديث سياق النشاط.');
+    }
+  };
+
+  const changePreference = async (
+    key: keyof Pick<SanadAgentPreferences,
+      'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
+    >,
+    value: boolean,
+  ) => {
+    if (!preferences) return;
+    const previous = preferences;
+    setPreferences({ ...preferences, [key]: value });
+    try {
+      setPreferences(await updateSanadAgentPreferences({ [key]: value }));
+    } catch (cause) {
+      setPreferences(previous);
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر حفظ إعداد المساعد.');
+    }
+  };
+
+  const forgetMemory = async (memoryId: string) => {
+    try {
+      await forgetSanadAgentMemory(memoryId);
+      setMemories((current) => current.filter((item) => item.id !== memoryId));
+    } catch (cause) {
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر نسيان الذاكرة.');
+    }
+  };
+
   async function sendPrompt(rawPrompt?: string) {
     const prompt = (rawPrompt ?? draft).trim();
     if (!prompt || sending) return;
+
+    let threadId: string;
+    try {
+      threadId = await ensureThread();
+    } catch (cause) {
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء المحادثة.');
+      return;
+    }
 
     const priorMessages = messages;
     const userMessage: WorkspaceMessage = {
@@ -251,64 +421,49 @@ export default function SanadAgentWorkspace() {
     setLastUserPrompt(prompt);
     setLiveStatus('بدأت معالجة الطلب…');
     setLiveTools([]);
+    setWorkspaceError(null);
 
     try {
       const result = await streamSanadAiAgentTurn({
         message: prompt,
         business_id: businessId || null,
+        thread_id: threadId,
         history: historyFrom(priorMessages),
       }, (event) => {
-        if (event.type === 'run.started') {
-          setLiveStatus('بدأ مساعد سند المعالجة…');
-          return;
-        }
-        if (event.type === 'agent.status') {
-          setLiveStatus(event.data.label);
-          return;
-        }
-        if (event.type === 'tool.started') {
-          setLiveStatus(`${toolLabel(event.data.name)}…`);
-          return;
-        }
-        if (event.type === 'tool.completed') {
+        if (event.type === 'run.started') setLiveStatus('بدأ مساعد سند المعالجة…');
+        else if (event.type === 'agent.status') setLiveStatus(event.data.label);
+        else if (event.type === 'tool.started') setLiveStatus(`${toolLabel(event.data.name)}…`);
+        else if (event.type === 'tool.completed') {
           setLiveTools((current) => [...current, event.data]);
-          setLiveStatus(
-            event.data.status === 'completed'
-              ? `اكتملت: ${toolLabel(event.data.name)}`
-              : `تعذرت: ${toolLabel(event.data.name)}`,
-          );
-          return;
-        }
-        if (event.type === 'answer.final') {
-          setLiveStatus('تم التحقق، أجهز الإجابة…');
-        }
+          setLiveStatus(event.data.status === 'completed'
+            ? `اكتملت: ${toolLabel(event.data.name)}`
+            : `تعذرت: ${toolLabel(event.data.name)}`);
+        } else if (event.type === 'answer.final') setLiveStatus('تم التحقق، أجهز الإجابة…');
       });
 
       const answer = result.response?.text?.trim() || 'أكملت معالجة الطلب، لكن لم يصل نص الإجابة.';
-      setMessages((current) => [
-        ...current,
-        {
-          id: createId(),
-          role: 'assistant',
-          content: answer,
-          createdAt: Date.now(),
-          result,
-        },
-      ]);
+      setMessages((current) => [...current, {
+        id: createId(),
+        role: 'assistant',
+        content: answer,
+        createdAt: Date.now(),
+        result,
+      }]);
+
+      await refreshThreads(threadId);
+      if (/^(?:تذكر|تذكّر|احفظ|احتفظ)\b/i.test(prompt)) {
+        const context = await getSanadAgentContext(threadId);
+        setMemories(context.memories);
+      }
     } catch (cause) {
-      const message = cause instanceof Error && cause.message
-        ? cause.message
-        : 'تعذر إكمال الطلب الآن.';
-      setMessages((current) => [
-        ...current,
-        {
-          id: createId(),
-          role: 'assistant',
-          content: `تعذر إكمال الطلب: ${message}`,
-          createdAt: Date.now(),
-          failed: true,
-        },
-      ]);
+      const message = cause instanceof Error && cause.message ? cause.message : 'تعذر إكمال الطلب الآن.';
+      setMessages((current) => [...current, {
+        id: createId(),
+        role: 'assistant',
+        content: `تعذر إكمال الطلب: ${message}`,
+        createdAt: Date.now(),
+        failed: true,
+      }]);
     } finally {
       setSending(false);
       setLiveStatus('');
@@ -329,79 +484,93 @@ export default function SanadAgentWorkspace() {
     }
   }
 
-  function newThread() {
-    if (sending) return;
-    setMessages([]);
-    setDraft('');
-    setLastUserPrompt('');
-    try { localStorage.removeItem(STORAGE_KEY); } catch { }
-    window.setTimeout(() => textareaRef.current?.focus(), 50);
-  }
-
   const empty = messages.length === 0;
 
   return (
     <section className="overflow-hidden rounded-[1.8rem] border border-slate-200 bg-[#FAFAF8] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
-      <div className="border-b border-slate-200 bg-white px-4 py-4 md:px-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="border-b border-slate-200 bg-white px-3 py-3 md:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 xl:hidden"
+              aria-label="فتح محادثات وإعدادات مساعد سند"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
               <Bot className="h-5 w-5" />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-black text-slate-950">مساحة مساعد سند</h2>
+                <h2 className="text-base font-black text-slate-950">مساعد سند</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700">
                   <ShieldCheck className="h-3 w-3" /> قراءة آمنة
                 </span>
               </div>
-              <p className="mt-1 text-[10px] leading-5 text-slate-500">يفهم الطلب، يستخدم أدوات سند، ثم يتحقق قبل الإجابة.</p>
+              <p className="mt-1 text-[10px] text-slate-500">
+                محادثات سحابية · ذاكرة طويلة · بيانات حية موثقة
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="relative min-w-[190px]">
-              <BriefcaseBusiness className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <select
-                value={businessId}
-                onChange={(event) => setBusinessId(event.target.value)}
-                disabled={businessLoading || sending}
-                className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pr-9 pl-8 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-400"
-                aria-label="سياق النشاط التجاري"
-              >
-                <option value="">بدون نشاط محدد</option>
-                {businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
-              </select>
-              {businessLoading
-                ? <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
-                : <ChevronDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />}
-            </label>
-
-            <button
-              type="button"
-              onClick={newThread}
-              disabled={sending}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-700 shadow-sm disabled:opacity-40"
+          <label className="relative min-w-[190px]">
+            <BriefcaseBusiness className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <select
+              value={businessId}
+              onChange={(event) => void changeBusiness(event.target.value)}
+              disabled={businessLoading || sending}
+              className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 pr-9 pl-8 text-[10px] font-bold text-slate-700 outline-none focus:border-slate-400"
+              aria-label="سياق النشاط التجاري"
             >
-              <MessageSquarePlus className="h-4 w-4" /> محادثة جديدة
-            </button>
-          </div>
+              <option value="">بدون نشاط محدد</option>
+              {businesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
+            </select>
+            {businessLoading
+              ? <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+              : <ChevronDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />}
+          </label>
         </div>
       </div>
 
-      <div className="grid min-h-[66vh] xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="flex min-h-[66vh] flex-col">
+      {workspaceError ? (
+        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[10px] font-bold text-rose-700">
+          {workspaceError}
+        </div>
+      ) : null}
+
+      <div className="grid min-h-[68vh] xl:grid-cols-[300px_minmax(0,1fr)]">
+        <AssistantWorkspaceSidebar
+          threads={threads}
+          selectedThreadId={selectedThreadId}
+          loading={threadsLoading}
+          mobileOpen={sidebarOpen}
+          onCloseMobile={() => setSidebarOpen(false)}
+          onSelect={selectThread}
+          onNew={() => void newThread()}
+          onArchive={(id) => void archiveThread(id)}
+          preferences={preferences}
+          onPreferenceChange={(key, value) => void changePreference(key, value)}
+          memories={memories}
+          onForgetMemory={(id) => void forgetMemory(id)}
+        />
+
+        <div className="flex min-h-[68vh] min-w-0 flex-col">
           <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
-            {empty ? (
+            {threadLoading ? (
+              <div className="flex min-h-[360px] items-center justify-center gap-2 text-[10px] font-bold text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
+              </div>
+            ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
                 <span className="flex h-16 w-16 items-center justify-center rounded-[1.6rem] bg-gradient-to-br from-slate-950 to-indigo-900 text-white shadow-[0_18px_50px_rgba(49,46,129,0.22)]">
                   <Sparkles className="h-7 w-7" />
                 </span>
-                <h3 className="mt-5 text-xl font-black text-slate-950 md:text-2xl">ماذا تريد أن تعرف أو تنجز؟</h3>
+                <h3 className="mt-5 text-xl font-black text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
-                  اسأل بطريقتك الطبيعية. مساعد سند يستطيع قراءة بياناتك المالية، وفهم نشاطك، والبحث في نسخة إبداع السحابية ضمن صلاحياتك.
+                  اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
                 </p>
-
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button
@@ -416,16 +585,16 @@ export default function SanadAgentWorkspace() {
                 </div>
               </div>
             ) : (
-              <>
-                {messages.map((message, index) => (
-                  <div key={message.id}>
-                    <MessageBubble
-                      message={message}
-                      onRetry={message.failed && lastUserPrompt && index === messages.length - 1 ? () => void sendPrompt(lastUserPrompt) : undefined}
-                    />
-                  </div>
-                ))}
-              </>
+              messages.map((message, index) => (
+                <div key={message.id}>
+                  <MessageBubble
+                    message={message}
+                    onRetry={message.failed && lastUserPrompt && index === messages.length - 1
+                      ? () => void sendPrompt(lastUserPrompt)
+                      : undefined}
+                  />
+                </div>
+              ))
             )}
 
             {sending ? (
@@ -443,20 +612,14 @@ export default function SanadAgentWorkspace() {
                           {liveTools.slice(-4).map((item, index) => (
                             <span
                               key={`${item.name}-${index}`}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-bold ${
-                                item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                              }`}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[8px] font-bold ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
                             >
                               {item.status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                               {toolLabel(item.name)}
                             </span>
                           ))}
                         </div>
-                      ) : (
-                        <div className="mt-2 flex gap-1">
-                          {[0, 1, 2].map((dot) => <span key={dot} className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-300" style={{ animationDelay: `${dot * 180}ms` }} />)}
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -474,13 +637,13 @@ export default function SanadAgentWorkspace() {
                 onKeyDown={handleKeyDown}
                 disabled={sending}
                 rows={2}
-                placeholder="اسأل مساعد سند… مثال: أعطني كشف حساب عبدالله الحبشي"
+                placeholder="اسأل مساعد سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
                 className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60"
               />
               <div className="flex items-center justify-between gap-3 px-1 pb-1">
                 <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  قراءة فقط — لا ترحيل مالي
+                  الأرقام المالية تُقرأ من المصدر الحي
                 </div>
                 <button
                   type="submit"
@@ -492,40 +655,11 @@ export default function SanadAgentWorkspace() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">Enter للإرسال • Shift + Enter لسطر جديد • قد يطلب المساعد توضيحًا قبل قراءة حساب ملتبس.</p>
+            <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
+              Enter للإرسال • Shift + Enter لسطر جديد • قل «تذكر أن…» لحفظ ملاحظة مستقرة.
+            </p>
           </form>
         </div>
-
-        <aside className="hidden border-r border-slate-200 bg-white/75 p-5 xl:block">
-          <div className="sticky top-24 space-y-4">
-            <div>
-              <p className="text-[9px] font-black text-indigo-700">AGENT RUNTIME</p>
-              <h3 className="mt-1 text-sm font-black text-slate-950">ما الذي يستطيع فعله الآن؟</h3>
-            </div>
-
-            {[
-              [Zap, 'فهم الطلب', 'يختار عمق التفكير والأدوات حسب السؤال.'],
-              [Database, 'قراءة موثوقة', 'يستخدم عقود سند وERP الدلالية بدل تخمين البيانات.'],
-              [Wrench, 'تنفيذ متعدد الأدوات', 'يبحث ويحل الحساب ثم يقرأ الكشف داخل الطلب نفسه.'],
-              [ShieldCheck, 'تحقق مالي', 'يحافظ على العملات والفترة ولا ينفذ أي كتابة مالية.'],
-            ].map(([Icon, title, description]) => {
-              const Component = Icon as typeof Zap;
-              return (
-                <div key={String(title)} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-                  <Component className="h-4 w-4 text-slate-700" />
-                  <p className="mt-3 text-[10px] font-black text-slate-800">{String(title)}</p>
-                  <p className="mt-1 text-[9px] leading-5 text-slate-500">{String(description)}</p>
-                </div>
-              );
-            })}
-
-            <div className="rounded-2xl bg-slate-950 p-4 text-white">
-              <p className="text-[9px] font-black text-white/55">حالة هذه المرحلة</p>
-              <p className="mt-2 text-xs font-black">قراءة وتحليل فقط</p>
-              <p className="mt-2 text-[9px] leading-5 text-white/60">أي إنشاء أو تعديل مالي مستقبلاً سيمر عبر مسودة ومراجعة وموافقة صريحة.</p>
-            </div>
-          </div>
-        </aside>
       </div>
     </section>
   );

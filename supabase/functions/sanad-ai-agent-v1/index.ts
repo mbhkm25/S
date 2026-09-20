@@ -24,6 +24,7 @@ import {
   type Json,
   type ToolCall,
 } from "../_shared/sanad-agent-core.ts";
+import { buildAgentPresentation } from "../_shared/sanad-agent-presentation.ts";
 
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
 
@@ -82,6 +83,178 @@ async function rpc<T = unknown>(client: SupabaseClient, name: string, args: Json
 
 async function bestEffortRpc(client: SupabaseClient, name: string, args: Json) {
   try { await client.rpc(name, args); } catch { /* telemetry must never fail the user turn */ }
+}
+
+type AgentCloudContext = {
+  threadId: string | null;
+  businessId: string | null;
+  history: HistoryTurn[];
+  summary: string | null;
+  memories: string[];
+  messageCount: number;
+  preferences: {
+    save_history_enabled: boolean;
+    memory_enabled: boolean;
+    proactive_insights_enabled: boolean;
+    response_cards_enabled: boolean;
+  };
+};
+
+function bool(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+async function loadAgentCloudContext(
+  userClient: SupabaseClient,
+  threadId: string | null,
+  fallbackHistory: HistoryTurn[],
+  requestedBusinessId: string | null,
+): Promise<AgentCloudContext> {
+  if (!threadId) {
+    return {
+      threadId: null,
+      businessId: requestedBusinessId,
+      history: fallbackHistory,
+      summary: null,
+      memories: [],
+      messageCount: fallbackHistory.length,
+      preferences: {
+        save_history_enabled: false,
+        memory_enabled: false,
+        proactive_insights_enabled: true,
+        response_cards_enabled: true,
+      },
+    };
+  }
+
+  const payload = await rpc<Json>(userClient, "get_my_sanad_agent_context_v1", {
+    p_thread_id: threadId,
+    p_recent_limit: 24,
+    p_memory_limit: 30,
+  });
+  const thread = payload.thread && typeof payload.thread === "object" ? payload.thread as Json : {};
+  const preferences = payload.preferences && typeof payload.preferences === "object" ? payload.preferences as Json : {};
+  const history = sanitizeHistory(payload.recent_messages);
+  const memories = Array.isArray(payload.memories)
+    ? payload.memories.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const row = item as Json;
+        const value = cleanText(row.value_text, 1200);
+        return value ? [value] : [];
+      })
+    : [];
+
+  return {
+    threadId,
+    businessId: requestedBusinessId || cleanText(thread.business_id, 80) || null,
+    history,
+    summary: cleanText(thread.summary, 4000) || null,
+    memories,
+    messageCount: Number(thread.message_count || history.length) || history.length,
+    preferences: {
+      save_history_enabled: bool(preferences.save_history_enabled, true),
+      memory_enabled: bool(preferences.memory_enabled, true),
+      proactive_insights_enabled: bool(preferences.proactive_insights_enabled, true),
+      response_cards_enabled: bool(preferences.response_cards_enabled, true),
+    },
+  };
+}
+
+function explicitMemoryFrom(message: string): { key: string; value: string } | null {
+  const match = message.match(/^(?:تذكر|تذكّر|احفظ|احتفظ)\s+(?:أن|بأن)?\s*(.{3,800})$/i);
+  if (!match) return null;
+  const value = cleanText(match[1], 800);
+  if (!value) return null;
+  const key = "explicit:" + value.toLowerCase().replace(/\s+/g, " ").slice(0, 120);
+  return { key, value };
+}
+
+async function maybeStoreExplicitMemory(
+  adminClient: SupabaseClient,
+  authUserId: string,
+  cloud: AgentCloudContext,
+  message: string,
+) {
+  if (!cloud.threadId || !cloud.preferences.memory_enabled) return;
+  const memory = explicitMemoryFrom(message);
+  if (!memory) return;
+  await bestEffortRpc(adminClient, "upsert_sanad_agent_memory_v1", {
+    p_user_id: authUserId,
+    p_memory_key: memory.key,
+    p_category: "explicit_note",
+    p_value_text: memory.value,
+    p_confidence: 1,
+    p_source_thread_id: cloud.threadId,
+    p_source_message_id: null,
+    p_expires_at: null,
+    p_metadata: { source: "explicit_user_instruction" },
+  });
+}
+
+async function maybeRefreshThreadSummary(
+  adminClient: SupabaseClient,
+  cloud: AgentCloudContext,
+  authUserId: string,
+  latestUserMessage: string,
+  latestAssistantMessage: string,
+) {
+  if (!cloud.threadId || !cloud.preferences.save_history_enabled) return;
+  if (cloud.messageCount < 20 || cloud.messageCount % 10 > 1) return;
+
+  try {
+    const transcript = cloud.history.slice(-20)
+      .map((turn) => `${turn.role === "user" ? "المستخدم" : "مساعد سند"}: ${turn.content}`)
+      .join("\n");
+    const summaryInteraction = await geminiInteraction({
+      model: MODEL,
+      system_instruction: "لخّص سياق محادثة مساعد سند باختصار عملي. احتفظ بالأهداف والتفضيلات والقرارات والسياق الثابت. لا تحفظ أرصدة أو مبالغ أو فواتير باعتبارها حقائق دائمة؛ هذه يجب إعادة قراءتها من الأدوات. لا تضف معلومات غير موجودة.",
+      input: [
+        cloud.summary ? `الملخص السابق: ${cloud.summary}` : "لا يوجد ملخص سابق.",
+        "المحادثة الحديثة:",
+        transcript,
+        `المستخدم: ${latestUserMessage}`,
+        `مساعد سند: ${latestAssistantMessage}`,
+      ].join("\n"),
+      generation_config: { thinking_level: "low", temperature: 0.1 },
+    });
+    const summary = cleanText(extractText(summaryInteraction), 4000);
+    if (!summary) return;
+    await adminClient
+      .from("sanad_agent_threads")
+      .update({ summary, summary_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", cloud.threadId)
+      .eq("user_id", authUserId);
+  } catch {
+    // Summary refresh is best-effort and must never block the user turn.
+  }
+}
+
+async function persistAgentTurn(
+  adminClient: SupabaseClient,
+  cloud: AgentCloudContext,
+  authUserId: string,
+  requestId: string,
+  message: string,
+  responseText: string,
+  response: Json,
+  toolTrace: ToolTrace[],
+  thinkingLevel: "low" | "medium" | "high",
+) {
+  if (!cloud.threadId || !cloud.preferences.save_history_enabled) return;
+  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v1", {
+    p_user_id: authUserId,
+    p_thread_id: cloud.threadId,
+    p_user_message: message,
+    p_assistant_message: responseText,
+    p_response: response,
+    p_tool_trace: toolTrace,
+    p_request_id: requestId,
+    p_model: MODEL,
+    p_thinking_level: thinkingLevel,
+    p_business_id: cloud.businessId,
+  });
+  await maybeStoreExplicitMemory(adminClient, authUserId, cloud, message);
+  await maybeRefreshThreadSummary(adminClient, cloud, authUserId, message, responseText);
 }
 
 function safeSearchTerm(value: unknown, max = 120) {
@@ -282,8 +455,7 @@ async function logTool(
 function streamAgentResponse(
   req: Request,
   message: string,
-  history: HistoryTurn[],
-  businessId: string | null,
+  cloud: AgentCloudContext,
   thinkingLevel: "low" | "medium" | "high",
   requestId: string,
   authUserId: string,
@@ -317,7 +489,7 @@ function streamAgentResponse(
           interaction = await geminiInteraction({
             model: MODEL,
             system_instruction: SYSTEM_INSTRUCTION,
-            input: userInput(message, history, businessId),
+            input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
             tools: TOOLS,
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
@@ -403,27 +575,39 @@ function streamAgentResponse(
             },
           });
 
+          const presentation = buildAgentPresentation(toolOutputs);
+          const responsePayload = {
+            text: verified.text,
+            scope: inferScope(toolOutputs.map((row) => row.name)),
+            period: verified.period,
+            currencies: verified.currencies,
+            cards: cloud.preferences.response_cards_enabled ? presentation.cards : [],
+            entities: presentation.entities,
+            attention: cloud.preferences.proactive_insights_enabled ? presentation.attention : [],
+            copy_text: cloud.preferences.response_cards_enabled ? presentation.copy_text : undefined,
+            source_refs: toolTrace
+              .filter((row) => row.status === "completed")
+              .map((row) => ({ tool: row.name, source: row.source })),
+            needs_clarification: detectClarification(verified.text),
+          };
           const result = {
             ok: true,
             request_id: requestId,
+            thread_id: cloud.threadId,
             runtime_version: RUNTIME_VERSION,
             model: MODEL,
             thinking_level: thinkingLevel,
-            response: {
-              text: verified.text,
-              scope: inferScope(toolOutputs.map((row) => row.name)),
-              period: verified.period,
-              currencies: verified.currencies,
-              source_refs: toolTrace
-                .filter((row) => row.status === "completed")
-                .map((row) => ({ tool: row.name, source: row.source })),
-              needs_clarification: detectClarification(verified.text),
-            },
+            response: responsePayload,
             verification: verified.verification,
             tool_trace: toolTrace,
             usage,
             latency_ms: latency,
           };
+
+          await persistAgentTurn(
+            adminClient, cloud, authUserId, requestId, message, verified.text,
+            responsePayload as Json, toolTrace, thinkingLevel,
+          );
 
           send("answer.final", { text: verified.text });
           send("run.completed", result);
@@ -505,8 +689,16 @@ Deno.serve(async (req) => {
   const message = cleanText(body.message);
   if (!message) return respond(req, { ok: false, error: "message_required" }, 400);
 
-  const history = sanitizeHistory(body.history);
-  const businessId = cleanText(body.business_id, 80) || null;
+  const fallbackHistory = sanitizeHistory(body.history);
+  const requestedBusinessId = cleanText(body.business_id, 80) || null;
+  const threadId = cleanText(body.thread_id, 80) || null;
+  let cloud: AgentCloudContext;
+  try {
+    cloud = await loadAgentCloudContext(userClient, threadId, fallbackHistory, requestedBusinessId);
+  } catch (cause) {
+    const contextError = cleanText(cause instanceof Error ? cause.message : cause, 600);
+    return respond(req, { ok: false, error: contextError }, contextError.includes("not_found") ? 404 : 403);
+  }
   const thinkingLevel = chooseThinking(message);
   const requestId = crypto.randomUUID();
   const started = Date.now();
@@ -520,8 +712,7 @@ Deno.serve(async (req) => {
     return streamAgentResponse(
       req,
       message,
-      history,
-      businessId,
+      cloud,
       thinkingLevel,
       requestId,
       authData.user.id,
@@ -534,7 +725,7 @@ Deno.serve(async (req) => {
     interaction = await geminiInteraction({
       model: MODEL,
       system_instruction: SYSTEM_INSTRUCTION,
-      input: userInput(message, history, businessId),
+      input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
       tools: TOOLS,
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
@@ -602,22 +793,35 @@ Deno.serve(async (req) => {
       },
     });
 
+    const presentation = buildAgentPresentation(toolOutputs);
+    const responsePayload = {
+      text: verified.text,
+      scope: inferScope(toolOutputs.map((row) => row.name)),
+      period: verified.period,
+      currencies: verified.currencies,
+      cards: cloud.preferences.response_cards_enabled ? presentation.cards : [],
+      entities: presentation.entities,
+      attention: cloud.preferences.proactive_insights_enabled ? presentation.attention : [],
+      copy_text: cloud.preferences.response_cards_enabled ? presentation.copy_text : undefined,
+      source_refs: toolTrace
+        .filter((row) => row.status === "completed")
+        .map((row) => ({ tool: row.name, source: row.source })),
+      needs_clarification: detectClarification(verified.text),
+    };
+
+    await persistAgentTurn(
+      adminClient, cloud, authData.user.id, requestId, message, verified.text,
+      responsePayload as Json, toolTrace, thinkingLevel,
+    );
+
     return respond(req, {
       ok: true,
       request_id: requestId,
+      thread_id: cloud.threadId,
       runtime_version: RUNTIME_VERSION,
       model: MODEL,
       thinking_level: thinkingLevel,
-      response: {
-        text: verified.text,
-        scope: inferScope(toolOutputs.map((row) => row.name)),
-        period: verified.period,
-        currencies: verified.currencies,
-        source_refs: toolTrace
-          .filter((row) => row.status === "completed")
-          .map((row) => ({ tool: row.name, source: row.source })),
-        needs_clarification: detectClarification(verified.text),
-      },
+      response: responsePayload,
       verification: verified.verification,
       tool_trace: toolTrace,
       usage,
