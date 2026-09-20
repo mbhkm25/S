@@ -24,6 +24,9 @@ const attachmentMigration = readFileSync('supabase/migrations/20260920103000_san
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts', 'utf8');
 const attachmentComposer = readFileSync('src/features/assistant/SanadAttachmentComposer.tsx', 'utf8');
 const attachmentFunction = readFileSync('supabase/functions/sanad-ai-attachment-analyze-v1/index.ts', 'utf8');
+const actionMigration = readFileSync('supabase/migrations/20260920113000_sanad_agent_actions_v1.sql', 'utf8');
+const actionApi = readFileSync('src/features/assistant/assistantActionApi.ts', 'utf8');
+const actionCard = readFileSync('src/features/assistant/SanadAgentActionCard.tsx', 'utf8');
 const insights = readFileSync('supabase/functions/_shared/sanad-agent-insights.ts', 'utf8');
 
 for (const required of [
@@ -301,3 +304,63 @@ assert.match(core, /broadAttention && businessId[\s\S]*business_get_dashboard/);
 assert.match(core, /if \(replica\)[\s\S]*erp_get_replica_status/);
 
 console.log('SANAD Agent Intelligence v2 contract passed.');
+
+
+for (const required of [
+  'sanad_agent_actions',
+  'sanad_agent_action_events',
+  'create_my_sanad_agent_action_draft_v1',
+  'approve_my_sanad_agent_action_v1',
+  'cancel_my_sanad_agent_action_v1',
+  'agent_action_version_conflict',
+  'create_personal_finance_transaction_v1',
+  'create_business_commercial_draft_v1',
+]) {
+  assert.ok(actionMigration.includes(required), `Action v1 migration missing ${required}`);
+}
+
+assert.match(actionMigration, /status text not null default 'review'/);
+assert.match(actionMigration, /for update/);
+assert.match(actionMigration, /p_expected_version/);
+assert.match(actionMigration, /status='approved'/);
+assert.match(actionMigration, /status='executing'/);
+assert.match(actionMigration, /status='completed'/);
+assert.match(actionMigration, /v_normalized - 'metadata'/);
+assert.match(actionMigration, /'writes_to_erp',false/);
+assert.doesNotMatch(actionMigration, /post_business_commercial_document_v1/);
+assert.doesNotMatch(actionMigration, /settle_business_commercial_document_v1/);
+assert.doesNotMatch(actionMigration, /get_ai_erp_read_context_v1/);
+
+for (const required of [
+  'approve_my_sanad_agent_action_v1',
+  'cancel_my_sanad_agent_action_v1',
+  'get_my_sanad_agent_action_v1',
+]) {
+  assert.ok(actionApi.includes(required), `Action API missing ${required}`);
+}
+
+for (const required of ['اعتماد','تعديل','إلغاء','window.confirm','approval_effect']) {
+  assert.ok(actionCard.includes(required), `Action review card missing ${required}`);
+}
+assert.match(actionCard, /cancelSanadAgentAction\(card\.action_id, version\)[\s\S]*onModify/);
+assert.match(responseBlocks, /action_review/);
+assert.match(responseBlocks, /payment_inbox_list/);
+assert.match(workspace, /onModifyAction/);
+assert.match(workspace, /business_get_payment_inbox/);
+
+assert.match(core, /action_prepare_personal_transaction/);
+assert.match(core, /action_prepare_commercial_document/);
+assert.match(core, /finance_get_accounts/);
+assert.match(core, /business_search_parties/);
+assert.match(core, /business_get_payment_inbox/);
+assert.match(core, /هذه مسودة مراجعة فقط/);
+assert.doesNotMatch(core, /approve_my_sanad_agent_action_v1/);
+
+assert.match(runtime, /action_requires_finance_accounts_resolution/);
+assert.match(runtime, /action_party_not_resolved_in_turn/);
+assert.match(runtime, /create_my_sanad_agent_action_draft_v1/);
+assert.match(runtime, /get_business_payment_inbox_v3/);
+assert.doesNotMatch(runtime, /claim_business_payment_v2|complete_business_payment_v2|release_business_payment_v2|resolve_business_payment_reuse_v1/);
+assert.doesNotMatch(runtime, /post_business_commercial_document_v1|settle_business_commercial_document_v1|create_personal_finance_transaction_v1/);
+
+console.log('SANAD Agent Action Integration v1 contract passed.');

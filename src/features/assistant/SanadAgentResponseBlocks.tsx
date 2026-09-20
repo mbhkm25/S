@@ -8,8 +8,10 @@ import {
   Database,
   FileText,
   Info,
+  Inbox,
   UserRound,
 } from 'lucide-react';
+import SanadAgentActionCard from './SanadAgentActionCard';
 import type {
   SanadAssistantAnswerCard,
   SanadAssistantAttention,
@@ -195,6 +197,61 @@ function ReplicaCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type:
   );
 }
 
+function PaymentInboxCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'payment_inbox_list' }> }) {
+  return (
+    <section className="overflow-hidden rounded-[1.55rem] border border-emerald-100 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-emerald-50/70 to-white p-4">
+        <div className="flex items-start gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            <Inbox className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-[11px] font-black text-slate-900">{card.title}</p>
+            <p className="mt-0.5 text-[9px] text-slate-400">{card.view_label} · {card.count} عملية</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[8px] font-black text-slate-500">قراءة فقط</span>
+      </div>
+
+      <div className="divide-y divide-slate-100">
+        {(card.items || []).slice(0, 10).map((item, index) => (
+          <a
+            key={item.id || item.operation_id || index}
+            href={item.href}
+            className="flex items-center justify-between gap-3 p-3 transition hover:bg-slate-50"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black text-slate-800">
+                {[item.financial_entity, item.receiver_name].filter(Boolean).join(' · ') || 'عملية دفع'}
+              </p>
+              <p className="mt-0.5 truncate text-[8px] text-slate-400">
+                {[item.reference_number ? `مرجع ${item.reference_number}` : null, item.transaction_datetime, item.status].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <div className="shrink-0 text-left">
+              {typeof item.amount === 'number' ? (
+                <p className="text-[10px] font-black text-slate-800" dir="ltr">{number(item.amount)} {item.currency || ''}</p>
+              ) : null}
+              <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
+            </div>
+          </a>
+        ))}
+        {!card.items?.length ? (
+          <div className="p-4 text-center text-[9px] font-bold text-slate-400">لا توجد عمليات في هذا العرض.</div>
+        ) : null}
+      </div>
+
+      {card.href ? (
+        <div className="border-t border-slate-100 p-3">
+          <a href={card.href} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-[9px] font-black text-white">
+            فتح وارد المدفوعات <ArrowUpLeft className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function AttentionItem({ item }: { item: SanadAssistantAttention }) {
   const Icon = item.severity === 'critical' ? CircleAlert : item.severity === 'warning' ? AlertTriangle : Info;
   const classes = item.severity === 'critical'
@@ -225,10 +282,12 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
   );
 }
 
-function renderCard(card: SanadAssistantAnswerCard, index: number) {
+function renderCard(card: SanadAssistantAnswerCard, index: number, onModifyAction?: (prompt: string) => void) {
   if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
+  if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`}><PaymentInboxCard card={card} /></div>;
+  if (card.type === 'action_review') return <div key={`action-${card.action_id}`}><SanadAgentActionCard card={card} onModify={onModifyAction} /></div>;
   if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
@@ -242,7 +301,13 @@ function renderCard(card: SanadAssistantAnswerCard, index: number) {
   return null;
 }
 
-export default function SanadAgentResponseBlocks({ response }: { response?: SanadAssistantResponseContract }) {
+export default function SanadAgentResponseBlocks({
+  response,
+  onModifyAction,
+}: {
+  response?: SanadAssistantResponseContract;
+  onModifyAction?: (prompt: string) => void;
+}) {
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
   const entities = Array.isArray(response.entities) ? response.entities : [];
@@ -251,7 +316,7 @@ export default function SanadAgentResponseBlocks({ response }: { response?: Sana
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map(renderCard)}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">

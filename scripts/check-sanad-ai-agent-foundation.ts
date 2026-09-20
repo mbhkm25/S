@@ -21,8 +21,9 @@ for (const tool of SANAD_ASSISTANT_TOOLS) {
   assert.ok(!names.has(tool.name), `duplicate tool name: ${tool.name}`);
   names.add(tool.name);
   assert.equal(tool.parameters.additionalProperties, false, `${tool.name} must reject undeclared parameters`);
-  assert.equal(tool.risk, 'read_only', `${tool.name} must remain read-only in v1`);
-  assert.equal(isToolExecutableNow(tool.name), true, `${tool.name} should be executable in read-only v1`);
+  assert.ok(tool.risk === 'read_only' || tool.risk === 'draft_only', `${tool.name} has unsupported Agent risk`);
+  assert.notEqual(tool.risk, 'approval_required', `${tool.name} must never expose approval execution to the model`);
+  assert.equal(isToolExecutableNow(tool.name), true, `${tool.name} should be executable under the current read/draft policy`);
 }
 
 for (const required of [
@@ -30,6 +31,12 @@ for (const required of [
   'finance_search_transactions',
   'business_list_accessible',
   'business_get_dashboard',
+  'business_get_payment_inbox',
+  'finance_get_accounts',
+  'finance_get_categories',
+  'business_search_parties',
+  'action_prepare_personal_transaction',
+  'action_prepare_commercial_document',
   'erp_search_customers',
   'erp_get_customer_statement',
   'erp_get_documents',
@@ -41,7 +48,7 @@ for (const required of [
 const principles = SANAD_ASSISTANT_SYSTEM_PRINCIPLES.join('\n');
 assert.match(principles, /Never merge currencies/i);
 assert.match(principles, /never guess the account/i);
-assert.match(principles, /read-only/i);
+assert.match(principles, /ERP\/Edaa remains read-only/i);
 assert.match(principles, /Do not expose private chain-of-thought/i);
 
 const architecture = readFileSync('docs/architecture/sanad-assistant-agent-runtime-v1.md', 'utf8');
@@ -51,3 +58,10 @@ assert.match(architecture, /no free SQL/i);
 assert.match(architecture, /stateless/i);
 
 console.log('SANAD Assistant agent foundation contract passed.');
+
+const draftTools = SANAD_ASSISTANT_TOOLS.filter((tool) => tool.risk === 'draft_only').map((tool) => tool.name).sort();
+assert.deepEqual(draftTools, ['action_prepare_commercial_document','action_prepare_personal_transaction']);
+assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.writeToolsEnabled,false);
+assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.draftToolsEnabled,true);
+assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.approvalExecutionAvailableOnlyInUi,true);
+assert.ok(![...names].some((name) => /approve|execute|post|settle|reverse/.test(name)), 'model tool registry must not expose approval or posting commands');

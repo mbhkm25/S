@@ -1,10 +1,10 @@
 # SANAD AI Domain
 
-Status: agent-runtime foundation defined on current `main`; production assistant remains read-only until the new authenticated Agent Runtime passes eval and release gates.
+Status: staged Agent Runtime development. Read tools are authoritative; Action Integration v1 adds review-only drafts plus explicit UI approval for a bounded set of SANAD-owned domain commands. ERP/Edaa remains read-only.
 
 ## Product boundary
 
-SANAD AI consumes authorized context from other SANAD domains. In the current phase it does not create, post, settle or reverse financial/commercial transactions.
+SANAD AI consumes authorized context from other SANAD domains. The model may prepare review-only action drafts. It cannot approve, post, settle, reverse or directly mutate financial/commercial records. Explicit authenticated UI approval may invoke a bounded deterministic SANAD domain command.
 
 ## Frontend entrypoint
 
@@ -23,7 +23,10 @@ The v2 gateway records each context request in `ai_financial_context_access_log`
 - every v2 request creates an audit record;
 - the client receives read-only context;
 - direct client INSERT into the AI audit log remains revoked;
-- financial write tools remain out of scope until an approval/action policy is designed and separately tested.
+- model-visible financial execution tools remain prohibited;
+- review-only draft preparation is separated from explicit UI approval;
+- approval uses versioned deterministic server contracts and audit events;
+- ERP/Edaa remains read-only.
 
 ## Release rule
 
@@ -45,5 +48,5 @@ Key decisions:
 - no free SQL and no raw ERP rows;
 - currencies stay separate;
 - customer identity must be resolved before ERP statements;
-- v1 remains read-only;
-- future writes require Draft -> Review -> explicit approval -> deterministic command.
+- ERP/Edaa remains read-only;
+- Action Integration v1 follows Draft -> Review -> explicit UI approval -> deterministic SANAD command -> audit.

@@ -40,7 +40,11 @@ for (const required of [
 assert.doesNotMatch(runtime, /const SYSTEM_INSTRUCTION\s*=/, 'runtime must not duplicate shared system instruction');
 assert.doesNotMatch(runtime, /const TOOLS\s*=\s*\[/, 'runtime must not duplicate shared tool registry');
 assert.doesNotMatch(runtime, /from\(["']business_erp_snapshot_rows["']\)/, 'agent runtime must not query raw ERP snapshot rows');
-assert.doesNotMatch(runtime, /\.rpc\(["'][^"']*(post|create|settle|reverse)[^"']*["']/, 'agent runtime v1 must not invoke financial mutation RPCs');
+assert.doesNotMatch(runtime, /post_business_commercial_document_v1|settle_business_commercial_document_v1|create_personal_finance_transaction_v1|reverse_personal_finance_transaction_v1/, 'Agent runtime must not invoke domain mutation RPCs directly');
+assert.match(runtime, /create_my_sanad_agent_action_draft_v1/, 'Agent runtime may create review-only action drafts');
+assert.doesNotMatch(shared, /approve_my_sanad_agent_action_v1|cancel_my_sanad_agent_action_v1/, 'model tool registry must not expose approval/cancel RPCs');
+assert.match(runtime, /get_business_payment_inbox_v3/);
+assert.doesNotMatch(runtime, /claim_business_payment_v2|complete_business_payment_v2|release_business_payment_v2|resolve_business_payment_reuse_v1/, 'Payment Inbox is read-only in Agent Action v1');
 assert.match(api, /sanad-ai-agent-v1/);
 assert.match(foundation, /writeToolsEnabled: false/);
 

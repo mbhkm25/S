@@ -28,6 +28,14 @@ import { buildAgentPresentation } from "../_shared/sanad-agent-presentation.ts";
 import { buildAgentInsights, mergeAgentAttention } from "../_shared/sanad-agent-insights.ts";
 
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
+type ActionToolContext = {
+  threadId: string | null;
+  businessId: string | null;
+  requestId: string;
+  toolCallId: string;
+  attachmentIds: string[];
+  priorToolOutputs: Array<{ name: string; args: Json; output: unknown }>;
+};
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -307,6 +315,74 @@ function safeSearchTerm(value: unknown, max = 120) {
   return cleanText(value, max).replace(/[,()%_*]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function objectValue(value: unknown): Json {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Json : {};
+}
+
+function resolvedIdsFromToolOutputs(
+  rows: Array<{ name: string; output: unknown }>,
+  toolName: string,
+  field: string,
+) {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.name !== toolName) continue;
+    const root = objectValue(row.output);
+    const items = Array.isArray(root.items)
+      ? root.items
+      : Array.isArray(row.output) ? row.output : [];
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const id = cleanText((item as Json)[field],80);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+function assertActionPreparationResolved(
+  name: string,
+  args: Json,
+  actionContext: ActionToolContext,
+) {
+  if (name === "action_prepare_personal_transaction") {
+    const accounts = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"finance_get_accounts","id");
+    if (!accounts.size) throw new Error("action_requires_finance_accounts_resolution");
+
+    const type = cleanText(args.transaction_type,20);
+    const accountId = cleanText(args.account_id,80);
+    const sourceId = cleanText(args.source_account_id,80);
+    const destinationId = cleanText(args.destination_account_id,80);
+
+    if ((type === "income" || type === "expense") && (!accountId || !accounts.has(accountId))) {
+      throw new Error("action_account_not_resolved_in_turn");
+    }
+    if (type === "transfer" && (!sourceId || !destinationId || !accounts.has(sourceId) || !accounts.has(destinationId))) {
+      throw new Error("action_transfer_accounts_not_resolved_in_turn");
+    }
+
+    const categoryId = cleanText(args.category_id,80);
+    if (categoryId) {
+      const categories = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"finance_get_categories","id");
+      if (!categories.has(categoryId)) throw new Error("action_category_not_resolved_in_turn");
+    }
+    return;
+  }
+
+  if (name === "action_prepare_commercial_document") {
+    const businessId = cleanText(args.business_id,80);
+    if (!businessId || (actionContext.businessId && businessId !== actionContext.businessId)) {
+      throw new Error("action_business_context_mismatch");
+    }
+
+    const partyId = cleanText(args.party_id,80);
+    if (partyId) {
+      const parties = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"business_search_parties","id");
+      if (!parties.has(partyId)) throw new Error("action_party_not_resolved_in_turn");
+    }
+  }
+}
+
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
     finance_get_overview: "get_ai_financial_context_v2",
@@ -315,8 +391,14 @@ function sourceForTool(name: string) {
     finance_get_budgets: "get_my_budget_progress_v1",
     finance_get_goals: "get_ai_financial_context_v2",
     finance_search_parties: "personal_finance_parties",
+    finance_get_accounts: "get_my_financial_accounts_v1",
+    finance_get_categories: "personal_finance_categories",
     business_list_accessible: "get_my_account_center_v1",
     business_get_dashboard: "get_business_commercial_dashboard_v1",
+    business_get_payment_inbox: "get_business_payment_inbox_v3",
+    business_search_parties: "business_parties",
+    action_prepare_personal_transaction: "sanad_agent_actions:review_only",
+    action_prepare_commercial_document: "sanad_agent_actions:review_only",
     erp_get_replica_status: "get_ai_erp_read_context_v1",
     erp_search_customers: "get_business_erp_customer_candidates_v1",
     erp_get_customer_statement: "get_ai_erp_read_context_v1",
@@ -331,6 +413,7 @@ async function executeTool(
   args: Json,
   userClient: SupabaseClient,
   adminClient: SupabaseClient,
+  actionContext: ActionToolContext,
 ): Promise<unknown> {
   const today = todayIso();
   const from = isoDate(args.from, daysAgoIso(30));
@@ -378,12 +461,63 @@ async function executeTool(
     return { items: data ?? [] };
   }
 
+  if (name === "finance_get_accounts") {
+    return { items: await rpc(userClient, "get_my_financial_accounts_v1") };
+  }
+
+  if (name === "finance_get_categories") {
+    const kind = cleanText(args.kind, 20);
+    let query = userClient
+      .from("personal_finance_categories")
+      .select("id,kind,name,status")
+      .eq("status","active")
+      .order("kind")
+      .order("name");
+    if (kind === "income" || kind === "expense") query = query.eq("kind",kind);
+    const { data, error } = await query.limit(100);
+    if (error) throw new Error(`finance_get_categories:${error.message}`);
+    return { items: data ?? [] };
+  }
+
   if (name === "business_list_accessible") {
     const payload = await rpc<Json>(userClient, "get_my_account_center_v1");
     return {
       owned_businesses: payload?.owned_businesses ?? payload?.businesses ?? [],
       business_memberships: payload?.business_memberships ?? [],
     };
+  }
+
+  if (name === "business_search_parties") {
+    const businessId = cleanText(args.business_id,80);
+    const queryText = safeSearchTerm(args.query,120);
+    if (!businessId || !queryText) throw new Error("business_id_and_party_query_required");
+    const partyLimit = boundedInt(args.limit,10,20);
+    const { data, error } = await userClient
+      .from("business_parties")
+      .select("id,business_id,display_name,primary_phone,status")
+      .eq("business_id",businessId)
+      .eq("status","active")
+      .or(`display_name.ilike.%${queryText.replaceAll(",", " ")}%,primary_phone.ilike.%${queryText.replaceAll(",", " ")}%`)
+      .order("display_name")
+      .limit(partyLimit);
+    if (error) throw new Error(`business_search_parties:${error.message}`);
+    return { items:data ?? [] };
+  }
+
+  if (name === "action_prepare_personal_transaction" || name === "action_prepare_commercial_document") {
+    if (!actionContext.threadId) throw new Error("action_thread_required");
+    assertActionPreparationResolved(name,args,actionContext);
+    const actionType = name === "action_prepare_personal_transaction"
+      ? "personal_transaction"
+      : "commercial_document_draft";
+    return await rpc(userClient,"create_my_sanad_agent_action_draft_v1",{
+      p_thread_id:actionContext.threadId,
+      p_action_type:actionType,
+      p_payload:args,
+      p_request_id:actionContext.requestId,
+      p_tool_call_id:actionContext.toolCallId,
+      p_attachment_ids:actionContext.attachmentIds,
+    });
   }
 
   if (name === "business_get_dashboard") {
@@ -394,6 +528,50 @@ async function executeTool(
       p_from: from,
       p_to: to,
     });
+  }
+
+  if (name === "business_get_payment_inbox") {
+    const businessId = cleanText(args.business_id,80);
+    if (!businessId) throw new Error("business_id_required");
+    if (actionContext.businessId && businessId !== actionContext.businessId) {
+      throw new Error("payment_inbox_business_context_mismatch");
+    }
+    const allowedViews = new Set(["new","mine","team_active","review","completed","all"]);
+    const requestedView = cleanText(args.view,30) || "new";
+    const view = allowedViews.has(requestedView) ? requestedView : "new";
+    const payload = await rpc<Json>(userClient,"get_business_payment_inbox_v3",{
+      p_business_id:businessId,
+      p_view:view,
+      p_limit:boundedInt(args.limit,20,30),
+      p_before_created_at:null,
+      p_before_id:null,
+    });
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    return {
+      contract_version: payload.contract_version,
+      business_id: businessId,
+      view,
+      has_more: payload.has_more === true,
+      items: items.slice(0,30).flatMap((value) => {
+        if (!value || typeof value !== "object") return [];
+        const row = value as Json;
+        return [{
+          id: cleanText(row.id,80),
+          operation_id: cleanText(row.operation_id,80),
+          public_token: cleanText(row.public_token,180),
+          status: cleanText(row.status,60),
+          amount: Number(row.amount ?? 0) || 0,
+          currency: cleanText(row.currency,20),
+          financial_entity: cleanText(row.financial_entity,160) || null,
+          receiver_name: cleanText(row.receiver_name,200) || null,
+          reference_number: cleanText(row.reference_number,160) || null,
+          transaction_datetime: cleanText(row.transaction_datetime,80) || null,
+          claimed_by_name: cleanText(row.claimed_by_name,200) || null,
+          completed_by_name: cleanText(row.completed_by_name,200) || null,
+          created_at: cleanText(row.created_at,80) || null,
+        }];
+      }),
+    };
   }
 
   if (name === "erp_search_customers") {
@@ -560,7 +738,14 @@ function streamAgentResponse(
               const item = await logTool(
                 adminClient,
                 tool,
-                () => executeTool(tool.name, tool.arguments, userClient, adminClient),
+                () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
+                  threadId: cloud.threadId,
+                  businessId: cloud.businessId,
+                  requestId,
+                  toolCallId: tool.id,
+                  attachmentIds: attachmentContext.ids,
+                  priorToolOutputs: toolOutputs,
+                }),
               );
               send("tool.completed", item.trace);
               return item;
@@ -801,7 +986,14 @@ Deno.serve(async (req) => {
       totalToolCalls += calls.length;
 
       const executed = await Promise.all(calls.map((tool) =>
-        logTool(adminClient, tool, () => executeTool(tool.name, tool.arguments, userClient, adminClient))
+        logTool(adminClient, tool, () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
+          threadId: cloud.threadId,
+          businessId: cloud.businessId,
+          requestId,
+          toolCallId: tool.id,
+          attachmentIds: attachmentContext.ids,
+          priorToolOutputs: toolOutputs,
+        }))
       ));
 
       const results = executed.map((item, index) => {

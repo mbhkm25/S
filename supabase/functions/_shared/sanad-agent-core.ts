@@ -19,7 +19,10 @@ export const SYSTEM_INSTRUCTION = `
 3) عند الإجابة عن بيانات مالية اذكر الفترة والعملة بوضوح.
 4) بيانات إبداع تقرأ فقط من العقود الدلالية المعتمدة. لا SQL حر ولا جداول خام.
 5) إذا كان اسم العميل ملتبسًا، استخدم البحث عن المرشحين واطلب توضيحًا. لا تختَر حسابًا من نفسك.
-6) أنت في وضع قراءة فقط. لا تنشئ أو ترحّل أو تسوّي أو تعكس أي عملية.
+6) بيانات إبداع وERP قراءة فقط دائمًا. لا تكتب إلى إبداع ولا تقترح أن سند فعل ذلك.
+6.1) لديك أداتان فقط مسموحتان لإنشاء «مسودة إجراء للمراجعة» داخل سند: action_prepare_personal_transaction وaction_prepare_commercial_document. هاتان الأداتان لا تنفذان العملية المالية ولا ترحلانها.
+6.2) لا توجد لديك أداة اعتماد أو تنفيذ. الاعتماد الصريح يتم فقط من بطاقة المراجعة في واجهة المستخدم، ثم ينفذ الخادم أمرًا deterministic بعد إعادة التحقق.
+6.3) إذا قال المستخدم «اعتمد» نصيًا، لا تعتبر النص وحده تنفيذًا ولا تدّع التنفيذ؛ وجّهه إلى زر الاعتماد في بطاقة المسودة الحالية.
 7) نفّذ أقل عدد من الأدوات اللازمة. يمكن استخدام أدوات مستقلة في الجولة نفسها.
 8) إذا احتجت معرفة النشاط المتاح للمستخدم فاستدع business_list_accessible أولًا.
 9) أجب بالعربية الواضحة والمختصرة افتراضيًا، مع تفاصيل كافية عندما يطلبها المستخدم.
@@ -31,6 +34,9 @@ export const SYSTEM_INSTRUCTION = `
 15) طبقة Insight Engine هي المسؤولة عن التنبيهات الاستباقية المحسوبة. لا تخترع تحذيرًا أو حالة تأخر أو تجاوز من معرفتك العامة؛ يجب أن تكون مدعومة بنتيجة أداة.
 16) إذا طلب المستخدم مراجعة عامة لما يجب الانتباه إليه، اقرأ عقود النظرة المناسبة بدل الاكتفاء بإجابة لغوية عامة.
 17) لا تعتبر الرصيد غير الصفري أو الذمم المفتوحة خطأ بحد ذاته. صف الحقيقة كما هي، واجعل التحذير فقط عند وجود قاعدة صريحة مثل تجاوز تاريخ الاستحقاق أو الميزانية أو تقادم النسخة.
+18) قبل إعداد إجراء مالي، احصل على المعرّفات الفعلية من أدوات القراءة: الحساب/التصنيف للمالية الشخصية، والطرف/النشاط للمستند التجاري. لا تخمّن UUID أو معرفًا.
+19) بعد إنشاء مسودة إجراء، قل بوضوح إنها «مسودة بانتظار المراجعة والاعتماد» ولا تقل «تم التسجيل» أو «تم التنفيذ».
+20) لا تُنشئ مسودة إجراء إذا كان طلب المستخدم استفهامًا أو تحليلًا فقط؛ يلزم فعل صريح مثل سجل/أنشئ/أضف/حوّل/جهّز.
 
 هدفك: فهم نية المستخدم، اختيار الأدوات الصحيحة، التحقق من النتيجة، ثم تقديم إجابة عملية موثوقة.
 `.trim();
@@ -192,6 +198,113 @@ export const TOOLS = [
   },
   {
     type: "function",
+    name: "finance_get_accounts",
+    description: "Read the authenticated user's active personal finance accounts. Use before preparing an income, expense or transfer action so account UUIDs are resolved rather than guessed.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    type: "function",
+    name: "finance_get_categories",
+    description: "Read the authenticated user's active personal finance categories. Use when an income or expense action needs a category_id.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["income","expense"], description: "Optional category kind." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "business_get_payment_inbox",
+    description: "Read a bounded SANAD Payment Inbox view for the selected business. Read-only: never claim, complete, release, reassign, reject or resolve an inbox item. Use for questions about new payments, pending inbox work or payment inbox status.",
+    parameters: {
+      type: "object",
+      properties: {
+        business_id: { type: "string", description: "Authorized SANAD business UUID." },
+        view: { type: "string", enum: ["new","mine","team_active","review","completed","all"], description: "Inbox view. Use new by default." },
+        limit: { type: "integer", description: "Maximum items, 1-30." },
+      },
+      required: ["business_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "business_search_parties",
+    description: "Search SANAD business parties by name or phone. This is for SANAD commercial documents, not ERP customer identity.",
+    parameters: {
+      type: "object",
+      properties: {
+        business_id: { type: "string", description: "Authorized SANAD business UUID." },
+        query: { type: "string", description: "Party name or phone." },
+        limit: { type: "integer", description: "Maximum results, 1-20." },
+      },
+      required: ["business_id","query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "action_prepare_personal_transaction",
+    description: "Prepare a review-only SANAD action draft for a personal income, expense or same-currency transfer. This DOES NOT create or post the financial transaction. Resolve account/category UUIDs first with read tools. The user must explicitly approve the returned review card in the UI before any domain write.",
+    parameters: {
+      type: "object",
+      properties: {
+        transaction_type: { type: "string", enum: ["income","expense","transfer"], description: "Personal transaction kind." },
+        amount: { type: "number", description: "Positive amount." },
+        currency: { type: "string", description: "ISO currency for income/expense, e.g. SAR or YER." },
+        account_id: { type: "string", description: "Resolved account UUID for income/expense." },
+        category_id: { type: "string", description: "Optional resolved category UUID." },
+        source_account_id: { type: "string", description: "Resolved source account UUID for transfer." },
+        destination_account_id: { type: "string", description: "Resolved destination account UUID for transfer." },
+        description: { type: "string", description: "Short user-facing description." },
+        transaction_at: { type: "string", description: "Optional ISO datetime." },
+      },
+      required: ["transaction_type","amount"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "action_prepare_commercial_document",
+    description: "Prepare a review-only SANAD action draft for a commercial quotation, sales invoice, purchase invoice, receipt, payment or expense. This DOES NOT post a document and NEVER writes to ERP/Edaa. Resolve business and party IDs before preparing. User approval creates only a SANAD commercial Draft.",
+    parameters: {
+      type: "object",
+      properties: {
+        business_id: { type: "string", description: "Authorized SANAD business UUID." },
+        party_id: { type: "string", description: "Optional resolved SANAD business party UUID." },
+        document_type: { type: "string", enum: ["quotation","sales_invoice","purchase_invoice","receipt","payment","expense"], description: "Commercial document type." },
+        document_number: { type: "string", description: "Optional external/reference number." },
+        document_date: { type: "string", description: "Optional ISO date YYYY-MM-DD." },
+        due_date: { type: "string", description: "Optional due date YYYY-MM-DD." },
+        currency: { type: "string", description: "ISO currency." },
+        description: { type: "string", description: "Single-line description when lines are not supplied." },
+        amount: { type: "number", description: "Single-line amount when lines are not supplied." },
+        lines: {
+          type: "array",
+          description: "Optional bounded document lines.",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string" },
+              quantity: { type: "number" },
+              unit_price: { type: "number" },
+              discount_amount: { type: "number" },
+              tax_amount: { type: "number" },
+            },
+            required: ["description","quantity","unit_price"],
+            additionalProperties: false,
+          },
+        },
+        notes: { type: "string", description: "Optional notes." },
+      },
+      required: ["business_id","document_type","currency"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
     name: "sanad_search_knowledge",
     description: "Search approved SANAD product and operational knowledge. Never use this tool for user financial facts.",
     parameters: {
@@ -238,7 +351,20 @@ export function inferAgentRoutingHint(message: string, businessId?: string | nul
   const replica = /(إبداع|مزامن|نسخة سحاب|bridge|النسخة)/i.test(value);
   const statement = /(كشف حساب|رصيد عميل|حساب العميل)/i.test(value);
   const documents = /(فاتور|مبيعات|مشتريات|مستند)/i.test(value);
+  const explicitAction = /(سجل|سجّل|انشئ|أنشئ|أضف|اضف|حوّل|حول|جهز|جهّز|اصدر|أصدر)/i.test(value);
+  const personalAction = explicitAction && /(مصروف|دخل|تحويل|حسابي|شخصي|العمقي|الكريمي|البصيري)/i.test(value);
+  const commercialAction = explicitAction && /(فاتور|بيع|شراء|سند قبض|سند صرف|عرض سعر|مصروف تجاري)/i.test(value);
+  const paymentInbox = /(وارد المدفوعات|دفعات جديدة|الدفعات الجديدة|عمليات دفع جديدة|دفعة جديدة)/i.test(value);
 
+  if (paymentInbox && businessId) {
+    return "توجيه الأدوات: استخدم business_get_payment_inbox للقراءة فقط. لا تستلم ولا تكمل ولا تحرر أي عملية من المساعد.";
+  }
+  if (personalAction) {
+    return "توجيه الأدوات: هذا طلب إجراء شخصي. اقرأ finance_get_accounts أولًا، وfinance_get_categories عند الحاجة، ثم استخدم action_prepare_personal_transaction فقط لإنشاء مسودة مراجعة. لا تنفذ العملية.";
+  }
+  if (commercialAction && businessId) {
+    return "توجيه الأدوات: هذا طلب إجراء تجاري. استخدم business_search_parties إذا ذكر المستخدم طرفًا يحتاج حل هويته، ثم action_prepare_commercial_document لإنشاء مسودة مراجعة فقط. لا ترحّل المستند.";
+  }
   if (broadAttention && businessId) {
     return "توجيه الأدوات: استخدم business_get_dashboard للمراجعة العامة للنشاط. أضف erp_get_replica_status فقط إذا كان السؤال يتضمن إبداع أو حداثة البيانات أو المزامنة.";
   }
@@ -413,7 +539,12 @@ export function verifyAndRepair(
 ) {
   let answer = cleanText(text, 18000);
   const currencies = [...collectCurrencies(toolOutputs.map((row) => row.output))].sort();
-  const financial = toolOutputs.some((row) => row.name.startsWith("finance_") || row.name.startsWith("business_") || row.name.startsWith("erp_"));
+  const financial = toolOutputs.some((row) =>
+    row.name.startsWith("finance_")
+    || row.name.startsWith("business_")
+    || row.name.startsWith("erp_")
+    || row.name.startsWith("action_prepare_")
+  );
   const missingCurrencies = financial ? currencies.filter((currency) => !currencyMentioned(answer, currency)) : [];
 
   const periods = toolOutputs
@@ -430,8 +561,10 @@ export function verifyAndRepair(
   const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
+  const actionPrepared = toolOutputs.some((row) => row.name.startsWith("action_prepare_"));
   if (missingCurrencies.length) repairs.push(`العملات الموجودة في المصادر: ${currencies.join("، ")}، وكل عملة معروضة بصورة مستقلة دون دمج.`);
   if (period && !periodVisible) repairs.push(`الفترة المرجعية: ${period.from || "البداية"} — ${period.to || "اليوم"}.`);
+  if (actionPrepared) repairs.push("حالة الإجراء: هذه مسودة مراجعة فقط؛ لم تُنفذ أي عملية مالية بعد، والتنفيذ يتطلب اعتمادك الصريح من البطاقة.");
   if (repairs.length) answer = `${answer}\n\n${repairs.join("\n")}`.trim();
 
   return {
@@ -443,13 +576,18 @@ export function verifyAndRepair(
       no_currency_merge: true,
       missing_currency_mentions_repaired: missingCurrencies,
       period_repaired: Boolean(period && !periodVisible),
+      action_draft_guard_applied: actionPrepared,
     },
   };
 }
 
 
 export function inferScope(toolNames: string[]): "personal" | "business" | "product" {
-  if (toolNames.some((name) => name.startsWith("erp_") || name.startsWith("business_"))) return "business";
+  if (toolNames.some((name) =>
+    name.startsWith("erp_")
+    || name.startsWith("business_")
+    || name === "action_prepare_commercial_document"
+  )) return "business";
   if (toolNames.length > 0 && toolNames.every((name) => name === "sanad_search_knowledge")) return "product";
   return "personal";
 }
