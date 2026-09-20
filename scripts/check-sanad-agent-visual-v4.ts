@@ -20,6 +20,7 @@ for (const required of [
   "matchMedia('(prefers-reduced-motion: reduce)')",
   'sanad-orb-css-fallback',
   'sanad-fluid-orb__fallback',
+  'preferCssFallback',
   'data-orb-state',
   "label = 'سند'",
 ]) {
@@ -42,6 +43,7 @@ for (const required of [
   'markOrbSuccess',
   'handleVoiceStateChange',
   'onStateChange={handleVoiceStateChange}',
+  'aria-live="polite"',
 ]) {
   assert.ok(workspace.includes(required), `workspace fluid-orb contract missing ${required}`);
 }
