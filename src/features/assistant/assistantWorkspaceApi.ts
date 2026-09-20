@@ -15,6 +15,7 @@ export type SanadAgentThreadSummary = {
 
 export type SanadAgentStoredMessage = {
   id: string;
+  sequence_no: number;
   role: 'user' | 'assistant';
   content: string;
   response?: SanadAiAgentTurnResult['response'] | null;
