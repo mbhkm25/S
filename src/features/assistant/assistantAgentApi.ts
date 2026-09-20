@@ -10,6 +10,7 @@ export type SanadAiAgentTurnRequest = {
   message: string;
   business_id?: string | null;
   thread_id?: string | null;
+  attachment_ids?: string[];
   history?: SanadAiHistoryTurn[];
 };
 
@@ -60,6 +61,7 @@ export async function runSanadAiAgentTurn(input: SanadAiAgentTurnRequest): Promi
       message,
       business_id: input.business_id || null,
       thread_id: input.thread_id || null,
+      attachment_ids: (input.attachment_ids || []).slice(0, 5),
       history: (input.history || []).slice(-24),
     },
   });
@@ -115,6 +117,7 @@ export async function streamSanadAiAgentTurn(
       message,
       business_id: input.business_id || null,
       thread_id: input.thread_id || null,
+      attachment_ids: (input.attachment_ids || []).slice(0, 5),
       history: (input.history || []).slice(-24),
       stream: true,
     }),
