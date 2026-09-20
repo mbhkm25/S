@@ -7,7 +7,6 @@ import {
   Menu,
   RotateCcw,
   SendHorizontal,
-  ShieldCheck,
   Sparkles,
   Wrench,
   XCircle,
@@ -275,6 +274,14 @@ function storedMessagesToWorkspace(
       return attachment ? [attachment] : [];
     }),
   }));
+}
+
+function syncComposerTextareaHeight(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  const nextHeight = Math.min(textarea.scrollHeight, 64);
+  textarea.style.height = `${Math.max(nextHeight, 40)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > 64 ? 'auto' : 'hidden';
 }
 
 export default function SanadAgentWorkspace() {
@@ -700,57 +707,31 @@ export default function SanadAgentWorkspace() {
     }
   }
 
+  useEffect(() => {
+    syncComposerTextareaHeight(textareaRef.current);
+  }, [draft]);
+
   const empty = messages.length === 0;
 
   return (
-    <section id="sanad-agent-workspace" className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
-      <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-3 md:px-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 xl:hidden"
-              aria-label="فتح محادثات وإعدادات سند"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-            <span className="flex h-11 w-11 items-center justify-center">
-              <SanadFluidOrb state={orbState} size={38} />
-            </span>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold text-slate-950">سند</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  <ShieldCheck className="h-3 w-3" /> قراءة آمنة
-                </span>
-              </div>
-              <p className="mt-1 text-[13px] text-slate-500">
-                محادثات سحابية · ذاكرة طويلة · بيانات حية موثقة
-              </p>
-            </div>
-          </div>
-
-          {businessLoading ? (
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> تحميل سياق النشاط…
-            </span>
-          ) : businessId ? (
-            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-700">
-              <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
-              <span className="truncate">{businesses.find((business) => business.id === businessId)?.name || 'نشاط مرتبط'}</span>
-            </span>
-          ) : businesses.length > 1 ? (
-            <button
-              type="button"
-              onClick={() => setBusinessSelectionOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[13px] font-medium text-amber-800"
-            >
-              <BriefcaseBusiness className="h-4 w-4" /> اختر نشاط المحادثة
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <section
+      id="sanad-agent-workspace"
+      data-conversation-surface="open"
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white"
+    >
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(true)}
+        data-mobile-sidebar-trigger
+        className="absolute right-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur xl:hidden"
+        aria-label="فتح محادثات وإعدادات سند"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
+      />
 
       {workspaceError ? (
         <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700">
@@ -758,8 +739,14 @@ export default function SanadAgentWorkspace() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[284px_minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
+          assistantState={orbState}
+          assistantStatus={sending ? (liveStatus || 'يعمل الآن') : orbState === 'listening' ? 'يستمع' : orbState === 'thinking' ? 'يفكر' : orbState === 'executing' ? 'ينفذ' : orbState === 'success' ? 'اكتمل' : 'جاهز'}
+          businessLabel={businessLoading ? null : (businesses.find((business) => business.id === businessId)?.name || null)}
+          businessLoading={businessLoading}
+          canChooseBusiness={!businessLoading && businesses.length > 1 && !businessId}
+          onChooseBusiness={() => setBusinessSelectionOpen(true)}
           threads={threads}
           selectedThreadId={selectedThreadId}
           loading={threadsLoading}
@@ -774,11 +761,11 @@ export default function SanadAgentWorkspace() {
           onForgetMemory={(id) => void forgetMemory(id)}
         />
 
-        <div className="flex min-h-0 min-w-0 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-col">
           <div
             ref={timelineRef}
             data-scroll-owner="timeline"
-            className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 [scrollbar-gutter:stable] md:px-7 md:py-6"
+            className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
@@ -876,9 +863,10 @@ export default function SanadAgentWorkspace() {
           <form
             data-workspace-slot="composer"
             onSubmit={handleSubmit}
-            className="shrink-0 border-t border-slate-200/80 bg-white/95 p-3 backdrop-blur-xl md:p-4"
+            data-composer-density="compact"
+            className="shrink-0 border-t border-slate-200/80 bg-white/95 p-2 backdrop-blur-xl md:px-4 md:py-3"
           >
-            <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
+            <div className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
@@ -892,14 +880,17 @@ export default function SanadAgentWorkspace() {
               <textarea
                 ref={textareaRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  syncComposerTextareaHeight(event.currentTarget);
+                }}
                 onKeyDown={handleKeyDown}
                 disabled={sending}
-                rows={2}
+                rows={1}
                 placeholder="اسأل سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
-                className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
+                className="max-h-[64px] min-h-10 w-full resize-none overflow-y-hidden bg-transparent px-2.5 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
               />
-              <div className="flex items-center justify-between gap-3 px-1 pb-1">
+              <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
                 <div className="flex min-w-0 items-center gap-2">
                   <SanadVoiceDictationButton
                     disabled={sending}
@@ -907,14 +898,13 @@ export default function SanadAgentWorkspace() {
                     onTranscript={(text) => {
                       setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
                       setWorkspaceError(null);
-                      window.setTimeout(() => textareaRef.current?.focus(), 40);
+                      window.setTimeout(() => {
+                        syncComposerTextareaHeight(textareaRef.current);
+                        textareaRef.current?.focus();
+                      }, 40);
                     }}
                     onError={(message) => setWorkspaceError(message)}
                   />
-                  <div className="hidden items-center gap-2 text-xs font-medium text-slate-400 md:flex">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    راجع النص الصوتي قبل الإرسال
-                  </div>
                 </div>
                 <button
                   type="submit"
@@ -930,9 +920,6 @@ export default function SanadAgentWorkspace() {
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • أي إجراء مالي ينشئ مسودة مراجعة أولًا ولا يُنفذ إلا بعد اعتمادك الصريح.
-            </p>
           </form>
         </div>
       </div>
