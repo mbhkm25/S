@@ -23,6 +23,19 @@ for (const required of [
   assert.ok(migration.toLowerCase().includes(required.toLowerCase()), `message ordering migration missing: ${required}`);
 }
 
+
+assert.match(
+  migration,
+  /alter table public\.sanad_agent_threads[\s\S]*alter column next_message_sequence set not null/i,
+  'Thread sequence allocator must be NOT NULL.',
+);
+
+assert.match(
+  migration,
+  /alter table public\.sanad_agent_messages[\s\S]*alter column sequence_no set not null/i,
+  'Message semantic sequence must be NOT NULL.',
+);
+
 assert.match(
   migration,
   /create unique index if not exists sanad_agent_messages_thread_sequence_uidx\s+on public\.sanad_agent_messages\(thread_id, sequence_no\)/i,
