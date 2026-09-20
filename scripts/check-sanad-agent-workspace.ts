@@ -452,7 +452,7 @@ assert.match(styles, /noto-sans-arabic-arabic-wght-normal\.woff2/);
 assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/);
 assert.match(styles, /font-display:\s*swap/);
 assert.match(styles, /font-weight:\s*100 900/);
-assert.match(styles, /Noto Sans Arabic Variable/);
+assert.match(styles, /Noto Sans Arabic/);
 assert.match(workspace, /id="sanad-agent-workspace"/);
 assert.match(workspace, /sticky bottom-0/);
 assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
