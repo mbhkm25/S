@@ -149,11 +149,13 @@ export default function SanadAttachmentComposer({
       }
     }
 
+    let nextAttachments = attachments;
     for (const file of selected) {
       setBusyNames((current) => [...current, file.name]);
       try {
         const attachment = await uploadSanadAgentAttachment(file, activeThreadId, businessId);
-        onChange([...attachments.filter((item) => item.id !== attachment.id), attachment]);
+        nextAttachments = [...nextAttachments.filter((item) => item.id !== attachment.id), attachment];
+        onChange(nextAttachments);
       } catch (cause) {
         report(cause, `تعذر رفع ${file.name}.`);
       } finally {
