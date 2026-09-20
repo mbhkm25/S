@@ -71,16 +71,16 @@ export function SanadAttachmentPreview({
   const target = attachment.suggestion?.target;
 
   return (
-    <div className={`rounded-2xl border border-slate-200/80 bg-white shadow-sm ${compact ? 'p-2.5' : 'p-3'}`}>
+    <div className={`rounded-xl border border-slate-200/70 bg-slate-50/70 ${compact ? 'p-2.5' : 'p-3'}`}>
       <div className="flex min-w-0 items-start gap-2.5">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-black text-slate-800">{attachment.file_name}</p>
+          <p className="truncate text-sm font-semibold text-slate-800">{attachment.file_name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className="text-[8px] text-slate-400">{prettySize(attachment.file_size)}</span>
-            <span className={`rounded-full border px-2 py-0.5 text-[7px] font-black ${statusClasses(attachment)}`}>
+            <span className="text-sm text-slate-400">{prettySize(attachment.file_size)}</span>
+            <span className={`rounded-full border px-2 py-0.5 text-sm font-semibold ${statusClasses(attachment)}`}>
               {statusLabel(attachment)}
             </span>
           </div>
@@ -88,13 +88,13 @@ export function SanadAttachmentPreview({
       </div>
 
       {!compact && summary ? (
-        <p className="mt-2.5 text-[9px] leading-5 text-slate-600">{summary}</p>
+        <p className="mt-2.5 text-xs leading-5 text-slate-600">{summary}</p>
       ) : null}
 
       {!compact && attachment.suggestion?.kind === 'link_existing' && target?.href ? (
         <a
           href={target.href}
-          className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-2 text-[9px] font-black text-sky-700"
+          className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-2 text-xs font-semibold text-sky-700"
         >
           <Link2 className="h-3.5 w-3.5" />
           {target.type === 'erp_customer' ? 'فتح العميل المطابق المحتمل' : 'فتح المستند المطابق المحتمل'}
@@ -104,7 +104,7 @@ export function SanadAttachmentPreview({
       {!compact && attachment.suggestion?.kind === 'draft_candidate' ? (
         <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-violet-50 p-2.5 text-violet-800">
           <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <p className="text-[8px] leading-4">
+          <p className="text-sm leading-4">
             استخرج سند بيانات تصلح لتجهيز مسودة، لكن لم تُنشأ أي عملية. يجب مراجعتها واعتمادها في مرحلة الإجراء.
           </p>
         </div>
@@ -241,7 +241,7 @@ export default function SanadAttachmentComposer({
                   </button>
                 </div>
                 {attachment.status === 'failed' ? (
-                  <div className="mt-1 flex items-center gap-1 px-1 text-[8px] text-rose-600">
+                  <div className="mt-1 flex items-center gap-1 px-1 text-sm text-rose-600">
                     <AlertTriangle className="h-3 w-3" />
                     {attachment.error_code || 'تعذر تحليل الملف'}
                   </div>
