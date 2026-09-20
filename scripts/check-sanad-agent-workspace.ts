@@ -12,7 +12,7 @@ const runtime = readFileSync('supabase/functions/sanad-ai-agent-v1/index.ts', 'u
 const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts', 'utf8');
 const presentation = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260920071058_sanad_agent_workspace_v2.sql', 'utf8');
-const visualMigration = readFileSync('supabase/migrations/20260920093000_sanad_agent_message_feedback_v1.sql', 'utf8');
+const visualMigration = readFileSync('supabase/migrations/20260920121801_sanad_agent_message_feedback_v1.sql', 'utf8');
 const pulse = readFileSync('src/features/assistant/SanadPulseMark.tsx', 'utf8');
 const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
@@ -20,16 +20,17 @@ const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButt
 const voiceApi = readFileSync('src/features/assistant/assistantVoiceApi.ts', 'utf8');
 const voiceFunction = readFileSync('supabase/functions/sanad-ai-transcribe-v1/index.ts', 'utf8');
 const supabaseConfig = readFileSync('supabase/config.toml', 'utf8');
-const attachmentMigration = readFileSync('supabase/migrations/20260920103000_sanad_agent_attachments_v1.sql', 'utf8');
+const attachmentMigration = readFileSync('supabase/migrations/20260920121807_sanad_agent_attachments_v1.sql', 'utf8');
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts', 'utf8');
 const attachmentComposer = readFileSync('src/features/assistant/SanadAttachmentComposer.tsx', 'utf8');
 const attachmentFunction = readFileSync('supabase/functions/sanad-ai-attachment-analyze-v1/index.ts', 'utf8');
-const actionMigration = readFileSync('supabase/migrations/20260920113000_sanad_agent_actions_v1.sql', 'utf8');
+const actionMigration = readFileSync('supabase/migrations/20260920121815_sanad_agent_actions_v1.sql', 'utf8');
 const actionApi = readFileSync('src/features/assistant/assistantActionApi.ts', 'utf8');
 const actionCard = readFileSync('src/features/assistant/SanadAgentActionCard.tsx', 'utf8');
 const insights = readFileSync('supabase/functions/_shared/sanad-agent-insights.ts', 'utf8');
-const observabilityMigration = readFileSync('supabase/migrations/20260920123000_sanad_agent_observability_v1.sql', 'utf8');
+const observabilityMigration = readFileSync('supabase/migrations/20260920121821_sanad_agent_observability_v1.sql', 'utf8');
 const observabilityApi = readFileSync('src/features/assistant/assistantObservabilityApi.ts', 'utf8');
+const productionDeploy = readFileSync('.github/workflows/deploy-production.yml', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -422,3 +423,24 @@ assert.match(core, /__sanad_retry_count/);
 assert.match(core, /__sanad_http_latency_ms/);
 
 console.log('SANAD Agent Performance & Observability v1 contract passed.');
+
+
+for (const required of [
+  'Verify SANAD Agent backend contract',
+  '20260920071058',
+  '20260920121801',
+  '20260920121807',
+  '20260920121815',
+  '20260920121821',
+  'sanad-ai-agent-v1',
+  'sanad-ai-transcribe-v1',
+  'sanad-ai-attachment-analyze-v1',
+]) {
+  assert.ok(productionDeploy.includes(required), `production release guard missing ${required}`);
+}
+assert.match(productionDeploy, /SUPABASE_ACCESS_TOKEN/);
+assert.match(productionDeploy, /SUPABASE_DB_PASSWORD/);
+assert.match(productionDeploy, /supabase migration list --linked/);
+assert.match(productionDeploy, /supabase functions list/);
+
+console.log('SANAD Production runtime release guard contract passed.');
