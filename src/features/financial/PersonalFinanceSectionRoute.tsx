@@ -189,9 +189,9 @@ export default function PersonalFinanceSectionRoute() {
               const ItemIcon = item.icon;
               const selected = key === section;
               return (
-                <a key={key} href={`${basePath()}financial/${key}`} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[10px] font-bold transition ${selected ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                <button key={key} type="button" onClick={() => go(`financial/${key}`)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-[12px] font-medium transition ${selected ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   <ItemIcon className="h-4 w-4" /> {item.label}
-                </a>
+                </button>
               );
             })}
           </div>
