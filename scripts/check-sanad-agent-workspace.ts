@@ -30,6 +30,7 @@ const actionCard = readFileSync('src/features/assistant/SanadAgentActionCard.tsx
 const insights = readFileSync('supabase/functions/_shared/sanad-agent-insights.ts', 'utf8');
 const observabilityMigration = readFileSync('supabase/migrations/20260920121821_sanad_agent_observability_v1.sql', 'utf8');
 const observabilityApi = readFileSync('src/features/assistant/assistantObservabilityApi.ts', 'utf8');
+const productionDeploy = readFileSync('.github/workflows/deploy-production.yml', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -422,3 +423,24 @@ assert.match(core, /__sanad_retry_count/);
 assert.match(core, /__sanad_http_latency_ms/);
 
 console.log('SANAD Agent Performance & Observability v1 contract passed.');
+
+
+for (const required of [
+  'Verify SANAD Agent backend contract',
+  '20260920071058',
+  '20260920121801',
+  '20260920121807',
+  '20260920121815',
+  '20260920121821',
+  'sanad-ai-agent-v1',
+  'sanad-ai-transcribe-v1',
+  'sanad-ai-attachment-analyze-v1',
+]) {
+  assert.ok(productionDeploy.includes(required), `production release guard missing ${required}`);
+}
+assert.match(productionDeploy, /SUPABASE_ACCESS_TOKEN/);
+assert.match(productionDeploy, /SUPABASE_DB_PASSWORD/);
+assert.match(productionDeploy, /supabase migration list --linked/);
+assert.match(productionDeploy, /supabase functions list/);
+
+console.log('SANAD Production runtime release guard contract passed.');
