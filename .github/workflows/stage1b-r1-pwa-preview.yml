@@ -274,6 +274,33 @@ jobs:
             curl --fail --silent --show-error --location --max-time 30 "$PREVIEW_URL$path" >/dev/null
           done
 
+      - name: Publish preview access details
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+          PROMOTE_URL: ${{ steps.tunnel.outputs.promote_url }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/stage1b-r1-preview-access.txt <<EOF
+          TARGET_SHA=$TARGET_SHA
+          PREVIEW_URL=$PREVIEW_URL
+          SANAD_AI_URL=$PREVIEW_URL/sanad-ai
+          STATUS_URL=$PREVIEW_URL/__stage1b_r1/status
+          PROMOTE_URL=$PROMOTE_URL
+          BUILD_A=stage1b-r1-${TARGET_SHA:0:12}-a
+          BUILD_B=stage1b-r1-${TARGET_SHA:0:12}-b
+          EOF
+          cat /tmp/stage1b-r1-preview-access.txt
+
+      - name: Upload preview access details
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1b-r1-preview-access
+          path: /tmp/stage1b-r1-preview-access.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
       - name: Keep preview available for device testing
         shell: bash
         env:
