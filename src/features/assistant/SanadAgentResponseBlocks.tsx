@@ -214,10 +214,10 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
 }
 
 function renderCard(card: SanadAssistantAnswerCard, index: number) {
-  if (card.type === 'customer_statement') return <StatementCard key={`statement-${index}`} card={card} />;
-  if (card.type === 'document_list') return <DocumentsCard key={`documents-${index}`} card={card} />;
-  if (card.type === 'replica_status') return <ReplicaCard key={`replica-${index}`} card={card} />;
-  if (card.type === 'warning') return <AttentionItem key={`warning-${index}`} item={{ severity: 'warning', title: card.title, body: card.body }} />;
+  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} /></div>;
+  if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
+  if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
+  if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
       <div key={`metric-${index}`} className="rounded-2xl border border-slate-200 bg-white p-3">
@@ -243,13 +243,13 @@ export default function SanadAgentResponseBlocks({ response }: { response?: Sana
       {attention.length > 0 && (
         <div className="space-y-2">
           <p className="px-1 text-[9px] font-black text-slate-400">انتبه إلى</p>
-          {attention.map((item, index) => <AttentionItem key={`${item.title}-${index}`} item={item} />)}
+          {attention.map((item, index) => <div key={`${item.title}-${index}`}><AttentionItem item={item} /></div>)}
         </div>
       )}
       {entities.length > 0 && !cards.some((card) => card.type === 'document_list') && (
         <div className="flex flex-wrap gap-1.5">
           {entities.slice(0, 12).map((entity, index) => (
-            <EntityLink key={`${entity.type}-${entity.label}-${index}`} entity={entity} />
+            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} /></span>
           ))}
         </div>
       )}
