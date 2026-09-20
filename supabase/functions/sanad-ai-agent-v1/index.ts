@@ -769,6 +769,7 @@ function streamAgentResponse(
   userClient: SupabaseClient,
   adminClient: SupabaseClient,
   attachmentContext: { ids: string[]; summaries: string[] },
+  requestTiming: { startedAt: number; contextLoadMs: number; attachmentContextMs: number },
 ) {
   const encoder = new TextEncoder();
 
@@ -779,10 +780,14 @@ function streamAgentResponse(
       };
 
       void (async () => {
-        const started = Date.now();
+        const started = requestTiming.startedAt;
         const toolTrace: ToolTrace[] = [];
         const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+        const aggregateUsage = emptyAgentUsage();
         let totalToolCalls = 0;
+        let modelLatencyMs = 0;
+        let retryCount = 0;
+        let persistenceMs = 0;
         let interaction: Json | null = null;
 
         try {
@@ -801,6 +806,9 @@ function streamAgentResponse(
             tools: TOOLS,
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
+          addInteractionUsage(aggregateUsage,interaction);
+          modelLatencyMs += interactionLatencyMs(interaction);
+          retryCount += interactionRetryCount(interaction);
 
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
             const calls = extractToolCalls(interaction);
@@ -856,6 +864,9 @@ function streamAgentResponse(
               tools: TOOLS,
               generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
             });
+            addInteractionUsage(aggregateUsage,interaction);
+            modelLatencyMs += interactionLatencyMs(interaction);
+            retryCount += interactionRetryCount(interaction);
           }
 
           const remainingCalls = interaction ? extractToolCalls(interaction) : [];
@@ -867,7 +878,7 @@ function streamAgentResponse(
           send("agent.status", { status: "verifying", label: "أراجع العملات والفترة والمصادر قبل الإجابة…" });
 
           const verified = verifyAndRepair(finalText, toolOutputs);
-          const usage = mapUsage(interaction?.usage);
+          const usage = aggregateUsage;
           const latency = Date.now() - started;
 
           await bestEffortRpc(adminClient, "record_ai_usage", {
@@ -926,10 +937,33 @@ function streamAgentResponse(
             latency_ms: latency,
           };
 
+          const persistenceStartedAt = Date.now();
           await persistAgentTurn(
             adminClient, cloud, authUserId, requestId, message, verified.text,
             responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
           );
+          persistenceMs = Date.now() - persistenceStartedAt;
+
+          await recordAgentServerMetric(adminClient,{
+            userId:authUserId,
+            threadId:cloud.threadId,
+            businessId:cloud.businessId,
+            requestId,
+            status:"completed",
+            transport:"sse",
+            thinkingLevel,
+            totalLatencyMs:Date.now()-started,
+            contextLoadMs:requestTiming.contextLoadMs,
+            attachmentContextMs:requestTiming.attachmentContextMs,
+            modelLatencyMs,
+            toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+            persistenceMs,
+            toolCalls:totalToolCalls,
+            failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+            retryCount,
+            usage,
+            attachmentCount:attachmentContext.ids.length,
+          });
 
           send("answer.final", { text: verified.text });
           send("run.completed", result);
@@ -946,7 +980,7 @@ function streamAgentResponse(
             p_billing_mode: "standard",
             p_status: "failed",
             p_latency_ms: latency,
-            p_usage_metadata: mapUsage(interaction?.usage),
+            p_usage_metadata: aggregateUsage,
             p_metadata: {
               user_id: authUserId,
               runtime_version: RUNTIME_VERSION,
@@ -955,6 +989,28 @@ function streamAgentResponse(
               error: messageText,
               transport: "sse",
             },
+          });
+
+          await recordAgentServerMetric(adminClient,{
+            userId:authUserId,
+            threadId:cloud.threadId,
+            businessId:cloud.businessId,
+            requestId,
+            status:"failed",
+            transport:"sse",
+            thinkingLevel,
+            totalLatencyMs:latency,
+            contextLoadMs:requestTiming.contextLoadMs,
+            attachmentContextMs:requestTiming.attachmentContextMs,
+            modelLatencyMs,
+            toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+            persistenceMs,
+            toolCalls:totalToolCalls,
+            failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+            retryCount,
+            usage:aggregateUsage,
+            attachmentCount:attachmentContext.ids.length,
+            errorCode:messageText.split(":")[0].slice(0,160),
           });
 
           send("run.error", {
