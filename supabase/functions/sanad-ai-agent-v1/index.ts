@@ -738,12 +738,20 @@ Deno.serve(async (req) => {
   const fallbackHistory = sanitizeHistory(body.history);
   const requestedBusinessId = cleanText(body.business_id, 80) || null;
   const threadId = cleanText(body.thread_id, 80) || null;
+  const attachmentIds = attachmentIdsFrom(body.attachment_ids);
   let cloud: AgentCloudContext;
   try {
     cloud = await loadAgentCloudContext(userClient, threadId, fallbackHistory, requestedBusinessId);
   } catch (cause) {
     const contextError = cleanText(cause instanceof Error ? cause.message : cause, 600);
     return respond(req, { ok: false, error: contextError }, contextError.includes("not_found") ? 404 : 403);
+  }
+  let attachmentContext: { ids: string[]; summaries: string[] };
+  try {
+    attachmentContext = await loadAttachmentContext(userClient, cloud.threadId, attachmentIds);
+  } catch (cause) {
+    const attachmentError = cleanText(cause instanceof Error ? cause.message : cause, 600);
+    return respond(req, { ok: false, error: attachmentError }, 422);
   }
   const thinkingLevel = chooseThinking(message);
   const requestId = crypto.randomUUID();
@@ -764,6 +772,7 @@ Deno.serve(async (req) => {
       authData.user.id,
       userClient,
       adminClient,
+      attachmentContext,
     );
   }
 
@@ -771,7 +780,7 @@ Deno.serve(async (req) => {
     interaction = await geminiInteraction({
       model: MODEL,
       system_instruction: SYSTEM_INSTRUCTION,
-      input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
+      input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
       tools: TOOLS,
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
@@ -857,7 +866,7 @@ Deno.serve(async (req) => {
 
     await persistAgentTurn(
       adminClient, cloud, authData.user.id, requestId, message, verified.text,
-      responsePayload as Json, toolTrace, thinkingLevel,
+      responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
     );
 
     return respond(req, {
