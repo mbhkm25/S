@@ -1,6 +1,7 @@
 param(
   [string]$TaskName = "SANAD Bridge Agent",
-  [string]$RunnerPath = "C:\SANAD-DEV\bridge\windows\run-agent-cycle.ps1"
+  [string]$RunnerPath = "C:\SANAD-DEV\bridge\windows\run-agent-cycle.ps1",
+  [string]$LauncherPath = "C:\SANAD-DEV\bridge\windows\run-agent-cycle-hidden.vbs"
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,12 +9,15 @@ $ErrorActionPreference = "Stop"
 if (-not (Test-Path $RunnerPath)) {
   throw "Runner script not found: $RunnerPath"
 }
+if (-not (Test-Path $LauncherPath)) {
+  throw "Hidden launcher not found: $LauncherPath"
+}
 
 $UserId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $RunnerPath + '"'
+$WScript = "$env:SystemRoot\System32\wscript.exe"
+$Arguments = '//B //NoLogo "' + $LauncherPath + '" "' + $RunnerPath + '"'
 
-$Action = New-ScheduledTaskAction -Execute $PowerShell -Argument $Arguments
+$Action = New-ScheduledTaskAction -Execute $WScript -Argument $Arguments
 
 # Task Scheduler rejects TimeSpan::MaxValue because it serializes to an out-of-range
 # ISO-8601 duration (P99999999D...). Use a bounded long-lived duration instead.
@@ -52,5 +56,7 @@ Write-Host "Installed scheduled task: $TaskName" -ForegroundColor Green
 Write-Host "Run-as user          : $UserId"
 Write-Host "Interval             : every 1 minute + at logon"
 Write-Host "Repetition duration  : 3650 days"
+Write-Host "Launcher             : $LauncherPath"
 Write-Host "Runner               : $RunnerPath"
+Write-Host "Window mode          : no-console (wscript)"
 Write-Host "Log                  : $env:ProgramData\SANAD\Bridge\logs\agent-cycle.log"
