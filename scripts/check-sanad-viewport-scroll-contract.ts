@@ -42,7 +42,7 @@ assert.match(shell, /min-h-0 flex-1 overflow-hidden/);
 assert.match(shell, /layoutMode=\{assistant \? 'viewport' : 'document'\}/);
 assert.match(
   shell,
-  /: 'min-h-screen bg\[#F8F8F6\] text-slate-900'/,
+  /: 'min-h-screen bg-\[#F8F8F6\] text-slate-900'/,
   'Document workspaces must retain document flow.',
 );
 
