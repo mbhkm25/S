@@ -1,4 +1,4 @@
-import type { Json } from "./sanad-agent-core.ts";
+type Json = Record<string, unknown>;
 
 export type AgentInsightToolOutput = { name: string; args: Json; output: unknown };
 
