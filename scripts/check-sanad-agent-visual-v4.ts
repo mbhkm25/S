@@ -51,7 +51,7 @@ for (const required of [
 assert.doesNotMatch(workspace, /SanadPulseMark/, 'workspace must not render the retired pulse SVG');
 assert.doesNotMatch(workspace, /state="working"/, 'workspace must use explicit executing state');
 assert.match(sidebar, /SanadFluidOrb/);
-assert.match(sidebar, /animated=\{false\}/);
+assert.match(sidebar, /state=\{props\.assistantState\}/, 'sidebar owns the live assistant identity/status in Stage 1C');
 
 for (const required of [
   "export type SanadVoiceState = 'idle' | 'listening' | 'transcribing'",
