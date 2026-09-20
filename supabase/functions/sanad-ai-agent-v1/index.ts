@@ -282,9 +282,10 @@ async function persistAgentTurn(
   response: Json,
   toolTrace: ToolTrace[],
   thinkingLevel: "low" | "medium" | "high",
+  attachmentIds: string[] = [],
 ) {
   if (!cloud.threadId || !cloud.preferences.save_history_enabled) return;
-  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v1", {
+  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v2", {
     p_user_id: authUserId,
     p_thread_id: cloud.threadId,
     p_user_message: message,
@@ -295,6 +296,7 @@ async function persistAgentTurn(
     p_model: MODEL,
     p_thinking_level: thinkingLevel,
     p_business_id: cloud.businessId,
+    p_attachment_ids: attachmentIds,
   });
   await maybeStoreExplicitMemory(adminClient, authUserId, cloud, message);
   await maybeRefreshThreadSummary(adminClient, cloud, authUserId, message, responseText);
