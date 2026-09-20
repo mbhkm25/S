@@ -40,6 +40,9 @@ export type SanadAgentAttachmentSuggestion = {
     document_id?: number | null;
     document_number?: string | null;
     party_name?: string | null;
+    account_id?: number | null;
+    account_number?: string | null;
+    customer_name?: string | null;
     href?: string | null;
   };
   draft?: Record<string, unknown>;
