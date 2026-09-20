@@ -17,7 +17,7 @@ const api = readFileSync('src/features/financial/api/financialApi.ts', 'utf8');
 assert.match(home, /window\.location\.replace\(financialUrl\(\)\)/, 'authenticated root must hand off into a product workspace');
 assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['مساعد سند', 'سند المالي', 'سند للأعمال', 'حسابي']) {
+for (const label of ['سند', 'سند المالي', 'سند للأعمال', 'حسابي']) {
   assert.match(productNav, new RegExp(label), `four-domain navigation must include ${label}`);
 }
 

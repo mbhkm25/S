@@ -29,7 +29,7 @@ export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
   const base = basePath();
 
   const items = [
-    { id: 'assistant' as const, label: 'مساعد سند', path: 'sanad-ai', icon: Bot },
+    { id: 'assistant' as const, label: 'سند', path: 'sanad-ai', icon: Bot },
     { id: 'financial' as const, label: 'سند المالي', path: 'financial', icon: WalletCards },
     { id: 'business' as const, label: 'سند للأعمال', path: 'commercial', icon: BriefcaseBusiness },
     { id: 'account' as const, label: 'حسابي', path: 'account-center', icon: UserRound },
