@@ -255,6 +255,7 @@ async function readBusinessMatches(
       account_id: numberOrNull(row.account_id),
       account_number: cleanText(row.account_number,120) || null,
       resolution_status: cleanText(row.resolution_status,100) || null,
+      exact_name: Boolean(expectedParty) && normalized(row.customer_name) === expectedParty,
     })),
     documents,
   };
@@ -281,6 +282,34 @@ function buildSuggestion(analysis: Json, matches: Json, businessId: string | nul
           : null,
       },
       confidence: Number(exact.score || 1),
+      requires_explicit_review: true,
+      write_performed: false,
+    };
+  }
+
+  const customers = array(matches.customers);
+  const exactCustomer = customers.find((row) =>
+    row.exact_name === true
+    && cleanText(row.resolution_status,100) === "resolved_unique_sale_account"
+    && numberOrNull(row.account_id)
+  );
+  if (exactCustomer && businessId) {
+    const accountId = numberOrNull(exactCustomer.account_id);
+    const customerName = cleanText(exactCustomer.customer_name,300) || "عميل";
+    return {
+      kind: "link_existing",
+      title: "وجد سند عميلًا مطابقًا بصورة فريدة قد يرتبط بالمرفق.",
+      target: {
+        type: "erp_customer",
+        business_id: businessId,
+        account_id: accountId,
+        account_number: cleanText(exactCustomer.account_number,120) || null,
+        customer_name: customerName,
+        href: accountId
+          ? `/business/manage?section=accounting&erp=statement&business_id=${encodeURIComponent(businessId)}&account_id=${accountId}&customer_name=${encodeURIComponent(customerName)}`
+          : null,
+      },
+      confidence: 0.88,
       requires_explicit_review: true,
       write_performed: false,
     };
