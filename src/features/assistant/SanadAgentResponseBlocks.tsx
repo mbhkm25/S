@@ -48,7 +48,7 @@ function CopyButton({ text, label = 'نسخ' }: { text?: string; label?: string 
     <button
       type="button"
       onClick={() => void copy()}
-      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-[9px] font-black text-slate-600 shadow-sm transition hover:border-slate-300"
+      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? 'تم النسخ' : label}
@@ -60,7 +60,7 @@ function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
   const Icon = entity.type === 'erp_customer' ? UserRound : entity.type === 'erp_document' ? FileText : Database;
   if (!entity.href) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700">
+      <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-sm font-medium text-slate-700">
         <Icon className="h-3.5 w-3.5" /> {entity.label}
       </span>
     );
@@ -68,7 +68,7 @@ function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
   return (
     <a
       href={entity.href}
-      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black text-slate-700 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700"
+      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700"
     >
       <Icon className="h-3.5 w-3.5" />
       {entity.label}
@@ -86,8 +86,8 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             <UserRound className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-[11px] font-black text-slate-900">{card.title}</p>
-            <p className="mt-0.5 text-[9px] text-slate-400">
+            <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+            <p className="mt-0.5 text-xs text-slate-400">
               حساب {card.account_number || card.account_id || '—'} · {card.movement_count} حركة
             </p>
           </div>
@@ -96,25 +96,25 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
       </div>
 
       <div className="p-3.5">
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid sm:grid-cols-2">
           {card.currency_summaries.map((item) => (
-            <div key={item.currency} className="rounded-2xl border border-slate-100 bg-[#FAFAF9] p-3.5">
+            <div key={item.currency} className="border-b border-slate-100 py-3.5 last:border-b-0 sm:border-b-0 sm:border-l sm:px-4 sm:last:border-l-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[9px] font-bold text-slate-400">الرصيد الختامي</span>
-                <span className="rounded-full bg-white px-2 py-1 text-[9px] font-black text-slate-600">{item.currency}</span>
+                <span className="text-xs font-medium text-slate-400">الرصيد الختامي</span>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">{item.currency}</span>
               </div>
-              <p className="mt-1 text-lg font-black text-slate-950" dir="ltr">{number(item.closing_balance)}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-950" dir="ltr">{number(item.closing_balance)}</p>
               <dl className="mt-3 grid grid-cols-3 gap-1 text-center">
-                <div><dt className="text-[8px] text-slate-400">افتتاحي</dt><dd className="mt-0.5 text-[9px] font-bold text-slate-700" dir="ltr">{number(item.opening_balance)}</dd></div>
-                <div><dt className="text-[8px] text-slate-400">مدين</dt><dd className="mt-0.5 text-[9px] font-bold text-slate-700" dir="ltr">{number(item.debit)}</dd></div>
-                <div><dt className="text-[8px] text-slate-400">دائن</dt><dd className="mt-0.5 text-[9px] font-bold text-slate-700" dir="ltr">{number(item.credit)}</dd></div>
+                <div><dt className="text-sm text-slate-400">افتتاحي</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.opening_balance)}</dd></div>
+                <div><dt className="text-sm text-slate-400">مدين</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.debit)}</dd></div>
+                <div><dt className="text-sm text-slate-400">دائن</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.credit)}</dd></div>
               </dl>
             </div>
           ))}
         </div>
 
         {(card.from_date || card.to_date) && (
-          <p className="mt-3 text-[9px] text-slate-400">
+          <p className="mt-3 text-xs text-slate-400">
             الفترة: {card.from_date || 'البداية'} — {card.to_date || 'اليوم'}
           </p>
         )}
@@ -122,7 +122,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
         {card.href && (
           <a
             href={card.href}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-2.5 text-[10px] font-black text-white shadow-sm transition hover:-translate-y-px hover:shadow-md"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-px hover:shadow-md"
           >
             فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
           </a>
@@ -141,8 +141,8 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             <FileText className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-[11px] font-black text-slate-900">{card.title}</p>
-            <p className="text-[9px] text-slate-400">{card.count} مستند</p>
+            <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+            <p className="text-xs text-slate-400">{card.count} مستند</p>
           </div>
         </div>
       </div>
@@ -154,14 +154,14 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             className="flex items-center justify-between gap-3 p-3 transition hover:bg-slate-50"
           >
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-black text-slate-800">{item.label}</p>
-              <p className="mt-0.5 truncate text-[9px] text-slate-400">
+              <p className="truncate text-sm font-semibold text-slate-800">{item.label}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-400">
                 {[item.party_name, item.date, item.currency].filter(Boolean).join(' · ')}
               </p>
             </div>
             <div className="shrink-0 text-left">
               {typeof item.source_line_total === 'number' && (
-                <p className="text-[10px] font-black text-slate-700" dir="ltr">{number(item.source_line_total)}</p>
+                <p className="text-sm font-semibold text-slate-700" dir="ltr">{number(item.source_line_total)}</p>
               )}
               <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
             </div>
@@ -174,22 +174,22 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
 
 function ReplicaCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'replica_status' }> }) {
   return (
-    <section className="rounded-[1.55rem] border border-slate-200/80 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,.06)]">
+    <section className="border-y border-slate-100 bg-slate-50/60 px-1 py-4">
       <div className="flex items-start gap-2.5">
         <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${card.available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
           <Database className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-black text-slate-900">{card.title}</p>
-            <span className={`rounded-full px-2 py-1 text-[8px] font-black ${card.available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+            <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+            <span className={`rounded-full px-2 py-1 text-sm font-semibold ${card.available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
               {card.available ? 'متاحة للقراءة' : 'غير مكتملة'}
             </span>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[8px] text-slate-400">الجداول</p><p className="mt-1 text-[11px] font-black text-slate-800">{card.table_count ?? '—'}</p></div>
-            <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[8px] text-slate-400">الصفوف</p><p className="mt-1 text-[11px] font-black text-slate-800">{card.row_count ? number(card.row_count) : '—'}</p></div>
-            <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[8px] text-slate-400">اكتملت</p><p className="mt-1 text-[9px] font-bold text-slate-700">{dateTime(card.completed_at)}</p></div>
+            <div className="border-l border-slate-200/70 px-3 py-1 last:border-l-0"><p className="text-sm text-slate-400">الجداول</p><p className="mt-1 text-sm font-semibold text-slate-800">{card.table_count ?? '—'}</p></div>
+            <div className="border-l border-slate-200/70 px-3 py-1 last:border-l-0"><p className="text-sm text-slate-400">الصفوف</p><p className="mt-1 text-sm font-semibold text-slate-800">{card.row_count ? number(card.row_count) : '—'}</p></div>
+            <div className="border-l border-slate-200/70 px-3 py-1 last:border-l-0"><p className="text-sm text-slate-400">اكتملت</p><p className="mt-1 text-xs font-medium text-slate-700">{dateTime(card.completed_at)}</p></div>
           </div>
         </div>
       </div>
@@ -206,11 +206,11 @@ function PaymentInboxCard({ card }: { card: Extract<SanadAssistantAnswerCard, { 
             <Inbox className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-[11px] font-black text-slate-900">{card.title}</p>
-            <p className="mt-0.5 text-[9px] text-slate-400">{card.view_label} · {card.count} عملية</p>
+            <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+            <p className="mt-0.5 text-xs text-slate-400">{card.view_label} · {card.count} عملية</p>
           </div>
         </div>
-        <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[8px] font-black text-slate-500">قراءة فقط</span>
+        <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-sm font-semibold text-slate-500">قراءة فقط</span>
       </div>
 
       <div className="divide-y divide-slate-100">
@@ -221,29 +221,29 @@ function PaymentInboxCard({ card }: { card: Extract<SanadAssistantAnswerCard, { 
             className="flex items-center justify-between gap-3 p-3 transition hover:bg-slate-50"
           >
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-black text-slate-800">
+              <p className="truncate text-sm font-semibold text-slate-800">
                 {[item.financial_entity, item.receiver_name].filter(Boolean).join(' · ') || 'عملية دفع'}
               </p>
-              <p className="mt-0.5 truncate text-[8px] text-slate-400">
+              <p className="mt-0.5 truncate text-sm text-slate-400">
                 {[item.reference_number ? `مرجع ${item.reference_number}` : null, item.transaction_datetime, item.status].filter(Boolean).join(' · ')}
               </p>
             </div>
             <div className="shrink-0 text-left">
               {typeof item.amount === 'number' ? (
-                <p className="text-[10px] font-black text-slate-800" dir="ltr">{number(item.amount)} {item.currency || ''}</p>
+                <p className="text-sm font-semibold text-slate-800" dir="ltr">{number(item.amount)} {item.currency || ''}</p>
               ) : null}
               <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
             </div>
           </a>
         ))}
         {!card.items?.length ? (
-          <div className="p-4 text-center text-[9px] font-bold text-slate-400">لا توجد عمليات في هذا العرض.</div>
+          <div className="p-4 text-center text-xs font-medium text-slate-400">لا توجد عمليات في هذا العرض.</div>
         ) : null}
       </div>
 
       {card.href ? (
         <div className="border-t border-slate-100 p-3">
-          <a href={card.href} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-[9px] font-black text-white">
+          <a href={card.href} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white">
             فتح وارد المدفوعات <ArrowUpLeft className="h-3.5 w-3.5" />
           </a>
         </div>
@@ -264,16 +264,16 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="text-[10px] font-black">{item.title}</p>
+          <p className="text-sm font-semibold">{item.title}</p>
           {item.rule_id ? (
-            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[7px] font-black opacity-80">
+            <span className="rounded-full bg-white/70 px-2 py-0.5 text-sm font-semibold opacity-80">
               إشارة محسوبة
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-[9px] leading-5 opacity-80">{item.body}</p>
+        <p className="mt-1 text-xs leading-5 opacity-80">{item.body}</p>
         {item.source_label ? (
-          <p className="mt-1.5 inline-flex items-center gap-1 text-[7px] font-bold opacity-60">
+          <p className="mt-1.5 inline-flex items-center gap-1 text-sm font-medium opacity-60">
             <Database className="h-2.5 w-2.5" /> المصدر: {item.source_label}
           </p>
         ) : null}
@@ -291,10 +291,10 @@ function renderCard(card: SanadAssistantAnswerCard, index: number, onModifyActio
   if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
-      <div key={`metric-${index}`} className="rounded-[1.25rem] border border-slate-200/80 bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
-        <p className="text-[9px] text-slate-400">{card.title}</p>
-        <p className="mt-1 text-base font-black text-slate-950">{card.value}</p>
-        {card.subtitle ? <p className="mt-1 text-[9px] text-slate-400">{card.subtitle}</p> : null}
+      <div key={`metric-${index}`} className="border-y border-slate-100 bg-slate-50/60 px-1 py-3.5">
+        <p className="text-xs text-slate-400">{card.title}</p>
+        <p className="mt-1 text-lg font-semibold text-slate-950">{card.value}</p>
+        {card.subtitle ? <p className="mt-1 text-xs text-slate-400">{card.subtitle}</p> : null}
       </div>
     );
   }
@@ -320,9 +320,9 @@ export default function SanadAgentResponseBlocks({
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
-            <p className="text-[9px] font-black text-slate-400">انتبه إلى</p>
+            <p className="text-xs font-semibold text-slate-400">انتبه إلى</p>
             {response.insight_meta?.deterministic_count ? (
-              <span className="text-[7px] font-bold text-slate-400">
+              <span className="text-sm font-medium text-slate-400">
                 {response.insight_meta.deterministic_count} إشارة محسوبة من البيانات
               </span>
             ) : null}
