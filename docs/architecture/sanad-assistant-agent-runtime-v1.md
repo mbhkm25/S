@@ -87,7 +87,8 @@ Execution is bounded by:
 - bounded result sizes;
 - no free SQL;
 - no raw ERP source rows;
-- no mutation tools in v1.
+- no direct mutation tools exposed to the model;
+- draft-only action preparation is separated from explicit authenticated UI approval.
 
 ## Context layers
 
@@ -146,7 +147,7 @@ Before returning a financial answer, the runtime verifies:
 - requested/used period is visible;
 - source tool exists for every user-specific factual claim;
 - ERP customer identity is concrete;
-- no write was implied or performed;
+- any prepared action is labeled as review-only until explicit UI approval;
 - no raw ERP row/table payload leaked.
 
 If verification fails, the runtime either repairs the answer or asks for clarification.
@@ -202,10 +203,14 @@ Financial facts are read from source tools each time and are not â€œrememberedâ€
 
 ## Mutation policy
 
-v1 is read-only.
+ERP/Edaa is read-only.
 
-Future writes follow:
-`Intent -> Draft -> Review -> Explicit user approval -> deterministic command -> audit`
+SANAD-owned actions follow:
+`Intent -> resolved entities -> Draft -> Review -> Explicit user approval -> deterministic domain command -> audit`
+
+The model can prepare bounded review drafts only. It has no approval or execution tool. Approval is an authenticated UI action with version checks and an audit trail.
+
+Personal-finance approval may invoke the canonical SANAD personal transaction command. Commercial approval in Action v1 creates only a SANAD commercial Draft; posting and settlement remain outside the Agent.
 
 The model will never post directly to accounting tables or Edaa.
 
