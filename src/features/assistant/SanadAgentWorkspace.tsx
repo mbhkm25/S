@@ -838,7 +838,7 @@ export default function SanadAgentWorkspace() {
 
             {sending ? (
               <div className="flex justify-start">
-                <div className="rounded-[1.35rem] rounded-tr-md border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+                <div role="status" aria-live="polite" className="rounded-[1.35rem] rounded-tr-md border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 items-center justify-center">
                       <SanadFluidOrb state={orbState === 'idle' ? 'thinking' : orbState} size={32} />
@@ -867,7 +867,7 @@ export default function SanadAgentWorkspace() {
           </div>
 
           <form onSubmit={handleSubmit} className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:p-4">
-            <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400">
+            <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
