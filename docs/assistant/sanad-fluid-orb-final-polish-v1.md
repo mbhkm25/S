@@ -1,14 +1,16 @@
 # SANAD Fluid Orb & Final Polish v1
 
-Status: Phase 4 implementation on the shared SANAD refinement branch.
+Status: **Merged to `main` through PR #340** as part of the combined Phases 2–4 refinement release. Awaiting Production deployment.
 
-Branch:
+Historical implementation branch:
 
 `feat/sanad-refinement-phases-2-4-20260920`
 
-Draft PR: #340
+Feature merge commit:
 
-This phase completes the four-stage post-release refinement plan. It does not authorize merge or production deployment by itself.
+`ac9e11ba20e4d8a5ecf0dc9553225cfa211a76d9`
+
+Production deployment remains intentionally separate from merge.
 
 ## Objective
 
@@ -178,14 +180,14 @@ Phase 4 does not:
 - change Supabase schema;
 - alter Draft -> Review -> Explicit Approval action governance;
 - write to Edaa;
-- merge the shared branch;
-- deploy to Production.
+- deploy to Production automatically.
 
-## Merge gate
+## Release gate
 
-After Phase 4:
+The combined Phases 2–4 implementation was merged only after the final feature head passed:
+- Production Quality Gate;
+- SANAD Admin Quality Gate;
+- Android APK build;
+- Operation Pipeline Quality.
 
-1. all combined Phase 2–4 CI must pass on one final head;
-2. PR #340 remains Draft until explicit merge authorization;
-3. combined end-to-end browser/mobile validation occurs after the requested merge/deployment step;
-4. final production testing must verify navigation, typography, voice, attachments, Orb states and action governance together.
+Before Production deployment, the deployment workflow must still validate the exact release SHA, production build, bundle budget and SANAD Agent backend contract. Final browser/mobile acceptance follows deployment.
