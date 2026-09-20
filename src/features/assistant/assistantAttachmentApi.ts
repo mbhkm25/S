@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
+import { invokeAuthenticatedSanadFunction } from './assistantEdgeFunctionApi';
 
 export type SanadAgentAttachmentStatus = 'uploaded' | 'analyzing' | 'ready' | 'failed' | 'deleted';
 
@@ -140,10 +141,10 @@ export async function listSanadAgentAttachments(threadId: string): Promise<Sanad
 }
 
 export async function analyzeSanadAgentAttachment(attachmentId: string): Promise<SanadAgentAttachment> {
-  const { data, error } = await supabase.functions.invoke('sanad-ai-attachment-analyze-v1', {
-    body: { attachment_id: attachmentId },
-  });
-  if (error) throw new Error(error.message || 'تعذر تحليل المرفق.');
+  const data = await invokeAuthenticatedSanadFunction<{ ok?: boolean; error?: string }>(
+    'sanad-ai-attachment-analyze-v1',
+    { body: { attachment_id: attachmentId } },
+  );
   if (!data?.ok) throw new Error(data?.error || 'تعذر تحليل المرفق.');
   return getSanadAgentAttachment(attachmentId);
 }
