@@ -210,6 +210,55 @@ function replicaPresentation(row: AgentToolOutput) {
   return { cards, entities: [] as Entity[], attention, copyText: null };
 }
 
+function actionReviewPresentation(row: AgentToolOutput) {
+  const action = object(row.output);
+  const review = object(action.review);
+  const fields = array(review.fields).map(object).slice(0,12).map((item) => ({
+    label: text(item.label) || "بيان",
+    value: text(item.value) || "—",
+  }));
+  const actionId = text(action.id);
+  const actionType = text(action.action_type);
+  const status = text(action.status) || "review";
+  const version = num(action.version) ?? 1;
+  const amount = num(review.amount);
+  const actionTitle = text(review.title) || "مراجعة إجراء مقترح";
+  const summary = text(review.summary);
+  const currencyCode = text(review.currency);
+  const approvalEffect = text(review.approval_effect);
+  const writesToErp = review.writes_to_erp === true;
+
+  const modifyPrompt = actionType === "personal_transaction"
+    ? `عدّل مسودة الإجراء المالي ${actionId}: ${summary || "المعاملة الشخصية"}`
+    : `عدّل مسودة المستند التجاري ${actionId}: ${summary || "المستند"}`;
+
+  return {
+    cards: [{
+      type: "action_review",
+      action_id: actionId,
+      action_type: actionType,
+      status,
+      version,
+      title: actionTitle,
+      summary: summary || null,
+      fields,
+      amount,
+      currency: currencyCode || null,
+      approval_effect: approvalEffect || null,
+      writes_to_erp: writesToErp,
+      modify_prompt: modifyPrompt,
+      risk: "approval_required",
+    }] as Card[],
+    entities: [] as Entity[],
+    attention: writesToErp ? [{
+      severity:"critical",
+      title:"إجراء غير مسموح",
+      body:"هذه المسودة تشير إلى كتابة في ERP، ولذلك يجب عدم اعتمادها.",
+    }] as Attention[] : [],
+    copyText: null,
+  };
+}
+
 export function buildAgentPresentation(toolOutputs: AgentToolOutput[]) {
   const cards: Card[] = [];
   const entities: Entity[] = [];
@@ -221,6 +270,7 @@ export function buildAgentPresentation(toolOutputs: AgentToolOutput[]) {
     if (row.name === "erp_get_customer_statement") built = customerStatementPresentation(row);
     else if (row.name === "erp_get_documents") built = documentsPresentation(row);
     else if (row.name === "erp_get_replica_status") built = replicaPresentation(row);
+    else if (row.name === "action_prepare_personal_transaction" || row.name === "action_prepare_commercial_document") built = actionReviewPresentation(row);
 
     if (!built) continue;
     cards.push(...built.cards);
