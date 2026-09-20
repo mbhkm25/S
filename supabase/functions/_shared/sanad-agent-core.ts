@@ -231,12 +231,16 @@ export function userInput(
   history: HistoryTurn[],
   businessId?: string | null,
   memoryContext?: { summary?: string | null; memories?: string[] },
+  attachmentContext?: string[],
 ) {
   const compactHistory = history.length
-    ? history.map((turn) => `${turn.role === "user" ? "المستخدم" : "مساعد سند"}: ${turn.content}`).join("\n")
+    ? history.map((turn) => `${turn.role === "user" ? "المستخدم" : "سند"}: ${turn.content}`).join("\n")
     : "لا يوجد سجل سابق مزود لهذه الجولة.";
   const memories = Array.isArray(memoryContext?.memories)
     ? memoryContext!.memories!.slice(0, 30).filter(Boolean)
+    : [];
+  const attachments = Array.isArray(attachmentContext)
+    ? attachmentContext.slice(0, 5).filter(Boolean)
     : [];
   return [
     "سياق الجلسة:",
@@ -244,6 +248,10 @@ export function userInput(
     memoryContext?.summary ? `ملخص المحادثة السابقة: ${memoryContext.summary}` : "لا يوجد ملخص طويل للمحادثة.",
     memories.length ? "ذاكرة مساعدة مستقرة:\n- " + memories.join("\n- ") : "لا توجد ذاكرة مستقرة إضافية.",
     "ملاحظة: الذاكرة ليست مصدرًا للحقائق المالية الحالية؛ استخدم الأدوات الحية لأي رصيد أو مستند أو رقم.",
+    attachments.length
+      ? "مرفقات هذه الرسالة (تحليل أولي غير ملزم، وليس حقيقة مالية نهائية):\n- " + attachments.join("\n- ")
+      : "لا توجد مرفقات مرتبطة بهذه الرسالة.",
+    "إذا احتوى المرفق على مبلغ أو فاتورة أو عميل فاستعمل أدوات النظام الحية للمطابقة قبل عرض أي حقيقة تشغيلية.",
     "",
     "آخر المحادثة:",
     compactHistory,

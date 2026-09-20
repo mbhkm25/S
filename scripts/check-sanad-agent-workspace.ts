@@ -19,6 +19,10 @@ const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButt
 const voiceApi = readFileSync('src/features/assistant/assistantVoiceApi.ts', 'utf8');
 const voiceFunction = readFileSync('supabase/functions/sanad-ai-transcribe-v1/index.ts', 'utf8');
 const supabaseConfig = readFileSync('supabase/config.toml', 'utf8');
+const attachmentMigration = readFileSync('supabase/migrations/20260920103000_sanad_agent_attachments_v1.sql', 'utf8');
+const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts', 'utf8');
+const attachmentComposer = readFileSync('src/features/assistant/SanadAttachmentComposer.tsx', 'utf8');
+const attachmentFunction = readFileSync('supabase/functions/sanad-ai-attachment-analyze-v1/index.ts', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -70,7 +74,7 @@ for (const rpc of [
 
 for (const required of [
   'loadAgentCloudContext',
-  'save_sanad_agent_turn_v1',
+  'save_sanad_agent_turn_v2',
   'upsert_sanad_agent_memory_v1',
   'buildAgentPresentation',
   'maybeRefreshThreadSummary',
@@ -144,3 +148,61 @@ assert.match(workspace, /راجع النص الصوتي قبل الإرسال/);
 assert.doesNotMatch(voiceButton, /sendPrompt\(/);
 
 console.log('SANAD Voice v1 contract passed.');
+
+
+for (const required of [
+  'SanadAttachmentComposer',
+  'attachment_ids',
+  'listSanadAgentAttachments',
+  'pendingAttachments',
+]) {
+  assert.ok(workspace.includes(required), `attachment workspace missing ${required}`);
+}
+
+for (const required of [
+  'sanad-agent-attachments',
+  'create_my_sanad_agent_attachment_v1',
+  'get_my_sanad_agent_attachment_v1',
+  'list_my_sanad_agent_attachments_v1',
+  'delete_my_sanad_agent_attachment_v1',
+  'save_sanad_agent_turn_v2',
+  'attachment_ids uuid[]',
+]) {
+  assert.ok(attachmentMigration.includes(required), `attachment migration missing ${required}`);
+}
+
+assert.match(attachmentMigration, /public\s*=\s*false/i);
+assert.match(attachmentMigration, /enable row level security/i);
+assert.match(attachmentMigration, /storage\.foldername\(name\)\)\[1\].*auth\.uid/s);
+assert.match(attachmentMigration, /file_size_limit[\s\S]*20971520/);
+assert.match(attachmentMigration, /grant execute on function public\.save_sanad_agent_turn_v2[\s\S]*service_role/i);
+assert.doesNotMatch(attachmentMigration, /grant execute on function public\.save_sanad_agent_turn_v2[\s\S]*authenticated/i);
+
+assert.match(attachmentApi, /MAX_FILE_BYTES = 20 \* 1024 \* 1024/);
+assert.match(attachmentApi, /sanad-ai-attachment-analyze-v1/);
+assert.match(attachmentApi, /upsert:\s*false/);
+assert.match(attachmentComposer, /MAX_PER_TURN = 3/);
+assert.match(attachmentComposer, /لم تُنشأ أي عملية/);
+assert.match(attachmentComposer, /فتح المستند المطابق المحتمل/);
+
+assert.match(attachmentFunction, /gemini-3\.8-flash/);
+assert.match(attachmentFunction, /upload\/v1beta\/files/);
+assert.match(attachmentFunction, /get_business_erp_customer_candidates_v1/);
+assert.match(attachmentFunction, /get_business_erp_documents_v1/);
+assert.match(attachmentFunction, /link_existing/);
+assert.match(attachmentFunction, /exactDocumentCandidates\.length === 1/);
+assert.match(attachmentFunction, /expectedKind/);
+assert.match(attachmentFunction, /isTextLike/);
+assert.match(attachmentFunction, /TextDecoder/);
+assert.match(attachmentFunction, /draft_candidate/);
+assert.match(attachmentFunction, /write_performed:\s*false/);
+assert.match(attachmentFunction, /requires_explicit_review:\s*true/);
+assert.doesNotMatch(attachmentFunction, /sales_invoice|purchase_invoice|receipt_voucher|payment_voucher/);
+assert.match(supabaseConfig, /\[functions\.sanad-ai-attachment-analyze-v1\][\s\S]*verify_jwt = true/);
+assert.match(core, /مرفقات هذه الرسالة/);
+assert.match(runtime, /loadAttachmentContext/);
+assert.match(runtime, /attachment_not_ready/);
+assert.match(runtime, /p_attachment_ids/);
+assert.match(api, /attachment_ids/);
+
+console.log('SANAD Attachments v1 contract passed.');

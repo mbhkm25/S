@@ -38,6 +38,8 @@ import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadMessageActions from './SanadMessageActions';
 import SanadPulseMark from './SanadPulseMark';
 import SanadVoiceDictationButton from './SanadVoiceDictationButton';
+import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
+import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 
 type BusinessOption = { id: string; name: string };
 
@@ -51,6 +53,7 @@ type WorkspaceMessage = {
   persisted?: boolean;
   isStarred?: boolean;
   rating?: -1 | 1 | null;
+  attachments?: SanadAgentAttachment[];
 };
 
 const QUICK_PROMPTS = [
@@ -135,6 +138,16 @@ function MessageBubble({
               </span>
               سند
               {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{result.model}</span> : null}
+            </div>
+          ) : null}
+
+          {!assistant && message.attachments?.length ? (
+            <div className="mb-3 grid gap-2">
+              {message.attachments.map((attachment) => (
+                <div key={attachment.id}>
+                  <SanadAttachmentPreview attachment={attachment} compact />
+                </div>
+              ))}
             </div>
           ) : null}
 
@@ -226,7 +239,19 @@ function storedResult(message: {
   };
 }
 
-function storedMessagesToWorkspace(messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages']): WorkspaceMessage[] {
+function unsentAttachments(
+  messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages'],
+  attachments: SanadAgentAttachment[],
+) {
+  const referenced = new Set(messages.flatMap((message) => message.attachment_ids || []));
+  return attachments.filter((attachment) => !referenced.has(attachment.id) && attachment.status !== 'deleted');
+}
+
+function storedMessagesToWorkspace(
+  messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages'],
+  attachments: SanadAgentAttachment[] = [],
+): WorkspaceMessage[] {
+  const byId = new Map(attachments.map((attachment) => [attachment.id, attachment]));
   return messages.map((message) => ({
     id: message.id,
     role: message.role,
@@ -236,6 +261,10 @@ function storedMessagesToWorkspace(messages: Awaited<ReturnType<typeof getSanadA
     persisted: true,
     isStarred: Boolean(message.is_starred),
     rating: message.rating ?? null,
+    attachments: (message.attachment_ids || []).flatMap((id) => {
+      const attachment = byId.get(id);
+      return attachment ? [attachment] : [];
+    }),
   }));
 }
 
@@ -259,6 +288,7 @@ export default function SanadAgentWorkspace() {
   const [liveStatus, setLiveStatus] = useState('');
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<SanadAgentAttachment[]>([]);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -340,15 +370,17 @@ export default function SanadAgentWorkspace() {
       setThreadLoading(true);
       setWorkspaceError(null);
       try {
-        const [detail, context] = await Promise.all([
+        const [detail, context, attachments] = await Promise.all([
           getSanadAgentThread(selectedThreadId),
           getSanadAgentContext(selectedThreadId),
+          listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
         setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
         setBusinessSelectionOpen(false);
         setMemories(context.memories);
-        setMessages(storedMessagesToWorkspace(detail.messages));
+        setPendingAttachments(unsentAttachments(detail.messages, attachments));
+        setMessages(storedMessagesToWorkspace(detail.messages, attachments));
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
       } finally {
@@ -362,6 +394,7 @@ export default function SanadAgentWorkspace() {
     const id = await createSanadAgentThread(nextBusinessId);
     setMessages([]);
     setDraft('');
+    setPendingAttachments([]);
     setBusinessId(nextBusinessId || '');
     setSelectedThreadId(id);
     setBusinessSelectionOpen(false);
@@ -386,6 +419,7 @@ export default function SanadAgentWorkspace() {
     if (businesses.length > 1) {
       setMessages([]);
       setDraft('');
+      setPendingAttachments([]);
       setSelectedThreadId(null);
       setBusinessId('');
       setBusinessSelectionOpen(true);
@@ -401,6 +435,7 @@ export default function SanadAgentWorkspace() {
 
   const selectThread = (threadId: string) => {
     if (sending) return;
+    setPendingAttachments([]);
     setSelectedThreadId(threadId);
     setSidebarOpen(false);
   };
@@ -476,8 +511,16 @@ export default function SanadAgentWorkspace() {
   };
 
   async function sendPrompt(rawPrompt?: string) {
-    const prompt = (rawPrompt ?? draft).trim();
+    const readyAttachments = pendingAttachments.filter((attachment) => attachment.status === 'ready');
+    const requestedPrompt = (rawPrompt ?? draft).trim();
+    const prompt = requestedPrompt || (readyAttachments.length
+      ? 'حلل المرفق المرفق واقترح ربطه ببيانات موجودة أو تجهيز مسودة مناسبة بعد التحقق.'
+      : '');
     if (!prompt || sending) return;
+    if (pendingAttachments.some((attachment) => attachment.status !== 'ready')) {
+      setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
+      return;
+    }
     if (!selectedThreadId && businesses.length > 1 && !businessId) {
       setBusinessSelectionOpen(true);
       return;
@@ -498,6 +541,7 @@ export default function SanadAgentWorkspace() {
       content: prompt,
       createdAt: Date.now(),
       persisted: false,
+      attachments: readyAttachments,
     };
 
     setMessages((current) => [...current, userMessage]);
@@ -513,6 +557,7 @@ export default function SanadAgentWorkspace() {
         message: prompt,
         business_id: businessId || null,
         thread_id: threadId,
+        attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
       }, (event) => {
         if (event.type === 'run.started') setLiveStatus('بدأ مساعد سند المعالجة…');
@@ -536,10 +581,15 @@ export default function SanadAgentWorkspace() {
         persisted: false,
       }]);
 
+      setPendingAttachments([]);
       await refreshThreads(threadId);
       try {
-        const persistedThread = await getSanadAgentThread(threadId);
-        setMessages(storedMessagesToWorkspace(persistedThread.messages));
+        const [persistedThread, persistedAttachments] = await Promise.all([
+          getSanadAgentThread(threadId),
+          listSanadAgentAttachments(threadId),
+        ]);
+        setPendingAttachments(unsentAttachments(persistedThread.messages, persistedAttachments));
+        setMessages(storedMessagesToWorkspace(persistedThread.messages, persistedAttachments));
       } catch {
         // The visible answer remains usable; feedback actions enable after the next successful thread reload.
       }
@@ -749,6 +799,16 @@ export default function SanadAgentWorkspace() {
 
           <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-3 md:p-4">
             <div className="mx-auto max-w-4xl rounded-[1.4rem] border border-slate-200 bg-slate-50 p-2 shadow-inner focus-within:border-slate-400">
+              <SanadAttachmentComposer
+                threadId={selectedThreadId}
+                businessId={businessId || null}
+                disabled={sending}
+                attachments={pendingAttachments}
+                onChange={setPendingAttachments}
+                onRequestThread={ensureThread}
+                onError={(message) => setWorkspaceError(message)}
+              />
+
               <textarea
                 ref={textareaRef}
                 value={draft}
@@ -777,7 +837,11 @@ export default function SanadAgentWorkspace() {
                 </div>
                 <button
                   type="submit"
-                  disabled={sending || !draft.trim()}
+                  disabled={
+                    sending
+                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                  }
                   className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[10px] font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
@@ -786,7 +850,7 @@ export default function SanadAgentWorkspace() {
               </div>
             </div>
             <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • الميكروفون يحوّل كلامك إلى نص قابل للمراجعة.
+              Enter للإرسال • Shift + Enter لسطر جديد • الصوت والمرفقات يبقيان للمراجعة قبل أي إرسال أو إجراء.
             </p>
           </form>
         </div>

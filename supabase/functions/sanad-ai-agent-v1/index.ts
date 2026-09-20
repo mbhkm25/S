@@ -160,6 +160,49 @@ async function loadAgentCloudContext(
   };
 }
 
+function attachmentIdsFrom(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.flatMap((item) => {
+    const id = cleanText(item, 80);
+    return /^[0-9a-f-]{36}$/i.test(id) ? [id] : [];
+  }))].slice(0, 5);
+}
+
+async function loadAttachmentContext(
+  userClient: SupabaseClient,
+  threadId: string | null,
+  attachmentIds: string[],
+) {
+  if (!attachmentIds.length) return { ids: [] as string[], summaries: [] as string[] };
+  if (!threadId) throw new Error("attachment_thread_required");
+
+  const rows = await Promise.all(attachmentIds.map((id) =>
+    rpc<Json>(userClient, "get_my_sanad_agent_attachment_v1", { p_attachment_id: id })
+  ));
+
+  const summaries: string[] = [];
+  for (const row of rows) {
+    if (cleanText(row.thread_id, 80) !== threadId) throw new Error("attachment_thread_mismatch");
+    if (cleanText(row.status, 40) !== "ready") throw new Error("attachment_not_ready");
+
+    const analysis = row.analysis && typeof row.analysis === "object" ? row.analysis as Json : {};
+    const suggestion = row.suggestion && typeof row.suggestion === "object" ? row.suggestion as Json : {};
+    const pieces = [
+      `الملف: ${cleanText(row.file_name, 300) || "مرفق"}`,
+      `النوع المستخرج: ${cleanText(analysis.document_type, 80) || "غير محدد"}`,
+      `الملخص: ${cleanText(analysis.summary, 1200) || "لا يوجد"}`,
+      cleanText(analysis.document_number, 160) ? `رقم المستند المستخرج: ${cleanText(analysis.document_number, 160)}` : "",
+      cleanText(analysis.counterparty_name, 300) ? `الطرف المستخرج: ${cleanText(analysis.counterparty_name, 300)}` : "",
+      analysis.amount !== null && analysis.amount !== undefined ? `المبلغ المستخرج: ${String(analysis.amount)} ${cleanText(analysis.currency, 20)}` : "",
+      `اقتراح المطابقة: ${cleanText(suggestion.kind, 80) || "review_required"}`,
+      suggestion.write_performed === false ? "لم تُنفذ أي كتابة أو عملية مالية." : "",
+    ].filter(Boolean);
+    summaries.push(pieces.join(" | "));
+  }
+
+  return { ids: attachmentIds, summaries };
+}
+
 function explicitMemoryFrom(message: string): { key: string; value: string } | null {
   const match = message.match(/^(?:تذكر|تذكّر|احفظ|احتفظ)\s+(?:أن|بأن)?\s*(.{3,800})$/i);
   if (!match) return null;
@@ -239,9 +282,10 @@ async function persistAgentTurn(
   response: Json,
   toolTrace: ToolTrace[],
   thinkingLevel: "low" | "medium" | "high",
+  attachmentIds: string[] = [],
 ) {
   if (!cloud.threadId || !cloud.preferences.save_history_enabled) return;
-  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v1", {
+  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v2", {
     p_user_id: authUserId,
     p_thread_id: cloud.threadId,
     p_user_message: message,
@@ -252,6 +296,7 @@ async function persistAgentTurn(
     p_model: MODEL,
     p_thinking_level: thinkingLevel,
     p_business_id: cloud.businessId,
+    p_attachment_ids: attachmentIds,
   });
   await maybeStoreExplicitMemory(adminClient, authUserId, cloud, message);
   await maybeRefreshThreadSummary(adminClient, cloud, authUserId, message, responseText);
@@ -461,6 +506,7 @@ function streamAgentResponse(
   authUserId: string,
   userClient: SupabaseClient,
   adminClient: SupabaseClient,
+  attachmentContext: { ids: string[]; summaries: string[] },
 ) {
   const encoder = new TextEncoder();
 
@@ -489,7 +535,7 @@ function streamAgentResponse(
           interaction = await geminiInteraction({
             model: MODEL,
             system_instruction: SYSTEM_INSTRUCTION,
-            input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
+            input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
             tools: TOOLS,
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
@@ -606,7 +652,7 @@ function streamAgentResponse(
 
           await persistAgentTurn(
             adminClient, cloud, authUserId, requestId, message, verified.text,
-            responsePayload as Json, toolTrace, thinkingLevel,
+            responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
           );
 
           send("answer.final", { text: verified.text });
@@ -692,12 +738,20 @@ Deno.serve(async (req) => {
   const fallbackHistory = sanitizeHistory(body.history);
   const requestedBusinessId = cleanText(body.business_id, 80) || null;
   const threadId = cleanText(body.thread_id, 80) || null;
+  const attachmentIds = attachmentIdsFrom(body.attachment_ids);
   let cloud: AgentCloudContext;
   try {
     cloud = await loadAgentCloudContext(userClient, threadId, fallbackHistory, requestedBusinessId);
   } catch (cause) {
     const contextError = cleanText(cause instanceof Error ? cause.message : cause, 600);
     return respond(req, { ok: false, error: contextError }, contextError.includes("not_found") ? 404 : 403);
+  }
+  let attachmentContext: { ids: string[]; summaries: string[] };
+  try {
+    attachmentContext = await loadAttachmentContext(userClient, cloud.threadId, attachmentIds);
+  } catch (cause) {
+    const attachmentError = cleanText(cause instanceof Error ? cause.message : cause, 600);
+    return respond(req, { ok: false, error: attachmentError }, 422);
   }
   const thinkingLevel = chooseThinking(message);
   const requestId = crypto.randomUUID();
@@ -718,6 +772,7 @@ Deno.serve(async (req) => {
       authData.user.id,
       userClient,
       adminClient,
+      attachmentContext,
     );
   }
 
@@ -725,7 +780,7 @@ Deno.serve(async (req) => {
     interaction = await geminiInteraction({
       model: MODEL,
       system_instruction: SYSTEM_INSTRUCTION,
-      input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
+      input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
       tools: TOOLS,
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
@@ -811,7 +866,7 @@ Deno.serve(async (req) => {
 
     await persistAgentTurn(
       adminClient, cloud, authData.user.id, requestId, message, verified.text,
-      responsePayload as Json, toolTrace, thinkingLevel,
+      responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
     );
 
     return respond(req, {

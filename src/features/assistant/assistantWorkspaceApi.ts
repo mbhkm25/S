@@ -25,6 +25,7 @@ export type SanadAgentStoredMessage = {
   is_starred?: boolean;
   rating?: -1 | 1 | null;
   rating_updated_at?: string | null;
+  attachment_ids?: string[];
   created_at: string;
 };
 
