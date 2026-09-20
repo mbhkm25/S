@@ -21,7 +21,8 @@
     "audit:migrations": "node scripts/audit-supabase-migration-history.mjs --mode audit",
     "gate:migrations": "node scripts/audit-supabase-migration-history.mjs --mode deploy-gate",
     "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs",
-    "verify:canonical-baseline": "node scripts/verify-supabase-canonical-baseline.mjs"
+    "verify:canonical-baseline": "node scripts/verify-supabase-canonical-baseline.mjs",
+    "check:bundle-budget": "node scripts/check-production-bundle-budget.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
