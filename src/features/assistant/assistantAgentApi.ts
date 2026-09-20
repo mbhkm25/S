@@ -130,10 +130,34 @@ export async function streamSanadAiAgentTurn(
 
   if (!response.ok) {
     const body = await response.text();
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs: performance.now() - clientStartedAt,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
     throw new Error(body || `تعذر الاتصال بمساعد سند (${response.status}).`);
   }
 
-  if (!response.body) throw new Error('المتصفح لا يدعم تدفق استجابة مساعد سند.');
+  if (!response.body) {
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs: performance.now() - clientStartedAt,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
+    throw new Error('المتصفح لا يدعم تدفق استجابة مساعد سند.');
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
