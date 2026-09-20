@@ -1,11 +1,11 @@
 # SANAD / محمد باحكم — Operating Playbook & Personal Skill
 
 **Status:** Active handoff baseline  
-**Updated:** 2026-09-19  
+**Updated:** 2026-09-20  
 **Audience:** Any new ChatGPT / coding session that will work with محمد باحكم on SANAD  
 **Primary repository:** `mbhkm25/S`  
 **Production branch:** `main`  
-**Current main at document creation:** `b9711a3230297b363403af481c665965bcd0bcde`  
+**Current main at this update:** `0ed19031bdd1689870ecc5b2d7c0f79f108fcf43`  
 **Historical Bridge consolidation commit:** `316bc48f33da84573cc7656a30debcfd25c2389d`  
 Always re-read the live `main` ref before starting work; these SHAs are context, not a permanent pointer.
 
@@ -235,12 +235,14 @@ Minimum interval:
 
 ### Verified field facts at this checkpoint
 
-The first full logical Edaa snapshot was completed successfully:
+Two real full logical Edaa snapshots have now been validated on the authorized workstation.
 
+First validated snapshot:
+
+- snapshot ID: `ae84cf09-0a3d-4656-abf6-2924c9e59d29`
 - 142 / 142 user tables
 - 20,526 materialized rows
 - 234 chunks
-- snapshot ID: `ae84cf09-0a3d-4656-abf6-2924c9e59d29`
 
 A real customer statement for Edaa account `122063` was compared with the Edaa PDF line-by-line and matched, including:
 
@@ -248,7 +250,35 @@ A real customer statement for Edaa account `122063` was compared with the Edaa P
 - total credit: 1,920 SAR
 - closing balance: 2,620 SAR
 
-The Bridge was then consolidated into `main`, and the scheduled production agent was upgraded successfully. It correctly detected the existing logical snapshot as current rather than uploading a duplicate before the 360-minute interval.
+Latest completed snapshot after the 2026-09-20 incident closure:
+
+- snapshot ID: `2feea1cd-e061-4c74-be84-b9a1480800d9`
+- status: `completed`
+- 142 / 142 user tables
+- 20,526 materialized rows
+- 234 / 234 chunks
+- completed at: `2026-09-20T06:36:04.835675Z`
+
+Live workstation facts verified during diagnosis:
+
+- Task Scheduler: `SANAD Bridge Agent`
+- local state: `C:\ProgramData\SANAD\Bridge\bridge.db`
+- log: `C:\ProgramData\SANAD\Bridge\logs\agent-cycle.log`
+- SQL service: `MSSQLSERVER` running
+- Edaa source label: `20-06-2026  10.20.55 am`
+- source key: `edaa_v5:38d56e1f75be58480332e2ff1543cadb6eccb23c`
+- sale watermark/current max at checkpoint: `1350 / 1350`
+- sale outbox pending: `0`
+- logical snapshot default cadence: `360` minutes
+- Bridge remained read-only toward Edaa
+
+The 2026-09-20 incident proved that snapshot idempotency must include `baseline_public_id`; otherwise unchanged chunks can collide with prior snapshots and produce false local ACK state. The ingest path now also propagates logical snapshot apply failures as delivery failures.
+
+SANAD Agent was verified against real Production ERP data after the fixes: customer candidate resolution, customer statement, and replica status all returned correct results.
+
+Detailed record:
+
+`docs/integrations/edaa/incident-closure-2026-09-20.md`
 
 ### Replica layers
 
@@ -448,15 +478,15 @@ For desktop:
 
 ### Current UI priority
 
-At this checkpoint, the immediate product task is:
+The previously reported ERP/Agent loading problem has been resolved at the root and verified against real Production Edaa data.
+
+Current product priority:
 
 1. Improve desktop layout, especially **سند للأعمال → النظام المحاسبي**.
-2. Diagnose and fix the identical loading failure shown in both:
-   - **سند المالي**
-   - **مساعد سند**
-3. Inspect real code, Production logs, Supabase RPCs/Edge Functions and authorization behavior before changing UI error handling.
+2. Continue SANAD Agent quality work using both Golden Eval and live authenticated ERP contract checks.
+3. Treat Bridge HTTP retry/backoff as resilience hardening, not as an unresolved data-correctness blocker.
 
-The visible error is a symptom. Find the root cause before replacing the message.
+For future generic loading failures, continue to inspect the real RPC/Edge Function/authorization/tool trace before changing UI error copy.
 
 ---
 
