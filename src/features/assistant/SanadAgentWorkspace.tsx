@@ -892,6 +892,7 @@ export default function SanadAgentWorkspace() {
               />
               <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
                 <div className="flex min-w-0 items-center gap-2">
+                  <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
                   <SanadVoiceDictationButton
                     disabled={sending}
                     onStateChange={handleVoiceStateChange}
