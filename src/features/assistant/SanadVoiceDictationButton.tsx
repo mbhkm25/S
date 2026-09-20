@@ -55,6 +55,7 @@ export default function SanadVoiceDictationButton({ disabled, onTranscript, onEr
   };
 
   useEffect(() => () => {
+    cancelRef.current = true;
     clearTimers();
     releaseStream();
     try {
