@@ -11,6 +11,7 @@ import { prefetchProductArea } from '../../features/financial/productRouteLoader
 type Props = {
   activeArea?: ProductArea;
   legacyPage?: string;
+  layoutMode?: 'document' | 'viewport';
 };
 
 function inferArea(pathname: string, legacyPage?: string): ProductArea {
@@ -38,14 +39,16 @@ function handleProductClick(event: MouseEvent<HTMLAnchorElement>, path: string):
   navigateProduct(path);
 }
 
-export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
+export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 'document' }: Props) {
   const active = activeArea || inferArea(window.location.pathname, legacyPage);
   const spaNavigation = legacyPage === undefined;
+  const viewportMode = layoutMode === 'viewport';
 
   return (
     <nav
       data-product-navigation="primary"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[1.65rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_14px_40px_rgba(15,23,42,0.08)]"
+      data-layout-mode={layoutMode}
+      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[1.65rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_14px_40px_rgba(15,23,42,0.08)]`}
       aria-label="أقسام سند الرئيسية"
       dir="rtl"
     >
