@@ -70,7 +70,49 @@ jobs:
     environment:
       name: production
       url: https://app.sanadflow.com
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
+      - name: Checkout release contract
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+          fetch-depth: 0
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify SANAD Agent backend contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          test -n "${SUPABASE_DB_PASSWORD:-}"
+
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+          migration_list="$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD")"
+          printf '%s\n' "$migration_list"
+
+          for version in             20260920071058             20260920121801             20260920121807             20260920121815             20260920121821; do
+            if ! grep -Eq "^[[:space:]]*$version[[:space:]]*\|[[:space:]]*$version([[:space:]]*\||[[:space:]]*$)" <<<"$migration_list"; then
+              echo "SANAD Agent backend migration is not aligned in production: $version" >&2
+              exit 1
+            fi
+          done
+
+          function_list="$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
+          printf '%s\n' "$function_list"
+          for fn in             sanad-ai-agent-v1             sanad-ai-transcribe-v1             sanad-ai-attachment-analyze-v1; do
+            grep -q "$fn" <<<"$function_list" || {
+              echo "Required SANAD Agent Edge Function is missing in production: $fn" >&2
+              exit 1
+            }
+          done
+
       - name: Configure SSH
         shell: bash
         env:
