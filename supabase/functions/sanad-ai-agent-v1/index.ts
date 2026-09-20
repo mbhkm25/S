@@ -506,6 +506,7 @@ function streamAgentResponse(
   authUserId: string,
   userClient: SupabaseClient,
   adminClient: SupabaseClient,
+  attachmentContext: { ids: string[]; summaries: string[] },
 ) {
   const encoder = new TextEncoder();
 
@@ -534,7 +535,7 @@ function streamAgentResponse(
           interaction = await geminiInteraction({
             model: MODEL,
             system_instruction: SYSTEM_INSTRUCTION,
-            input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }),
+            input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
             tools: TOOLS,
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
@@ -651,7 +652,7 @@ function streamAgentResponse(
 
           await persistAgentTurn(
             adminClient, cloud, authUserId, requestId, message, verified.text,
-            responsePayload as Json, toolTrace, thinkingLevel,
+            responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
           );
 
           send("answer.final", { text: verified.text });
