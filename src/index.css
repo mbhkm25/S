@@ -73,6 +73,17 @@ body {
   font-weight: 600;
 }
 
+/* Professional legibility floor for legacy micro-copy across SANAD. */
+.text-\\[7px\\],
+.text-\\[8px\\] {
+  font-size: 11px;
+}
+
+.text-\\[9px\\],
+.text-\\[10px\\] {
+  font-size: 12px;
+}
+
 #home_view section[aria-labelledby="financial-sanad-title"] > div.grid button {
   min-height: 5.5rem !important;
 }
