@@ -144,7 +144,9 @@ function MessageBubble({
           {!assistant && message.attachments?.length ? (
             <div className="mb-3 grid gap-2">
               {message.attachments.map((attachment) => (
-                <SanadAttachmentPreview key={attachment.id} attachment={attachment} compact />
+                <div key={attachment.id}>
+                  <SanadAttachmentPreview attachment={attachment} compact />
+                </div>
               ))}
             </div>
           ) : null}
