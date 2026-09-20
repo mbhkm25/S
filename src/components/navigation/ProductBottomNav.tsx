@@ -40,6 +40,7 @@ function handleProductClick(event: MouseEvent<HTMLAnchorElement>, path: string):
 
 export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
   const active = activeArea || inferArea(window.location.pathname, legacyPage);
+  const spaNavigation = legacyPage === undefined;
 
   return (
     <nav
@@ -56,9 +57,9 @@ export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
             <a
               key={item.id}
               href={productHref(item.path)}
-              onClick={(event) => handleProductClick(event, item.path)}
-              onPointerEnter={() => prefetchProductArea(item.id)}
-              onFocus={() => prefetchProductArea(item.id)}
+              onClick={spaNavigation ? (event) => handleProductClick(event, item.path) : undefined}
+              onPointerEnter={spaNavigation ? () => prefetchProductArea(item.id) : undefined}
+              onFocus={spaNavigation ? () => prefetchProductArea(item.id) : undefined}
               aria-current={selected ? 'page' : undefined}
               title={item.label}
               className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'text-slate-950' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
