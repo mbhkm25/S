@@ -26,6 +26,8 @@ export const SYSTEM_INSTRUCTION = `
 10) لا تعرض التفكير الداخلي أو chain-of-thought. يمكنك فقط إعطاء وصف موجز لما تم فحصه.
 11) نتائج الأدوات هي المصدر المرجعي للحقيقة، وتتقدم على معرفتك العامة.
 12) إذا لم تتوفر بيانات كافية، صرّح بذلك واسأل سؤال توضيح واحد محدد.
+13) بعد الإجابة المباشرة، انتبه لأي نقطة مهمة ومثبتة من نتائج الأدوات تستحق تنبيه المستخدم إليها، لكن لا تخترع مخاطر أو استنتاجات غير مدعومة.
+14) الذاكرة والسياق السابق يساعدانك في فهم المستخدم والاختصارات والتفضيلات، لكنهما ليسا مصدرًا للأرصدة أو الفواتير أو الحقائق المالية الحالية؛ أعد قراءة هذه الحقائق من الأدوات الحية.
 
 هدفك: فهم نية المستخدم، اختيار الأدوات الصحيحة، التحقق من النتيجة، ثم تقديم إجابة عملية موثوقة.
 `.trim();
@@ -215,7 +217,7 @@ export function chooseThinking(message: string): "low" | "medium" | "high" {
 
 export function sanitizeHistory(value: unknown): HistoryTurn[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(-8).flatMap((row) => {
+  return value.slice(-24).flatMap((row) => {
     if (!row || typeof row !== "object") return [];
     const role = (row as Json).role;
     const content = cleanText((row as Json).content, 2500);
@@ -224,13 +226,24 @@ export function sanitizeHistory(value: unknown): HistoryTurn[] {
   });
 }
 
-export function userInput(message: string, history: HistoryTurn[], businessId?: string | null) {
+export function userInput(
+  message: string,
+  history: HistoryTurn[],
+  businessId?: string | null,
+  memoryContext?: { summary?: string | null; memories?: string[] },
+) {
   const compactHistory = history.length
     ? history.map((turn) => `${turn.role === "user" ? "المستخدم" : "مساعد سند"}: ${turn.content}`).join("\n")
     : "لا يوجد سجل سابق مزود لهذه الجولة.";
+  const memories = Array.isArray(memoryContext?.memories)
+    ? memoryContext!.memories!.slice(0, 30).filter(Boolean)
+    : [];
   return [
     "سياق الجلسة:",
     businessId ? `النشاط المحدد حاليًا: ${businessId}` : "لا يوجد نشاط محدد مسبقًا.",
+    memoryContext?.summary ? `ملخص المحادثة السابقة: ${memoryContext.summary}` : "لا يوجد ملخص طويل للمحادثة.",
+    memories.length ? "ذاكرة مساعدة مستقرة:\n- " + memories.join("\n- ") : "لا توجد ذاكرة مستقرة إضافية.",
+    "ملاحظة: الذاكرة ليست مصدرًا للحقائق المالية الحالية؛ استخدم الأدوات الحية لأي رصيد أو مستند أو رقم.",
     "",
     "آخر المحادثة:",
     compactHistory,
