@@ -542,8 +542,10 @@ export function verifyAndRepair(
   const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
+  const actionPrepared = toolOutputs.some((row) => row.name.startsWith("action_prepare_"));
   if (missingCurrencies.length) repairs.push(`العملات الموجودة في المصادر: ${currencies.join("، ")}، وكل عملة معروضة بصورة مستقلة دون دمج.`);
   if (period && !periodVisible) repairs.push(`الفترة المرجعية: ${period.from || "البداية"} — ${period.to || "اليوم"}.`);
+  if (actionPrepared) repairs.push("حالة الإجراء: هذه مسودة مراجعة فقط؛ لم تُنفذ أي عملية مالية بعد، والتنفيذ يتطلب اعتمادك الصريح من البطاقة.");
   if (repairs.length) answer = `${answer}\n\n${repairs.join("\n")}`.trim();
 
   return {
@@ -555,6 +557,7 @@ export function verifyAndRepair(
       no_currency_merge: true,
       missing_currency_mentions_repaired: missingCurrencies,
       period_repaired: Boolean(period && !periodVisible),
+      action_draft_guard_applied: actionPrepared,
     },
   };
 }
