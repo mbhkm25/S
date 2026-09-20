@@ -28,6 +28,9 @@ export const SYSTEM_INSTRUCTION = `
 12) إذا لم تتوفر بيانات كافية، صرّح بذلك واسأل سؤال توضيح واحد محدد.
 13) بعد الإجابة المباشرة، انتبه لأي نقطة مهمة ومثبتة من نتائج الأدوات تستحق تنبيه المستخدم إليها، لكن لا تخترع مخاطر أو استنتاجات غير مدعومة.
 14) الذاكرة والسياق السابق يساعدانك في فهم المستخدم والاختصارات والتفضيلات، لكنهما ليسا مصدرًا للأرصدة أو الفواتير أو الحقائق المالية الحالية؛ أعد قراءة هذه الحقائق من الأدوات الحية.
+15) طبقة Insight Engine هي المسؤولة عن التنبيهات الاستباقية المحسوبة. لا تخترع تحذيرًا أو حالة تأخر أو تجاوز من معرفتك العامة؛ يجب أن تكون مدعومة بنتيجة أداة.
+16) إذا طلب المستخدم مراجعة عامة لما يجب الانتباه إليه، اقرأ عقود النظرة المناسبة بدل الاكتفاء بإجابة لغوية عامة.
+17) لا تعتبر الرصيد غير الصفري أو الذمم المفتوحة خطأ بحد ذاته. صف الحقيقة كما هي، واجعل التحذير فقط عند وجود قاعدة صريحة مثل تجاوز تاريخ الاستحقاق أو الميزانية أو تقادم النسخة.
 
 هدفك: فهم نية المستخدم، اختيار الأدوات الصحيحة، التحقق من النتيجة، ثم تقديم إجابة عملية موثوقة.
 `.trim();
@@ -36,7 +39,7 @@ export const TOOLS = [
   {
     type: "function",
     name: "finance_get_overview",
-    description: "Read the authenticated user's personal finance overview for a bounded period, including dashboard, transactions, obligations and goals. Currencies stay separate.",
+    description: "Read the authenticated user's personal finance overview for a bounded period, including dashboard, transactions, obligations and goals. Use for broad personal reviews. If the user asks what to pay attention to, pair with finance_get_budgets because budget progress comes from a separate read model. Currencies stay separate.",
     parameters: {
       type: "object",
       properties: {
@@ -115,7 +118,7 @@ export const TOOLS = [
   {
     type: "function",
     name: "business_get_dashboard",
-    description: "Read the commercial dashboard for an authorized SANAD business and period.",
+    description: "Read the commercial dashboard for an authorized SANAD business and period. It includes totals, open receivables/payables by currency and overdue document count; use it for broad business review or what-needs-attention questions.",
     parameters: {
       type: "object",
       properties: {
@@ -226,6 +229,31 @@ export function sanitizeHistory(value: unknown): HistoryTurn[] {
   });
 }
 
+export function inferAgentRoutingHint(message: string, businessId?: string | null): string {
+  const value = cleanText(message,1200).toLowerCase();
+  const broadAttention = /(انتبه|الانتباه|راجع وضعي|راجع الوضع|نظرة شاملة|حلل وضعي|ما المهم|ما الذي يهم|ما الذي يجب)/i.test(value);
+  const budget = /(ميزاني|budget|الميزانية)/i.test(value);
+  const obligation = /(التزام|التزامات|مستحق|مستحقات|دين|ديون|ذمم)/i.test(value);
+  const goal = /(هدف|اهداف|أهداف|goal)/i.test(value);
+  const replica = /(إبداع|مزامن|نسخة سحاب|bridge|النسخة)/i.test(value);
+  const statement = /(كشف حساب|رصيد عميل|حساب العميل)/i.test(value);
+  const documents = /(فاتور|مبيعات|مشتريات|مستند)/i.test(value);
+
+  if (broadAttention && businessId) {
+    return "توجيه الأدوات: استخدم business_get_dashboard للمراجعة العامة للنشاط. أضف erp_get_replica_status فقط إذا كان السؤال يتضمن إبداع أو حداثة البيانات أو المزامنة.";
+  }
+  if (broadAttention) {
+    return "توجيه الأدوات: للمراجعة الشخصية العامة استخدم finance_get_overview وfinance_get_budgets حتى تشمل الالتزامات والأهداف وتقدم الميزانيات.";
+  }
+  if (budget) return "توجيه الأدوات: استخدم finance_get_budgets ولا تستنتج التجاوز من نص المستخدم.";
+  if (obligation) return "توجيه الأدوات: استخدم finance_get_obligations لقراءة المبلغ والعملة وتاريخ الاستحقاق.";
+  if (goal) return "توجيه الأدوات: استخدم finance_get_goals لقراءة الهدف والتقدم والموعد.";
+  if (replica) return "توجيه الأدوات: استخدم erp_get_replica_status عندما يكون المطلوب حالة إبداع أو حداثة النسخة.";
+  if (statement) return "توجيه الأدوات: ابحث عن العميل أولًا عند الحاجة ثم اقرأ كشف الحساب بعد حل account_id بصورة فريدة.";
+  if (documents) return "توجيه الأدوات: استخدم erp_get_documents وحدد المبيعات أو المشتريات بحسب طلب المستخدم.";
+  return "توجيه الأدوات: لا توجد أداة إضافية مفروضة؛ اختر أقل مجموعة أدوات لازمة للطلب.";
+}
+
 export function userInput(
   message: string,
   history: HistoryTurn[],
@@ -239,6 +267,7 @@ export function userInput(
   const memories = Array.isArray(memoryContext?.memories)
     ? memoryContext!.memories!.slice(0, 30).filter(Boolean)
     : [];
+  const routingHint = inferAgentRoutingHint(message,businessId);
   const attachments = Array.isArray(attachmentContext)
     ? attachmentContext.slice(0, 5).filter(Boolean)
     : [];
@@ -248,6 +277,7 @@ export function userInput(
     memoryContext?.summary ? `ملخص المحادثة السابقة: ${memoryContext.summary}` : "لا يوجد ملخص طويل للمحادثة.",
     memories.length ? "ذاكرة مساعدة مستقرة:\n- " + memories.join("\n- ") : "لا توجد ذاكرة مستقرة إضافية.",
     "ملاحظة: الذاكرة ليست مصدرًا للحقائق المالية الحالية؛ استخدم الأدوات الحية لأي رصيد أو مستند أو رقم.",
+    routingHint,
     attachments.length
       ? "مرفقات هذه الرسالة (تحليل أولي غير ملزم، وليس حقيقة مالية نهائية):\n- " + attachments.join("\n- ")
       : "لا توجد مرفقات مرتبطة بهذه الرسالة.",
