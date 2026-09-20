@@ -531,6 +531,7 @@ export default function SanadAgentWorkspace() {
       content: prompt,
       createdAt: Date.now(),
       persisted: false,
+      attachments: readyAttachments,
     };
 
     setMessages((current) => [...current, userMessage]);
