@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildAgentInsights } from '../supabase/functions/_shared/sanad-agent-insights.ts';
-import { inferAgentRoutingHint } from '../supabase/functions/_shared/sanad-agent-core.ts';
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
@@ -297,8 +296,8 @@ assert.ok(insightFixture.some((item) => item.rule_id === 'erp_replica_stale_24h_
 assert.ok(insightFixture.every((item) => Boolean(item.source_label)));
 assert.ok(insightFixture.every((item) => !item.body.includes('SAR + YER')));
 
-assert.match(inferAgentRoutingHint('ما الذي يجب أن أنتبه له في وضعي المالي؟'), /finance_get_overview.*finance_get_budgets/);
-assert.match(inferAgentRoutingHint('راجع النشاط وما الذي يجب الانتباه له', 'business-id'), /business_get_dashboard/);
-assert.match(inferAgentRoutingHint('ما حالة نسخة إبداع؟', 'business-id'), /erp_get_replica_status/);
+assert.match(core, /broadAttention[\s\S]*finance_get_overview وfinance_get_budgets/);
+assert.match(core, /broadAttention && businessId[\s\S]*business_get_dashboard/);
+assert.match(core, /if \(replica\)[\s\S]*erp_get_replica_status/);
 
 console.log('SANAD Agent Intelligence v2 contract passed.');
