@@ -118,7 +118,6 @@ alter table public.sanad_agent_messages
 create unique index if not exists sanad_agent_messages_thread_sequence_uidx
   on public.sanad_agent_messages(thread_id, sequence_no);
 
-drop index if exists public.sanad_agent_messages_thread_time_idx;
 
 -- Legacy service-role persistence remains compatible while all callers move on v2.
 create or replace function public.save_sanad_agent_turn_v1(
