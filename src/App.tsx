@@ -25,7 +25,7 @@ const BusinessWhatsAppCatalog = lazy(() => import('./components/business/Busines
 const BusinessCustomers = lazy(() => import('./components/business/BusinessCustomers'));
 const NotificationCenter = lazy(() => import('./components/notifications/NotificationCenter'));
 const PlatformAdmin = lazy(() => import('./components/admin/PlatformAdmin'));
-import { ShieldAlert, Loader2 } from 'lucide-react';
+import { ShieldAlert, Loader2, Inbox } from 'lucide-react';
 import { isBasicProfileComplete } from './lib/profileUtils';
 import { getUserAvatarUrl } from './lib/userAvatar';
 import ProfileCompletionGateModal from './components/ProfileCompletionGateModal';
@@ -1101,6 +1101,14 @@ export default function App() {
             <div>
               {isAuthenticated && (
                 <div className="flex items-center gap-2">
+                  <a
+                    href="/payment-inbox.html"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
+                    aria-label="فتح وارد المدفوعات"
+                    title="وارد المدفوعات"
+                  >
+                    <Inbox className="h-4 w-4" />
+                  </a>
                   <NotificationBell onNavigate={() => navigateTo('notifications')} />
                   <div className="flex items-center gap-2 bg-slate-50 p-1 pl-3 pr-1 rounded-full border border-slate-200/80">
                     <button type="button" onClick={() => navigateTo('profile')} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-white ring-2 ring-white shadow-sm" aria-label="فتح حسابي">
