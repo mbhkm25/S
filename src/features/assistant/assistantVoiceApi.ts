@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/supabase';
+import { invokeAuthenticatedSanadFunction } from './assistantEdgeFunctionApi';
 
 export type SanadVoiceTranscriptionResult = {
   ok: true;
@@ -37,15 +37,17 @@ export async function transcribeSanadAudio(
   const audioBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : '';
   if (!audioBase64) throw new Error('تعذر تجهيز التسجيل الصوتي.');
 
-  const { data, error } = await supabase.functions.invoke<SanadVoiceTranscriptionResult>('sanad-ai-transcribe-v1', {
-    body: {
-      audio_base64: audioBase64,
-      mime_type: blob.type || 'audio/webm',
-      duration_ms: Math.max(0, Math.round(durationMs)),
+  const data = await invokeAuthenticatedSanadFunction<SanadVoiceTranscriptionResult>(
+    'sanad-ai-transcribe-v1',
+    {
+      body: {
+        audio_base64: audioBase64,
+        mime_type: blob.type || 'audio/webm',
+        duration_ms: Math.max(0, Math.round(durationMs)),
+      },
     },
-  });
+  );
 
-  if (error) throw new Error(error.message || 'تعذر تحويل الصوت إلى نص.');
   if (!data?.ok || !data.transcript?.trim()) throw new Error('لم أستطع استخراج نص واضح من التسجيل.');
   return { ...data, transcript: data.transcript.trim() };
 }

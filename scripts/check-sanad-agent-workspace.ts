@@ -143,6 +143,8 @@ for (const required of [
 
 assert.match(voiceApi, /sanad-ai-transcribe-v1/);
 assert.match(voiceApi, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceApi, /invokeAuthenticatedSanadFunction/);
+assert.doesNotMatch(voiceApi, /functions\.invoke/, 'Voice must use explicit authenticated fetch transport');
 assert.match(voiceFunction, /gemini-3\.5-transcribe/);
 assert.match(voiceFunction, /upload\/v1beta\/files/);
 assert.match(voiceFunction, /transcription_config/);
@@ -189,6 +191,8 @@ assert.doesNotMatch(attachmentMigration, /grant execute on function public\.save
 
 assert.match(attachmentApi, /MAX_FILE_BYTES = 20 \* 1024 \* 1024/);
 assert.match(attachmentApi, /sanad-ai-attachment-analyze-v1/);
+assert.match(attachmentApi, /invokeAuthenticatedSanadFunction/);
+assert.doesNotMatch(attachmentApi, /functions\.invoke/, 'Attachment analysis must use explicit authenticated fetch transport');
 assert.match(attachmentApi, /upsert:\s*false/);
 assert.match(attachmentComposer, /MAX_PER_TURN = 3/);
 assert.match(attachmentComposer, /لم تُنشأ أي عملية/);
