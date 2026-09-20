@@ -132,7 +132,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               key={String(id)}
               type="button"
               onClick={() => setTab(id as SidebarTab)}
-              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-semibold transition ${active ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70'}`}
+              className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition ${active ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-white/70'}`}
             >
               <Component className="h-3.5 w-3.5" />
               {String(label)}
@@ -147,7 +147,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             <button
               type="button"
               onClick={props.onNew}
-              className="flex w-full items-center justify-center gap-2 rounded-[1.1rem] bg-slate-950 px-3 py-3 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(15,23,42,.16)] transition active:scale-[.99]"
+              className="flex w-full items-center justify-center gap-2 rounded-[1.1rem] bg-slate-950 px-3 py-3 text-[13px] font-medium text-white shadow-[0_10px_25px_rgba(15,23,42,.16)] transition active:scale-[.99]"
             >
               <MessageSquarePlus className="h-4 w-4" />
               محادثة جديدة
@@ -171,10 +171,10 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                       onClick={() => props.onSelect(thread.id)}
                       className="min-w-0 flex-1 p-3 text-right"
                     >
-                      <p className={`truncate text-sm font-semibold ${active ? 'text-slate-950' : 'text-slate-700'}`}>
+                      <p className={`truncate text-[13px] font-medium ${active ? 'text-slate-950' : 'text-slate-700'}`}>
                         {thread.title}
                       </p>
-                      <p className="mt-1 text-sm text-slate-400">
+                      <p className="mt-1 text-[11px] text-slate-400">
                         {thread.message_count} رسالة
                       </p>
                     </button>
@@ -200,7 +200,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           <div className="rounded-2xl bg-indigo-50 p-3">
             <div className="flex items-center gap-2 text-indigo-800">
               <Brain className="h-4 w-4" />
-              <p className="text-sm font-semibold">ذاكرة سند</p>
+              <p className="text-[13px] font-semibold">ذاكرة سند</p>
             </div>
             <p className="mt-2 text-xs leading-5 text-indigo-700/70">
               تحفظ التفضيلات والسياق المستقر. الأرصدة والفواتير لا تعتمد على الذاكرة، بل يعاد قراءتها من النظام الحي.
@@ -215,7 +215,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             ) : props.memories.map((memory) => (
               <div key={memory.id} className="border-b border-slate-100 bg-transparent px-1 py-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs leading-5 text-slate-700">{memory.value_text}</p>
+                  <p className="text-[13px] leading-6 text-slate-700">{memory.value_text}</p>
                   <button
                     type="button"
                     onClick={() => props.onForgetMemory(memory.id)}
@@ -225,7 +225,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-sm font-medium text-slate-500">
+                <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500">
                   {memory.category}
                 </span>
               </div>
@@ -237,7 +237,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
       {tab === 'settings' ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <div>
-            <h3 className="text-xs font-semibold text-slate-900">إعدادات سند</h3>
+            <h3 className="text-base font-semibold text-slate-900">إعدادات سند</h3>
             <p className="mt-1 text-xs leading-5 text-slate-400">تحكم في ذاكرة سند وطريقة عرض الإجابات.</p>
           </div>
 
@@ -255,8 +255,8 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                 return (
                   <div key={String(key)} className="flex items-center justify-between gap-3 border-b border-slate-100 bg-transparent px-1 py-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">{String(title)}</p>
-                      <p className="mt-1 text-sm leading-4 text-slate-400">{String(description)}</p>
+                      <p className="text-[13px] font-medium text-slate-800">{String(title)}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{String(description)}</p>
                     </div>
                     <Toggle enabled={props.preferences[k]} onChange={(value) => props.onPreferenceChange(k, value)} />
                   </div>
@@ -273,7 +273,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                 <Activity className="h-4 w-4 text-slate-500" />
                 <div>
                   <p className="text-xs font-semibold text-slate-800">أداء سند · آخر 7 أيام</p>
-                  <p className="mt-0.5 text-sm text-slate-400">قياسات زمنية فقط، دون حفظ محتوى رسائلك.</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">قياسات زمنية فقط، دون حفظ محتوى رسائلك.</p>
                 </div>
               </div>
               <button
@@ -303,11 +303,11 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                     };
                     return (
                       <div key={scope.scope} className="rounded-xl bg-slate-50 p-2.5">
-                        <p className="text-sm font-medium text-slate-400">{labels[scope.scope] || scope.scope}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-800" dir="ltr">
+                        <p className="text-[11px] font-medium text-slate-400">{labels[scope.scope] || scope.scope}</p>
+                        <p className="mt-1 text-xs font-medium text-slate-800" dir="ltr">
                           P50 {scope.p50_total_ms ?? '—'} ms
                         </p>
-                        <p className="mt-0.5 text-sm text-slate-400" dir="ltr">
+                        <p className="mt-0.5 text-[11px] text-slate-400" dir="ltr">
                           P95 {scope.p95_total_ms ?? '—'} ms · fail {Math.round((scope.failure_rate || 0) * 100)}%
                         </p>
                       </div>
@@ -315,7 +315,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                   })}
               </div>
             ) : (
-              <p className="mt-3 text-sm leading-4 text-slate-400">ستظهر المؤشرات بعد استخدام سند على النسخة المنشورة.</p>
+              <p className="mt-3 text-xs leading-5 text-slate-400">ستظهر المؤشرات بعد استخدام سند على النسخة المنشورة.</p>
             )}
           </div>
 
@@ -324,7 +324,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               <Check className="h-4 w-4" />
               <p className="text-xs font-semibold">الحقائق المالية تبقى حية</p>
             </div>
-            <p className="mt-1 text-sm leading-4 opacity-75">حتى مع تشغيل الذاكرة، يعيد المساعد قراءة الأرصدة والمستندات من مصدرها عند كل طلب.</p>
+            <p className="mt-1 text-xs leading-5 opacity-75">حتى مع تشغيل الذاكرة، يعيد المساعد قراءة الأرصدة والمستندات من مصدرها عند كل طلب.</p>
           </div>
         </div>
       ) : null}
