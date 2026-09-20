@@ -1,6 +1,6 @@
 # Edaa Cloud Replica and Backup Architecture v1
 
-Status: **Active production/field baseline** as of 2026-09-19.
+Status: **Active production/field baseline** as of 2026-09-20.
 
 The original implementation branch has been superseded. Cloud/UI capabilities were released and the verified field Bridge was consolidated into `main`. Always inspect current `main` and production runtime rather than reviving the historical feature branch.
 
@@ -36,7 +36,7 @@ Properties:
 - the complete schema has its own full-schema fingerprint in snapshot metadata;
 - all user tables are discovered dynamically;
 - table rows are split into durable chunks;
-- each chunk is idempotent through the existing ERP event envelope;
+- logical-snapshot chunk idempotency is scoped by snapshot identity (`integrity.baseline_public_id`) so unchanged chunks can recur safely in later snapshots;
 - snapshot completeness is validated by table row counts before completion;
 - the latest completed snapshot is queryable from SANAD;
 - incomplete network transfers remain durable locally and retry safely.
@@ -237,3 +237,32 @@ The architecture has passed its first real field validation on the authorized Ed
 - the production scheduled agent was upgraded from `main` and correctly skipped a premature duplicate snapshot until the 360-minute interval becomes due.
 
 This validates Layer B as an operational read replica. It still does not convert Layer B into a physical SQL Server disaster-recovery backup.
+
+
+## Production incident closure — 2026-09-20
+
+A second live logical snapshot exposed a cross-snapshot idempotency defect and several adjacent runtime-contract issues. The incident has been closed in Production.
+
+Final verified snapshot:
+
+- snapshot ID: `2feea1cd-e061-4c74-be84-b9a1480800d9`
+- status: `completed`
+- 142 / 142 user tables
+- 20,526 materialized rows
+- 234 / 234 chunks
+- completed at: `2026-09-20T06:36:04.835675Z`
+
+Key fixes:
+
+1. `authenticated` now has the minimum required `INSERT` privilege on `ai_financial_context_access_log`; existing RLS still enforces ownership.
+2. `get_business_erp_snapshot_status_v1` uses the latest **completed** logical snapshot as readable truth while exposing any newer in-progress run separately as `current_sync`.
+3. raw-event uniqueness for `erp_logical_snapshot_chunk` now includes `integrity.baseline_public_id`, preventing unchanged chunks from later snapshots from colliding with prior snapshot events.
+4. `sanad-erp-ingest-v1` no longer returns a successful delivery response when applying a logical snapshot chunk fails.
+
+Field recovery preserved `bridge.db`, reset only the affected snapshot outbox after backup, and allowed scheduled durable retries to finish the upload despite intermittent HTTP/timeouts.
+
+The live Agent was then verified against the real business authorization path: customer resolution, customer statement, and replica status all returned correct Production data.
+
+Detailed root-cause analysis and recovery evidence:
+
+`docs/integrations/edaa/incident-closure-2026-09-20.md`
