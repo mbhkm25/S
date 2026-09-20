@@ -97,7 +97,7 @@ export function SanadAttachmentPreview({
           className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-2.5 py-2 text-[9px] font-black text-sky-700"
         >
           <Link2 className="h-3.5 w-3.5" />
-          فتح المستند المطابق المحتمل
+          {target.type === 'erp_customer' ? 'فتح العميل المطابق المحتمل' : 'فتح المستند المطابق المحتمل'}
         </a>
       ) : null}
 
