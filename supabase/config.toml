@@ -424,3 +424,7 @@ verify_jwt = true
 
 [functions.sanad-ai-transcribe-v1]
 verify_jwt = true
+
+
+[functions.sanad-ai-attachment-analyze-v1]
+verify_jwt = true
