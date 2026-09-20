@@ -1,14 +1,14 @@
 # SANAD Product Navigation & Performance v1
 
-Status: Phase 3 implementation on the shared refinement branch.
+Status: **Merged to `main` through PR #340** as part of the combined Phases 2–4 refinement release. Awaiting Production deployment.
 
-Branch:
+Historical implementation branch:
 
 `feat/sanad-refinement-phases-2-4-20260920`
 
-Draft PR: #340
+Feature merge commit:
 
-Do not merge this phase independently from Phase 4.
+`ac9e11ba20e4d8a5ecf0dc9553225cfa211a76d9`
 
 ## Objective
 
@@ -162,8 +162,8 @@ Budget changes must therefore be explicit code-review decisions rather than sile
 - legacy main runtimes remain lazy;
 - device-ledger initialization remains legacy-only.
 
-## Phase boundary
+## Release state
 
-Phase 3 does not redesign the SANAD Agent orb or perform the final visual polish. Those belong to Phase 4.
+Phase 3 was merged only after Phase 4 and the combined CI gates completed successfully.
 
-No merge is authorized until Phase 4 and the combined final review/testing are complete.
+Production deployment remains a separate operator action. The Production workflow revalidates TypeScript/routes, the production build, bundle budgets, and the Agent backend contract before deployment.
