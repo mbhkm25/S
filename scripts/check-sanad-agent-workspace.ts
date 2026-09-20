@@ -36,7 +36,7 @@ for (const required of [
   'streamSanadAiAgentTurn',
   'get_my_account_center_v1',
   'خطوات التنفيذ والمصادر',
-  'Shift + Enter',
+  'data-conversation-surface="open"',
   'thread_id',
   'AssistantWorkspaceSidebar',
   'SanadAgentResponseBlocks',
