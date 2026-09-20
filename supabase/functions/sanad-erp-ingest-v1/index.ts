@@ -182,6 +182,26 @@ serve(async (req) => {
       } else {
         normalization = (normalized || {}) as Record<string, unknown>;
       }
+    } else if (
+      receiptId &&
+      (adapterCode === "edaa" || adapterCode === "edaa_v5") &&
+      entityType === "erp_logical_snapshot_chunk"
+    ) {
+      const { data: applied, error: applyError } = await supabase.rpc(
+        "apply_erp_logical_snapshot_chunk_v1",
+        { p_raw_event_id: receiptId },
+      );
+
+      if (applyError) {
+        console.error("erp_ingest_snapshot_apply_failed", {
+          code: applyError.code,
+          event_id: eventId,
+          receipt_id: receiptId,
+        });
+        return jsonResponse({ ok: false, error: "snapshot_apply_failed" }, 500);
+      } else {
+        normalization = (applied || {}) as Record<string, unknown>;
+      }
     }
 
     const syncTime = new Date().toISOString();
