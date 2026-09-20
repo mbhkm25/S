@@ -231,7 +231,7 @@ jobs:
           {
             echo "## Stage 1B.R1 PWA Runtime Preview"
             echo
-            echo "- Exact frontend SHA: `$TARGET_SHA`"
+            echo "- Exact frontend SHA: $TARGET_SHA"
             echo "- Preview URL: $PREVIEW_URL"
             echo "- SANAD AI: $PREVIEW_URL/sanad-ai"
             echo "- Build status: $PREVIEW_URL/__stage1b_r1/status"
@@ -254,6 +254,21 @@ jobs:
           PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
         run: |
           set -euo pipefail
+          echo "Waiting for temporary tunnel DNS to become reachable..."
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 10 "$PREVIEW_URL/version.json" >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$READY" -ne 1 ]]; then
+            echo "Temporary tunnel hostname did not become reachable in time." >&2
+            cat /tmp/cloudflared.log || true
+            exit 1
+          fi
+
           for path in / /sanad-ai /manifest.webmanifest /sw.js /version.json; do
             echo "Checking $PREVIEW_URL$path"
             curl --fail --silent --show-error --location --max-time 30 "$PREVIEW_URL$path" >/dev/null
