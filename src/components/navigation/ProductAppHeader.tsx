@@ -33,17 +33,18 @@ export default function ProductAppHeader({ userId }: Props) {
 
     let active = true;
     setLoading(true);
-    void supabase
-      .from('profiles')
-      .select('full_name,avatar_path')
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data }) => {
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('full_name,avatar_path')
+          .eq('id', userId)
+          .maybeSingle();
         if (active) setProfile((data || null) as HeaderProfile | null);
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    })();
 
     return () => { active = false; };
   }, [userId]);
