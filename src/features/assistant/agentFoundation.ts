@@ -32,6 +32,8 @@ export const SANAD_ASSISTANT_EXECUTION_POLICY = {
   maxSequentialToolRounds: 5,
   maxParallelToolsPerRound: 4,
   writeToolsEnabled: false,
+  draftToolsEnabled: true,
+  approvalExecutionAvailableOnlyInUi: true,
   requireUserApprovalForMutations: true,
   neverExposeRawErpRows: true,
   neverMergeCurrencies: true,
@@ -238,6 +240,92 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
     },
   },
   {
+    name: 'finance_get_accounts',
+    description: 'Read active personal finance accounts before preparing a personal action.',
+    scope: 'personal',
+    risk: 'read_only',
+    authoritativeSource: 'get_my_financial_accounts_v1',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'finance_get_categories',
+    description: 'Read active personal income/expense categories before preparing a personal action.',
+    scope: 'personal',
+    risk: 'read_only',
+    authoritativeSource: 'personal_finance_categories',
+    parameters: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', description: 'Optional category kind.', enum: ['income','expense'] },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'business_search_parties',
+    description: 'Search SANAD business parties before preparing a commercial document.',
+    scope: 'business',
+    risk: 'read_only',
+    authoritativeSource: 'business_parties',
+    parameters: {
+      type: 'object',
+      properties: {
+        business_id: { type: 'string', description: 'Authorized SANAD business UUID.' },
+        query: { type: 'string', description: 'Party name or phone.' },
+        limit: { type: 'integer', description: 'Bounded result count.' },
+      },
+      required: ['business_id','query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'action_prepare_personal_transaction',
+    description: 'Create only a SANAD review draft for personal income, expense, or same-currency transfer. It does not execute the transaction.',
+    scope: 'personal',
+    risk: 'draft_only',
+    authoritativeSource: 'create_my_sanad_agent_action_draft_v1',
+    parameters: {
+      type: 'object',
+      properties: {
+        transaction_type: { type: 'string', description: 'income, expense, or transfer.', enum: ['income','expense','transfer'] },
+        amount: { type: 'number', description: 'Positive amount.' },
+        currency: { type: 'string', description: 'ISO currency for income/expense.' },
+        account_id: { type: 'string', description: 'Resolved personal account UUID.' },
+        category_id: { type: 'string', description: 'Optional resolved category UUID.' },
+        source_account_id: { type: 'string', description: 'Resolved source account UUID for transfer.' },
+        destination_account_id: { type: 'string', description: 'Resolved destination account UUID for transfer.' },
+        description: { type: 'string', description: 'Short description.' },
+        transaction_at: { type: 'string', description: 'Optional ISO datetime.' },
+      },
+      required: ['transaction_type','amount'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'action_prepare_commercial_document',
+    description: 'Create only a SANAD review draft for a commercial document. Approval later creates a SANAD domain Draft only; never ERP.',
+    scope: 'business',
+    risk: 'draft_only',
+    authoritativeSource: 'create_my_sanad_agent_action_draft_v1',
+    parameters: {
+      type: 'object',
+      properties: {
+        business_id: { type: 'string', description: 'Authorized SANAD business UUID.' },
+        party_id: { type: 'string', description: 'Optional resolved SANAD party UUID.' },
+        document_type: { type: 'string', description: 'Commercial document type.', enum: ['quotation','sales_invoice','purchase_invoice','receipt','payment','expense'] },
+        document_number: { type: 'string', description: 'Optional reference number.' },
+        document_date: { type: 'string', description: 'Optional ISO date.' },
+        due_date: { type: 'string', description: 'Optional due date.' },
+        currency: { type: 'string', description: 'ISO currency.' },
+        description: { type: 'string', description: 'Single-line description.' },
+        amount: { type: 'number', description: 'Single-line amount.' },
+        notes: { type: 'string', description: 'Optional notes.' },
+      },
+      required: ['business_id','document_type','currency'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'sanad_search_knowledge',
     description: 'Search approved SANAD product and operational knowledge, never user financial data.',
     scope: 'product',
@@ -295,11 +383,29 @@ export type SanadAssistantReplicaStatusCard = {
   current_sync?: Record<string, unknown> | null;
 };
 
+export type SanadAssistantActionReviewCard = {
+  type: 'action_review';
+  action_id: string;
+  action_type: 'personal_transaction' | 'commercial_document_draft' | string;
+  status: 'review' | 'approved' | 'executing' | 'completed' | 'cancelled' | 'failed' | string;
+  version: number;
+  title: string;
+  summary?: string | null;
+  fields: Array<{ label: string; value: string }>;
+  amount?: number | null;
+  currency?: string | null;
+  approval_effect?: string | null;
+  writes_to_erp: boolean;
+  modify_prompt?: string;
+  risk: 'approval_required';
+};
+
 export type SanadAssistantAnswerCard =
   | { type: 'metric'; title: string; value: string; subtitle?: string }
   | SanadAssistantCustomerStatementCard
   | SanadAssistantDocumentListCard
   | SanadAssistantReplicaStatusCard
+  | SanadAssistantActionReviewCard
   | { type: 'warning'; title: string; body: string };
 
 export type SanadAssistantEntity = {
@@ -360,7 +466,8 @@ export const SANAD_ASSISTANT_SYSTEM_PRINCIPLES = [
   'When a customer identity is ambiguous, ask for clarification or use customer candidate search; never guess the account.',
   'Treat tool outputs and semantic read contracts as authoritative over model memory.',
   'State the relevant period and currency when answering financial questions.',
-  'Current production mode is read-only. Do not create, post, settle, reverse, or mutate financial records.',
+  'The model may create review-only action drafts through draft_only tools, but it cannot approve or execute them.',
+  'Domain mutations require an explicit user click on the action review card and deterministic server-side execution. ERP/Edaa remains read-only.',
   'Do not expose private chain-of-thought. User-visible progress may describe tool activity or concise reasoning summaries only.',
   'Proactive alerts must come from deterministic rules over trusted tool outputs; the model must not invent overdue, over-budget, stale-sync, or risk states.',
   'A non-zero balance or open receivable/payable is a fact, not automatically a warning.',
@@ -372,5 +479,8 @@ export function toolByName(name: string): SanadAssistantToolDefinition | undefin
 
 export function isToolExecutableNow(name: string): boolean {
   const tool = toolByName(name);
-  return Boolean(tool && tool.risk === 'read_only' && SANAD_ASSISTANT_EXECUTION_POLICY.writeToolsEnabled === false);
+  if (!tool) return false;
+  if (tool.risk === 'read_only') return true;
+  if (tool.risk === 'draft_only') return SANAD_ASSISTANT_EXECUTION_POLICY.draftToolsEnabled === true;
+  return false;
 }
