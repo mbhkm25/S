@@ -74,13 +74,13 @@ body {
 }
 
 /* Professional legibility floor for legacy micro-copy across SANAD. */
-.text-\\[7px\\],
-.text-\\[8px\\] {
+.text-\[7px\],
+.text-\[8px\] {
   font-size: 11px;
 }
 
-.text-\\[9px\\],
-.text-\\[10px\\] {
+.text-\[9px\],
+.text-\[10px\] {
   font-size: 12px;
 }
 
