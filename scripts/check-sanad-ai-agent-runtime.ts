@@ -33,6 +33,11 @@ for (const required of [
   'SUPABASE_ANON_KEY',
   'Authorization: authHeader',
   'auth.getUser(token)',
+  'record_sanad_agent_server_metric_v1',
+  'aggregateUsage',
+  'modelLatencyMs',
+  'retryCount',
+  'persistenceMs',
 ]) {
   assert.ok(runtime.includes(required), `runtime missing ${required}`);
 }
@@ -49,3 +54,12 @@ assert.match(api, /sanad-ai-agent-v1/);
 assert.match(foundation, /writeToolsEnabled: false/);
 
 console.log('SANAD AI Agent Runtime v1 static contract passed.');
+
+assert.match(shared, /maxAttempts = 3/);
+assert.match(shared, /response\.status === 429 \|\| response\.status >= 500/);
+assert.match(shared, /__sanad_retry_count/);
+assert.match(runtime, /recordAgentServerMetric/);
+assert.match(runtime, /contextLoadMs/);
+assert.match(runtime, /attachmentContextMs/);
+assert.match(runtime, /toolTrace\.reduce\(\(sum,item\)=>sum\+item\.latency_ms,0\)/);
+assert.match(runtime, /p_usage_metadata: aggregateUsage/);

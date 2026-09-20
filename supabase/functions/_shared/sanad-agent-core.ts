@@ -469,23 +469,49 @@ export async function geminiInteraction(
   body: Json,
   apiKey = Deno.env.get("GEMINI_API_KEY") ?? "",
 ): Promise<Json> {
-  const response = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-      "Api-Revision": "2026-05-20",
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await response.text();
-  let parsed: Json = {};
-  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text.slice(0, 1000) }; }
-  if (!response.ok) {
-    const message = cleanText((parsed.error as Json | undefined)?.message ?? text, 1200);
-    throw new Error(`gemini_${response.status}:${message}`);
+  const maxAttempts = 3;
+  let lastError = "";
+  let retryCount = 0;
+  const startedAt = Date.now();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+          "Api-Revision": "2026-05-20",
+        },
+        body: JSON.stringify(body),
+      });
+      const text = await response.text();
+      let parsed: Json = {};
+      try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text.slice(0, 1000) }; }
+
+      if (response.ok) {
+        parsed.__sanad_retry_count = retryCount;
+        parsed.__sanad_http_latency_ms = Date.now() - startedAt;
+        return parsed;
+      }
+
+      const message = cleanText((parsed.error as Json | undefined)?.message ?? text, 1200);
+      lastError = `gemini_${response.status}:${message}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      if (!retryable || attempt === maxAttempts) throw new Error(lastError);
+    } catch (cause) {
+      const message = cleanText(cause instanceof Error ? cause.message : cause,1200);
+      lastError = message || "gemini_network_error";
+      const retryableNetwork = !/^gemini_4\d\d:/.test(lastError) || /^gemini_429:/.test(lastError);
+      if (!retryableNetwork || attempt === maxAttempts) throw new Error(lastError);
+    }
+
+    retryCount += 1;
+    const delayMs = retryCount === 1 ? 250 : 700;
+    await new Promise((resolve) => setTimeout(resolve,delayMs));
   }
-  return parsed;
+
+  throw new Error(lastError || "gemini_runtime_error");
 }
 
 function collectCurrencies(value: unknown, output = new Set<string>()): Set<string> {

@@ -12,6 +12,9 @@ const overview = readFileSync('src/features/financial/PersonalFinanceOverview.ts
 const masterActions = readFileSync('src/features/financial/FinancialMasterDataActions.tsx', 'utf8');
 const financeActions = readFileSync('src/features/financial/FinancialWorkspaceActions.tsx', 'utf8');
 const api = readFileSync('src/features/financial/api/financialApi.ts', 'utf8');
+const productHeader = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
+const app = readFileSync('src/App.tsx', 'utf8');
+const styles = readFileSync('src/index.css', 'utf8');
 
 
 assert.match(home, /window\.location\.replace\(financialUrl\(\)\)/, 'authenticated root must hand off into a product workspace');
@@ -20,6 +23,11 @@ assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspac
 for (const label of ['سند', 'سند المالي', 'سند للأعمال', 'حسابي']) {
   assert.match(productNav, new RegExp(label), `four-domain navigation must include ${label}`);
 }
+
+assert.match(productHeader, /payment-inbox\.html/, 'shared product header must expose Payment Inbox');
+assert.match(productHeader, /وارد المدفوعات/, 'shared product header must label Payment Inbox access');
+assert.match(app, /payment-inbox\.html/, 'global app header must expose Payment Inbox');
+assert.match(styles, /Noto\+Sans\+Arabic:wght@100;200;300;400;500;600;700;800;900/, 'Noto Sans Arabic full weight range must remain loaded');
 
 for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai']) {
   assert.match(main, new RegExp(route.replace('-', '\\-')), `main.tsx must recognize /${route}`);

@@ -40,6 +40,7 @@ import SanadPulseMark from './SanadPulseMark';
 import SanadVoiceDictationButton from './SanadVoiceDictationButton';
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
+import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 type BusinessOption = { id: string; name: string };
 
@@ -375,6 +376,7 @@ export default function SanadAgentWorkspace() {
     }
     let alive = true;
     void (async () => {
+      const loadStartedAt = performance.now();
       setThreadLoading(true);
       setWorkspaceError(null);
       try {
@@ -389,7 +391,22 @@ export default function SanadAgentWorkspace() {
         setMemories(context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
+        void recordSanadAgentClientMetric({
+          scope: 'thread_load',
+          threadId: selectedThreadId,
+          status: 'completed',
+          transport: 'rpc',
+          totalLatencyMs: performance.now() - loadStartedAt,
+          itemCount: detail.messages.length + attachments.length,
+        });
       } catch (cause) {
+        void recordSanadAgentClientMetric({
+          scope: 'thread_load',
+          threadId: selectedThreadId,
+          status: 'failed',
+          transport: 'rpc',
+          totalLatencyMs: performance.now() - loadStartedAt,
+        });
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
       } finally {
         if (alive) setThreadLoading(false);

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.110.0";
-import { cleanText, extractText, geminiInteraction, type Json } from "../_shared/sanad-agent-core.ts";
+import { cleanText, extractText, geminiInteraction, mapUsage, type Json } from "../_shared/sanad-agent-core.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -401,6 +401,7 @@ Deno.serve(async (req) => {
   const fileName = cleanText(attachment.file_name,300);
   const fileSize = Number(attachment.file_size || 0);
   const businessId = cleanText(attachment.business_id,80) || null;
+  const threadId = cleanText(attachment.thread_id,80) || null;
 
   if (!storagePath || attachment.storage_bucket !== BUCKET || fileSize <= 0 || fileSize > MAX_FILE_BYTES) {
     return respond(req,{ok:false,error:"attachment_metadata_invalid"},400);
@@ -411,7 +412,10 @@ Deno.serve(async (req) => {
     .eq("id",attachmentId)
     .eq("user_id",authData.user.id);
 
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   let uploadedName = "";
+  let interaction: Json | null = null;
   try {
     const { data: fileBlob, error: downloadError } = await userClient.storage.from(BUCKET).download(storagePath);
     if (downloadError || !fileBlob) throw new Error(`attachment_download_failed:${downloadError?.message || "missing"}`);
@@ -479,7 +483,7 @@ Deno.serve(async (req) => {
     }
     interactionInput.push({ type: "text", text: prompt });
 
-    const interaction = await geminiInteraction({
+    interaction = await geminiInteraction({
       model: MODEL,
       input: interactionInput,
       generation_config: { thinking_level:"low",temperature:0.1 },
@@ -508,13 +512,45 @@ Deno.serve(async (req) => {
 
     if (updateError) throw new Error(`attachment_update_failed:${updateError.message}`);
 
+    const usage = mapUsage(interaction?.usage);
+    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+      p_user_id:authData.user.id,
+      p_thread_id:threadId,
+      p_business_id:businessId,
+      p_request_id:requestId,
+      p_scope:"attachment_analysis",
+      p_status:"completed",
+      p_transport:"json",
+      p_model:MODEL,
+      p_thinking_level:"low",
+      p_total_latency_ms:Date.now()-startedAt,
+      p_context_load_ms:null,
+      p_attachment_context_ms:null,
+      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+      p_tool_latency_ms:null,
+      p_persistence_ms:null,
+      p_tool_calls:businessId ? 3 : 0,
+      p_failed_tool_calls:0,
+      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+      p_input_tokens:usage.promptTokenCount,
+      p_cached_tokens:usage.cachedContentTokenCount,
+      p_output_tokens:usage.candidatesTokenCount,
+      p_total_tokens:usage.totalTokenCount,
+      p_item_count:1,
+      p_byte_count:fileSize,
+      p_error_code:null,
+      p_runtime_version:"sanad-attachments-v1",
+    }).catch(()=>null);
+
     return respond(req,{
       ok:true,
+      request_id:requestId,
       attachment_id:attachmentId,
       analysis,
       matches,
       suggestion,
       model:MODEL,
+      latency_ms:Date.now()-startedAt,
     });
   } catch (cause) {
     const error = cleanText(cause instanceof Error ? cause.message : cause,800) || "attachment_analysis_failed";
@@ -531,7 +567,36 @@ Deno.serve(async (req) => {
       })
       .eq("id",attachmentId)
       .eq("user_id",authData.user.id);
-    return respond(req,{ok:false,error},502);
+    const usage = mapUsage(interaction?.usage);
+    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+      p_user_id:authData.user.id,
+      p_thread_id:threadId,
+      p_business_id:businessId,
+      p_request_id:requestId,
+      p_scope:"attachment_analysis",
+      p_status:"failed",
+      p_transport:"json",
+      p_model:MODEL,
+      p_thinking_level:"low",
+      p_total_latency_ms:Date.now()-startedAt,
+      p_context_load_ms:null,
+      p_attachment_context_ms:null,
+      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+      p_tool_latency_ms:null,
+      p_persistence_ms:null,
+      p_tool_calls:businessId ? 3 : 0,
+      p_failed_tool_calls:0,
+      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+      p_input_tokens:usage.promptTokenCount,
+      p_cached_tokens:usage.cachedContentTokenCount,
+      p_output_tokens:usage.candidatesTokenCount,
+      p_total_tokens:usage.totalTokenCount,
+      p_item_count:1,
+      p_byte_count:fileSize,
+      p_error_code:error.split(":")[0].slice(0,160),
+      p_runtime_version:"sanad-attachments-v1",
+    }).catch(()=>null);
+    return respond(req,{ok:false,request_id:requestId,error,latency_ms:Date.now()-startedAt},502);
   } finally {
     if (uploadedName) await deleteGeminiFile(uploadedName);
   }

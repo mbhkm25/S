@@ -94,6 +94,89 @@ async function bestEffortRpc(client: SupabaseClient, name: string, args: Json) {
   try { await client.rpc(name, args); } catch { /* telemetry must never fail the user turn */ }
 }
 
+type AgentUsage = ReturnType<typeof mapUsage>;
+
+function emptyAgentUsage(): AgentUsage {
+  return {
+    promptTokenCount: 0,
+    cachedContentTokenCount: 0,
+    candidatesTokenCount: 0,
+    thoughtsTokenCount: 0,
+    totalTokenCount: 0,
+  };
+}
+
+function addInteractionUsage(target: AgentUsage, interaction: Json | null) {
+  const usage = mapUsage(interaction?.usage);
+  target.promptTokenCount += usage.promptTokenCount;
+  target.cachedContentTokenCount += usage.cachedContentTokenCount;
+  target.candidatesTokenCount += usage.candidatesTokenCount;
+  target.thoughtsTokenCount += usage.thoughtsTokenCount;
+  target.totalTokenCount += usage.totalTokenCount;
+}
+
+function interactionRetryCount(interaction: Json | null) {
+  return Math.max(0, Number(interaction?.__sanad_retry_count || 0) || 0);
+}
+
+function interactionLatencyMs(interaction: Json | null) {
+  return Math.max(0, Number(interaction?.__sanad_http_latency_ms || 0) || 0);
+}
+
+async function recordAgentServerMetric(
+  adminClient: SupabaseClient,
+  input: {
+    userId: string;
+    threadId: string | null;
+    businessId: string | null;
+    requestId: string;
+    status: "completed" | "failed";
+    transport: "sse" | "json";
+    thinkingLevel: "low" | "medium" | "high";
+    totalLatencyMs: number;
+    contextLoadMs: number;
+    attachmentContextMs: number;
+    modelLatencyMs: number;
+    toolLatencyMs: number;
+    persistenceMs: number;
+    toolCalls: number;
+    failedToolCalls: number;
+    retryCount: number;
+    usage: AgentUsage;
+    attachmentCount: number;
+    errorCode?: string | null;
+  },
+) {
+  await bestEffortRpc(adminClient,"record_sanad_agent_server_metric_v1",{
+    p_user_id:input.userId,
+    p_thread_id:input.threadId,
+    p_business_id:input.businessId,
+    p_request_id:input.requestId,
+    p_scope:"agent_server_turn",
+    p_status:input.status,
+    p_transport:input.transport,
+    p_model:MODEL,
+    p_thinking_level:input.thinkingLevel,
+    p_total_latency_ms:Math.max(0,Math.round(input.totalLatencyMs)),
+    p_context_load_ms:Math.max(0,Math.round(input.contextLoadMs)),
+    p_attachment_context_ms:Math.max(0,Math.round(input.attachmentContextMs)),
+    p_model_latency_ms:Math.max(0,Math.round(input.modelLatencyMs)),
+    p_tool_latency_ms:Math.max(0,Math.round(input.toolLatencyMs)),
+    p_persistence_ms:Math.max(0,Math.round(input.persistenceMs)),
+    p_tool_calls:input.toolCalls,
+    p_failed_tool_calls:input.failedToolCalls,
+    p_retry_count:input.retryCount,
+    p_input_tokens:input.usage.promptTokenCount,
+    p_cached_tokens:input.usage.cachedContentTokenCount,
+    p_output_tokens:input.usage.candidatesTokenCount,
+    p_total_tokens:input.usage.totalTokenCount,
+    p_item_count:input.attachmentCount,
+    p_byte_count:null,
+    p_error_code:input.errorCode || null,
+    p_runtime_version:RUNTIME_VERSION,
+  });
+}
+
 type AgentCloudContext = {
   threadId: string | null;
   businessId: string | null;
@@ -686,6 +769,7 @@ function streamAgentResponse(
   userClient: SupabaseClient,
   adminClient: SupabaseClient,
   attachmentContext: { ids: string[]; summaries: string[] },
+  requestTiming: { startedAt: number; contextLoadMs: number; attachmentContextMs: number },
 ) {
   const encoder = new TextEncoder();
 
@@ -696,10 +780,14 @@ function streamAgentResponse(
       };
 
       void (async () => {
-        const started = Date.now();
+        const started = requestTiming.startedAt;
         const toolTrace: ToolTrace[] = [];
         const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+        const aggregateUsage = emptyAgentUsage();
         let totalToolCalls = 0;
+        let modelLatencyMs = 0;
+        let retryCount = 0;
+        let persistenceMs = 0;
         let interaction: Json | null = null;
 
         try {
@@ -718,6 +806,9 @@ function streamAgentResponse(
             tools: TOOLS,
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
+          addInteractionUsage(aggregateUsage,interaction);
+          modelLatencyMs += interactionLatencyMs(interaction);
+          retryCount += interactionRetryCount(interaction);
 
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
             const calls = extractToolCalls(interaction);
@@ -773,6 +864,9 @@ function streamAgentResponse(
               tools: TOOLS,
               generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
             });
+            addInteractionUsage(aggregateUsage,interaction);
+            modelLatencyMs += interactionLatencyMs(interaction);
+            retryCount += interactionRetryCount(interaction);
           }
 
           const remainingCalls = interaction ? extractToolCalls(interaction) : [];
@@ -784,7 +878,7 @@ function streamAgentResponse(
           send("agent.status", { status: "verifying", label: "أراجع العملات والفترة والمصادر قبل الإجابة…" });
 
           const verified = verifyAndRepair(finalText, toolOutputs);
-          const usage = mapUsage(interaction?.usage);
+          const usage = aggregateUsage;
           const latency = Date.now() - started;
 
           await bestEffortRpc(adminClient, "record_ai_usage", {
@@ -843,10 +937,33 @@ function streamAgentResponse(
             latency_ms: latency,
           };
 
+          const persistenceStartedAt = Date.now();
           await persistAgentTurn(
             adminClient, cloud, authUserId, requestId, message, verified.text,
             responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
           );
+          persistenceMs = Date.now() - persistenceStartedAt;
+
+          await recordAgentServerMetric(adminClient,{
+            userId:authUserId,
+            threadId:cloud.threadId,
+            businessId:cloud.businessId,
+            requestId,
+            status:"completed",
+            transport:"sse",
+            thinkingLevel,
+            totalLatencyMs:Date.now()-started,
+            contextLoadMs:requestTiming.contextLoadMs,
+            attachmentContextMs:requestTiming.attachmentContextMs,
+            modelLatencyMs,
+            toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+            persistenceMs,
+            toolCalls:totalToolCalls,
+            failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+            retryCount,
+            usage,
+            attachmentCount:attachmentContext.ids.length,
+          });
 
           send("answer.final", { text: verified.text });
           send("run.completed", result);
@@ -863,7 +980,7 @@ function streamAgentResponse(
             p_billing_mode: "standard",
             p_status: "failed",
             p_latency_ms: latency,
-            p_usage_metadata: mapUsage(interaction?.usage),
+            p_usage_metadata: aggregateUsage,
             p_metadata: {
               user_id: authUserId,
               runtime_version: RUNTIME_VERSION,
@@ -872,6 +989,28 @@ function streamAgentResponse(
               error: messageText,
               transport: "sse",
             },
+          });
+
+          await recordAgentServerMetric(adminClient,{
+            userId:authUserId,
+            threadId:cloud.threadId,
+            businessId:cloud.businessId,
+            requestId,
+            status:"failed",
+            transport:"sse",
+            thinkingLevel,
+            totalLatencyMs:latency,
+            contextLoadMs:requestTiming.contextLoadMs,
+            attachmentContextMs:requestTiming.attachmentContextMs,
+            modelLatencyMs,
+            toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+            persistenceMs,
+            toolCalls:totalToolCalls,
+            failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+            retryCount,
+            usage:aggregateUsage,
+            attachmentCount:attachmentContext.ids.length,
+            errorCode:messageText.split(":")[0].slice(0,160),
           });
 
           send("run.error", {
@@ -901,6 +1040,7 @@ function streamAgentResponse(
 }
 
 Deno.serve(async (req) => {
+  const requestStartedAt = Date.now();
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return respond(req, { ok: false, error: "method_not_allowed" }, 405);
   if (!GEMINI_API_KEY || !SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -933,25 +1073,33 @@ Deno.serve(async (req) => {
   const threadId = cleanText(body.thread_id, 80) || null;
   const attachmentIds = attachmentIdsFrom(body.attachment_ids);
   let cloud: AgentCloudContext;
+  const contextStartedAt = Date.now();
   try {
     cloud = await loadAgentCloudContext(userClient, threadId, fallbackHistory, requestedBusinessId);
   } catch (cause) {
     const contextError = cleanText(cause instanceof Error ? cause.message : cause, 600);
     return respond(req, { ok: false, error: contextError }, contextError.includes("not_found") ? 404 : 403);
   }
+  const contextLoadMs = Date.now() - contextStartedAt;
   let attachmentContext: { ids: string[]; summaries: string[] };
+  const attachmentContextStartedAt = Date.now();
   try {
     attachmentContext = await loadAttachmentContext(userClient, cloud.threadId, attachmentIds);
   } catch (cause) {
     const attachmentError = cleanText(cause instanceof Error ? cause.message : cause, 600);
     return respond(req, { ok: false, error: attachmentError }, 422);
   }
+  const attachmentContextMs = Date.now() - attachmentContextStartedAt;
   const thinkingLevel = chooseThinking(message);
   const requestId = crypto.randomUUID();
-  const started = Date.now();
+  const started = requestStartedAt;
   const toolTrace: ToolTrace[] = [];
   const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+  const aggregateUsage = emptyAgentUsage();
   let totalToolCalls = 0;
+  let modelLatencyMs = 0;
+  let retryCount = 0;
+  let persistenceMs = 0;
   let interaction: Json | null = null;
 
   const wantsStream = body.stream === true || (req.headers.get("Accept") || "").includes("text/event-stream");
@@ -966,6 +1114,7 @@ Deno.serve(async (req) => {
       userClient,
       adminClient,
       attachmentContext,
+      { startedAt:requestStartedAt, contextLoadMs, attachmentContextMs },
     );
   }
 
@@ -977,6 +1126,9 @@ Deno.serve(async (req) => {
       tools: TOOLS,
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
+    addInteractionUsage(aggregateUsage,interaction);
+    modelLatencyMs += interactionLatencyMs(interaction);
+    retryCount += interactionRetryCount(interaction);
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const calls = extractToolCalls(interaction);
@@ -1017,6 +1169,9 @@ Deno.serve(async (req) => {
         tools: TOOLS,
         generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
       });
+      addInteractionUsage(aggregateUsage,interaction);
+      modelLatencyMs += interactionLatencyMs(interaction);
+      retryCount += interactionRetryCount(interaction);
     }
 
     const remainingCalls = interaction ? extractToolCalls(interaction) : [];
@@ -1026,7 +1181,7 @@ Deno.serve(async (req) => {
     if (!finalText) throw new Error("empty_model_answer");
 
     const verified = verifyAndRepair(finalText, toolOutputs);
-    const usage = mapUsage(interaction?.usage);
+    const usage = aggregateUsage;
     const latency = Date.now() - started;
 
     await bestEffortRpc(adminClient, "record_ai_usage", {
@@ -1071,10 +1226,33 @@ Deno.serve(async (req) => {
       needs_clarification: detectClarification(verified.text),
     };
 
+    const persistenceStartedAt = Date.now();
     await persistAgentTurn(
       adminClient, cloud, authData.user.id, requestId, message, verified.text,
       responsePayload as Json, toolTrace, thinkingLevel, attachmentContext.ids,
     );
+    persistenceMs = Date.now() - persistenceStartedAt;
+
+    await recordAgentServerMetric(adminClient,{
+      userId:authData.user.id,
+      threadId:cloud.threadId,
+      businessId:cloud.businessId,
+      requestId,
+      status:"completed",
+      transport:"json",
+      thinkingLevel,
+      totalLatencyMs:Date.now()-started,
+      contextLoadMs,
+      attachmentContextMs,
+      modelLatencyMs,
+      toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+      persistenceMs,
+      toolCalls:totalToolCalls,
+      failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+      retryCount,
+      usage,
+      attachmentCount:attachmentContext.ids.length,
+    });
 
     return respond(req, {
       ok: true,
@@ -1102,7 +1280,7 @@ Deno.serve(async (req) => {
       p_billing_mode: "standard",
       p_status: "failed",
       p_latency_ms: latency,
-      p_usage_metadata: mapUsage(interaction?.usage),
+      p_usage_metadata: aggregateUsage,
       p_metadata: {
         user_id: authData.user.id,
         runtime_version: RUNTIME_VERSION,
@@ -1110,6 +1288,28 @@ Deno.serve(async (req) => {
         tool_calls: totalToolCalls,
         error: message,
       },
+    });
+
+    await recordAgentServerMetric(adminClient,{
+      userId:authData.user.id,
+      threadId:cloud.threadId,
+      businessId:cloud.businessId,
+      requestId,
+      status:"failed",
+      transport:"json",
+      thinkingLevel,
+      totalLatencyMs:latency,
+      contextLoadMs,
+      attachmentContextMs,
+      modelLatencyMs,
+      toolLatencyMs:toolTrace.reduce((sum,item)=>sum+item.latency_ms,0),
+      persistenceMs,
+      toolCalls:totalToolCalls,
+      failedToolCalls:toolTrace.filter((item)=>item.status==="failed").length,
+      retryCount,
+      usage:aggregateUsage,
+      attachmentCount:attachmentContext.ids.length,
+      errorCode:message.split(":")[0].slice(0,160),
     });
 
     return respond(req, {

@@ -4,6 +4,7 @@ import { cleanText, extractText, geminiInteraction, type Json } from "../_shared
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const MODEL = "gemini-3.5-transcribe";
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
@@ -140,7 +141,7 @@ async function deleteGeminiFile(name: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return respond(req, { ok: false, error: "method_not_allowed" }, 405);
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !GEMINI_API_KEY) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY || !GEMINI_API_KEY) {
     return respond(req, { ok: false, error: "voice_service_not_configured" }, 503);
   }
 
@@ -149,6 +150,9 @@ Deno.serve(async (req) => {
 
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const token = authorization.slice("Bearer ".length).trim();
@@ -176,12 +180,14 @@ Deno.serve(async (req) => {
   }
 
   const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   let uploadedName = "";
+  let interaction: Json | null = null;
   try {
     const uploaded = await uploadGeminiFile(bytes, mimeType);
     uploadedName = uploaded.name;
 
-    const interaction = await geminiInteraction({
+    interaction = await geminiInteraction({
       model: MODEL,
       input: [{ type: "audio", uri: uploaded.uri, mime_type: mimeType }],
       generation_config: {
@@ -195,12 +201,44 @@ Deno.serve(async (req) => {
     const transcript = cleanText(extractText(interaction), 12000);
     if (!transcript) return respond(req, { ok: false, error: "transcript_empty" }, 422);
 
+    const latencyMs = Date.now() - startedAt;
+    const usage = interaction?.usage && typeof interaction.usage === "object" ? interaction.usage as Json : {};
+    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+      p_user_id:authData.user.id,
+      p_thread_id:null,
+      p_business_id:null,
+      p_request_id:requestId,
+      p_scope:"voice_transcription",
+      p_status:"completed",
+      p_transport:"json",
+      p_model:MODEL,
+      p_thinking_level:null,
+      p_total_latency_ms:latencyMs,
+      p_context_load_ms:null,
+      p_attachment_context_ms:null,
+      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+      p_tool_latency_ms:null,
+      p_persistence_ms:null,
+      p_tool_calls:0,
+      p_failed_tool_calls:0,
+      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+      p_input_tokens:Number(usage.total_input_tokens ?? usage.input_tokens ?? 0) || 0,
+      p_cached_tokens:Number(usage.total_cached_tokens ?? usage.cached_tokens ?? 0) || 0,
+      p_output_tokens:Number(usage.total_output_tokens ?? usage.output_tokens ?? 0) || 0,
+      p_total_tokens:Number(usage.total_tokens ?? 0) || 0,
+      p_item_count:1,
+      p_byte_count:bytes.byteLength,
+      p_error_code:null,
+      p_runtime_version:"sanad-voice-v1",
+    }).catch(()=>null);
+
     return respond(req, {
       ok: true,
+      request_id: requestId,
       transcript,
       model: MODEL,
       duration_ms: Number(body.duration_ms || 0) || null,
-      latency_ms: Date.now() - startedAt,
+      latency_ms: latencyMs,
     });
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : "transcription_failed";
@@ -210,7 +248,35 @@ Deno.serve(async (req) => {
       mime_type: mimeType,
       byte_length: bytes.byteLength,
     });
-    return respond(req, { ok: false, error: cleanText(error, 800) || "transcription_failed" }, 502);
+    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+      p_user_id:authData.user.id,
+      p_thread_id:null,
+      p_business_id:null,
+      p_request_id:requestId,
+      p_scope:"voice_transcription",
+      p_status:"failed",
+      p_transport:"json",
+      p_model:MODEL,
+      p_thinking_level:null,
+      p_total_latency_ms:Date.now()-startedAt,
+      p_context_load_ms:null,
+      p_attachment_context_ms:null,
+      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+      p_tool_latency_ms:null,
+      p_persistence_ms:null,
+      p_tool_calls:0,
+      p_failed_tool_calls:0,
+      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+      p_input_tokens:0,
+      p_cached_tokens:0,
+      p_output_tokens:0,
+      p_total_tokens:0,
+      p_item_count:1,
+      p_byte_count:bytes.byteLength,
+      p_error_code:cleanText(error,160),
+      p_runtime_version:"sanad-voice-v1",
+    }).catch(()=>null);
+    return respond(req, { ok: false, request_id:requestId, error: cleanText(error, 800) || "transcription_failed" }, 502);
   } finally {
     if (uploadedName) await deleteGeminiFile(uploadedName);
   }

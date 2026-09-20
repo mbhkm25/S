@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Inbox, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SANAD_APP_VERSION } from '../../lib/appVersion';
 import { getUserAvatarUrl } from '../../lib/userAvatar';
@@ -71,6 +71,14 @@ export default function ProductAppHeader({ userId }: Props) {
 
         {userId ? (
           <div className="flex items-center gap-1.5 sm:gap-2">
+            <a
+              href="/payment-inbox.html"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200/80 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
+              aria-label="فتح وارد المدفوعات"
+              title="وارد المدفوعات"
+            >
+              <Inbox className="h-4.5 w-4.5" />
+            </a>
             <NotificationBell onNavigate={() => window.location.assign(`${base}notifications`)} />
 
             <a

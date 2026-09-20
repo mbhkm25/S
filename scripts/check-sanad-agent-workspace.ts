@@ -28,6 +28,8 @@ const actionMigration = readFileSync('supabase/migrations/20260920113000_sanad_a
 const actionApi = readFileSync('src/features/assistant/assistantActionApi.ts', 'utf8');
 const actionCard = readFileSync('src/features/assistant/SanadAgentActionCard.tsx', 'utf8');
 const insights = readFileSync('supabase/functions/_shared/sanad-agent-insights.ts', 'utf8');
+const observabilityMigration = readFileSync('supabase/migrations/20260920123000_sanad_agent_observability_v1.sql', 'utf8');
+const observabilityApi = readFileSync('src/features/assistant/assistantObservabilityApi.ts', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -364,3 +366,59 @@ assert.doesNotMatch(runtime, /claim_business_payment_v2|complete_business_paymen
 assert.doesNotMatch(runtime, /post_business_commercial_document_v1|settle_business_commercial_document_v1|create_personal_finance_transaction_v1/);
 
 console.log('SANAD Agent Action Integration v1 contract passed.');
+
+
+for (const required of [
+  'sanad_agent_performance_metrics',
+  'record_sanad_agent_server_metric_v1',
+  'record_my_sanad_agent_client_metric_v1',
+  'get_my_sanad_agent_performance_v1',
+  'first_progress_ms',
+  'first_answer_ms',
+  'context_load_ms',
+  'attachment_context_ms',
+  'model_latency_ms',
+  'tool_latency_ms',
+  'persistence_ms',
+  'retry_count',
+  'cached_tokens',
+]) {
+  assert.ok(observabilityMigration.includes(required), `Observability v1 migration missing ${required}`);
+}
+
+assert.match(observabilityMigration, /enable row level security/i);
+assert.match(observabilityMigration, /using \(\(select auth\.uid\(\)\)=user_id\)/);
+assert.match(observabilityMigration, /metric_scope_not_client_allowed/);
+assert.match(observabilityMigration, /metric_scope_not_server_allowed/);
+assert.match(observabilityMigration, /percentile_cont\(0\.50\)/);
+assert.match(observabilityMigration, /percentile_cont\(0\.95\)/);
+assert.match(observabilityMigration, /cache_ratio/);
+assert.doesNotMatch(observabilityMigration, /message_text|prompt_text|document_text|file_name|customer_name|account_number/);
+
+assert.match(observabilityApi, /record_my_sanad_agent_client_metric_v1/);
+assert.match(observabilityApi, /get_my_sanad_agent_performance_v1/);
+assert.match(api, /firstProgressMs/);
+assert.match(api, /firstAnswerMs/);
+assert.match(api, /agent_client_turn/);
+assert.match(workspace, /thread_load/);
+assert.match(attachmentApi, /attachment_upload/);
+assert.match(sidebar, /أداء سند · آخر 7 أيام/);
+assert.match(sidebar, /P50/);
+assert.match(sidebar, /P95/);
+assert.match(sidebar, /دون حفظ محتوى رسائلك/);
+
+assert.match(runtime, /recordAgentServerMetric/);
+assert.match(runtime, /modelLatencyMs/);
+assert.match(runtime, /retryCount/);
+assert.match(runtime, /persistenceMs/);
+assert.match(runtime, /aggregateUsage/);
+assert.match(voiceFunction, /record_sanad_agent_server_metric_v1/);
+assert.match(attachmentFunction, /record_sanad_agent_server_metric_v1/);
+
+assert.match(core, /maxAttempts = 3/);
+assert.match(core, /response\.status === 429 \|\| response\.status >= 500/);
+assert.match(core, /delayMs = retryCount === 1 \? 250 : 700/);
+assert.match(core, /__sanad_retry_count/);
+assert.match(core, /__sanad_http_latency_ms/);
+
+console.log('SANAD Agent Performance & Observability v1 contract passed.');

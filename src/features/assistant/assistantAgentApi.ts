@@ -1,5 +1,6 @@
 import { supabase, supabaseApiUrl, supabasePublicKey } from '../../lib/supabase';
 import type { SanadAssistantResponseContract } from './agentFoundation';
+import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 export type SanadAiHistoryTurn = {
   role: 'user' | 'assistant';
@@ -97,6 +98,10 @@ export async function streamSanadAiAgentTurn(
   input: SanadAiAgentTurnRequest,
   onEvent: (event: SanadAiStreamEvent) => void,
 ): Promise<SanadAiAgentTurnResult> {
+  const clientStartedAt = performance.now();
+  let requestId: string | null = null;
+  let firstProgressMs: number | null = null;
+  let firstAnswerMs: number | null = null;
   const message = input.message.trim();
   if (!message) throw new Error('اكتب رسالتك أولًا.');
 
@@ -125,10 +130,34 @@ export async function streamSanadAiAgentTurn(
 
   if (!response.ok) {
     const body = await response.text();
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs: performance.now() - clientStartedAt,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
     throw new Error(body || `تعذر الاتصال بمساعد سند (${response.status}).`);
   }
 
-  if (!response.body) throw new Error('المتصفح لا يدعم تدفق استجابة مساعد سند.');
+  if (!response.body) {
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs: performance.now() - clientStartedAt,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
+    throw new Error('المتصفح لا يدعم تدفق استجابة مساعد سند.');
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -141,10 +170,17 @@ export async function streamSanadAiAgentTurn(
     if (!parsed) return;
 
     const event = { type: parsed.event, data: parsed.data } as SanadAiStreamEvent;
+    const elapsed = performance.now() - clientStartedAt;
+    if (event.type === 'run.started') requestId = event.data.request_id || requestId;
+    if (event.type === 'agent.status' && firstProgressMs === null) firstProgressMs = elapsed;
+    if (event.type === 'answer.final' && firstAnswerMs === null) firstAnswerMs = elapsed;
     onEvent(event);
 
     if (event.type === 'run.completed') result = event.data;
-    if (event.type === 'run.error') streamError = event.data.error || 'تعذر إكمال طلب مساعد سند.';
+    if (event.type === 'run.error') {
+      requestId = event.data.request_id || requestId;
+      streamError = event.data.error || 'تعذر إكمال طلب مساعد سند.';
+    }
   };
 
   while (true) {
@@ -165,7 +201,46 @@ export async function streamSanadAiAgentTurn(
   const tail = buffer.trim();
   if (tail) dispatch(tail);
 
-  if (streamError) throw new Error(streamError);
-  if (!result) throw new Error('انتهى تدفق مساعد سند دون نتيجة نهائية.');
+  const totalLatencyMs = performance.now() - clientStartedAt;
+  if (streamError) {
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
+    throw new Error(streamError);
+  }
+  if (!result) {
+    void recordSanadAgentClientMetric({
+      scope: 'agent_client_turn',
+      threadId: input.thread_id || null,
+      requestId,
+      status: 'failed',
+      transport: 'sse',
+      totalLatencyMs,
+      firstProgressMs,
+      firstAnswerMs,
+      itemCount: input.attachment_ids?.length || 0,
+    });
+    throw new Error('انتهى تدفق مساعد سند دون نتيجة نهائية.');
+  }
+
+  void recordSanadAgentClientMetric({
+    scope: 'agent_client_turn',
+    threadId: input.thread_id || result.thread_id || null,
+    requestId: result.request_id || requestId,
+    status: 'completed',
+    transport: 'sse',
+    totalLatencyMs,
+    firstProgressMs,
+    firstAnswerMs,
+    itemCount: input.attachment_ids?.length || 0,
+  });
   return result;
 }

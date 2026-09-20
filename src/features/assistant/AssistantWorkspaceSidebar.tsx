@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Activity,
   Archive,
   Brain,
   Check,
   ChevronLeft,
   MessageSquare,
   MessageSquarePlus,
+  RefreshCcw,
   Settings2,
   Trash2,
   X,
 } from 'lucide-react';
 import SanadPulseMark from './SanadPulseMark';
+import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
 import type {
   SanadAgentMemory,
   SanadAgentPreferences,
@@ -82,6 +85,25 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
 
 export default function AssistantWorkspaceSidebar(props: Props) {
   const [tab, setTab] = useState<SidebarTab>('chats');
+  const [performanceSummary, setPerformanceSummary] = useState<SanadAgentPerformanceSummary | null>(null);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+
+  const loadPerformance = async () => {
+    setPerformanceLoading(true);
+    try {
+      setPerformanceSummary(await getMySanadAgentPerformance(7));
+    } catch {
+      setPerformanceSummary(null);
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'settings' && !performanceSummary && !performanceLoading) {
+      void loadPerformance();
+    }
+  }, [tab]);
 
   return (
     <Shell mobileOpen={props.mobileOpen} onCloseMobile={props.onCloseMobile}>
@@ -244,6 +266,58 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           ) : (
             <p className="mt-4 text-[9px] text-slate-400">جارٍ تحميل الإعدادات…</p>
           )}
+
+          <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-slate-500" />
+                <div>
+                  <p className="text-[9px] font-black text-slate-800">أداء سند · آخر 7 أيام</p>
+                  <p className="mt-0.5 text-[7px] text-slate-400">قياسات زمنية فقط، دون حفظ محتوى رسائلك.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadPerformance()}
+                disabled={performanceLoading}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40"
+                title="تحديث مؤشرات الأداء"
+              >
+                <RefreshCcw className={`h-3.5 w-3.5 ${performanceLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {performanceLoading && !performanceSummary ? (
+              <p className="mt-3 text-[8px] text-slate-400">جارٍ تحميل القياسات…</p>
+            ) : performanceSummary?.scopes?.length ? (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {performanceSummary.scopes
+                  .filter((scope) => ['agent_client_turn','thread_load','voice_transcription','attachment_analysis'].includes(scope.scope))
+                  .slice(0,4)
+                  .map((scope) => {
+                    const labels: Record<string,string> = {
+                      agent_client_turn: 'استجابة سند',
+                      thread_load: 'فتح المحادثة',
+                      voice_transcription: 'تحويل الصوت',
+                      attachment_analysis: 'تحليل المرفق',
+                    };
+                    return (
+                      <div key={scope.scope} className="rounded-xl bg-slate-50 p-2.5">
+                        <p className="text-[7px] font-bold text-slate-400">{labels[scope.scope] || scope.scope}</p>
+                        <p className="mt-1 text-[9px] font-black text-slate-800" dir="ltr">
+                          P50 {scope.p50_total_ms ?? '—'} ms
+                        </p>
+                        <p className="mt-0.5 text-[7px] text-slate-400" dir="ltr">
+                          P95 {scope.p95_total_ms ?? '—'} ms · fail {Math.round((scope.failure_rate || 0) * 100)}%
+                        </p>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <p className="mt-3 text-[8px] leading-4 text-slate-400">ستظهر المؤشرات بعد استخدام سند على النسخة المنشورة.</p>
+            )}
+          </div>
 
           <div className="mt-4 rounded-2xl bg-emerald-50 p-3 text-emerald-800">
             <div className="flex items-center gap-2">
