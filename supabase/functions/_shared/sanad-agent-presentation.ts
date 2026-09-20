@@ -210,6 +210,61 @@ function replicaPresentation(row: AgentToolOutput) {
   return { cards, entities: [] as Entity[], attention, copyText: null };
 }
 
+function paymentInboxPresentation(row: AgentToolOutput) {
+  const root = object(row.output);
+  const items = array(root.items).map(object).slice(0,20);
+  const businessId = text(root.business_id) || text(row.args.business_id);
+  const view = text(root.view) || "new";
+  const labels: Record<string,string> = {
+    new:"الجديدة",
+    mine:"لدي",
+    team_active:"لدى الفريق",
+    review:"تحتاج مراجعة",
+    completed:"المكتملة",
+    all:"كل العمليات",
+  };
+
+  const rendered = items.flatMap((item) => {
+    const token = text(item.public_token);
+    if (!token) return [];
+    return [{
+      id:text(item.id) || null,
+      operation_id:text(item.operation_id) || null,
+      status:text(item.status) || null,
+      amount:num(item.amount),
+      currency:text(item.currency) || null,
+      financial_entity:text(item.financial_entity) || null,
+      receiver_name:text(item.receiver_name) || null,
+      reference_number:text(item.reference_number) || null,
+      transaction_datetime:text(item.transaction_datetime) || null,
+      claimed_by_name:text(item.claimed_by_name) || null,
+      completed_by_name:text(item.completed_by_name) || null,
+      href:`/v/${encodeURIComponent(token)}?src=sanad-agent`,
+    }];
+  });
+
+  const cardHref = businessId
+    ? `/business/manage/operations?view=payment-inbox&business_id=${encodeURIComponent(businessId)}`
+    : null;
+
+  return {
+    cards:[{
+      type:"payment_inbox_list",
+      title:"وارد المدفوعات",
+      view,
+      view_label:labels[view] || view,
+      count:rendered.length,
+      has_more:root.has_more === true,
+      items:rendered,
+      href:cardHref,
+      read_only:true,
+    }] as Card[],
+    entities:[] as Entity[],
+    attention:[] as Attention[],
+    copyText:null,
+  };
+}
+
 function actionReviewPresentation(row: AgentToolOutput) {
   const action = object(row.output);
   const review = object(action.review);
@@ -270,6 +325,7 @@ export function buildAgentPresentation(toolOutputs: AgentToolOutput[]) {
     if (row.name === "erp_get_customer_statement") built = customerStatementPresentation(row);
     else if (row.name === "erp_get_documents") built = documentsPresentation(row);
     else if (row.name === "erp_get_replica_status") built = replicaPresentation(row);
+    else if (row.name === "business_get_payment_inbox") built = paymentInboxPresentation(row);
     else if (row.name === "action_prepare_personal_transaction" || row.name === "action_prepare_commercial_document") built = actionReviewPresentation(row);
 
     if (!built) continue;
