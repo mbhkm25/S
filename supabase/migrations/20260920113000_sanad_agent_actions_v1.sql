@@ -416,7 +416,9 @@ begin
     );
   end if;
 
-  v_fingerprint := md5(v_action_type||'|'||p_thread_id::text||'|'||v_normalized::text);
+  -- Exclude per-action audit metadata from idempotency. Otherwise the freshly
+  -- generated action UUID would make every logically identical draft unique.
+  v_fingerprint := md5(v_action_type||'|'||p_thread_id::text||'|'||(v_normalized - 'metadata')::text);
 
   select * into v_existing
   from public.sanad_agent_actions
