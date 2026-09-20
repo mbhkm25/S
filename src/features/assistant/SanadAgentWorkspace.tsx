@@ -237,7 +237,11 @@ function storedResult(message: {
   };
 }
 
-function storedMessagesToWorkspace(messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages']): WorkspaceMessage[] {
+function storedMessagesToWorkspace(
+  messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages'],
+  attachments: SanadAgentAttachment[] = [],
+): WorkspaceMessage[] {
+  const byId = new Map(attachments.map((attachment) => [attachment.id, attachment]));
   return messages.map((message) => ({
     id: message.id,
     role: message.role,
@@ -247,6 +251,10 @@ function storedMessagesToWorkspace(messages: Awaited<ReturnType<typeof getSanadA
     persisted: true,
     isStarred: Boolean(message.is_starred),
     rating: message.rating ?? null,
+    attachments: (message.attachment_ids || []).flatMap((id) => {
+      const attachment = byId.get(id);
+      return attachment ? [attachment] : [];
+    }),
   }));
 }
 
@@ -270,6 +278,7 @@ export default function SanadAgentWorkspace() {
   const [liveStatus, setLiveStatus] = useState('');
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<SanadAgentAttachment[]>([]);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
