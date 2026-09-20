@@ -360,15 +360,17 @@ export default function SanadAgentWorkspace() {
       setThreadLoading(true);
       setWorkspaceError(null);
       try {
-        const [detail, context] = await Promise.all([
+        const [detail, context, attachments] = await Promise.all([
           getSanadAgentThread(selectedThreadId),
           getSanadAgentContext(selectedThreadId),
+          listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
         setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
         setBusinessSelectionOpen(false);
         setMemories(context.memories);
-        setMessages(storedMessagesToWorkspace(detail.messages));
+        setPendingAttachments([]);
+        setMessages(storedMessagesToWorkspace(detail.messages, attachments));
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
       } finally {
@@ -382,6 +384,7 @@ export default function SanadAgentWorkspace() {
     const id = await createSanadAgentThread(nextBusinessId);
     setMessages([]);
     setDraft('');
+    setPendingAttachments([]);
     setBusinessId(nextBusinessId || '');
     setSelectedThreadId(id);
     setBusinessSelectionOpen(false);
@@ -406,6 +409,7 @@ export default function SanadAgentWorkspace() {
     if (businesses.length > 1) {
       setMessages([]);
       setDraft('');
+      setPendingAttachments([]);
       setSelectedThreadId(null);
       setBusinessId('');
       setBusinessSelectionOpen(true);
@@ -421,6 +425,7 @@ export default function SanadAgentWorkspace() {
 
   const selectThread = (threadId: string) => {
     if (sending) return;
+    setPendingAttachments([]);
     setSelectedThreadId(threadId);
     setSidebarOpen(false);
   };
