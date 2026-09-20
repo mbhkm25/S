@@ -242,11 +242,74 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   },
 ] as const;
 
+export type SanadAssistantCustomerStatementCard = {
+  type: 'customer_statement';
+  title: string;
+  customer_name: string;
+  account_id: number | null;
+  account_number?: string | null;
+  from_date?: string | null;
+  to_date?: string | null;
+  movement_count: number;
+  currency_summaries: Array<{
+    currency: string;
+    opening_balance: number;
+    debit: number;
+    credit: number;
+    closing_balance: number;
+  }>;
+  copy_text?: string;
+  href?: string | null;
+};
+
+export type SanadAssistantDocumentListCard = {
+  type: 'document_list';
+  title: string;
+  kind: 'sale' | 'purchase';
+  count: number;
+  items?: SanadAssistantEntity[];
+};
+
+export type SanadAssistantReplicaStatusCard = {
+  type: 'replica_status';
+  title: string;
+  available: boolean;
+  status?: string;
+  snapshot_public_id?: string | null;
+  completed_at?: string | null;
+  table_count?: number | null;
+  row_count?: number | null;
+  current_sync?: Record<string, unknown> | null;
+};
+
 export type SanadAssistantAnswerCard =
   | { type: 'metric'; title: string; value: string; subtitle?: string }
-  | { type: 'customer_statement'; title: string; account_id: string; currency_summaries: Array<{ currency: string; balance: string }> }
-  | { type: 'document_list'; title: string; kind: 'sales' | 'purchases'; count: number }
+  | SanadAssistantCustomerStatementCard
+  | SanadAssistantDocumentListCard
+  | SanadAssistantReplicaStatusCard
   | { type: 'warning'; title: string; body: string };
+
+export type SanadAssistantEntity = {
+  type: 'erp_customer' | 'erp_document' | 'business' | 'personal_party';
+  label: string;
+  business_id?: string | null;
+  account_id?: number;
+  account_number?: string | null;
+  document_kind?: 'sale' | 'purchase';
+  document_id?: number;
+  document_number?: string | null;
+  party_name?: string | null;
+  date?: string | null;
+  currency?: string | null;
+  source_line_total?: number | null;
+  href?: string | null;
+};
+
+export type SanadAssistantAttention = {
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  body: string;
+};
 
 export type SanadAssistantResponseContract = {
   text: string;
@@ -254,6 +317,9 @@ export type SanadAssistantResponseContract = {
   period?: { from?: string; to?: string };
   currencies?: string[];
   cards?: SanadAssistantAnswerCard[];
+  entities?: SanadAssistantEntity[];
+  attention?: SanadAssistantAttention[];
+  copy_text?: string;
   source_refs: Array<{
     tool: string;
     source: string;
