@@ -75,7 +75,6 @@ jobs:
       url: https://app.sanadflow.com
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
     steps:
       - name: Checkout release contract
@@ -93,15 +92,29 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${SUPABASE_ACCESS_TOKEN:-}"
-          test -n "${SUPABASE_DB_PASSWORD:-}"
+          test -n "${SUPABASE_PROJECT_REF:-}"
 
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          required_versions=(
+            20260920071058
+            20260920121801
+            20260920121807
+            20260920121815
+            20260920121821
+          )
 
-          migration_list="$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD")"
-          printf '%s\n' "$migration_list"
+          version_sql="select version from supabase_migrations.schema_migrations where version in ('20260920071058','20260920121801','20260920121807','20260920121815','20260920121821') order by version;"
 
-          for version in             20260920071058             20260920121801             20260920121807             20260920121815             20260920121821; do
-            if ! grep -Eq "^[[:space:]]*$version[[:space:]]*\|[[:space:]]*$version([[:space:]]*\||[[:space:]]*$)" <<<"$migration_list"; then
+          migration_json="$(
+            jq -n --arg query "$version_sql" '{query: $query}' |
+              curl --fail-with-body --silent --show-error                 --request POST                 --url "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query/read-only"                 --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"                 --header "Content-Type: application/json"                 --data-binary @-
+          )"
+
+          printf '%s\n' "$migration_json" | jq .
+
+          for version in "${required_versions[@]}"; do
+            if ! jq -e --arg version "$version" '
+              [.. | objects | select((.version? // "") == $version)] | length > 0
+            ' <<<"$migration_json" >/dev/null; then
               echo "SANAD Agent backend migration is not aligned in production: $version" >&2
               exit 1
             fi

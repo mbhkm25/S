@@ -440,8 +440,10 @@ for (const required of [
   assert.ok(productionDeploy.includes(required), `production release guard missing ${required}`);
 }
 assert.match(productionDeploy, /SUPABASE_ACCESS_TOKEN/);
-assert.match(productionDeploy, /SUPABASE_DB_PASSWORD/);
-assert.match(productionDeploy, /supabase migration list --linked/);
+assert.doesNotMatch(productionDeploy, /SUPABASE_DB_PASSWORD/, 'Production release guard must not depend on a database password');
+assert.match(productionDeploy, /database\/query\/read-only/);
+assert.match(productionDeploy, /supabase_migrations\.schema_migrations/);
+assert.match(productionDeploy, /curl --fail-with-body/);
 assert.match(productionDeploy, /supabase functions list/);
 
 console.log('SANAD Production runtime release guard contract passed.');
