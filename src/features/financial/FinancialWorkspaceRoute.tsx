@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Bot,
@@ -21,8 +21,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
-import PersonalFinanceOverview from './PersonalFinanceOverview';
-import SanadAgentWorkspace from '../assistant/SanadAgentWorkspace';
+import { loadPersonalFinanceOverview, loadSanadAgentWorkspace } from './productRouteLoaders';
+
+const PersonalFinanceOverview = lazy(loadPersonalFinanceOverview);
+const SanadAgentWorkspace = lazy(loadSanadAgentWorkspace);
 
 type WorkspaceKind = 'financial' | 'commercial' | 'account' | 'ai';
 
@@ -309,7 +311,9 @@ export default function FinancialWorkspaceRoute() {
         ) : error ? <ErrorCard message={error} onRetry={() => void load()} /> : null}
 
         {!loading && !error && kind === 'financial' && finance ? (
-          <PersonalFinanceOverview dashboard={finance} />
+          <Suspense fallback={<div className="min-h-32 rounded-[1.5rem] bg-white" aria-busy="true" />}>
+            <PersonalFinanceOverview dashboard={finance} />
+          </Suspense>
         ) : null}
 
         {!loading && !error && kind === 'commercial' ? (
@@ -359,7 +363,11 @@ export default function FinancialWorkspaceRoute() {
           </>
         ) : null}
 
-        {!loading && !error && kind === 'ai' ? <SanadAgentWorkspace /> : null}
+        {!loading && !error && kind === 'ai' ? (
+          <Suspense fallback={<div className="min-h-[420px] rounded-[1.5rem] bg-white" aria-busy="true" />}>
+            <SanadAgentWorkspace />
+          </Suspense>
+        ) : null}
       </main>
     </div>
   );
