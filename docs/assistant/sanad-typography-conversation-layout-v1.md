@@ -1,6 +1,6 @@
 # SANAD Typography & Conversation Layout v1
 
-Status: Phase 2 implementation on the shared refinement branch. Do not merge independently from Phases 3–4.
+Status: **Merged to `main` through PR #340** as part of the combined Phases 2–4 refinement release. Awaiting Production deployment.
 
 ## Scope
 
@@ -106,16 +106,12 @@ This prevents the input area from moving away with message scrolling.
 
 `scripts/check-financial-workspace-routes.ts` protects the same local-font contract so older tests cannot silently restore the previous Google Fonts implementation.
 
-## Merge policy
+## Release state
 
-This phase remains on:
+Phase 2 was integrated together with Phases 3 and 4 through PR #340.
 
-`feat/sanad-refinement-phases-2-4-20260920`
+Feature merge commit:
 
-with Draft PR #340.
+`ac9e11ba20e4d8a5ecf0dc9553225cfa211a76d9`
 
-Do not merge until:
-1. Phase 3 is completed;
-2. Phase 4 is completed;
-3. final CI and review pass;
-4. the combined branch is approved for merge and end-to-end production testing.
+Production deployment is intentionally separate from the merge. The deployment workflow must validate the current `main` release SHA, Agent backend contract, production build and bundle budget before SSH deployment.
