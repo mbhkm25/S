@@ -15,6 +15,10 @@ const visualMigration = readFileSync('supabase/migrations/20260920093000_sanad_a
 const pulse = readFileSync('src/features/assistant/SanadPulseMark.tsx', 'utf8');
 const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
+const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButton.tsx', 'utf8');
+const voiceApi = readFileSync('src/features/assistant/assistantVoiceApi.ts', 'utf8');
+const voiceFunction = readFileSync('supabase/functions/sanad-ai-transcribe-v1/index.ts', 'utf8');
+const supabaseConfig = readFileSync('supabase/config.toml', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -112,3 +116,31 @@ assert.match(styles, /sanad-pulse-working/);
 assert.match(styles, /prefers-reduced-motion/);
 
 console.log('SANAD Agent Visual v3 contract passed.');
+
+
+for (const required of [
+  'MediaRecorder',
+  'getUserMedia',
+  'MAX_RECORDING_MS = 90_000',
+  'transcribeSanadAudio',
+  'تم تحويل الصوت إلى نص. راجعه قبل الإرسال.',
+]) {
+  assert.ok(voiceButton.includes(required), `voice button missing ${required}`);
+}
+
+assert.match(voiceApi, /sanad-ai-transcribe-v1/);
+assert.match(voiceApi, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceFunction, /gemini-3\.5-transcribe/);
+assert.match(voiceFunction, /upload\/v1beta\/files/);
+assert.match(voiceFunction, /transcription_config/);
+assert.match(voiceFunction, /custom_vocabulary/);
+assert.match(voiceFunction, /mode:\s*"smart"/);
+assert.match(voiceFunction, /auth\.getUser/);
+assert.match(voiceFunction, /method:\s*"DELETE"/);
+assert.match(voiceFunction, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(supabaseConfig, /\[functions\.sanad-ai-transcribe-v1\][\s\S]*verify_jwt = true/);
+assert.match(workspace, /SanadVoiceDictationButton/);
+assert.match(workspace, /راجع النص الصوتي قبل الإرسال/);
+assert.doesNotMatch(voiceButton, /sendPrompt\(/);
+
+console.log('SANAD Voice v1 contract passed.');

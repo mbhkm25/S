@@ -37,6 +37,7 @@ import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadMessageActions from './SanadMessageActions';
 import SanadPulseMark from './SanadPulseMark';
+import SanadVoiceDictationButton from './SanadVoiceDictationButton';
 
 type BusinessOption = { id: string; name: string };
 
@@ -755,13 +756,24 @@ export default function SanadAgentWorkspace() {
                 onKeyDown={handleKeyDown}
                 disabled={sending}
                 rows={2}
-                placeholder="اسأل مساعد سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
+                placeholder="اسأل سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
                 className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60"
               />
               <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  الأرقام المالية تُقرأ من المصدر الحي
+                <div className="flex min-w-0 items-center gap-2">
+                  <SanadVoiceDictationButton
+                    disabled={sending}
+                    onTranscript={(text) => {
+                      setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+                      setWorkspaceError(null);
+                      window.setTimeout(() => textareaRef.current?.focus(), 40);
+                    }}
+                    onError={(message) => setWorkspaceError(message)}
+                  />
+                  <div className="hidden items-center gap-2 text-[9px] font-bold text-slate-400 md:flex">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    راجع النص الصوتي قبل الإرسال
+                  </div>
                 </div>
                 <button
                   type="submit"
@@ -774,7 +786,7 @@ export default function SanadAgentWorkspace() {
               </div>
             </div>
             <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • قل «تذكر أن…» لحفظ ملاحظة مستقرة.
+              Enter للإرسال • Shift + Enter لسطر جديد • الميكروفون يحوّل كلامك إلى نص قابل للمراجعة.
             </p>
           </form>
         </div>

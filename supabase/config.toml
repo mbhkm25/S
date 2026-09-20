@@ -420,3 +420,7 @@ verify_jwt = true
 
 [functions.sanad-ai-agent-eval-v1]
 verify_jwt = true
+
+
+[functions.sanad-ai-transcribe-v1]
+verify_jwt = true
