@@ -42,6 +42,8 @@ jobs:
         run: git diff --check
       - name: Build production PWA
         run: npm run build -- --mode production
+      - name: Enforce production bundle budget
+        run: npm run check:bundle-budget
       - name: Build Android assets
         run: npm run build:android
       - name: Validate production artifacts
