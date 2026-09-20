@@ -100,9 +100,10 @@ jobs:
             20260920121807
             20260920121815
             20260920121821
+            20260920190000
           )
 
-          version_sql="select version from supabase_migrations.schema_migrations where version in ('20260920071058','20260920121801','20260920121807','20260920121815','20260920121821') order by version;"
+          version_sql="select version from supabase_migrations.schema_migrations where version in ('20260920071058','20260920121801','20260920121807','20260920121815','20260920121821','20260920190000') order by version;"
 
           migration_json="$(
             jq -n --arg query "$version_sql" '{query: $query}' |
