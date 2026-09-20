@@ -120,7 +120,7 @@ jobs:
           test_root="${RUNNER_TEMP}/sanad-erp-cloud-ui-beta-contract"
           mkdir -p "${test_root}/supabase/migrations"
           cp supabase/config.toml "${test_root}/supabase/config.toml"
-          OPENAI_API_KEY=disabled supabase start             --workdir "${test_root}"             -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          OPENAI_API_KEY=disabled supabase start             --workdir "${test_root}"             -x studio,imgproxy,inbucket,logflare,vector,supavisor,edge-runtime
           docker exec supabase_db_sanad pg_isready -U postgres -d postgres
 
       - name: Apply synthetic baseline and semantic migrations
