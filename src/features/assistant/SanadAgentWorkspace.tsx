@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
   CheckCircle2,
@@ -36,8 +36,8 @@ import {
 import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadMessageActions from './SanadMessageActions';
-import SanadPulseMark from './SanadPulseMark';
-import SanadVoiceDictationButton from './SanadVoiceDictationButton';
+import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
+import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDictationButton';
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
@@ -143,7 +143,7 @@ function MessageBubble({
           {assistant ? (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                <SanadPulseMark state="idle" size={17} />
+                <SanadFluidOrb state="idle" size={22} animated={false} />
               </span>
               سند
               {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-500">{result.model}</span> : null}
@@ -298,9 +298,34 @@ export default function SanadAgentWorkspace() {
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<SanadAgentAttachment[]>([]);
+  const [orbState, setOrbState] = useState<SanadOrbState>('idle');
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const orbSuccessTimeoutRef = useRef<number | null>(null);
+
+  const clearOrbSuccessTimeout = useCallback(() => {
+    if (orbSuccessTimeoutRef.current !== null) {
+      window.clearTimeout(orbSuccessTimeoutRef.current);
+      orbSuccessTimeoutRef.current = null;
+    }
+  }, []);
+
+  const markOrbSuccess = useCallback(() => {
+    clearOrbSuccessTimeout();
+    setOrbState('success');
+    orbSuccessTimeoutRef.current = window.setTimeout(() => {
+      setOrbState('idle');
+      orbSuccessTimeoutRef.current = null;
+    }, 900);
+  }, [clearOrbSuccessTimeout]);
+
+  const handleVoiceStateChange = useCallback((state: SanadVoiceState) => {
+    clearOrbSuccessTimeout();
+    setOrbState(state === 'listening' ? 'listening' : state === 'transcribing' ? 'thinking' : 'idle');
+  }, [clearOrbSuccessTimeout]);
+
+  useEffect(() => () => clearOrbSuccessTimeout(), [clearOrbSuccessTimeout]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -578,6 +603,8 @@ export default function SanadAgentWorkspace() {
     setMessages((current) => [...current, userMessage]);
     setDraft('');
     setSending(true);
+    clearOrbSuccessTimeout();
+    setOrbState('thinking');
     setLastUserPrompt(prompt);
     setLiveStatus('بدأت معالجة الطلب…');
     setLiveTools([]);
@@ -591,15 +618,25 @@ export default function SanadAgentWorkspace() {
         attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
       }, (event) => {
-        if (event.type === 'run.started') setLiveStatus('بدأ مساعد سند المعالجة…');
-        else if (event.type === 'agent.status') setLiveStatus(event.data.label);
-        else if (event.type === 'tool.started') setLiveStatus(`${toolLabel(event.data.name)}…`);
-        else if (event.type === 'tool.completed') {
+        if (event.type === 'run.started') {
+          setOrbState('thinking');
+          setLiveStatus('بدأ مساعد سند المعالجة…');
+        } else if (event.type === 'agent.status') {
+          setOrbState('thinking');
+          setLiveStatus(event.data.label);
+        } else if (event.type === 'tool.started') {
+          setOrbState('executing');
+          setLiveStatus(`${toolLabel(event.data.name)}…`);
+        } else if (event.type === 'tool.completed') {
+          setOrbState('executing');
           setLiveTools((current) => [...current, event.data]);
           setLiveStatus(event.data.status === 'completed'
             ? `اكتملت: ${toolLabel(event.data.name)}`
             : `تعذرت: ${toolLabel(event.data.name)}`);
-        } else if (event.type === 'answer.final') setLiveStatus('تم التحقق، أجهز الإجابة…');
+        } else if (event.type === 'answer.final') {
+          setOrbState('thinking');
+          setLiveStatus('تم التحقق، أجهز الإجابة…');
+        }
       });
 
       const answer = result.response?.text?.trim() || 'أكملت معالجة الطلب، لكن لم يصل نص الإجابة.';
@@ -611,6 +648,7 @@ export default function SanadAgentWorkspace() {
         result,
         persisted: false,
       }]);
+      markOrbSuccess();
 
       setPendingAttachments([]);
       await refreshThreads(threadId);
@@ -629,6 +667,8 @@ export default function SanadAgentWorkspace() {
         setMemories(context.memories);
       }
     } catch (cause) {
+      clearOrbSuccessTimeout();
+      setOrbState('idle');
       const message = cause instanceof Error && cause.message ? cause.message : 'تعذر إكمال الطلب الآن.';
       setMessages((current) => [...current, {
         id: createId(),
@@ -660,7 +700,7 @@ export default function SanadAgentWorkspace() {
   const empty = messages.length === 0;
 
   return (
-    <section id="sanad-agent-workspace" className="flex h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[58rem] flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+    <section id="sanad-agent-workspace" className="flex h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[58rem] flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
       <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-3 md:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -672,8 +712,8 @@ export default function SanadAgentWorkspace() {
             >
               <Menu className="h-4 w-4" />
             </button>
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
-              <SanadPulseMark state={sending ? 'working' : 'idle'} size={25} />
+            <span className="flex h-11 w-11 items-center justify-center">
+              <SanadFluidOrb state={orbState} size={38} />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -739,9 +779,7 @@ export default function SanadAgentWorkspace() {
               </div>
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
-                <span className="flex h-16 w-16 items-center justify-center rounded-[1.6rem] bg-gradient-to-br from-slate-950 to-indigo-900 text-white shadow-[0_18px_50px_rgba(49,46,129,0.22)]">
-                  <SanadPulseMark state="idle" size={34} />
-                </span>
+                <SanadFluidOrb state="idle" size={74} label="سند جاهز" />
                 <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
@@ -800,11 +838,10 @@ export default function SanadAgentWorkspace() {
 
             {sending ? (
               <div className="flex justify-start">
-                <div className="rounded-[1.4rem] rounded-tr-md border border-indigo-100 bg-white px-4 py-3 shadow-sm">
+                <div className="rounded-[1.35rem] rounded-tr-md border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                      <SanadPulseMark state="working" size={18} />
-                      <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="flex h-9 w-9 items-center justify-center">
+                      <SanadFluidOrb state={orbState === 'idle' ? 'thinking' : orbState} size={32} />
                     </span>
                     <div>
                       <p className="text-[13px] font-medium text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
@@ -855,6 +892,7 @@ export default function SanadAgentWorkspace() {
                 <div className="flex min-w-0 items-center gap-2">
                   <SanadVoiceDictationButton
                     disabled={sending}
+                    onStateChange={handleVoiceStateChange}
                     onTranscript={(text) => {
                       setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
                       setWorkspaceError(null);
