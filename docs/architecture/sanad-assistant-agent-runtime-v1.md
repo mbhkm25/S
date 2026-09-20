@@ -179,18 +179,22 @@ The assistant workspace should resemble a modern agent console, not a support bo
 
 ## Observability
 
-Each turn should eventually record:
-- thread/run id;
-- authenticated user;
-- selected scope/business;
-- model + thinking level;
-- tool calls and latency;
-- token usage and estimated cost;
-- final status;
-- verifier result;
-- user feedback/eval linkage.
+Performance & Observability v1 records privacy-safe operational metrics for:
+- browser end-to-end turn latency;
+- first progress and first final-answer latency;
+- thread loading;
+- context and attachment-context loading;
+- aggregate model latency and bounded retry count;
+- per-tool latency through the existing SANAD Assistant tool-execution log;
+- aggregate tool latency and failed-tool count per turn;
+- persistence latency;
+- voice transcription;
+- attachment upload and analysis;
+- token usage, implicit-cache tokens and estimated cost through the existing AI usage ledger.
 
-Reuse existing SANAD AI cost/eval infrastructure where compatible instead of duplicating it.
+Telemetry deliberately excludes prompt text, answer text, filenames, extracted document text, customer names, account numbers and credentials.
+
+The runtime reuses existing SANAD AI usage/cost and tool-execution infrastructure rather than duplicating it. Metrics are best-effort and can never fail the user operation. Production P50/P95/failure-rate baselines are observational until sufficient real traffic exists.
 
 ## Memory policy
 
