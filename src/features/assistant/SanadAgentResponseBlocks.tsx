@@ -205,9 +205,21 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
   return (
     <div className={`flex items-start gap-2.5 rounded-2xl border p-3 ${classes}`}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div>
-        <p className="text-[10px] font-black">{item.title}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-[10px] font-black">{item.title}</p>
+          {item.rule_id ? (
+            <span className="rounded-full bg-white/70 px-2 py-0.5 text-[7px] font-black opacity-80">
+              إشارة محسوبة
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-[9px] leading-5 opacity-80">{item.body}</p>
+        {item.source_label ? (
+          <p className="mt-1.5 inline-flex items-center gap-1 text-[7px] font-bold opacity-60">
+            <Database className="h-2.5 w-2.5" /> المصدر: {item.source_label}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -242,7 +254,14 @@ export default function SanadAgentResponseBlocks({ response }: { response?: Sana
       {cards.map(renderCard)}
       {attention.length > 0 && (
         <div className="space-y-2">
-          <p className="px-1 text-[9px] font-black text-slate-400">انتبه إلى</p>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="text-[9px] font-black text-slate-400">انتبه إلى</p>
+            {response.insight_meta?.deterministic_count ? (
+              <span className="text-[7px] font-bold text-slate-400">
+                {response.insight_meta.deterministic_count} إشارة محسوبة من البيانات
+              </span>
+            ) : null}
+          </div>
           {attention.map((item, index) => <div key={`${item.title}-${index}`}><AttentionItem item={item} /></div>)}
         </div>
       )}
