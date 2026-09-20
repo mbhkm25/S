@@ -141,6 +141,14 @@ function MessageBubble({
             </div>
           ) : null}
 
+          {!assistant && message.attachments?.length ? (
+            <div className="mb-3 grid gap-2">
+              {message.attachments.map((attachment) => (
+                <SanadAttachmentPreview key={attachment.id} attachment={attachment} compact />
+              ))}
+            </div>
+          ) : null}
+
           <p className={`whitespace-pre-wrap text-[13px] leading-7 md:text-sm ${assistant ? 'text-slate-800' : 'text-white'}`}>
             {message.content}
           </p>
