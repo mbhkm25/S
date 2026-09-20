@@ -333,6 +333,10 @@ div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-i
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
 }
 
+.sanad-orb-idle {
+  animation: sanad-orb-idle-shell 4.8s ease-in-out infinite;
+}
+
 .sanad-orb-listening {
   box-shadow:
     inset 0 0 0 1px rgba(207,250,254,.48),
@@ -392,6 +396,11 @@ div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-i
 article:hover .sanad-message-actions,
 .sanad-message-actions:focus-within {
   opacity: 1;
+}
+
+@keyframes sanad-orb-idle-shell {
+  0%, 100% { transform: scale(.992); }
+  50% { transform: scale(1.012); }
 }
 
 @keyframes sanad-orb-wave-a {
