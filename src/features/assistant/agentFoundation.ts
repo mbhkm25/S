@@ -60,7 +60,7 @@ export type SanadAssistantToolDefinition = {
 export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   {
     name: 'finance_get_overview',
-    description: 'Read the authenticated user personal financial overview, preserving every currency separately.',
+    description: 'Read the authenticated user personal financial overview, preserving every currency separately. Use for broad personal reviews; pair with finance_get_budgets when the user asks what needs attention.'
     scope: 'personal',
     risk: 'read_only',
     authoritativeSource: 'get_ai_financial_context_v2',
@@ -154,7 +154,7 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   },
   {
     name: 'business_get_dashboard',
-    description: 'Read a business commercial dashboard using the authorized business scope.',
+    description: 'Read a business commercial dashboard using the authorized business scope, including open receivables/payables by currency and overdue document count. Use for broad business attention reviews.'
     scope: 'business',
     risk: 'read_only',
     authoritativeSource: 'get_business_commercial_dashboard_v1',
