@@ -82,8 +82,13 @@ function toolLabel(name: string) {
     finance_get_budgets: 'قراءة الميزانيات',
     finance_get_goals: 'قراءة الأهداف',
     finance_search_parties: 'البحث في الأطراف',
+    finance_get_accounts: 'قراءة الحسابات الشخصية',
+    finance_get_categories: 'قراءة التصنيفات',
     business_list_accessible: 'قراءة الأنشطة المتاحة',
     business_get_dashboard: 'قراءة لوحة النشاط',
+    business_search_parties: 'البحث في أطراف النشاط',
+    action_prepare_personal_transaction: 'تجهيز مسودة إجراء شخصي',
+    action_prepare_commercial_document: 'تجهيز مسودة مستند تجاري',
     erp_get_replica_status: 'فحص النسخة السحابية',
     erp_search_customers: 'البحث عن العميل',
     erp_get_customer_statement: 'قراءة كشف الحساب',
@@ -111,11 +116,13 @@ function MessageBubble({
   onRetry,
   onStar,
   onRate,
+  onModifyAction,
 }: {
   message: WorkspaceMessage;
   onRetry?: () => void;
   onStar?: (value: boolean) => void;
   onRate?: (value: -1 | 1 | null) => void;
+  onModifyAction?: (prompt: string) => void;
 }) {
   const assistant = message.role === 'assistant';
   const result = message.result;
@@ -155,7 +162,7 @@ function MessageBubble({
             {message.content}
           </p>
 
-          {assistant && result?.response ? <SanadAgentResponseBlocks response={result.response} /> : null}
+          {assistant && result?.response ? <SanadAgentResponseBlocks response={result.response} onModifyAction={onModifyAction} /> : null}
 
           {message.failed && onRetry ? (
             <button
@@ -510,6 +517,12 @@ export default function SanadAgentWorkspace() {
     }
   };
 
+  const modifyActionFromCard = (prompt: string) => {
+    setDraft(prompt);
+    setWorkspaceError(null);
+    window.setTimeout(() => textareaRef.current?.focus(),40);
+  };
+
   async function sendPrompt(rawPrompt?: string) {
     const readyAttachments = pendingAttachments.filter((attachment) => attachment.status === 'ready');
     const requestedPrompt = (rawPrompt ?? draft).trim();
@@ -761,6 +774,7 @@ export default function SanadAgentWorkspace() {
                       : undefined}
                     onStar={(value) => void updateMessageFeedback(message.id, { isStarred: value })}
                     onRate={(value) => void updateMessageFeedback(message.id, { rating: value })}
+                    onModifyAction={modifyActionFromCard}
                   />
                 </div>
               ))
@@ -850,7 +864,7 @@ export default function SanadAgentWorkspace() {
               </div>
             </div>
             <p className="mt-2 text-center text-[8px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • الصوت والمرفقات يبقيان للمراجعة قبل أي إرسال أو إجراء.
+              Enter للإرسال • Shift + Enter لسطر جديد • أي إجراء مالي ينشئ مسودة مراجعة أولًا ولا يُنفذ إلا بعد اعتمادك الصريح.
             </p>
           </form>
         </div>
