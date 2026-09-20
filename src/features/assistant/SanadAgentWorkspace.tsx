@@ -1,6 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import {
-  Bot,
   BriefcaseBusiness,
   CheckCircle2,
   Clock3,
@@ -28,6 +27,7 @@ import {
   getSanadAgentPreferences,
   getSanadAgentThread,
   listSanadAgentThreads,
+  updateSanadAgentMessageFeedback,
   updateSanadAgentPreferences,
   type SanadAgentMemory,
   type SanadAgentPreferences,
@@ -35,6 +35,8 @@ import {
 } from './assistantWorkspaceApi';
 import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
+import SanadMessageActions from './SanadMessageActions';
+import SanadPulseMark from './SanadPulseMark';
 
 type BusinessOption = { id: string; name: string };
 
@@ -45,6 +47,9 @@ type WorkspaceMessage = {
   createdAt: number;
   result?: SanadAiAgentTurnResult;
   failed?: boolean;
+  persisted?: boolean;
+  isStarred?: boolean;
+  rating?: -1 | 1 | null;
 };
 
 const QUICK_PROMPTS = [
@@ -97,7 +102,17 @@ function toolSummary(trace: SanadAiToolTrace[]) {
   return `${completed} أداة`;
 }
 
-function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetry?: () => void }) {
+function MessageBubble({
+  message,
+  onRetry,
+  onStar,
+  onRate,
+}: {
+  message: WorkspaceMessage;
+  onRetry?: () => void;
+  onStar?: (value: boolean) => void;
+  onRate?: (value: -1 | 1 | null) => void;
+}) {
   const assistant = message.role === 'assistant';
   const result = message.result;
   const trace = result?.tool_trace || [];
@@ -115,9 +130,9 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
           {assistant ? (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                <Bot className="h-3.5 w-3.5" />
+                <SanadPulseMark state="idle" size={17} />
               </span>
-              مساعد سند
+              سند
               {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] text-slate-500">{result.model}</span> : null}
             </div>
           ) : null}
@@ -138,6 +153,19 @@ function MessageBubble({ message, onRetry }: { message: WorkspaceMessage; onRetr
             </button>
           ) : null}
         </div>
+
+        {!message.failed ? (
+          <div className={`mt-1.5 flex ${assistant ? 'justify-start' : 'justify-end'} px-1`}>
+            <SanadMessageActions
+              content={message.content}
+              starred={Boolean(message.isStarred)}
+              rating={message.rating ?? null}
+              disabled={!message.persisted}
+              onStar={(value) => onStar?.(value)}
+              onRate={(value) => onRate?.(value)}
+            />
+          </div>
+        ) : null}
 
         {assistant && result && !message.failed ? (
           <div className="mt-2 space-y-2">
@@ -195,6 +223,19 @@ function storedResult(message: {
     model: message.model || undefined,
     thinking_level: message.thinking_level || undefined,
   };
+}
+
+function storedMessagesToWorkspace(messages: Awaited<ReturnType<typeof getSanadAgentThread>>['messages']): WorkspaceMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: new Date(message.created_at).getTime(),
+    result: message.role === 'assistant' ? storedResult(message) : undefined,
+    persisted: true,
+    isStarred: Boolean(message.is_starred),
+    rating: message.rating ?? null,
+  }));
 }
 
 export default function SanadAgentWorkspace() {
@@ -306,13 +347,7 @@ export default function SanadAgentWorkspace() {
         setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
         setBusinessSelectionOpen(false);
         setMemories(context.memories);
-        setMessages(detail.messages.map((message) => ({
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          createdAt: new Date(message.created_at).getTime(),
-          result: message.role === 'assistant' ? storedResult(message) : undefined,
-        })));
+        setMessages(storedMessagesToWorkspace(detail.messages));
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تحميل المحادثة.');
       } finally {
@@ -409,6 +444,36 @@ export default function SanadAgentWorkspace() {
     }
   };
 
+  const updateMessageFeedback = async (
+    messageId: string,
+    patch: { isStarred?: boolean; rating?: -1 | 1 | null },
+  ) => {
+    const previous = messages;
+    setMessages((current) => current.map((message) =>
+      message.id === messageId
+        ? {
+            ...message,
+            isStarred: patch.isStarred ?? message.isStarred,
+            rating: patch.rating !== undefined ? patch.rating : message.rating,
+          }
+        : message
+    ));
+    try {
+      const saved = await updateSanadAgentMessageFeedback(messageId, {
+        is_starred: patch.isStarred,
+        rating: patch.rating,
+      });
+      setMessages((current) => current.map((message) =>
+        message.id === messageId
+          ? { ...message, isStarred: saved.is_starred, rating: saved.rating }
+          : message
+      ));
+    } catch (cause) {
+      setMessages(previous);
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر حفظ تفاعل الرسالة.');
+    }
+  };
+
   async function sendPrompt(rawPrompt?: string) {
     const prompt = (rawPrompt ?? draft).trim();
     if (!prompt || sending) return;
@@ -431,6 +496,7 @@ export default function SanadAgentWorkspace() {
       role: 'user',
       content: prompt,
       createdAt: Date.now(),
+      persisted: false,
     };
 
     setMessages((current) => [...current, userMessage]);
@@ -466,9 +532,16 @@ export default function SanadAgentWorkspace() {
         content: answer,
         createdAt: Date.now(),
         result,
+        persisted: false,
       }]);
 
       await refreshThreads(threadId);
+      try {
+        const persistedThread = await getSanadAgentThread(threadId);
+        setMessages(storedMessagesToWorkspace(persistedThread.messages));
+      } catch {
+        // The visible answer remains usable; feedback actions enable after the next successful thread reload.
+      }
       if (/^(?:تذكر|تذكّر|احفظ|احتفظ)\b/i.test(prompt)) {
         const context = await getSanadAgentContext(threadId);
         setMemories(context.memories);
@@ -513,16 +586,16 @@ export default function SanadAgentWorkspace() {
               type="button"
               onClick={() => setSidebarOpen(true)}
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 xl:hidden"
-              aria-label="فتح محادثات وإعدادات مساعد سند"
+              aria-label="فتح محادثات وإعدادات سند"
             >
               <Menu className="h-4 w-4" />
             </button>
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
-              <Bot className="h-5 w-5" />
+              <SanadPulseMark state={sending ? 'working' : 'idle'} size={25} />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-black text-slate-950">مساعد سند</h2>
+                <h2 className="text-base font-black text-slate-950">سند</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-black text-emerald-700">
                   <ShieldCheck className="h-3 w-3" /> قراءة آمنة
                 </span>
@@ -585,7 +658,7 @@ export default function SanadAgentWorkspace() {
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
                 <span className="flex h-16 w-16 items-center justify-center rounded-[1.6rem] bg-gradient-to-br from-slate-950 to-indigo-900 text-white shadow-[0_18px_50px_rgba(49,46,129,0.22)]">
-                  <Sparkles className="h-7 w-7" />
+                  <SanadPulseMark state="idle" size={34} />
                 </span>
                 <h3 className="mt-5 text-xl font-black text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
@@ -635,6 +708,8 @@ export default function SanadAgentWorkspace() {
                     onRetry={message.failed && lastUserPrompt && index === messages.length - 1
                       ? () => void sendPrompt(lastUserPrompt)
                       : undefined}
+                    onStar={(value) => void updateMessageFeedback(message.id, { isStarred: value })}
+                    onRate={(value) => void updateMessageFeedback(message.id, { rating: value })}
                   />
                 </div>
               ))
@@ -645,7 +720,7 @@ export default function SanadAgentWorkspace() {
                 <div className="rounded-[1.4rem] rounded-tr-md border border-indigo-100 bg-white px-4 py-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <span className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                      <Bot className="h-4 w-4" />
+                      <SanadPulseMark state="working" size={18} />
                       <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
                     </span>
                     <div>
