@@ -501,8 +501,16 @@ export default function SanadAgentWorkspace() {
   };
 
   async function sendPrompt(rawPrompt?: string) {
-    const prompt = (rawPrompt ?? draft).trim();
+    const readyAttachments = pendingAttachments.filter((attachment) => attachment.status === 'ready');
+    const requestedPrompt = (rawPrompt ?? draft).trim();
+    const prompt = requestedPrompt || (readyAttachments.length
+      ? 'حلل المرفق المرفق واقترح ربطه ببيانات موجودة أو تجهيز مسودة مناسبة بعد التحقق.'
+      : '');
     if (!prompt || sending) return;
+    if (pendingAttachments.some((attachment) => attachment.status !== 'ready')) {
+      setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
+      return;
+    }
     if (!selectedThreadId && businesses.length > 1 && !businessId) {
       setBusinessSelectionOpen(true);
       return;
