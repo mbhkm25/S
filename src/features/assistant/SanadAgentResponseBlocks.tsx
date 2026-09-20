@@ -77,8 +77,8 @@ function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
 
 function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }> }) {
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50/70 p-3.5">
+    <section className="overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
         <div className="flex items-start gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
             <UserRound className="h-4 w-4" />
@@ -96,7 +96,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
       <div className="p-3.5">
         <div className="grid gap-2 sm:grid-cols-2">
           {card.currency_summaries.map((item) => (
-            <div key={item.currency} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div key={item.currency} className="rounded-2xl border border-slate-100 bg-[#FAFAF9] p-3.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[9px] font-bold text-slate-400">الرصيد الختامي</span>
                 <span className="rounded-full bg-white px-2 py-1 text-[9px] font-black text-slate-600">{item.currency}</span>
@@ -120,7 +120,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
         {card.href && (
           <a
             href={card.href}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-2.5 text-[10px] font-black text-white"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-2.5 text-[10px] font-black text-white shadow-sm transition hover:-translate-y-px hover:shadow-md"
           >
             فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
           </a>
@@ -132,8 +132,8 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
 
 function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'document_list' }> }) {
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 p-3.5">
+    <section className="overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
             <FileText className="h-4 w-4" />
@@ -172,7 +172,7 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
 
 function ReplicaCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'replica_status' }> }) {
   return (
-    <section className="rounded-[1.35rem] border border-slate-200 bg-white p-3.5 shadow-sm">
+    <section className="rounded-[1.55rem] border border-slate-200/80 bg-white p-4 shadow-[0_12px_30px_rgba(15,23,42,.06)]">
       <div className="flex items-start gap-2.5">
         <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${card.available ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
           <Database className="h-4 w-4" />
@@ -220,7 +220,7 @@ function renderCard(card: SanadAssistantAnswerCard, index: number) {
   if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
-      <div key={`metric-${index}`} className="rounded-2xl border border-slate-200 bg-white p-3">
+      <div key={`metric-${index}`} className="rounded-[1.25rem] border border-slate-200/80 bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,.04)]">
         <p className="text-[9px] text-slate-400">{card.title}</p>
         <p className="mt-1 text-base font-black text-slate-950">{card.value}</p>
         {card.subtitle ? <p className="mt-1 text-[9px] text-slate-400">{card.subtitle}</p> : null}

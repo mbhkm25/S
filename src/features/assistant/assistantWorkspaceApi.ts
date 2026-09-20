@@ -22,6 +22,9 @@ export type SanadAgentStoredMessage = {
   request_id?: string | null;
   model?: string | null;
   thinking_level?: 'low' | 'medium' | 'high' | null;
+  is_starred?: boolean;
+  rating?: -1 | 1 | null;
+  rating_updated_at?: string | null;
   created_at: string;
 };
 
@@ -166,4 +169,19 @@ export async function forgetSanadAgentMemory(memoryId: string): Promise<void> {
   const { data, error } = await supabase.rpc('forget_my_sanad_agent_memory_v1', { p_memory_id: memoryId });
   if (error) rpcError(error, 'تعذر حذف هذه الذاكرة.');
   if (data !== true) throw new Error('لم يتم العثور على الذاكرة المطلوبة.');
+}
+
+
+export async function updateSanadAgentMessageFeedback(
+  messageId: string,
+  patch: { is_starred?: boolean; rating?: -1 | 1 | null },
+): Promise<{ id: string; is_starred: boolean; rating: -1 | 1 | null }> {
+  const { data, error } = await supabase.rpc('update_my_sanad_agent_message_feedback_v1', {
+    p_message_id: messageId,
+    p_is_starred: patch.is_starred ?? null,
+    p_rating: patch.rating === null ? null : patch.rating ?? null,
+    p_clear_rating: patch.rating === null,
+  });
+  if (error) rpcError(error, 'تعذر حفظ تفاعل الرسالة.');
+  return data as { id: string; is_starred: boolean; rating: -1 | 1 | null };
 }

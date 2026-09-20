@@ -204,3 +204,81 @@ div.fixed.inset-0.z-50.flex[class~="bg-slate-900/60"].font-arabic.animate-fade-i
     order: 2;
   }
 }
+
+
+/* SANAD Agent Visual v3 */
+.sanad-pulse-mark {
+  color: currentColor;
+  transform: translateZ(0);
+}
+
+.sanad-pulse-idle .sanad-pulse-dot {
+  animation: sanad-pulse-breathe 2.8s ease-in-out infinite;
+}
+
+.sanad-pulse-thinking .sanad-pulse-orbit,
+.sanad-pulse-working .sanad-pulse-orbit {
+  transform-origin: 24px 24px;
+  animation: sanad-pulse-orbit 1.05s linear infinite;
+}
+
+.sanad-pulse-thinking .sanad-pulse-path {
+  stroke-dasharray: 16 10;
+  animation: sanad-pulse-dash 1.15s linear infinite;
+}
+
+.sanad-pulse-working .sanad-pulse-path {
+  stroke-dasharray: 22 8;
+  animation: sanad-pulse-dash .72s linear infinite;
+}
+
+.sanad-pulse-working .sanad-pulse-core {
+  transform-origin: 24px 24px;
+  animation: sanad-pulse-core .9s ease-in-out infinite;
+}
+
+.sanad-pulse-success .sanad-pulse-dot {
+  animation: sanad-pulse-success .5s ease-out 1;
+}
+
+.sanad-message-actions {
+  opacity: .72;
+  transition: opacity .18s ease;
+}
+
+article:hover .sanad-message-actions,
+.sanad-message-actions:focus-within {
+  opacity: 1;
+}
+
+@keyframes sanad-pulse-breathe {
+  0%, 100% { opacity: .58; transform: scale(.9); transform-origin: 40px 24px; }
+  50% { opacity: 1; transform: scale(1.18); transform-origin: 40px 24px; }
+}
+
+@keyframes sanad-pulse-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sanad-pulse-dash {
+  to { stroke-dashoffset: -48; }
+}
+
+@keyframes sanad-pulse-core {
+  0%, 100% { transform: scale(.72); opacity: .12; }
+  50% { transform: scale(1.7); opacity: .28; }
+}
+
+@keyframes sanad-pulse-success {
+  0% { transform: scale(.7); opacity: .3; transform-origin: 40px 24px; }
+  65% { transform: scale(1.35); opacity: 1; transform-origin: 40px 24px; }
+  100% { transform: scale(1); opacity: .8; transform-origin: 40px 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sanad-pulse-mark *,
+  .sanad-message-actions {
+    animation: none !important;
+    transition: none !important;
+  }
+}

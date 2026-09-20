@@ -11,6 +11,10 @@ const runtime = readFileSync('supabase/functions/sanad-ai-agent-v1/index.ts', 'u
 const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts', 'utf8');
 const presentation = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260920071058_sanad_agent_workspace_v2.sql', 'utf8');
+const visualMigration = readFileSync('supabase/migrations/20260920093000_sanad_agent_message_feedback_v1.sql', 'utf8');
+const pulse = readFileSync('src/features/assistant/SanadPulseMark.tsx', 'utf8');
+const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
+const styles = readFileSync('src/index.css', 'utf8');
 
 for (const required of [
   'streamSanadAiAgentTurn',
@@ -20,6 +24,8 @@ for (const required of [
   'thread_id',
   'AssistantWorkspaceSidebar',
   'SanadAgentResponseBlocks',
+  'SanadMessageActions',
+  'SanadPulseMark',
 ]) {
   assert.ok(workspace.includes(required), `workspace missing ${required}`);
 }
@@ -89,3 +95,20 @@ assert.match(migration, /revoke all on table public\.sanad_agent_messages from p
 assert.match(migration, /grant execute on function public\.save_sanad_agent_turn_v1.*service_role/i);
 
 console.log('SANAD Agent Workspace v2 contract passed.');
+
+
+for (const required of ['Copy', 'Share2', 'Star', 'ThumbsUp', 'ThumbsDown']) {
+  assert.ok(messageActions.includes(required), `message actions missing ${required}`);
+}
+
+assert.match(workspaceApi, /update_my_sanad_agent_message_feedback_v1/);
+assert.match(visualMigration, /is_starred/);
+assert.match(visualMigration, /rating smallint/);
+assert.match(visualMigration, /update_my_sanad_agent_message_feedback_v1/);
+assert.match(visualMigration, /security definer/i);
+assert.match(visualMigration, /auth\.uid\(\)/);
+assert.match(pulse, /sanad-pulse-path/);
+assert.match(styles, /sanad-pulse-working/);
+assert.match(styles, /prefers-reduced-motion/);
+
+console.log('SANAD Agent Visual v3 contract passed.');
