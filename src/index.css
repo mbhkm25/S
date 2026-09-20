@@ -1,6 +1,9 @@
-/* SANAD primary typeface: self-hosted variable WOFF2, split by script for smaller transfers. */
+@import "tailwindcss";
+@import "./styles/sanad-motion.css";
+
+/* SANAD primary typeface: self-hosted Noto Sans Arabic variable WOFF2 (OFL). */
 @font-face {
-  font-family: "Noto Sans Arabic Variable";
+  font-family: "Noto Sans Arabic";
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -9,16 +12,13 @@
 }
 
 @font-face {
-  font-family: "Noto Sans Arabic Variable";
+  font-family: "Noto Sans Arabic";
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
   src: url('/fonts/noto-sans-arabic-latin-wght-normal.woff2') format('woff2-variations');
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
-@import "tailwindcss";
-@import "./styles/sanad-motion.css";
-
 @layer components {
   .profile-input {
     @apply w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-slate-500;
@@ -55,7 +55,7 @@
 }
 
 @theme {
-  --font-sans: "Noto Sans Arabic Variable", "Noto Sans Arabic", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-sans: "Noto Sans Arabic", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
