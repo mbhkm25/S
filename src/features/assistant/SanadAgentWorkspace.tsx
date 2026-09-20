@@ -141,12 +141,12 @@ function MessageBubble({
           }
         >
           {assistant ? (
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
                 <SanadPulseMark state="idle" size={17} />
               </span>
               سند
-              {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">{result.model}</span> : null}
+              {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-500">{result.model}</span> : null}
             </div>
           ) : null}
 
@@ -170,7 +170,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-[13px] font-medium text-rose-700"
             >
               <RotateCcw className="h-3.5 w-3.5" /> إعادة الإرسال
             </button>
@@ -192,7 +192,7 @@ function MessageBubble({
 
         {assistant && result && !message.failed ? (
           <div className="mt-2 space-y-2">
-            <div className="flex flex-wrap items-center gap-2 px-1 text-xs font-medium text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] font-medium text-slate-400">
               {result.latency_ms !== undefined ? (
                 <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
               ) : null}
@@ -203,18 +203,18 @@ function MessageBubble({
 
             {trace.length ? (
               <details className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-                <summary className="cursor-pointer list-none text-sm font-semibold text-slate-600">خطوات التنفيذ والمصادر</summary>
+                <summary className="cursor-pointer list-none text-[13px] font-medium text-slate-600">خطوات التنفيذ والمصادر</summary>
                 <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                   {trace.map((item, index) => (
-                    <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3 text-sm">
+                    <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3 text-xs">
                       <div className="flex items-start gap-2">
                         {item.status === 'completed'
                           ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-600" />
                           : <XCircle className="mt-0.5 h-3.5 w-3.5 text-rose-600" />}
                         <div>
                           <p className="font-semibold text-slate-700">{toolLabel(item.name)}</p>
-                          <p className="mt-0.5 text-xs text-slate-400">{item.source}</p>
-                          {item.error ? <p className="mt-1 text-xs text-rose-600">{item.error}</p> : null}
+                          <p className="mt-0.5 text-[11px] text-slate-400">{item.source}</p>
+                          {item.error ? <p className="mt-1 text-[11px] text-rose-600">{item.error}</p> : null}
                         </div>
                       </div>
                       <span className="shrink-0 text-slate-400">{formatLatency(item.latency_ms)}</span>
@@ -682,7 +682,7 @@ export default function SanadAgentWorkspace() {
                   <ShieldCheck className="h-3 w-3" /> قراءة آمنة
                 </span>
               </div>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-[13px] text-slate-500">
                 محادثات سحابية · ذاكرة طويلة · بيانات حية موثقة
               </p>
             </div>
@@ -693,7 +693,7 @@ export default function SanadAgentWorkspace() {
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> تحميل سياق النشاط…
             </span>
           ) : businessId ? (
-            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
+            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-700">
               <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
               <span className="truncate">{businesses.find((business) => business.id === businessId)?.name || 'نشاط مرتبط'}</span>
             </span>
@@ -701,7 +701,7 @@ export default function SanadAgentWorkspace() {
             <button
               type="button"
               onClick={() => setBusinessSelectionOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-800"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[13px] font-medium text-amber-800"
             >
               <BriefcaseBusiness className="h-4 w-4" /> اختر نشاط المحادثة
             </button>
@@ -710,7 +710,7 @@ export default function SanadAgentWorkspace() {
       </div>
 
       {workspaceError ? (
-        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700">
+        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700">
           {workspaceError}
         </div>
       ) : null}
@@ -734,7 +734,7 @@ export default function SanadAgentWorkspace() {
         <div className="flex min-h-0 min-w-0 flex-col">
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 md:px-7 md:py-6">
             {threadLoading ? (
-              <div className="flex min-h-[360px] items-center justify-center gap-2 text-sm font-medium text-slate-400">
+              <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
               </div>
             ) : empty ? (
@@ -751,7 +751,7 @@ export default function SanadAgentWorkspace() {
                   <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
                     <div className="flex items-center gap-2">
                       <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-sm font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
+                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
                     </div>
                     <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -760,7 +760,7 @@ export default function SanadAgentWorkspace() {
                           key={business.id}
                           type="button"
                           onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-sm font-semibold text-slate-800 shadow-sm transition hover:border-amber-300"
+                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
                         >
                           {business.name}
                         </button>
@@ -807,13 +807,13 @@ export default function SanadAgentWorkspace() {
                       <span className="absolute -left-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
+                      <p className="text-[13px] font-medium text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
                       {liveTools.length ? (
                         <div className="mt-2 flex max-w-[70vw] flex-wrap gap-1.5">
                           {liveTools.slice(-4).map((item, index) => (
                             <span
                               key={`${item.name}-${index}`}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${item.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
                             >
                               {item.status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                               {toolLabel(item.name)}
@@ -874,14 +874,14 @@ export default function SanadAgentWorkspace() {
                     || pendingAttachments.some((attachment) => attachment.status !== 'ready')
                     || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
                   }
-                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                   <span className="hidden sm:inline">إرسال</span>
                 </button>
               </div>
             </div>
-            <p className="mt-2 text-center text-sm leading-4 text-slate-400">
+            <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
               Enter للإرسال • Shift + Enter لسطر جديد • أي إجراء مالي ينشئ مسودة مراجعة أولًا ولا يُنفذ إلا بعد اعتمادك الصريح.
             </p>
           </form>
