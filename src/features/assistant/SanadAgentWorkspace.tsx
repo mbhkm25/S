@@ -571,10 +571,14 @@ export default function SanadAgentWorkspace() {
         persisted: false,
       }]);
 
+      setPendingAttachments([]);
       await refreshThreads(threadId);
       try {
-        const persistedThread = await getSanadAgentThread(threadId);
-        setMessages(storedMessagesToWorkspace(persistedThread.messages));
+        const [persistedThread, persistedAttachments] = await Promise.all([
+          getSanadAgentThread(threadId),
+          listSanadAgentAttachments(threadId),
+        ]);
+        setMessages(storedMessagesToWorkspace(persistedThread.messages, persistedAttachments));
       } catch {
         // The visible answer remains usable; feedback actions enable after the next successful thread reload.
       }
