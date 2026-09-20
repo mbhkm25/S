@@ -193,7 +193,8 @@ export default function SanadFluidOrb({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || size < 22) {
+    const preferCssFallback = size < 22 || (!animated && size < 28);
+    if (!canvas || preferCssFallback) {
       setCanvasReady(false);
       return;
     }
