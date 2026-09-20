@@ -53,6 +53,7 @@ function array(value: unknown): Json[] {
 }
 
 function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
@@ -161,6 +162,8 @@ async function uploadGeminiFile(bytes: Uint8Array, mimeType: string, displayName
     file = await statusResponse.json() as Json;
   }
 
+  const finalState = cleanText(file.state, 40).toUpperCase();
+  if (finalState === "PROCESSING") throw new Error("gemini_file_processing_timeout");
   const uri = cleanText(file.uri, 1200);
   if (!uri) throw new Error("gemini_file_uri_missing");
   return { name, uri };
