@@ -23,3 +23,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\bridge\\windows\\inst
 Verification:
 Get-ScheduledTask -TaskName "SANAD Bridge Agent" | Get-ScheduledTaskInfo
 Get-Content "$env:ProgramData\\SANAD\\Bridge\\logs\\agent-cycle.log" -Tail 80
+
+
+## No-console task launcher — 2026-09-20
+
+The scheduled task must not launch `powershell.exe` directly under the interactive Windows session because even `-WindowStyle Hidden` can create a very brief console window and steal keyboard focus once per minute.
+
+The installer now schedules:
+
+`wscript.exe //B //NoLogo run-agent-cycle-hidden.vbs run-agent-cycle.ps1`
+
+The VBScript launcher starts Windows PowerShell with window style `0`, waits for completion, and returns the same exit code to Task Scheduler. This keeps the existing interactive-user / Integrated Security behavior required by the legacy Edaa SQL Server connection while preventing console focus theft.
+
+The actual Bridge child process remains `CreateNoWindow=true` inside `run-agent-cycle.ps1`.
