@@ -86,6 +86,7 @@ function toolLabel(name: string) {
     finance_get_categories: 'قراءة التصنيفات',
     business_list_accessible: 'قراءة الأنشطة المتاحة',
     business_get_dashboard: 'قراءة لوحة النشاط',
+    business_get_payment_inbox: 'قراءة وارد المدفوعات',
     business_search_parties: 'البحث في أطراف النشاط',
     action_prepare_personal_transaction: 'تجهيز مسودة إجراء شخصي',
     action_prepare_commercial_document: 'تجهيز مسودة مستند تجاري',
