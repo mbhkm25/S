@@ -262,6 +262,23 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
     },
   },
   {
+    name: 'business_get_payment_inbox',
+    description: 'Read a bounded SANAD Payment Inbox view for the selected business. Read-only; it cannot claim, complete, release, reassign, reject, or resolve an inbox item.',
+    scope: 'business',
+    risk: 'read_only',
+    authoritativeSource: 'get_business_payment_inbox_v3',
+    parameters: {
+      type: 'object',
+      properties: {
+        business_id: { type: 'string', description: 'Authorized SANAD business UUID.' },
+        view: { type: 'string', description: 'Inbox view.', enum: ['new','mine','team_active','review','completed','all'] },
+        limit: { type: 'integer', description: 'Bounded result count.' },
+      },
+      required: ['business_id'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'business_search_parties',
     description: 'Search SANAD business parties before preparing a commercial document.',
     scope: 'business',
@@ -383,6 +400,31 @@ export type SanadAssistantReplicaStatusCard = {
   current_sync?: Record<string, unknown> | null;
 };
 
+export type SanadAssistantPaymentInboxCard = {
+  type: 'payment_inbox_list';
+  title: string;
+  view: string;
+  view_label: string;
+  count: number;
+  has_more?: boolean;
+  href?: string | null;
+  read_only: true;
+  items: Array<{
+    id?: string | null;
+    operation_id?: string | null;
+    status?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    financial_entity?: string | null;
+    receiver_name?: string | null;
+    reference_number?: string | null;
+    transaction_datetime?: string | null;
+    claimed_by_name?: string | null;
+    completed_by_name?: string | null;
+    href: string;
+  }>;
+};
+
 export type SanadAssistantActionReviewCard = {
   type: 'action_review';
   action_id: string;
@@ -405,6 +447,7 @@ export type SanadAssistantAnswerCard =
   | SanadAssistantCustomerStatementCard
   | SanadAssistantDocumentListCard
   | SanadAssistantReplicaStatusCard
+  | SanadAssistantPaymentInboxCard
   | SanadAssistantActionReviewCard
   | { type: 'warning'; title: string; body: string };
 
