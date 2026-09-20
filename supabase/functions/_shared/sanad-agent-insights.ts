@@ -10,7 +10,7 @@ export type AgentInsight = {
   title: string;
   body: string;
   source_tool: string;
-  source_label: string;
+  source_label?: string;
   source_fact: string;
   rule_id: string;
 };
@@ -65,11 +65,23 @@ function currencyOf(row: Json) {
   return text(row.currency) || text(row.english_code) || text(row.arabic_code) || text(row.currency_name) || "عملة";
 }
 
+function sourceLabel(tool: string) {
+  const labels: Record<string,string> = {
+    finance_get_obligations: "الالتزامات الشخصية",
+    finance_get_budgets: "الميزانيات الشخصية",
+    finance_get_goals: "الأهداف المالية",
+    business_get_dashboard: "لوحة النشاط التجاري",
+    erp_get_replica_status: "حالة نسخة إبداع",
+  };
+  return labels[tool] || "بيانات سند";
+}
+
 function insight(
   partial: Omit<AgentInsight, "id">,
 ): AgentInsight {
   return {
     ...partial,
+    source_label: partial.source_label || sourceLabel(partial.source_tool),
     id: `${partial.rule_id}:${partial.source_tool}:${partial.source_fact}`,
   };
 }
