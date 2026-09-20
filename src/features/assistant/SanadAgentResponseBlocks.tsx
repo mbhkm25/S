@@ -10,6 +10,7 @@ import {
   Info,
   UserRound,
 } from 'lucide-react';
+import SanadAgentActionCard from './SanadAgentActionCard';
 import type {
   SanadAssistantAnswerCard,
   SanadAssistantAttention,
@@ -225,10 +226,11 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
   );
 }
 
-function renderCard(card: SanadAssistantAnswerCard, index: number) {
+function renderCard(card: SanadAssistantAnswerCard, index: number, onModifyAction?: (prompt: string) => void) {
   if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
+  if (card.type === 'action_review') return <div key={`action-${card.action_id}`}><SanadAgentActionCard card={card} onModify={onModifyAction} /></div>;
   if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
@@ -242,7 +244,13 @@ function renderCard(card: SanadAssistantAnswerCard, index: number) {
   return null;
 }
 
-export default function SanadAgentResponseBlocks({ response }: { response?: SanadAssistantResponseContract }) {
+export default function SanadAgentResponseBlocks({
+  response,
+  onModifyAction,
+}: {
+  response?: SanadAssistantResponseContract;
+  onModifyAction?: (prompt: string) => void;
+}) {
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
   const entities = Array.isArray(response.entities) ? response.entities : [];
@@ -251,7 +259,7 @@ export default function SanadAgentResponseBlocks({ response }: { response?: Sana
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map(renderCard)}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
