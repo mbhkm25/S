@@ -217,7 +217,7 @@ export default function SanadAttachmentComposer({
             const isBusy = busyNames.includes(attachment.file_name);
             return (
               <div key={attachment.id} className="relative">
-                <SanadAttachmentPreview attachment={attachment} compact />
+                <SanadAttachmentPreview attachment={attachment} />
                 <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
                   {attachment.status === 'failed' ? (
                     <button
