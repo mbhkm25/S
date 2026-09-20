@@ -9,6 +9,7 @@ export type SanadAiHistoryTurn = {
 export type SanadAiAgentTurnRequest = {
   message: string;
   business_id?: string | null;
+  thread_id?: string | null;
   history?: SanadAiHistoryTurn[];
 };
 
@@ -23,6 +24,7 @@ export type SanadAiToolTrace = {
 export type SanadAiAgentTurnResult = {
   ok: boolean;
   request_id: string;
+  thread_id?: string | null;
   runtime_version?: string;
   model?: string;
   thinking_level?: 'low' | 'medium' | 'high';
@@ -57,7 +59,8 @@ export async function runSanadAiAgentTurn(input: SanadAiAgentTurnRequest): Promi
     body: {
       message,
       business_id: input.business_id || null,
-      history: (input.history || []).slice(-8),
+      thread_id: input.thread_id || null,
+      history: (input.history || []).slice(-24),
     },
   });
 
@@ -111,7 +114,8 @@ export async function streamSanadAiAgentTurn(
     body: JSON.stringify({
       message,
       business_id: input.business_id || null,
-      history: (input.history || []).slice(-8),
+      thread_id: input.thread_id || null,
+      history: (input.history || []).slice(-24),
       stream: true,
     }),
   });
