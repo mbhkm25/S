@@ -3,6 +3,7 @@ import { supabase, supabaseApiUrl, supabasePublicKey } from '../../lib/supabase'
 type InvokeOptions = {
   body: unknown;
   signal?: AbortSignal;
+  endpointUrl?: string;
 };
 
 export async function invokeAuthenticatedSanadFunction<T>(
@@ -17,7 +18,8 @@ export async function invokeAuthenticatedSanadFunction<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${supabaseApiUrl}/functions/v1/${functionName}`, {
+    const endpointUrl = options.endpointUrl?.trim() || `${supabaseApiUrl}/functions/v1/${functionName}`;
+    response = await fetch(endpointUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
