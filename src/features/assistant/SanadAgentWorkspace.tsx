@@ -34,6 +34,7 @@ import {
 } from './assistantWorkspaceApi';
 import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
+import SanadConversationMarkdown from './SanadConversationMarkdown';
 import SanadMessageActions from './SanadMessageActions';
 import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
 import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDictationButton';
@@ -130,17 +131,18 @@ function MessageBubble({
   const trace = result?.tool_trace || [];
 
   return (
-    <article className={`flex w-full ${assistant ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[96%] md:max-w-[86%] 2xl:max-w-[78%] ${assistant ? '' : 'text-right'}`}>
+    <article className={`flex w-full min-w-0 ${assistant ? 'justify-start' : 'justify-end'}`}>
+      <div className={assistant ? 'w-full min-w-0' : 'max-w-[88%] text-right md:max-w-[72%] 2xl:max-w-[56rem]'}>
         <div
           className={
             assistant
-              ? `${message.failed ? 'rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3' : 'py-1'}`
+              ? `${message.failed ? 'max-w-[48rem] rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3' : 'max-w-[48rem] py-1'}`
               : 'rounded-2xl bg-slate-100 px-4 py-3 text-slate-900 md:px-5'
           }
+          data-message-surface={assistant ? 'assistant-flat' : 'user-bubble'}
         >
           {assistant ? (
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+            <div className="mb-2.5 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
               <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
                 <SanadFluidOrb state="idle" size={22} animated={false} />
               </span>
@@ -159,11 +161,9 @@ function MessageBubble({
             </div>
           ) : null}
 
-          <p className={`whitespace-pre-wrap text-sm leading-7 md:text-[15px] ${assistant ? 'text-slate-800' : 'text-slate-900'}`}>
-            {message.content}
-          </p>
-
-          {assistant && result?.response ? <SanadAgentResponseBlocks response={result.response} onModifyAction={onModifyAction} /> : null}
+          {assistant
+            ? <SanadConversationMarkdown content={message.content} />
+            : <p className="whitespace-pre-wrap text-sm leading-7 text-slate-900 md:text-[15px]">{message.content}</p>}
 
           {message.failed && onRetry ? (
             <button
@@ -176,8 +176,14 @@ function MessageBubble({
           ) : null}
         </div>
 
+        {assistant && result?.response ? (
+          <div className="mt-3 w-full min-w-0 max-w-[72rem]" data-structured-response-surface="wide">
+            <SanadAgentResponseBlocks response={result.response} onModifyAction={onModifyAction} />
+          </div>
+        ) : null}
+
         {!message.failed ? (
-          <div className={`mt-1.5 flex ${assistant ? 'justify-start' : 'justify-end'} px-1`}>
+          <div className={`mt-1.5 flex ${assistant ? 'max-w-[48rem] justify-start' : 'justify-end'} px-1`}>
             <SanadMessageActions
               content={message.content}
               starred={Boolean(message.isStarred)}
@@ -190,7 +196,7 @@ function MessageBubble({
         ) : null}
 
         {assistant && result && !message.failed ? (
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 max-w-[48rem] space-y-2">
             <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] font-medium text-slate-400">
               {result.latency_ms !== undefined ? (
                 <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
@@ -279,9 +285,9 @@ function storedMessagesToWorkspace(
 function syncComposerTextareaHeight(textarea: HTMLTextAreaElement | null) {
   if (!textarea) return;
   textarea.style.height = 'auto';
-  const nextHeight = Math.min(textarea.scrollHeight, 64);
-  textarea.style.height = `${Math.max(nextHeight, 40)}px`;
-  textarea.style.overflowY = textarea.scrollHeight > 64 ? 'auto' : 'hidden';
+  const nextHeight = Math.min(textarea.scrollHeight, 60);
+  textarea.style.height = `${Math.max(nextHeight, 36)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > 60 ? 'auto' : 'hidden';
 }
 
 export default function SanadAgentWorkspace() {
@@ -866,7 +872,10 @@ export default function SanadAgentWorkspace() {
             data-composer-density="compact"
             className="shrink-0 border-t border-slate-200/80 bg-white/95 p-2 backdrop-blur-xl md:px-4 md:py-3"
           >
-            <div className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
+            <div
+              className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
+              data-composer-layout="single-row-controls"
+            >
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
@@ -875,6 +884,7 @@ export default function SanadAgentWorkspace() {
                 onChange={setPendingAttachments}
                 onRequestThread={ensureThread}
                 onError={(message) => setWorkspaceError(message)}
+                layout="inline-grid"
               />
 
               <textarea
@@ -887,39 +897,37 @@ export default function SanadAgentWorkspace() {
                 onKeyDown={handleKeyDown}
                 disabled={sending}
                 rows={1}
-                placeholder="اسأل سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
-                className="max-h-[64px] min-h-10 w-full resize-none overflow-y-hidden bg-transparent px-2.5 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
+                placeholder="اسأل سند…"
+                className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
               />
-              <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
-                  <SanadVoiceDictationButton
-                    disabled={sending}
-                    onStateChange={handleVoiceStateChange}
-                    onTranscript={(text) => {
-                      setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-                      setWorkspaceError(null);
-                      window.setTimeout(() => {
-                        syncComposerTextareaHeight(textareaRef.current);
-                        textareaRef.current?.focus();
-                      }, 40);
-                    }}
-                    onError={(message) => setWorkspaceError(message)}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={
-                    sending
-                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
-                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
-                  }
-                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
-                  <span className="hidden sm:inline">إرسال</span>
-                </button>
-              </div>
+
+              <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
+              <SanadVoiceDictationButton
+                disabled={sending}
+                onStateChange={handleVoiceStateChange}
+                onTranscript={(text) => {
+                  setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+                  setWorkspaceError(null);
+                  window.setTimeout(() => {
+                    syncComposerTextareaHeight(textareaRef.current);
+                    textareaRef.current?.focus();
+                  }, 40);
+                }}
+                onError={(message) => setWorkspaceError(message)}
+              />
+              <button
+                type="submit"
+                disabled={
+                  sending
+                  || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                  || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                }
+                className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-slate-950 px-2.5 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                aria-label="إرسال"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                <span className="sr-only">إرسال</span>
+              </button>
             </div>
           </form>
         </div>
