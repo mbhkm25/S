@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
-import { Bot, BriefcaseBusiness, UserRound, WalletCards } from 'lucide-react';
+import { BriefcaseBusiness, UserRound, WalletCards } from 'lucide-react';
+import SanadIntelligenceMark from '../../features/assistant/SanadIntelligenceMark';
 import {
   navigateProduct,
   productHref,
@@ -27,7 +28,7 @@ function inferArea(pathname: string, legacyPage?: string): ProductArea {
 }
 
 const ITEMS = [
-  { id: 'assistant' as const, label: 'سند', path: 'sanad-ai', icon: Bot },
+  { id: 'assistant' as const, label: 'سند', path: 'sanad-ai', icon: null },
   { id: 'financial' as const, label: 'سند المالي', path: 'financial', icon: WalletCards },
   { id: 'business' as const, label: 'سند للأعمال', path: 'commercial', icon: BriefcaseBusiness },
   { id: 'account' as const, label: 'حسابي', path: 'account-center', icon: UserRound },
@@ -68,7 +69,11 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
               className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'text-slate-950' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
             >
               <span className={`flex h-9 w-11 items-center justify-center rounded-2xl transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'bg-transparent group-hover:bg-white'}`}>
-                <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
+                {item.id === 'assistant' ? (
+                  <SanadIntelligenceMark state="idle" size={18} className={selected ? 'text-white' : 'text-current'} />
+                ) : Icon ? (
+                  <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
+                ) : null}
               </span>
               <span className={`max-w-full truncate text-[11px] ${selected ? 'font-semibold text-slate-950' : 'font-medium'}`}>{item.label}</span>
             </a>
