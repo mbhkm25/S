@@ -53,7 +53,11 @@ for (const required of [
 }
 assert.match(markdown, /safeHref/);
 assert.doesNotMatch(markdown, /dangerouslySetInnerHTML/);
-assert.doesNotMatch(workspace, /<p[^>]*>\s*\{message\.content\}\s*<\/p>/s, 'Assistant narrative must not bypass the Markdown renderer.');
+assert.match(
+  workspace,
+  /\{assistant\s*\? <SanadConversationMarkdown content=\{message\.content\} \/>\s*:\s*<p[^>]*>\{message\.content\}<\/p>\}/s,
+  'Assistant narrative must use Markdown while user messages may remain plain text.',
+);
 
 assert.match(sidebar, /data-sidebar-density="compact"/);
 assert.match(sidebar, /مساعد سند/);
