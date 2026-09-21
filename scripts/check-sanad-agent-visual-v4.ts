@@ -54,9 +54,12 @@ assert.match(sidebar, /SanadFluidOrb/);
 assert.match(sidebar, /state=\{props\.assistantState\}/, 'sidebar owns the live assistant identity/status in Stage 1C');
 
 for (const required of [
-  "export type SanadVoiceState = 'idle' | 'listening' | 'transcribing'",
+  "export type { SanadVoiceState } from './sanadVoiceRuntime'",
   'onStateChange?:',
-  "recording ? 'listening' : transcribing ? 'transcribing' : 'idle'",
+  'reduceSanadVoiceState',
+  'requesting_permission',
+  'ready_to_send',
+  'network_failed',
 ]) {
   assert.ok(voice.includes(required), `voice state bridge missing ${required}`);
 }
