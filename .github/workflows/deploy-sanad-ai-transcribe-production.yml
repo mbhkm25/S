@@ -26,7 +26,6 @@ jobs:
     timeout-minutes: 15
     environment: production
     env:
-      DEFAULT_SOURCE_SHA: '0fa409a1bf704b9c494bad51d909c85222c85d02'
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
       FUNCTION_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-v1
@@ -39,7 +38,7 @@ jobs:
           REQUESTED_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          SOURCE_SHA="${REQUESTED_SHA:-$DEFAULT_SOURCE_SHA}"
+          SOURCE_SHA="${REQUESTED_SHA:-$GITHUB_SHA}"
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
