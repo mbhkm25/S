@@ -70,7 +70,7 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
             >
               <span className={`flex h-9 w-11 items-center justify-center rounded-2xl transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'bg-transparent group-hover:bg-white'}`}>
                 {item.id === 'assistant' ? (
-                  <SanadIntelligenceMark state="idle" size={18} className={selected ? 'text-white' : 'text-current'} />
+                  <SanadIntelligenceMark state="idle" size={18} monochrome className={selected ? 'text-white' : 'text-current'} />
                 ) : Icon ? (
                   <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
                 ) : null}
