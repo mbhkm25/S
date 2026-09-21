@@ -282,12 +282,25 @@ function AttentionItem({ item }: { item: SanadAssistantAttention }) {
   );
 }
 
-function renderCard(card: SanadAssistantAnswerCard, index: number, onModifyAction?: (prompt: string) => void) {
+function renderCard(
+  card: SanadAssistantAnswerCard,
+  index: number,
+  onModifyAction?: (prompt: string) => void,
+  onActionStatusChange?: (status: string) => void,
+) {
   if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`}><PaymentInboxCard card={card} /></div>;
-  if (card.type === 'action_review') return <div key={`action-${card.action_id}`}><SanadAgentActionCard card={card} onModify={onModifyAction} /></div>;
+  if (card.type === 'action_review') return (
+    <div key={`action-${card.action_id}`}>
+      <SanadAgentActionCard
+        card={card}
+        onModify={onModifyAction}
+        onStatusChange={onActionStatusChange}
+      />
+    </div>
+  );
   if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
@@ -304,9 +317,11 @@ function renderCard(card: SanadAssistantAnswerCard, index: number, onModifyActio
 export default function SanadAgentResponseBlocks({
   response,
   onModifyAction,
+  onActionStatusChange,
 }: {
   response?: SanadAssistantResponseContract;
   onModifyAction?: (prompt: string) => void;
+  onActionStatusChange?: (status: string) => void;
 }) {
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
@@ -316,7 +331,7 @@ export default function SanadAgentResponseBlocks({
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map((card, index) => renderCard(card, index, onModifyAction))}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
