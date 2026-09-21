@@ -1,0 +1,43 @@
+name: Stage 1G HF Voice Transport Probe
+
+on:
+  push:
+    branches:
+      - ops/stage1g-hf-voice-transport-probe
+    paths:
+      - '.github/workflows/stage1g-hf-voice-transport-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CUSTOM_URL: https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-v1
+      CANONICAL_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-v1
+      APP_ORIGIN: https://app.sanadflow.com
+      PUBLIC_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZGJ6bGdjbGdobGhhemxkdWFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NzI3NzEsImV4cCI6MjA5ODQ0ODc3MX0.mQvUtmAwmRXPdMJdynPemP56PSeONMUpw_k0rz_pUag
+    steps:
+      - name: Probe browser preflight and auth boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          for label in custom canonical; do
+            if [ "$label" = custom ]; then url="$CUSTOM_URL"; else url="$CANONICAL_URL"; fi
+
+            echo "===== $label OPTIONS ====="
+            curl --silent --show-error --max-time 30 -X OPTIONS "$url"               -H "Origin: $APP_ORIGIN"               -H 'Access-Control-Request-Method: POST'               -H 'Access-Control-Request-Headers: authorization,apikey,content-type'               -D "/tmp/$label-options.headers" -o "/tmp/$label-options.body"
+            cat "/tmp/$label-options.headers"
+            grep -i -F "access-control-allow-origin: $APP_ORIGIN" "/tmp/$label-options.headers"
+            grep -i 'access-control-allow-headers:' "/tmp/$label-options.headers" | grep -Ei 'authorization.*apikey|apikey.*authorization'
+
+            echo "===== $label POST with signed anon JWT ====="
+            status="$(curl --silent --show-error --max-time 30 -X POST "$url"               -H "Origin: $APP_ORIGIN"               -H "Authorization: Bearer $PUBLIC_KEY"               -H "apikey: $PUBLIC_KEY"               -H 'Content-Type: application/json'               --data '{"audio_base64":"AA==","mime_type":"audio/webm","duration_ms":1}'               -D "/tmp/$label-post.headers" -o "/tmp/$label-post.body" -w '%{http_code}')"
+            echo "status=$status"
+            cat "/tmp/$label-post.headers"
+            cat "/tmp/$label-post.body"
+            echo
+            grep -i -F "access-control-allow-origin: $APP_ORIGIN" "/tmp/$label-post.headers"
+          done
