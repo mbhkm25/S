@@ -1,4 +1,5 @@
-reason=deploy-stage1a-message-ordering-v1
-requested_at=2026-09-20T21:25:00+03:00
-source_merge_sha=5992396c22c31e90bfd3fd8169be832d229c5fc4
+reason=deploy-stage1-contract-hardening
+requested_at=2026-09-21T12:57:00+03:00
+source_integration_sha=11fc7dd5994f2f4db49b2dccb8ed2751b032998e
+source_merge_sha=e75b0a0518e469f00d966e2f129985e50cb02a07
 scope=production-pwa
