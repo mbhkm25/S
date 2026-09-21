@@ -27,6 +27,7 @@ type Props = {
   onChange: (attachments: SanadAgentAttachment[]) => void;
   onRequestThread: () => Promise<string>;
   onError?: (message: string) => void;
+  layout?: 'stacked' | 'inline-grid';
 };
 
 const MAX_PER_TURN = 3;
@@ -121,6 +122,7 @@ export default function SanadAttachmentComposer({
   onChange,
   onRequestThread,
   onError,
+  layout = 'stacked',
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busyNames, setBusyNames] = useState<string[]>([]);
@@ -189,34 +191,16 @@ export default function SanadAttachmentComposer({
 
   const busy = busyNames.length > 0;
 
+  const inlineGrid = layout === 'inline-grid';
+
   return (
-    <div className="min-w-0">
-      <input
-        ref={inputRef}
-        type="file"
-        accept={SANAD_ATTACHMENT_ACCEPT}
-        multiple
-        className="hidden"
-        onChange={(event) => void addFiles(event.target.files)}
-      />
-
-      <button
-        type="button"
-        disabled={disabled || busy || attachments.length >= MAX_PER_TURN}
-        onClick={() => inputRef.current?.click()}
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-        title="إرفاق صورة أو مستند"
-        aria-label="إرفاق صورة أو مستند"
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-      </button>
-
+    <div className={inlineGrid ? 'contents' : 'min-w-0'}>
       {attachments.length > 0 ? (
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div className={inlineGrid ? 'col-span-full mb-1 grid gap-2 sm:grid-cols-2' : 'mt-2 grid gap-2 sm:grid-cols-2'}>
           {attachments.map((attachment) => {
             const isBusy = busyNames.includes(attachment.file_name);
             return (
-              <div key={attachment.id} className="relative">
+              <div key={attachment.id} className="relative min-w-0">
                 <SanadAttachmentPreview attachment={attachment} />
                 <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
                   {attachment.status === 'failed' ? (
@@ -251,6 +235,27 @@ export default function SanadAttachmentComposer({
           })}
         </div>
       ) : null}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={SANAD_ATTACHMENT_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(event) => void addFiles(event.target.files)}
+      />
+
+      <button
+        type="button"
+        disabled={disabled || busy || attachments.length >= MAX_PER_TURN}
+        onClick={() => inputRef.current?.click()}
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+        title="إرفاق صورة أو مستند"
+        aria-label="إرفاق صورة أو مستند"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+      </button>
+
     </div>
   );
 }
