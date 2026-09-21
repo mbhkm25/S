@@ -389,34 +389,49 @@ async function handleRequest(req: Request, requestId: string, trace: VoiceTrace)
 
     const latencyMs = Date.now() - startedAt;
     const usage = interaction?.usage && typeof interaction.usage === "object" ? interaction.usage as Json : {};
-    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
-      p_user_id:authData.user.id,
-      p_thread_id:null,
-      p_business_id:null,
-      p_request_id:requestId,
-      p_scope:"voice_transcription",
-      p_status:"completed",
-      p_transport:"json",
-      p_model:MODEL,
-      p_thinking_level:null,
-      p_total_latency_ms:latencyMs,
-      p_context_load_ms:null,
-      p_attachment_context_ms:null,
-      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
-      p_tool_latency_ms:null,
-      p_persistence_ms:null,
-      p_tool_calls:0,
-      p_failed_tool_calls:0,
-      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
-      p_input_tokens:Number(usage.total_input_tokens ?? usage.input_tokens ?? 0) || 0,
-      p_cached_tokens:Number(usage.total_cached_tokens ?? usage.cached_tokens ?? 0) || 0,
-      p_output_tokens:Number(usage.total_output_tokens ?? usage.output_tokens ?? 0) || 0,
-      p_total_tokens:Number(usage.total_tokens ?? 0) || 0,
-      p_item_count:1,
-      p_byte_count:bytes.byteLength,
-      p_error_code:null,
-      p_runtime_version:"sanad-voice-v2",
-    }).catch(()=>null);
+    try {
+      const { error: metricError } = await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+        p_user_id:authData.user.id,
+        p_thread_id:null,
+        p_business_id:null,
+        p_request_id:requestId,
+        p_scope:"voice_transcription",
+        p_status:"completed",
+        p_transport:"json",
+        p_model:MODEL,
+        p_thinking_level:null,
+        p_total_latency_ms:latencyMs,
+        p_context_load_ms:null,
+        p_attachment_context_ms:null,
+        p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+        p_tool_latency_ms:null,
+        p_persistence_ms:null,
+        p_tool_calls:0,
+        p_failed_tool_calls:0,
+        p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+        p_input_tokens:Number(usage.total_input_tokens ?? usage.input_tokens ?? 0) || 0,
+        p_cached_tokens:Number(usage.total_cached_tokens ?? usage.cached_tokens ?? 0) || 0,
+        p_output_tokens:Number(usage.total_output_tokens ?? usage.output_tokens ?? 0) || 0,
+        p_total_tokens:Number(usage.total_tokens ?? 0) || 0,
+        p_item_count:1,
+        p_byte_count:bytes.byteLength,
+        p_error_code:null,
+        p_runtime_version:"sanad-voice-v2",
+      });
+      if (metricError) {
+        console.warn("sanad_voice_metric_record_failed", {
+          request_id: requestId,
+          status: "completed",
+          error_code: cleanText(metricError.message, 240),
+        });
+      }
+    } catch (metricCause) {
+      console.warn("sanad_voice_metric_record_failed", {
+        request_id: requestId,
+        status: "completed",
+        error_code: cleanText(metricCause instanceof Error ? metricCause.message : "metric_record_failed", 240),
+      });
+    }
 
     voicePhase("voice_response_sent", {
       request_id: requestId,
@@ -441,34 +456,49 @@ async function handleRequest(req: Request, requestId: string, trace: VoiceTrace)
       mime_type: mimeType,
       byte_length: bytes.byteLength,
     });
-    await adminClient.rpc("record_sanad_agent_server_metric_v1",{
-      p_user_id:authData.user.id,
-      p_thread_id:null,
-      p_business_id:null,
-      p_request_id:requestId,
-      p_scope:"voice_transcription",
-      p_status:"failed",
-      p_transport:"json",
-      p_model:MODEL,
-      p_thinking_level:null,
-      p_total_latency_ms:Date.now()-startedAt,
-      p_context_load_ms:null,
-      p_attachment_context_ms:null,
-      p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
-      p_tool_latency_ms:null,
-      p_persistence_ms:null,
-      p_tool_calls:0,
-      p_failed_tool_calls:0,
-      p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
-      p_input_tokens:0,
-      p_cached_tokens:0,
-      p_output_tokens:0,
-      p_total_tokens:0,
-      p_item_count:1,
-      p_byte_count:bytes.byteLength,
-      p_error_code:publicTranscriptionFailure(error).code,
-      p_runtime_version:"sanad-voice-v2",
-    }).catch(()=>null);
+    try {
+      const { error: metricError } = await adminClient.rpc("record_sanad_agent_server_metric_v1",{
+        p_user_id:authData.user.id,
+        p_thread_id:null,
+        p_business_id:null,
+        p_request_id:requestId,
+        p_scope:"voice_transcription",
+        p_status:"failed",
+        p_transport:"json",
+        p_model:MODEL,
+        p_thinking_level:null,
+        p_total_latency_ms:Date.now()-startedAt,
+        p_context_load_ms:null,
+        p_attachment_context_ms:null,
+        p_model_latency_ms:Number(interaction?.__sanad_http_latency_ms || 0) || null,
+        p_tool_latency_ms:null,
+        p_persistence_ms:null,
+        p_tool_calls:0,
+        p_failed_tool_calls:0,
+        p_retry_count:Number(interaction?.__sanad_retry_count || 0) || 0,
+        p_input_tokens:0,
+        p_cached_tokens:0,
+        p_output_tokens:0,
+        p_total_tokens:0,
+        p_item_count:1,
+        p_byte_count:bytes.byteLength,
+        p_error_code:publicTranscriptionFailure(error).code,
+        p_runtime_version:"sanad-voice-v2",
+      });
+      if (metricError) {
+        console.warn("sanad_voice_metric_record_failed", {
+          request_id: requestId,
+          status: "failed",
+          error_code: cleanText(metricError.message, 240),
+        });
+      }
+    } catch (metricCause) {
+      console.warn("sanad_voice_metric_record_failed", {
+        request_id: requestId,
+        status: "failed",
+        error_code: cleanText(metricCause instanceof Error ? metricCause.message : "metric_record_failed", 240),
+      });
+    }
     const failure = publicTranscriptionFailure(error);
     voicePhase("voice_request_failed", {
       request_id: requestId,
