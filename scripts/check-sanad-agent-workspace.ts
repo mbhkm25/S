@@ -154,7 +154,8 @@ assert.match(voiceFunction, /auth\.getUser/);
 assert.match(voiceFunction, /method:\s*"DELETE"/);
 assert.match(voiceFunction, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
 assert.match(voiceFunction, /MAX_RECORDING_MS = 90_000/);
-assert.match(voiceFunction, /trycloudflare\\.com/);
+assert.match(voiceFunction, /SANAD_VOICE_PREVIEW_ORIGINS/);
+assert.doesNotMatch(voiceFunction, /trycloudflare\\.com/, 'Production voice CORS must not wildcard temporary preview domains.');
 assert.match(voiceFunction, /"https:\/\/localhost"/);
 assert.match(voiceFunction, /publicTranscriptionFailure/);
 assert.doesNotMatch(
