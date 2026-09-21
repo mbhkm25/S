@@ -68,7 +68,7 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
       ) : null}
       <aside
         data-sidebar-density="compact"
-        className={`absolute inset-y-0 right-0 z-50 flex w-[84vw] max-w-[320px] flex-col border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[320px] flex-col overflow-hidden border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
@@ -100,14 +100,14 @@ export default function AssistantWorkspaceSidebar(props: Props) {
 
   return (
     <Shell mobileOpen={props.mobileOpen} onCloseMobile={props.onCloseMobile}>
-      <div className="border-b border-slate-100 px-3 py-3">
+      <div className="shrink-0 border-b border-slate-100 px-3 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-900">
-              <SanadIntelligenceMark state={props.assistantState} size={24} />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center text-slate-900">
+              <SanadIntelligenceMark state={props.assistantState} size={28} />
             </span>
             <div className="min-w-0">
-              <strong className="block truncate text-[13px] font-semibold text-slate-950">مساعد سند</strong>
+              <strong className="block truncate text-sm font-semibold tracking-[-0.01em] text-slate-950">مساعد سند</strong>
               <SanadAssistantStatus state={props.assistantState} className="mt-0.5" announce />
             </div>
           </div>
@@ -132,7 +132,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 border-b border-slate-100 px-2">
+      <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
         {[
           ['chats', MessageSquare, 'المحادثات'],
           ['memory', Brain, 'الذاكرة'],
@@ -209,7 +209,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
       ) : null}
 
       {tab === 'memory' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div data-sidebar-scroll-region="memory" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]">
           <div className="border-b border-slate-100 px-1 pb-3">
             <div className="flex items-center gap-2 text-slate-800">
               <Brain className="h-4 w-4" />
@@ -248,7 +248,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
       ) : null}
 
       {tab === 'settings' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div data-sidebar-scroll-region="settings" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]">
           <div>
             <h3 className="text-base font-semibold text-slate-900">إعدادات سند</h3>
             <p className="mt-1 text-xs leading-5 text-slate-400">تحكم في ذاكرة سند وطريقة عرض الإجابات.</p>
