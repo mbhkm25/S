@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
+import { SettingRow, SettingSwitch, SettingsSection } from '../../components/settings/SettingsControls';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
 import type {
   SanadAgentMemory,
@@ -40,31 +41,14 @@ type Props = {
   onPreferenceChange: (key: keyof Pick<SanadAgentPreferences,
     'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
   >, value: boolean) => void;
+  pendingPreferenceKey?: keyof Pick<SanadAgentPreferences,
+    'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
+  > | null;
   memories: SanadAgentMemory[];
   onForgetMemory: (memoryId: string) => void;
 };
 
 type SidebarTab = 'chats' | 'memory' | 'settings';
-
-function Toggle({
-  enabled,
-  onChange,
-}: {
-  enabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      onClick={() => onChange(!enabled)}
-      className={`relative h-6 w-11 rounded-full transition ${enabled ? 'bg-slate-950' : 'bg-slate-200'}`}
-    >
-      <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${enabled ? 'right-6' : 'right-1'}`} />
-    </button>
-  );
-}
 
 function Shell({ children, mobileOpen, onCloseMobile }: {
   children: React.ReactNode;
@@ -270,7 +254,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           </div>
 
           {props.preferences ? (
-            <div className="mt-4 space-y-2">
+            <SettingsSection title="التفضيلات" description="تحكم في الحفظ والذاكرة وطريقة عرض إجابات سند.">
               {[
                 ['save_history_enabled', 'حفظ المحادثات', 'احتفظ بسجل المحادثات على حسابك.'],
                 ['memory_enabled', 'الذاكرة طويلة المدى', 'استخدم التفضيلات والملاحظات المستقرة بين المحادثات.'],
@@ -280,40 +264,66 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                 const k = key as keyof Pick<SanadAgentPreferences,
                   'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
                 >;
+                const pending = props.pendingPreferenceKey === k;
+                const busy = props.pendingPreferenceKey !== null && props.pendingPreferenceKey !== undefined;
                 return (
-                  <div key={String(key)} className="flex items-center justify-between gap-3 border-b border-slate-100 bg-transparent px-1 py-3">
-                    <div>
-                      <p className="text-[13px] font-medium text-slate-800">{String(title)}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-400">{String(description)}</p>
-                    </div>
-                    <Toggle enabled={props.preferences[k]} onChange={(value) => props.onPreferenceChange(k, value)} />
-                  </div>
+                  <SettingRow
+                    key={String(key)}
+                    label={String(title)}
+                    description={String(description)}
+                    meta={pending ? <span className="text-[11px] text-slate-400">جارٍ حفظ التغيير…</span> : null}
+                    control={(
+                      <SettingSwitch
+                        checked={props.preferences[k]}
+                        label={String(title)}
+                        pending={pending}
+                        disabled={busy && !pending}
+                        onCheckedChange={(value) => props.onPreferenceChange(k, value)}
+                      />
+                    )}
+                  />
                 );
               })}
-            </div>
+            </SettingsSection>
           ) : (
-            <p className="mt-4 text-xs text-slate-400">جارٍ تحميل الإعدادات…</p>
+            <div className="mt-4" aria-busy="true">
+              <p className="px-1 text-xs text-slate-400">جارٍ تحميل الإعدادات…</p>
+              <div className="mt-2 space-y-1" aria-hidden="true">
+                {[0, 1, 2, 3].map((item) => (
+                  <div key={item} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 px-1 py-3">
+                    <div className="min-w-0 space-y-2">
+                      <div className="h-3 w-24 rounded bg-slate-100" />
+                      <div className="h-2.5 w-full max-w-[13rem] rounded bg-slate-100/80" />
+                    </div>
+                    <div className="h-6 w-10 shrink-0 rounded-full bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
-          <div className="mt-4 border-b border-slate-100 bg-transparent px-1 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-slate-500" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">أداء سند · آخر 7 أيام</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">قياسات زمنية فقط، دون حفظ محتوى رسائلك.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => void loadPerformance()}
-                disabled={performanceLoading}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40"
-                title="تحديث مؤشرات الأداء"
-              >
-                <RefreshCcw className={`h-3.5 w-3.5 ${performanceLoading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+          <div className="mt-4">
+            <SettingRow
+              label={(
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <Activity className="h-4 w-4 shrink-0 text-slate-500" />
+                  <span className="min-w-0">أداء سند · آخر 7 أيام</span>
+                </span>
+              )}
+              description="قياسات زمنية فقط، دون حفظ محتوى رسائلك."
+              control={(
+                <button
+                  type="button"
+                  onClick={() => void loadPerformance()}
+                  disabled={performanceLoading}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 outline-none hover:bg-slate-50 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:opacity-40"
+                  title="تحديث مؤشرات الأداء"
+                  aria-label="تحديث مؤشرات الأداء"
+                >
+                  <RefreshCcw className={`h-3.5 w-3.5 ${performanceLoading ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            />
 
             {performanceLoading && !performanceSummary ? (
               <p className="mt-3 text-sm text-slate-400">جارٍ تحميل القياسات…</p>
