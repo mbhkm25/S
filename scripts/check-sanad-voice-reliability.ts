@@ -93,7 +93,8 @@ assert.match(api, /options\.signal/);
 assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
 
 assert.match(edge, /isAllowedOrigin/);
-assert.match(edge, /trycloudflare\\.com/);
+assert.match(edge, /SANAD_VOICE_PREVIEW_ORIGINS/);
+assert.doesNotMatch(edge, /trycloudflare\\.com/, 'Production voice CORS must not wildcard temporary preview domains.');
 assert.match(edge, /https:\/\/localhost/);
 assert.match(edge, /voiceError/);
 assert.match(edge, /publicTranscriptionFailure/);
