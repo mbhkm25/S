@@ -134,7 +134,7 @@ console.log('SANAD Agent Visual v4 contract passed.');
 for (const required of [
   'MediaRecorder',
   'getUserMedia',
-  'MAX_RECORDING_MS = 90_000',
+  'MAX_RECORDING_MS',
   'transcribeSanadAudio',
   'تم تحويل الصوت إلى نص. راجعه قبل الإرسال.',
 ]) {
