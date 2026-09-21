@@ -62,12 +62,12 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
           type="button"
           aria-label="إغلاق الشريط الجانبي"
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[1px] xl:hidden"
+          className="absolute inset-0 z-40 bg-slate-950/25 backdrop-blur-[1px] xl:hidden"
         />
       ) : null}
       <aside
         data-sidebar-density="compact"
-        className={`fixed inset-y-0 right-0 z-50 flex w-[84vw] max-w-[320px] flex-col border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`absolute inset-y-0 right-0 z-50 flex w-[84vw] max-w-[320px] flex-col border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
