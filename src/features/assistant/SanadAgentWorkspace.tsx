@@ -340,7 +340,13 @@ export default function SanadAgentWorkspace() {
 
   const handleVoiceStateChange = useCallback((state: SanadVoiceState) => {
     clearOrbSuccessTimeout();
-    setOrbState(state === 'listening' ? 'listening' : state === 'transcribing' ? 'thinking' : 'idle');
+    setOrbState(
+      state === 'listening'
+        ? 'listening'
+        : ['requesting_permission', 'stopping', 'transcribing'].includes(state)
+          ? 'thinking'
+          : 'idle',
+    );
   }, [clearOrbSuccessTimeout]);
 
   useEffect(() => () => clearOrbSuccessTimeout(), [clearOrbSuccessTimeout]);
