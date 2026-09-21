@@ -6,6 +6,8 @@ import {
   voiceFailureMessage,
 } from './sanadVoiceRuntime';
 
+const VOICE_FUNCTION_ENDPOINT = String(import.meta.env.VITE_SANAD_VOICE_ENDPOINT || '').trim();
+
 export type SanadVoiceTranscriptionResult = {
   ok: true;
   request_id?: string;
@@ -132,6 +134,7 @@ export async function transcribeSanadAudio(
           duration_ms: Math.max(0, Math.round(durationMs)),
         },
         signal: request.signal,
+        endpointUrl: VOICE_FUNCTION_ENDPOINT || undefined,
       },
     );
 
