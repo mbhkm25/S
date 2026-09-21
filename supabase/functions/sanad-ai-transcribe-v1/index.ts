@@ -94,6 +94,17 @@ function voiceError(req: Request, code: string, status: number, requestId?: stri
   }, status);
 }
 
+function voicePhase(
+  event: string,
+  fields: Record<string, string | number | boolean | null | undefined> = {},
+) {
+  try {
+    console.info("[sanad_voice_phase]", { event, ...fields });
+  } catch {
+    // Telemetry must never affect the request path.
+  }
+}
+
 function publicTranscriptionFailure(error: string): { code: string; status: number } {
   const normalized = error.toLowerCase();
   if (/gemini_429|gemini_5\d\d|network|fetch|upload_start_5\d\d|upload_finalize_5\d\d/.test(normalized)) {
@@ -172,15 +183,47 @@ async function deleteGeminiFile(name: string) {
   }
 }
 
-Deno.serve(async (req) => {
+async function handleRequest(req: Request, requestId: string) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
-  if (req.method !== "POST") return voiceError(req, "method_not_allowed", 405);
+
+  const requestStartedAt = Date.now();
+  const origin = req.headers.get("Origin") || "";
+  voicePhase("voice_request_received", {
+    request_id: requestId,
+    method: req.method,
+    origin_allowed: isAllowedOrigin(origin),
+  });
+
+  if (req.method !== "POST") {
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "method",
+      error_code: "method_not_allowed",
+      duration_ms: Date.now() - requestStartedAt,
+    });
+    return voiceError(req, "method_not_allowed", 405, requestId);
+  }
+
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY || !GEMINI_API_KEY) {
-    return voiceError(req, "voice_service_not_configured", 503);
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "configuration",
+      error_code: "voice_service_not_configured",
+      duration_ms: Date.now() - requestStartedAt,
+    });
+    return voiceError(req, "voice_service_not_configured", 503, requestId);
   }
 
   const authorization = req.headers.get("Authorization") || "";
-  if (!authorization.startsWith("Bearer ")) return voiceError(req, "authentication_required", 401);
+  if (!authorization.startsWith("Bearer ")) {
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "auth",
+      error_code: "authentication_required",
+      duration_ms: Date.now() - requestStartedAt,
+    });
+    return voiceError(req, "authentication_required", 401, requestId);
+  }
 
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -188,52 +231,102 @@ Deno.serve(async (req) => {
   const token = authorization.slice("Bearer ".length).trim();
 
   let authData: { user: { id: string } | null };
+  voicePhase("voice_auth_started", { request_id: requestId });
   try {
     const result = await adminClient.auth.getUser(token);
     if (result.error || !result.data.user) {
       return voiceError(req, "authentication_required", 401);
     }
     authData = { user: { id: result.data.user.id } };
+    voicePhase("voice_auth_succeeded", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+    });
   } catch (cause) {
     console.error("sanad_voice_auth_verification_failed", {
       error: cleanText(cause instanceof Error ? cause.message : "auth_verification_failed", 240),
     });
-    return voiceError(req, "service_unavailable", 503);
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "auth",
+      error_code: "auth_verification_failed",
+      duration_ms: Date.now() - requestStartedAt,
+    });
+    return voiceError(req, "service_unavailable", 503, requestId);
   }
 
   let body: Json;
   try {
     body = await req.json() as Json;
+    voicePhase("voice_body_parsed", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+    });
   } catch {
-    return voiceError(req, "invalid_json", 400);
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "body_parse",
+      error_code: "invalid_json",
+      duration_ms: Date.now() - requestStartedAt,
+    });
+    return voiceError(req, "invalid_json", 400, requestId);
   }
 
   const durationMs = Math.max(0, Number(body.duration_ms || 0) || 0);
   if (durationMs > MAX_RECORDING_MS + 1000) {
-    return voiceError(req, "recording_too_long", 413);
+    return voiceError(req, "recording_too_long", 413, requestId);
   }
 
   const mimeType = normalizeMime(body.mime_type);
   if (!ALLOWED_MIME.has(mimeType) && mimeType !== "audio/m4a") {
-    return voiceError(req, "unsupported_audio_type", 415);
+    return voiceError(req, "unsupported_audio_type", 415, requestId);
   }
 
   let bytes: Uint8Array;
   try {
     bytes = decodeBase64(cleanText(body.audio_base64, MAX_BASE64_LENGTH));
+    voicePhase("voice_audio_decoded", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+      mime_type: mimeType,
+      size_bytes: bytes.byteLength,
+    });
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : "invalid_audio";
-    return voiceError(req, error, error === "audio_too_large" ? 413 : 400);
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "audio_decode",
+      error_code: error,
+      duration_ms: Date.now() - requestStartedAt,
+      mime_type: mimeType || null,
+    });
+    return voiceError(req, error, error === "audio_too_large" ? 413 : 400, requestId);
   }
 
   const startedAt = Date.now();
-  const requestId = crypto.randomUUID();
   let uploadedName = "";
   let interaction: Json | null = null;
+  let providerPhase = "gemini_upload";
   try {
+    voicePhase("voice_upload_started", {
+      request_id: requestId,
+      mime_type: mimeType,
+      size_bytes: bytes.byteLength,
+    });
     const uploaded = await uploadGeminiFile(bytes, mimeType);
     uploadedName = uploaded.name;
+    voicePhase("voice_upload_succeeded", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+      mime_type: mimeType,
+      size_bytes: bytes.byteLength,
+    });
 
+    providerPhase = "gemini_transcription";
+    voicePhase("voice_transcription_started", {
+      request_id: requestId,
+      model: MODEL,
+    });
     interaction = await geminiInteraction({
       model: MODEL,
       input: [{ type: "audio", uri: uploaded.uri, mime_type: mimeType }],
@@ -246,7 +339,21 @@ Deno.serve(async (req) => {
     }, GEMINI_API_KEY);
 
     const transcript = cleanText(extractText(interaction), 12000);
-    if (!transcript) return voiceError(req, "transcript_empty", 422, requestId);
+    if (!transcript) {
+      voicePhase("voice_request_failed", {
+        request_id: requestId,
+        phase: "transcript_extract",
+        error_code: "transcript_empty",
+        duration_ms: Date.now() - requestStartedAt,
+      });
+      return voiceError(req, "transcript_empty", 422, requestId);
+    }
+
+    voicePhase("voice_transcription_succeeded", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+      model: MODEL,
+    });
 
     const latencyMs = Date.now() - startedAt;
     const usage = interaction?.usage && typeof interaction.usage === "object" ? interaction.usage as Json : {};
@@ -279,6 +386,11 @@ Deno.serve(async (req) => {
       p_runtime_version:"sanad-voice-v2",
     }).catch(()=>null);
 
+    voicePhase("voice_response_sent", {
+      request_id: requestId,
+      duration_ms: Date.now() - requestStartedAt,
+      status: 200,
+    });
     return respond(req, {
       ok: true,
       request_id: requestId,
@@ -326,8 +438,35 @@ Deno.serve(async (req) => {
       p_runtime_version:"sanad-voice-v2",
     }).catch(()=>null);
     const failure = publicTranscriptionFailure(error);
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: providerPhase,
+      error_code: failure.code,
+      duration_ms: Date.now() - requestStartedAt,
+      mime_type: mimeType,
+      size_bytes: bytes.byteLength,
+    });
     return voiceError(req, failure.code, failure.status, requestId);
   } finally {
     if (uploadedName) await deleteGeminiFile(uploadedName);
+  }
+}
+
+Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  try {
+    return await handleRequest(req, requestId);
+  } catch (cause) {
+    const error = cleanText(cause instanceof Error ? cause.message : "internal_runtime_error", 800);
+    console.error("sanad_voice_unhandled_exception", {
+      request_id: requestId,
+      error,
+    });
+    voicePhase("voice_request_failed", {
+      request_id: requestId,
+      phase: "unhandled",
+      error_code: "internal_runtime_error",
+    });
+    return voiceError(req, "internal_runtime_error", 500, requestId);
   }
 });
