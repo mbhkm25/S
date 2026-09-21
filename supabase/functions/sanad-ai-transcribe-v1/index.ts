@@ -86,12 +86,27 @@ function respond(req: Request, data: unknown, status = 200) {
   });
 }
 
-function voiceError(req: Request, code: string, status: number, requestId?: string) {
+function voiceError(
+  req: Request,
+  code: string,
+  status: number,
+  requestId?: string,
+  phase?: string,
+) {
   return respond(req, {
     ok: false,
     error: code,
     ...(requestId ? { request_id: requestId } : {}),
+    ...(phase ? { phase } : {}),
   }, status);
+}
+
+type VoiceTrace = {
+  phase: string;
+};
+
+function setVoicePhase(trace: VoiceTrace, phase: string) {
+  trace.phase = phase;
 }
 
 function voicePhase(
@@ -183,10 +198,11 @@ async function deleteGeminiFile(name: string) {
   }
 }
 
-async function handleRequest(req: Request, requestId: string) {
+async function handleRequest(req: Request, requestId: string, trace: VoiceTrace) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
 
   const requestStartedAt = Date.now();
+  setVoicePhase(trace, "request_received");
   const origin = req.headers.get("Origin") || "";
   voicePhase("voice_request_received", {
     request_id: requestId,
@@ -225,12 +241,24 @@ async function handleRequest(req: Request, requestId: string) {
     return voiceError(req, "authentication_required", 401, requestId);
   }
 
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  setVoicePhase(trace, "client_init");
+  let adminClient: ReturnType<typeof createClient>;
+  try {
+    adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  } catch (cause) {
+    console.error("sanad_voice_client_init_failed", {
+      request_id: requestId,
+      error: cleanText(cause instanceof Error ? cause.message : "client_init_failed", 240),
+    });
+    return voiceError(req, "service_unavailable", 503, requestId, "client_init");
+  }
+
   const token = authorization.slice("Bearer ".length).trim();
 
   let authData: { user: { id: string } | null };
+  setVoicePhase(trace, "auth");
   voicePhase("voice_auth_started", { request_id: requestId });
   try {
     const result = await adminClient.auth.getUser(token);
@@ -255,6 +283,7 @@ async function handleRequest(req: Request, requestId: string) {
     return voiceError(req, "service_unavailable", 503, requestId);
   }
 
+  setVoicePhase(trace, "body_parse");
   let body: Json;
   try {
     body = await req.json() as Json;
@@ -282,6 +311,7 @@ async function handleRequest(req: Request, requestId: string) {
     return voiceError(req, "unsupported_audio_type", 415, requestId);
   }
 
+  setVoicePhase(trace, "audio_decode");
   let bytes: Uint8Array;
   try {
     bytes = decodeBase64(cleanText(body.audio_base64, MAX_BASE64_LENGTH));
@@ -304,6 +334,7 @@ async function handleRequest(req: Request, requestId: string) {
   }
 
   const startedAt = Date.now();
+  setVoicePhase(trace, "gemini_upload");
   let uploadedName = "";
   let interaction: Json | null = null;
   let providerPhase = "gemini_upload";
@@ -323,6 +354,7 @@ async function handleRequest(req: Request, requestId: string) {
     });
 
     providerPhase = "gemini_transcription";
+    setVoicePhase(trace, "gemini_transcription");
     voicePhase("voice_transcription_started", {
       request_id: requestId,
       model: MODEL,
@@ -454,8 +486,9 @@ async function handleRequest(req: Request, requestId: string) {
 
 Deno.serve(async (req) => {
   const requestId = crypto.randomUUID();
+  const trace: VoiceTrace = { phase: "entry" };
   try {
-    return await handleRequest(req, requestId);
+    return await handleRequest(req, requestId, trace);
   } catch (cause) {
     const error = cleanText(cause instanceof Error ? cause.message : "internal_runtime_error", 800);
     console.error("sanad_voice_unhandled_exception", {
@@ -464,9 +497,9 @@ Deno.serve(async (req) => {
     });
     voicePhase("voice_request_failed", {
       request_id: requestId,
-      phase: "unhandled",
+      phase: trace.phase,
       error_code: "internal_runtime_error",
     });
-    return voiceError(req, "internal_runtime_error", 500, requestId);
+    return voiceError(req, "internal_runtime_error", 500, requestId, trace.phase);
   }
 });
