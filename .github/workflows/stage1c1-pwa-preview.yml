@@ -1,4 +1,4 @@
-name: Stage 1C.1.1 PWA Runtime Preview
+name: Stage 1C.1 PWA Runtime Preview
 
 on:
   push:
@@ -229,7 +229,7 @@ jobs:
           echo "promote_url=$PROMOTE_URL" >> "$GITHUB_OUTPUT"
 
           {
-            echo "## Stage 1C.1.1 PWA Runtime Preview"
+            echo "## Stage 1C.1 PWA Runtime Preview"
             echo
             echo "- Exact frontend SHA: $TARGET_SHA"
             echo "- Preview URL: $PREVIEW_URL"
