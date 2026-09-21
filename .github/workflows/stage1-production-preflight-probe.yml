@@ -1,0 +1,39 @@
+name: Stage 1 Production Preflight Probe
+
+on:
+  push:
+    branches:
+      - ops/stage1-production-preflight-probe
+    paths:
+      - '.github/workflows/stage1-production-preflight-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe current Production PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/probe
+          curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/version.json -o /tmp/probe/version.json
+          curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/manifest.webmanifest -o /tmp/probe/manifest.webmanifest
+          curl --fail --silent --show-error --location --max-time 30 https://app.sanadflow.com/sw.js -o /tmp/probe/sw.js
+          {
+            echo "VERSION_JSON"
+            cat /tmp/probe/version.json
+            echo
+            echo "MANIFEST_SHA256=$(sha256sum /tmp/probe/manifest.webmanifest | awk '{print $1}')"
+            echo "SW_SHA256=$(sha256sum /tmp/probe/sw.js | awk '{print $1}')"
+          } | tee /tmp/probe/summary.txt
+
+      - name: Upload probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1-production-preflight-probe
+          path: /tmp/probe/
+          retention-days: 2
