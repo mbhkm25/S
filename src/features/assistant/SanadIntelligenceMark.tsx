@@ -6,6 +6,7 @@ type Props = {
   size?: number;
   className?: string;
   title?: string;
+  monochrome?: boolean;
 };
 
 function stateAccent(state: SanadAssistantPresentationState) {
@@ -24,8 +25,9 @@ export default function SanadIntelligenceMark({
   size = 24,
   className = '',
   title,
+  monochrome = false,
 }: Props) {
-  const accent = stateAccent(state);
+  const accent = monochrome ? 'currentColor' : stateAccent(state);
   const style = {
     '--sanad-intelligence-accent': accent,
   } as CSSProperties;
