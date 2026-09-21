@@ -10,13 +10,23 @@ const MODEL = "gemini-3.5-transcribe";
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_RECORDING_MS = 90_000;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_AUDIO_BYTES * 4 / 3) + 32;
-const ALLOWED_ORIGINS = new Set([
+const BASE_ALLOWED_ORIGINS = [
   "https://app.sanadflow.com",
   "https://localhost",
   "http://localhost",
   "capacitor://localhost",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+];
+
+const CONFIGURED_PREVIEW_ORIGINS = (Deno.env.get("SANAD_VOICE_PREVIEW_ORIGINS") ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter((value) => /^https:\/\/[A-Za-z0-9.-]+(?::\d+)?$/.test(value));
+
+const ALLOWED_ORIGINS = new Set([
+  ...BASE_ALLOWED_ORIGINS,
+  ...CONFIGURED_PREVIEW_ORIGINS,
 ]);
 const ALLOWED_MIME = new Set([
   "audio/webm",
@@ -51,7 +61,7 @@ const CUSTOM_VOCABULARY = [
 ];
 
 function isAllowedOrigin(origin: string) {
-  return ALLOWED_ORIGINS.has(origin) || /^https:\/\/[-a-z0-9]+\.trycloudflare\.com$/i.test(origin);
+  return ALLOWED_ORIGINS.has(origin);
 }
 
 function corsHeaders(req: Request) {
