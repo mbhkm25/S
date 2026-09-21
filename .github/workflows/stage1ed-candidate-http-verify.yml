@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       CANDIDATE_URL: 'https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-stage1e-candidate'
-      PREVIEW_ORIGIN: 'https://specify-bugs-lie-danny.trycloudflare.com'
+      PREVIEW_ORIGIN: 'https://commissioner-beer-prefer-acceptance.trycloudflare.com'
       OTHER_PREVIEW_ORIGIN: 'https://not-this-preview.trycloudflare.com'
     steps:
       - name: Verify exact preview CORS
