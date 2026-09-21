@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import type { Key, ReactNode } from 'react';
 
 type SettingRowProps = {
+  key?: Key;
   label: ReactNode;
   description?: ReactNode;
   meta?: ReactNode;
