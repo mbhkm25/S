@@ -1,0 +1,116 @@
+name: Deploy SANAD Voice Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Full commit SHA containing the reviewed sanad-ai-transcribe-v1 source"
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-sanad-ai-transcribe-production.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-voice-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      DEFAULT_SOURCE_SHA: '0fa409a1bf704b9c494bad51d909c85222c85d02'
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+      FUNCTION_URL: https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-v1
+
+    steps:
+      - name: Resolve reviewed source SHA
+        id: source
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="${REQUESTED_SHA:-$DEFAULT_SOURCE_SHA}"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout reviewed source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Validate Voice v2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ steps.source.outputs.sha }}"
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          ! grep -R "trycloudflare\.com" supabase/functions/sanad-ai-transcribe-v1
+          ! grep -R "sanad-ai-transcribe-stage1e-candidate" supabase/functions/sanad-ai-transcribe-v1
+          grep -q '"https://app.sanadflow.com"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+          grep -q '"capacitor://localhost"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+          grep -q 'p_runtime_version:"sanad-voice-v2"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy sanad-ai-transcribe-v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy sanad-ai-transcribe-v1 --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Verify function listing
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions list --project-ref "$SUPABASE_PROJECT_REF" | tee /tmp/functions.txt
+          grep -q 'sanad-ai-transcribe-v1' /tmp/functions.txt
+
+      - name: Verify CORS and JWT boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30             -X OPTIONS "$FUNCTION_URL"             -H 'Origin: https://app.sanadflow.com'             -H 'Access-Control-Request-Method: POST'             -D /tmp/app.headers -o /tmp/app.body
+          grep -i -F 'access-control-allow-origin: https://app.sanadflow.com' /tmp/app.headers
+
+          curl --silent --show-error --max-time 30             -X OPTIONS "$FUNCTION_URL"             -H 'Origin: https://unknown-stage1.trycloudflare.com'             -H 'Access-Control-Request-Method: POST'             -D /tmp/unknown.headers -o /tmp/unknown.body
+          if grep -i -F 'access-control-allow-origin: https://unknown-stage1.trycloudflare.com' /tmp/unknown.headers; then
+            echo 'Unexpected arbitrary trycloudflare CORS grant' >&2
+            exit 1
+          fi
+
+          STATUS="$(curl --silent --show-error --max-time 30             -X POST "$FUNCTION_URL"             -H 'Origin: https://app.sanadflow.com'             -H 'Content-Type: application/json'             --data '{"audio_base64":"AA==","mime_type":"audio/webm","duration_ms":1}'             -o /tmp/unauth.json -w '%{http_code}')"
+          test "$STATUS" = "401"
+          cat /tmp/unauth.json
+
+      - name: Record rollout evidence
+        shell: bash
+        run: |
+          {
+            echo "SOURCE_SHA=${{ steps.source.outputs.sha }}"
+            echo "FUNCTION=sanad-ai-transcribe-v1"
+            echo "RUNTIME=sanad-voice-v2"
+            echo "VERIFY_JWT_EXPECTED=true"
+            echo "CORS_APP_ORIGIN=PASS"
+            echo "CORS_ARBITRARY_TRYCLOUDFLARE=REJECTED"
+            echo "UNAUTHENTICATED_REQUEST=401"
+          } | tee /tmp/sanad-voice-production-rollout.txt
+
+      - name: Upload rollout evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanad-voice-production-rollout
+          path: /tmp/sanad-voice-production-rollout.txt
+          retention-days: 14
