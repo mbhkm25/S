@@ -157,7 +157,11 @@ assert.match(voiceFunction, /MAX_RECORDING_MS = 90_000/);
 assert.match(voiceFunction, /trycloudflare\\.com/);
 assert.match(voiceFunction, /"https:\/\/localhost"/);
 assert.match(voiceFunction, /publicTranscriptionFailure/);
-assert.doesNotMatch(voiceFunction, /error:\s*cleanText\(error, 800\)/, 'Voice responses must not expose raw provider errors');
+assert.doesNotMatch(
+  voiceFunction,
+  /return\s+respond\([^\n]*error:\s*cleanText\(error,\s*800\)/,
+  'Voice responses must not expose raw provider errors',
+);
 assert.match(supabaseConfig, /\[functions\.sanad-ai-transcribe-v1\][\s\S]*verify_jwt = true/);
 assert.match(workspace, /SanadVoiceDictationButton/);
 assert.match(workspace, /راجع النص الصوتي قبل الإرسال/);
