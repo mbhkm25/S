@@ -99,6 +99,24 @@ assert.match(edge, /https:\/\/localhost/);
 assert.match(edge, /voiceError/);
 assert.match(edge, /publicTranscriptionFailure/);
 assert.match(edge, /record_sanad_agent_server_metric_v1/);
+assert.match(edge, /async function handleRequest\(req: Request, requestId: string\)/);
+assert.match(edge, /sanad_voice_unhandled_exception/);
+for (const phase of [
+  'voice_request_received',
+  'voice_auth_started',
+  'voice_auth_succeeded',
+  'voice_body_parsed',
+  'voice_audio_decoded',
+  'voice_upload_started',
+  'voice_upload_succeeded',
+  'voice_transcription_started',
+  'voice_transcription_succeeded',
+  'voice_response_sent',
+  'voice_request_failed',
+]) {
+  assert.ok(edge.includes(phase), `Voice phase telemetry missing ${phase}`);
+}
 assert.doesNotMatch(edge, /transcript[^\n]*console\./i, 'Voice telemetry must not log transcript content.');
+assert.doesNotMatch(edge, /audio_base64[^\n]*console\./i, 'Voice telemetry must not log base64 audio content.');
 
 console.log('SANAD Voice Reliability Stage 1E contract passed.');
