@@ -438,3 +438,93 @@ article:hover .sanad-message-actions,
   }
 }
 
+
+
+/* SANAD Intelligence Mark v1 — state motion only, no perpetual idle animation. */
+.sanad-intelligence-mark {
+  color: #0f172a;
+  transform-origin: 50% 50%;
+  isolation: isolate;
+}
+
+.sanad-intelligence-mark svg {
+  display: block;
+  overflow: visible;
+}
+
+.sanad-intelligence-mark__frame,
+.sanad-intelligence-mark__core,
+.sanad-intelligence-mark__node {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.sanad-intelligence-mark--listening .sanad-intelligence-mark__node--top,
+.sanad-intelligence-mark--listening .sanad-intelligence-mark__node--bottom {
+  animation: sanad-intelligence-listening 1.05s ease-in-out infinite;
+}
+
+.sanad-intelligence-mark--transcribing .sanad-intelligence-mark__core {
+  animation: sanad-intelligence-transcribing 1.1s ease-in-out infinite;
+}
+
+.sanad-intelligence-mark--thinking .sanad-intelligence-mark__core {
+  animation: sanad-intelligence-thinking 2.4s ease-in-out infinite;
+}
+
+.sanad-intelligence-mark--executing .sanad-intelligence-mark__core {
+  animation: sanad-intelligence-executing .72s ease-in-out infinite alternate;
+}
+
+.sanad-intelligence-mark--waiting_approval .sanad-intelligence-mark__core {
+  opacity: .82;
+}
+
+.sanad-intelligence-mark--success {
+  animation: sanad-intelligence-success .26s ease-out 1;
+}
+
+.sanad-intelligence-mark--error {
+  animation: sanad-intelligence-error .2s ease-out 1;
+}
+
+@keyframes sanad-intelligence-listening {
+  0%, 100% { transform: scale(.88); opacity: .72; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+
+@keyframes sanad-intelligence-transcribing {
+  0%, 100% { opacity: .62; transform: translateY(-.15px); }
+  50% { opacity: 1; transform: translateY(.55px); }
+}
+
+@keyframes sanad-intelligence-thinking {
+  0%, 100% { opacity: .72; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.035); }
+}
+
+@keyframes sanad-intelligence-executing {
+  from { transform: translateX(-.7px); opacity: .78; }
+  to { transform: translateX(.9px); opacity: 1; }
+}
+
+@keyframes sanad-intelligence-success {
+  from { transform: scale(.92); opacity: .68; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes sanad-intelligence-error {
+  from { transform: translateX(-.55px); opacity: .7; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sanad-intelligence-mark,
+  .sanad-intelligence-mark *,
+  .sanad-intelligence-mark__frame,
+  .sanad-intelligence-mark__core,
+  .sanad-intelligence-mark__node {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
