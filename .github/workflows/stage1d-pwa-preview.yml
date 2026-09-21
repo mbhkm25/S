@@ -1,0 +1,323 @@
+name: Stage 1D PWA Runtime Preview
+
+on:
+  push:
+    branches:
+      - ops/stage1d-pwa-preview
+    paths:
+      - '.github/workflows/stage1d-pwa-preview.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage1d-pwa-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Serve exact Stage 1B SHA over HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TARGET_SHA: bef321695b57e1e436a1587be472b8feb159221c
+      PREVIEW_PORT: '4173'
+
+    steps:
+      - name: Checkout exact frontend candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$TARGET_SHA"
+          echo "Candidate SHA: $ACTUAL_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Stage 1B candidate
+        run: |
+          npm run lint
+          npm run check:routes
+
+      - name: Build PWA A and B from the same source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${TARGET_SHA:0:12}"
+
+          VITE_APP_VERSION="stage1d-${SHORT_SHA}-a" npm run build
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          test -f dist/version.json
+          mv dist dist-a
+
+          VITE_APP_VERSION="stage1d-${SHORT_SHA}-b" npm run build
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          test -f dist/version.json
+          mv dist dist-b
+
+          printf 'a' > /tmp/sanad-preview-active
+          echo "Build A:"
+          cat dist-a/version.json
+          echo
+          echo "Build B:"
+          cat dist-b/version.json
+
+      - name: Prepare isolated preview server
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_TOKEN="$(openssl rand -hex 20)"
+          printf '%s' "$PREVIEW_TOKEN" > /tmp/sanad-preview-token
+          chmod 600 /tmp/sanad-preview-token
+
+          cat > /tmp/sanad_preview_server.py <<'PY'
+          import http.server
+          import mimetypes
+          import os
+          import pathlib
+          import urllib.parse
+
+          REPO = pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          TOKEN = pathlib.Path("/tmp/sanad-preview-token").read_text().strip()
+          ACTIVE_FILE = pathlib.Path("/tmp/sanad-preview-active")
+
+          def active_root():
+              active = ACTIVE_FILE.read_text().strip()
+              return REPO / ("dist-b" if active == "b" else "dist-a")
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              server_version = "SANADStage1BR1Preview/1"
+
+              def send_common_headers(self, content_type, length):
+                  self.send_response(200)
+                  self.send_header("Content-Type", content_type)
+                  self.send_header("Content-Length", str(length))
+                  self.send_header("X-Content-Type-Options", "nosniff")
+                  self.send_header("Referrer-Policy", "no-referrer")
+                  self.send_header("Cache-Control", "no-store" if self.path.startswith(("/sw.js", "/version.json")) else "no-cache")
+                  self.end_headers()
+
+              def control(self, parsed):
+                  if parsed.path != "/__stage1d/promote":
+                      return False
+                  supplied = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
+                  if supplied != TOKEN:
+                      body = b"Forbidden"
+                      self.send_response(403)
+                      self.send_header("Content-Type", "text/plain; charset=utf-8")
+                      self.send_header("Content-Length", str(len(body)))
+                      self.end_headers()
+                      self.wfile.write(body)
+                      return True
+                  ACTIVE_FILE.write_text("b")
+                  body = (
+                      "<!doctype html><meta charset='utf-8'>"
+                      "<title>SANAD preview promoted</title>"
+                      "<body dir='rtl' style='font-family:sans-serif;padding:2rem'>"
+                      "<h1>تم تبديل الـPreview إلى Build B</h1>"
+                      "<p>ارجع إلى PWA سند المثبتة وافتحها/أعد إظهارها. "
+                      "سيطلب Service Worker التحديث، ويجب أن يظهر بانر «نسخة جديدة من سند متاحة».</p>"
+                      "</body>"
+                  ).encode("utf-8")
+                  self.send_common_headers("text/html; charset=utf-8", len(body))
+                  self.wfile.write(body)
+                  return True
+
+              def resolve(self, parsed):
+                  root = active_root().resolve()
+                  rel = urllib.parse.unquote(parsed.path).lstrip("/")
+                  candidate = (root / rel).resolve()
+                  if root not in candidate.parents and candidate != root:
+                      return None
+                  if candidate.is_dir():
+                      candidate = candidate / "index.html"
+                  if candidate.is_file():
+                      return candidate
+                  # SPA fallback for routes such as /sanad-ai.
+                  return root / "index.html"
+
+              def serve(self, head_only=False):
+                  parsed = urllib.parse.urlsplit(self.path)
+                  if parsed.path == "/__stage1d/status":
+                      active = ACTIVE_FILE.read_text().strip()
+                      body = ("active_build=" + active + "\n").encode()
+                      self.send_common_headers("text/plain; charset=utf-8", len(body))
+                      if not head_only:
+                          self.wfile.write(body)
+                      return
+                  if self.control(parsed):
+                      return
+                  path = self.resolve(parsed)
+                  if not path or not path.is_file():
+                      self.send_error(404)
+                      return
+                  data = path.read_bytes()
+                  content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+                  if content_type.startswith("text/") or path.suffix in {".js", ".json", ".webmanifest"}:
+                      content_type += "; charset=utf-8"
+                  self.send_common_headers(content_type, len(data))
+                  if not head_only:
+                      self.wfile.write(data)
+
+              def do_GET(self):
+                  self.serve(False)
+
+              def do_HEAD(self):
+                  self.serve(True)
+
+              def log_message(self, fmt, *args):
+                  print("[preview-http] " + (fmt % args), flush=True)
+
+          http.server.ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PREVIEW_PORT", "4173"))), Handler).serve_forever()
+          PY
+
+      - name: Start HTTPS preview tunnel
+        id: tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/sanad_preview_server.py >/tmp/sanad-preview-http.log 2>&1 &
+          SERVER_PID=$!
+          echo "$SERVER_PID" >/tmp/sanad-preview-http.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:$PREVIEW_PORT/version.json" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent "http://127.0.0.1:$PREVIEW_PORT/version.json"
+
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$PREVIEW_PORT" >/tmp/cloudflared.log 2>&1 &
+          echo $! >/tmp/cloudflared.pid
+
+          PREVIEW_URL=""
+          for attempt in $(seq 1 60); do
+            PREVIEW_URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n1 || true)"
+            if [[ -n "$PREVIEW_URL" ]]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ -z "$PREVIEW_URL" ]]; then
+            cat /tmp/cloudflared.log
+            exit 1
+          fi
+
+          TOKEN="$(cat /tmp/sanad-preview-token)"
+          PROMOTE_URL="$PREVIEW_URL/__stage1d/promote?token=$TOKEN"
+
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          echo "promote_url=$PROMOTE_URL" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Stage 1D PWA Runtime Preview"
+            echo
+            echo "- Exact frontend SHA: $TARGET_SHA"
+            echo "- Preview URL: $PREVIEW_URL"
+            echo "- SANAD AI: $PREVIEW_URL/sanad-ai"
+            echo "- Build status: $PREVIEW_URL/__stage1d/status"
+            echo
+            echo "### PWA update-prompt verification"
+            echo "1. Install/open Build A first."
+            echo "2. When ready to simulate publishing a newer PWA from the same source SHA, open:"
+            echo "   $PROMOTE_URL"
+            echo "3. Return to the installed PWA. Its visibility handler calls ServiceWorkerRegistration.update(); the existing PwaUpdatePrompt should show «نسخة جديدة من سند متاحة»."
+            echo
+            echo "> This preview is isolated, temporary, and does not write to app.sanadflow.com or main."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "PREVIEW_URL=$PREVIEW_URL"
+          echo "PROMOTE_URL=$PROMOTE_URL"
+
+      - name: Verify PWA resources over HTTPS
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for temporary tunnel DNS to become reachable..."
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 10 "$PREVIEW_URL/version.json" >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$READY" -ne 1 ]]; then
+            echo "Temporary tunnel hostname did not become reachable in time." >&2
+            cat /tmp/cloudflared.log || true
+            exit 1
+          fi
+
+          for path in / /sanad-ai /manifest.webmanifest /sw.js /version.json; do
+            echo "Checking $PREVIEW_URL$path"
+            curl --fail --silent --show-error --location --max-time 30 "$PREVIEW_URL$path" >/dev/null
+          done
+
+      - name: Publish preview access details
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+          PROMOTE_URL: ${{ steps.tunnel.outputs.promote_url }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/stage1d-preview-access.txt <<EOF
+          TARGET_SHA=$TARGET_SHA
+          PREVIEW_URL=$PREVIEW_URL
+          SANAD_AI_URL=$PREVIEW_URL/sanad-ai
+          STATUS_URL=$PREVIEW_URL/__stage1d/status
+          PROMOTE_URL=$PROMOTE_URL
+          BUILD_A=stage1d-${TARGET_SHA:0:12}-a
+          BUILD_B=stage1d-${TARGET_SHA:0:12}-b
+          EOF
+          cat /tmp/stage1d-preview-access.txt
+
+      - name: Upload preview access details
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1d-preview-access
+          path: /tmp/stage1d-preview-access.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Keep preview available for device testing
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+        run: |
+          echo "Preview remains available while this job is running: $PREVIEW_URL"
+          echo "Maximum preview lifetime for this gate: about 100 minutes from this step."
+          for minute in $(seq 1 100); do
+            if ! kill -0 "$(cat /tmp/sanad-preview-http.pid)" 2>/dev/null; then
+              echo "Preview HTTP server stopped unexpectedly."
+              cat /tmp/sanad-preview-http.log || true
+              exit 1
+            fi
+            if ! kill -0 "$(cat /tmp/cloudflared.pid)" 2>/dev/null; then
+              echo "HTTPS tunnel stopped unexpectedly."
+              cat /tmp/cloudflared.log || true
+              exit 1
+            fi
+            sleep 60
+          done
