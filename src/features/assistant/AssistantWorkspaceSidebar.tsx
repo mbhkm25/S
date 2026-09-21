@@ -13,7 +13,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
+import SanadIntelligenceMark from './SanadIntelligenceMark';
+import SanadAssistantStatus from './SanadAssistantStatus';
+import type { SanadAssistantPresentationState } from './sanadAssistantPresentation';
 import { SettingRow, SettingSwitch, SettingsSection } from '../../components/settings/SettingsControls';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
 import type {
@@ -23,8 +25,7 @@ import type {
 } from './assistantWorkspaceApi';
 
 type Props = {
-  assistantState: SanadOrbState;
-  assistantStatus: string;
+  assistantState: SanadAssistantPresentationState;
   businessLabel?: string | null;
   businessLoading?: boolean;
   canChooseBusiness?: boolean;
@@ -102,12 +103,12 @@ export default function AssistantWorkspaceSidebar(props: Props) {
       <div className="border-b border-slate-100 px-3 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center">
-              <SanadFluidOrb state={props.assistantState} size={30} />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-900">
+              <SanadIntelligenceMark state={props.assistantState} size={24} />
             </span>
             <div className="min-w-0">
               <strong className="block truncate text-[13px] font-semibold text-slate-950">مساعد سند</strong>
-              <p className="mt-0.5 truncate text-[11px] text-slate-400">{props.assistantStatus}</p>
+              <SanadAssistantStatus state={props.assistantState} className="mt-0.5" announce />
             </div>
           </div>
           <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500 xl:hidden" aria-label="إغلاق الشريط الجانبي">
