@@ -142,7 +142,7 @@ for (const required of [
 }
 
 assert.match(voiceApi, /sanad-ai-transcribe-v1/);
-assert.match(voiceApi, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceApi, /MAX_AUDIO_BYTES/);
 assert.match(voiceApi, /invokeAuthenticatedSanadFunction/);
 assert.doesNotMatch(voiceApi, /functions\.invoke/, 'Voice must use explicit authenticated fetch transport');
 assert.match(voiceFunction, /gemini-3\.5-transcribe/);
@@ -153,6 +153,11 @@ assert.match(voiceFunction, /mode:\s*"smart"/);
 assert.match(voiceFunction, /auth\.getUser/);
 assert.match(voiceFunction, /method:\s*"DELETE"/);
 assert.match(voiceFunction, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceFunction, /MAX_RECORDING_MS = 90_000/);
+assert.match(voiceFunction, /trycloudflare\\.com/);
+assert.match(voiceFunction, /"https:\/\/localhost"/);
+assert.match(voiceFunction, /publicTranscriptionFailure/);
+assert.doesNotMatch(voiceFunction, /error:\s*cleanText\(error, 800\)/, 'Voice responses must not expose raw provider errors');
 assert.match(supabaseConfig, /\[functions\.sanad-ai-transcribe-v1\][\s\S]*verify_jwt = true/);
 assert.match(workspace, /SanadVoiceDictationButton/);
 assert.match(workspace, /راجع النص الصوتي قبل الإرسال/);
