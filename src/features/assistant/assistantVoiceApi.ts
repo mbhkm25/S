@@ -6,7 +6,10 @@ import {
   voiceFailureMessage,
 } from './sanadVoiceRuntime';
 
-const VOICE_FUNCTION_ENDPOINT = String(import.meta.env.VITE_SANAD_VOICE_ENDPOINT || '').trim();
+const VOICE_PREVIEW_ENABLED = import.meta.env.VITE_SANAD_VOICE_PREVIEW === 'true';
+const VOICE_FUNCTION_ENDPOINT = VOICE_PREVIEW_ENABLED
+  ? String(import.meta.env.VITE_SANAD_VOICE_ENDPOINT || '').trim()
+  : '';
 
 export type SanadVoiceTranscriptionResult = {
   ok: true;
