@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SanadIntelligenceMark from '../src/features/assistant/SanadIntelligenceMark.tsx';
 import SanadAssistantStatus from '../src/features/assistant/SanadAssistantStatus.tsx';
