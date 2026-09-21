@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
+const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
 const nav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
@@ -39,6 +40,8 @@ assert.doesNotMatch(
 assert.match(shell, /data-workspace-mode=\{assistant \? 'viewport' : 'document'\}/);
 assert.match(shell, /flex h-dvh min-h-0 flex-col overflow-hidden/);
 assert.match(shell, /min-h-0 flex-1 overflow-hidden/);
+assert.match(shell, /data-workspace-body="viewport"/);
+assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
 assert.match(shell, /layoutMode=\{assistant \? 'viewport' : 'document'\}/);
 assert.match(
   shell,
@@ -50,6 +53,19 @@ assert.match(route, /const viewportMode = kind === 'ai'/);
 assert.match(route, /flex h-full min-h-0 flex-col overflow-hidden/);
 assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
+
+assert.match(sidebar, /className="absolute inset-0 z-40/);
+assert.match(sidebar, /className=\{`absolute inset-y-0 right-0 z-50/);
+assert.doesNotMatch(
+  sidebar,
+  /fixed inset-(?:0|y-0)/,
+  'Assistant sidebar and backdrop must stay inside the shell-owned workspace body, not the viewport.',
+);
+assert.doesNotMatch(
+  sidebar,
+  /top-\[[^\]]+\]|top:\s*\d|calc\([^)]*header/i,
+  'Sidebar must not guess global header height with magic top offsets.',
+);
 assert.match(
   route,
   /: 'mx-auto w-full max-w-\[1440px\] space-y-5 px-4 py-5 pb-32/,
