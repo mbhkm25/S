@@ -43,6 +43,9 @@ import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistan
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 type BusinessOption = { id: string; name: string };
+type PreferenceKey = keyof Pick<SanadAgentPreferences,
+  'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
+>;
 
 type WorkspaceMessage = {
   id: string;
@@ -297,6 +300,7 @@ export default function SanadAgentWorkspace() {
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [preferences, setPreferences] = useState<SanadAgentPreferences | null>(null);
+  const [pendingPreferenceKey, setPendingPreferenceKey] = useState<PreferenceKey | null>(null);
   const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -521,19 +525,21 @@ export default function SanadAgentWorkspace() {
   };
 
   const changePreference = async (
-    key: keyof Pick<SanadAgentPreferences,
-      'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
-    >,
+    key: PreferenceKey,
     value: boolean,
   ) => {
-    if (!preferences) return;
+    if (!preferences || pendingPreferenceKey) return;
     const previous = preferences;
+    setWorkspaceError(null);
+    setPendingPreferenceKey(key);
     setPreferences({ ...preferences, [key]: value });
     try {
       setPreferences(await updateSanadAgentPreferences({ [key]: value }));
     } catch (cause) {
       setPreferences(previous);
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر حفظ إعداد المساعد.');
+    } finally {
+      setPendingPreferenceKey(null);
     }
   };
 
@@ -762,6 +768,7 @@ export default function SanadAgentWorkspace() {
           onNew={() => void newThread()}
           onArchive={(id) => void archiveThread(id)}
           preferences={preferences}
+          pendingPreferenceKey={pendingPreferenceKey}
           onPreferenceChange={(key, value) => void changePreference(key, value)}
           memories={memories}
           onForgetMemory={(id) => void forgetMemory(id)}
