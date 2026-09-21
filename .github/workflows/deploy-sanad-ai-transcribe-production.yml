@@ -29,7 +29,7 @@ jobs:
       DEFAULT_SOURCE_SHA: '0fa409a1bf704b9c494bad51d909c85222c85d02'
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
-      FUNCTION_URL: https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-v1
+      FUNCTION_URL: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-v1
 
     steps:
       - name: Resolve reviewed source SHA
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase functions deploy sanad-ai-transcribe-v1 --project-ref "$SUPABASE_PROJECT_REF"
+          supabase functions deploy sanad-ai-transcribe-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
 
       - name: Verify function listing
         shell: bash
@@ -102,7 +102,8 @@ jobs:
             echo "SOURCE_SHA=${{ steps.source.outputs.sha }}"
             echo "FUNCTION=sanad-ai-transcribe-v1"
             echo "RUNTIME=sanad-voice-v2"
-            echo "VERIFY_JWT_EXPECTED=true"
+            echo "PLATFORM_VERIFY_JWT=false"
+            echo "HANDLER_JWT_VERIFICATION=required"
             echo "CORS_APP_ORIGIN=PASS"
             echo "CORS_ARBITRARY_TRYCLOUDFLARE=REJECTED"
             echo "UNAUTHENTICATED_REQUEST=401"
