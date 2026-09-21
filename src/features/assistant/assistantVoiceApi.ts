@@ -55,6 +55,12 @@ function mapTranscriptionFailure(cause: unknown): SanadVoiceTranscriptionError {
   if (code.includes('authentication_required') || code.includes('انتهت جلسة')) {
     return new SanadVoiceTranscriptionError('authentication_required', false);
   }
+  if (code.includes('recording_too_long')) {
+    return new SanadVoiceTranscriptionError('recording_too_long', false);
+  }
+  if (code.includes('unsupported_audio_type')) {
+    return new SanadVoiceTranscriptionError('unsupported_audio_type', false);
+  }
   if (code.includes('audio_too_large') || code.includes('413')) {
     return new SanadVoiceTranscriptionError('audio_too_large', false);
   }
