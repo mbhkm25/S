@@ -182,16 +182,24 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return voiceError(req, "authentication_required", 401);
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const token = authorization.slice("Bearer ".length).trim();
-  const { data: authData, error: authError } = await userClient.auth.getUser(token);
-  if (authError || !authData.user) return voiceError(req, "authentication_required", 401);
+
+  let authData: { user: { id: string } | null };
+  try {
+    const result = await adminClient.auth.getUser(token);
+    if (result.error || !result.data.user) {
+      return voiceError(req, "authentication_required", 401);
+    }
+    authData = { user: { id: result.data.user.id } };
+  } catch (cause) {
+    console.error("sanad_voice_auth_verification_failed", {
+      error: cleanText(cause instanceof Error ? cause.message : "auth_verification_failed", 240),
+    });
+    return voiceError(req, "service_unavailable", 503);
+  }
 
   let body: Json;
   try {

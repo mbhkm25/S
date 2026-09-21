@@ -1,3 +1,4 @@
+import { supabase } from '../../lib/supabase';
 import { invokeAuthenticatedSanadFunction } from './assistantEdgeFunctionApi';
 import {
   MAX_AUDIO_BYTES,
@@ -10,6 +11,8 @@ const VOICE_PREVIEW_ENABLED = import.meta.env.VITE_SANAD_VOICE_PREVIEW === 'true
 const VOICE_FUNCTION_ENDPOINT = VOICE_PREVIEW_ENABLED
   ? String(import.meta.env.VITE_SANAD_VOICE_ENDPOINT || '').trim()
   : '';
+const PRODUCTION_VOICE_ENDPOINT =
+  'https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-v1';
 
 export type SanadVoiceTranscriptionResult = {
   ok: true;
@@ -47,6 +50,27 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+function isTransportFailure(cause: unknown): boolean {
+  const raw = cause instanceof Error ? cause.message : String(cause || '');
+  return /failed to fetch|networkerror|network error|load failed|تعذر الاتصال/i.test(raw);
+}
+
+async function refreshVoiceSession(force = false): Promise<void> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new SanadVoiceTranscriptionError('authentication_required', false);
+  const session = data.session;
+  if (!session) throw new SanadVoiceTranscriptionError('authentication_required', false);
+
+  const expiresAtMs = Number(session.expires_at || 0) * 1000;
+  const expiresSoon = !expiresAtMs || expiresAtMs - Date.now() < 120_000;
+  if (!force && !expiresSoon) return;
+
+  const refreshed = await supabase.auth.refreshSession();
+  if (refreshed.error || !refreshed.data.session) {
+    throw new SanadVoiceTranscriptionError('authentication_required', false);
+  }
 }
 
 function mapTranscriptionFailure(cause: unknown): SanadVoiceTranscriptionError {
@@ -128,18 +152,42 @@ export async function transcribeSanadAudio(
 
   const request = linkedTimeoutSignal(options.signal);
   try {
-    const data = await invokeAuthenticatedSanadFunction<SanadVoiceTranscriptionResult>(
-      'sanad-ai-transcribe-v1',
-      {
-        body: {
-          audio_base64: audioBase64,
-          mime_type: blob.type || 'audio/webm',
-          duration_ms: Math.max(0, Math.round(durationMs)),
+    const requestBody = {
+      audio_base64: audioBase64,
+      mime_type: blob.type || 'audio/webm',
+      duration_ms: Math.max(0, Math.round(durationMs)),
+    };
+
+    await refreshVoiceSession(false);
+
+    let data: SanadVoiceTranscriptionResult;
+    try {
+      data = await invokeAuthenticatedSanadFunction<SanadVoiceTranscriptionResult>(
+        'sanad-ai-transcribe-v1',
+        {
+          body: requestBody,
+          signal: request.signal,
+          endpointUrl: VOICE_FUNCTION_ENDPOINT || PRODUCTION_VOICE_ENDPOINT,
         },
-        signal: request.signal,
-        endpointUrl: VOICE_FUNCTION_ENDPOINT || undefined,
-      },
-    );
+      );
+    } catch (primaryCause) {
+      if (VOICE_PREVIEW_ENABLED || !isTransportFailure(primaryCause) || request.signal.aborted) {
+        throw primaryCause;
+      }
+
+      // Production browser recovery: renew the user JWT and bypass the custom API
+      // hostname once when the failure is transport-only. The canonical endpoint
+      // serves the same deployed function and preserves the same JWT/CORS contract.
+      await refreshVoiceSession(true);
+      data = await invokeAuthenticatedSanadFunction<SanadVoiceTranscriptionResult>(
+        'sanad-ai-transcribe-v1',
+        {
+          body: requestBody,
+          signal: request.signal,
+          endpointUrl: PRODUCTION_VOICE_ENDPOINT,
+        },
+      );
+    }
 
     if (!data?.ok || !data.transcript?.trim()) {
       throw new SanadVoiceTranscriptionError('transcript_empty', true);

@@ -4,7 +4,7 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
-  Menu,
+  PanelRightOpen,
   RotateCcw,
   SendHorizontal,
   Wrench,
@@ -786,21 +786,15 @@ export default function SanadAgentWorkspace() {
         type="button"
         onClick={() => setSidebarOpen(true)}
         data-mobile-sidebar-trigger
-        className="absolute right-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur xl:hidden"
+        className="absolute right-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 xl:hidden"
         aria-label="فتح محادثات وإعدادات سند"
       >
-        <Menu className="h-4 w-4" />
+        <PanelRightOpen className="h-4 w-4" />
       </button>
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
       />
-
-      {workspaceError ? (
-        <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700">
-          {workspaceError}
-        </div>
-      ) : null}
 
       <div className="grid min-h-0 flex-1 xl:grid-cols-[284px_minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
@@ -825,6 +819,15 @@ export default function SanadAgentWorkspace() {
         />
 
         <div className="relative flex min-h-0 min-w-0 flex-col">
+          {workspaceError ? (
+            <div
+              data-assistant-status-slot="error"
+              role="status"
+              className="relative z-30 mx-3 mt-2 shrink-0 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[12px] font-medium leading-5 text-rose-700 md:mx-6"
+            >
+              {workspaceError}
+            </div>
+          ) : null}
           <div
             ref={timelineRef}
             data-scroll-owner="timeline"
