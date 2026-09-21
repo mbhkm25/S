@@ -101,6 +101,9 @@ assert.match(edge, /publicTranscriptionFailure/);
 assert.match(edge, /record_sanad_agent_server_metric_v1/);
 assert.match(edge, /async function handleRequest\(req: Request, requestId: string\)/);
 assert.match(edge, /sanad_voice_unhandled_exception/);
+assert.match(edge, /type VoiceTrace/);
+assert.match(edge, /phase: trace\.phase/);
+assert.match(edge, /client_init/);
 for (const phase of [
   'voice_request_received',
   'voice_auth_started',
