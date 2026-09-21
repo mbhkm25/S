@@ -1,0 +1,278 @@
+name: Stage 1E.D Desktop Voice Runtime Preview
+
+on:
+  push:
+    branches:
+      - ops/stage1ed-desktop-voice-preview
+    paths:
+      - '.github/workflows/stage1ed-desktop-voice-preview.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage1ed-desktop-voice-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Serve exact Stage 1E.D candidate over HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TARGET_SHA: 4ad3110d8bb9071a7ddf409f69e32fdd4d591266
+      PREVIEW_PORT: '4173'
+      VOICE_CANDIDATE_URL: 'https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-stage1e-candidate'
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          echo "Candidate SHA: $TARGET_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Stage 1E.D candidate
+        run: |
+          npm run lint
+          npm run check:routes
+
+      - name: Build PWA with isolated candidate voice proxy
+        shell: bash
+        env:
+          VITE_APP_VERSION: stage1ed-4ad3110d8bb9071a7ddf409f69e32fdd4d591266
+          VITE_SANAD_VOICE_ENDPOINT: /__stage1ed_voice_proxy
+        run: |
+          set -euo pipefail
+          npm run build
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          test -f dist/version.json
+
+      - name: Prepare isolated preview server
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIEW_TOKEN="$(openssl rand -hex 20)"
+          printf '%s' "$PREVIEW_TOKEN" > /tmp/sanad-preview-token
+          printf 'off' > /tmp/sanad-voice-failure-mode
+          chmod 600 /tmp/sanad-preview-token /tmp/sanad-voice-failure-mode
+
+          cat > /tmp/sanad_preview_server.py <<'PY'
+          import http.server
+          import mimetypes
+          import os
+          import pathlib
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = pathlib.Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          ROOT = (REPO / "dist").resolve()
+          TOKEN = pathlib.Path("/tmp/sanad-preview-token").read_text().strip()
+          FAILURE_FILE = pathlib.Path("/tmp/sanad-voice-failure-mode")
+          VOICE_TARGET = os.environ["VOICE_CANDIDATE_URL"]
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              server_version = "SANADStage1EDPreview/1"
+
+              def send_body(self, body, content_type="text/plain; charset=utf-8", status=200):
+                  self.send_response(status)
+                  self.send_header("Content-Type", content_type)
+                  self.send_header("Content-Length", str(len(body)))
+                  self.send_header("X-Content-Type-Options", "nosniff")
+                  self.send_header("Referrer-Policy", "no-referrer")
+                  self.send_header("Cache-Control", "no-store" if self.path.startswith(("/sw.js", "/version.json", "/__stage1ed")) else "no-cache")
+                  self.end_headers()
+                  if self.command != "HEAD":
+                      self.wfile.write(body)
+
+              def control(self, parsed):
+                  if parsed.path == "/__stage1ed_status":
+                      mode = FAILURE_FILE.read_text().strip()
+                      self.send_body(("voice_failure_mode=" + mode + "\n").encode())
+                      return True
+                  if parsed.path != "/__stage1ed_voice_failure":
+                      return False
+                  query = urllib.parse.parse_qs(parsed.query)
+                  supplied = query.get("token", [""])[0]
+                  mode = query.get("mode", [""])[0]
+                  if supplied != TOKEN or mode not in {"on", "off"}:
+                      self.send_body(b"Forbidden", status=403)
+                      return True
+                  FAILURE_FILE.write_text(mode)
+                  self.send_body(("voice_failure_mode=" + mode + "\n").encode())
+                  return True
+
+              def resolve(self, parsed):
+                  rel = urllib.parse.unquote(parsed.path).lstrip("/")
+                  candidate = (ROOT / rel).resolve()
+                  if ROOT not in candidate.parents and candidate != ROOT:
+                      return None
+                  if candidate.is_dir():
+                      candidate = candidate / "index.html"
+                  return candidate if candidate.is_file() else ROOT / "index.html"
+
+              def serve_static(self):
+                  parsed = urllib.parse.urlsplit(self.path)
+                  if self.control(parsed):
+                      return
+                  path = self.resolve(parsed)
+                  if not path or not path.is_file():
+                      self.send_error(404)
+                      return
+                  data = path.read_bytes()
+                  ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+                  if ctype.startswith("text/") or path.suffix in {".js", ".json", ".webmanifest"}:
+                      ctype += "; charset=utf-8"
+                  self.send_body(data, ctype)
+
+              def do_GET(self):
+                  self.serve_static()
+
+              def do_HEAD(self):
+                  self.serve_static()
+
+              def do_POST(self):
+                  parsed = urllib.parse.urlsplit(self.path)
+                  if parsed.path != "/__stage1ed_voice_proxy":
+                      self.send_error(404)
+                      return
+                  if FAILURE_FILE.read_text().strip() == "on":
+                      self.send_body(b'{"ok":false,"error":"service_unavailable"}', "application/json; charset=utf-8", 503)
+                      return
+
+                  length = int(self.headers.get("Content-Length") or "0")
+                  if length <= 0 or length > 8 * 1024 * 1024:
+                      self.send_body(b'{"ok":false,"error":"invalid_request"}', "application/json; charset=utf-8", 400)
+                      return
+                  body = self.rfile.read(length)
+                  headers = {}
+                  for name in ("Authorization", "apikey", "Content-Type", "Accept", "Origin"):
+                      value = self.headers.get(name)
+                      if value:
+                          headers[name] = value
+
+                  request = urllib.request.Request(VOICE_TARGET, data=body, headers=headers, method="POST")
+                  try:
+                      with urllib.request.urlopen(request, timeout=135) as response:
+                          data = response.read()
+                          status = response.getcode()
+                          ctype = response.headers.get("Content-Type") or "application/json; charset=utf-8"
+                  except urllib.error.HTTPError as error:
+                      data = error.read()
+                      status = error.code
+                      ctype = error.headers.get("Content-Type") or "application/json; charset=utf-8"
+                  except Exception:
+                      data = b'{"ok":false,"error":"service_unavailable"}'
+                      status = 503
+                      ctype = "application/json; charset=utf-8"
+
+                  self.send_body(data, ctype, status)
+
+              def log_message(self, fmt, *args):
+                  print("[stage1ed-preview] " + (fmt % args), flush=True)
+
+          http.server.ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PREVIEW_PORT", "4173"))), Handler).serve_forever()
+          PY
+
+      - name: Start HTTPS preview tunnel
+        id: tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 /tmp/sanad_preview_server.py >/tmp/sanad-preview-http.log 2>&1 &
+          echo $! >/tmp/sanad-preview-http.pid
+
+          for attempt in $(seq 1 30); do
+            curl --fail --silent "http://127.0.0.1:$PREVIEW_PORT/version.json" >/dev/null && break
+            sleep 1
+          done
+
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$PREVIEW_PORT" >/tmp/cloudflared.log 2>&1 &
+          echo $! >/tmp/cloudflared.pid
+
+          PREVIEW_URL=""
+          for attempt in $(seq 1 60); do
+            PREVIEW_URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n1 || true)"
+            [[ -n "$PREVIEW_URL" ]] && break
+            sleep 1
+          done
+          [[ -n "$PREVIEW_URL" ]] || { cat /tmp/cloudflared.log; exit 1; }
+
+          TOKEN="$(cat /tmp/sanad-preview-token)"
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          echo "failure_on=$PREVIEW_URL/__stage1ed_voice_failure?mode=on&token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "failure_off=$PREVIEW_URL/__stage1ed_voice_failure?mode=off&token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Verify HTTPS resources
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+        run: |
+          set -euo pipefail
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --location --max-time 10 "$PREVIEW_URL/version.json" >/dev/null 2>&1; then READY=1; break; fi
+            sleep 2
+          done
+          [[ "$READY" -eq 1 ]]
+          for path in / /sanad-ai /manifest.webmanifest /sw.js /version.json /__stage1ed_status; do
+            curl --fail --silent --show-error --location --max-time 30 "$PREVIEW_URL$path" >/dev/null
+          done
+
+      - name: Publish preview access details
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+          FAILURE_ON: ${{ steps.tunnel.outputs.failure_on }}
+          FAILURE_OFF: ${{ steps.tunnel.outputs.failure_off }}
+        run: |
+          cat > /tmp/stage1ed-preview-access.txt <<EOF
+          TARGET_SHA=$TARGET_SHA
+          PREVIEW_URL=$PREVIEW_URL
+          SANAD_AI_URL=$PREVIEW_URL/sanad-ai
+          STATUS_URL=$PREVIEW_URL/__stage1ed_status
+          FAILURE_ON_URL=$FAILURE_ON
+          FAILURE_OFF_URL=$FAILURE_OFF
+          VOICE_CANDIDATE_URL=$VOICE_CANDIDATE_URL
+          EOF
+          cat /tmp/stage1ed-preview-access.txt
+
+      - name: Upload preview access details
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1ed-desktop-voice-preview-access
+          path: /tmp/stage1ed-preview-access.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Keep preview available
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
+        run: |
+          echo "Stage 1E.D preview remains available: $PREVIEW_URL"
+          for minute in $(seq 1 100); do
+            kill -0 "$(cat /tmp/sanad-preview-http.pid)" 2>/dev/null || exit 1
+            kill -0 "$(cat /tmp/cloudflared.pid)" 2>/dev/null || exit 1
+            sleep 60
+          done
