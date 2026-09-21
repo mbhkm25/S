@@ -70,7 +70,10 @@ export default function FinancialWorkspaceShell() {
       >
         <ProductAppHeader userId={userId} />
         {assistant ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div
+            data-workspace-body="viewport"
+            className="relative min-h-0 flex-1 overflow-hidden pt-1.5"
+          >
             <Suspense fallback={<RouteFallback />}>
               {content}
             </Suspense>
