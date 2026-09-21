@@ -121,5 +121,7 @@ for (const phase of [
 }
 assert.doesNotMatch(edge, /transcript[^\n]*console\./i, 'Voice telemetry must not log transcript content.');
 assert.doesNotMatch(edge, /audio_base64[^\n]*console\./i, 'Voice telemetry must not log base64 audio content.');
+assert.doesNotMatch(edge, /record_sanad_agent_server_metric_v1"[\s\S]{0,1200}?\.catch\(/, 'Voice metric RPC must not rely on Promise.catch semantics.');
+assert.match(edge, /sanad_voice_metric_record_failed/);
 
 console.log('SANAD Voice Reliability Stage 1E contract passed.');
