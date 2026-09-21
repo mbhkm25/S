@@ -13,7 +13,8 @@ const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts', 'utf
 const presentation = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260920071058_sanad_agent_workspace_v2.sql', 'utf8');
 const visualMigration = readFileSync('supabase/migrations/20260920121801_sanad_agent_message_feedback_v1.sql', 'utf8');
-const orb = readFileSync('src/features/assistant/SanadFluidOrb.tsx', 'utf8');
+const intelligenceMark = readFileSync('src/features/assistant/SanadIntelligenceMark.tsx', 'utf8');
+const assistantPresentation = readFileSync('src/features/assistant/sanadAssistantPresentation.ts', 'utf8');
 const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButton.tsx', 'utf8');
@@ -41,7 +42,8 @@ for (const required of [
   'AssistantWorkspaceSidebar',
   'SanadAgentResponseBlocks',
   'SanadMessageActions',
-  'SanadFluidOrb',
+  'SanadIntelligenceMark',
+  'mapSanadAssistantPresentationState',
 ]) {
   assert.ok(workspace.includes(required), `workspace missing ${required}`);
 }
@@ -123,9 +125,10 @@ assert.match(visualMigration, /rating smallint/);
 assert.match(visualMigration, /update_my_sanad_agent_message_feedback_v1/);
 assert.match(visualMigration, /security definer/i);
 assert.match(visualMigration, /auth\.uid\(\)/);
-assert.match(orb, /SanadOrbState/);
-assert.match(orb, /canvas\.getContext\('2d'/);
-assert.match(styles, /sanad-orb-executing/);
+assert.match(intelligenceMark, /data-sanad-intelligence-mark/);
+assert.match(assistantPresentation, /waiting_approval/);
+assert.match(assistantPresentation, /mapSanadAssistantPresentationState/);
+assert.match(styles, /sanad-intelligence-mark--executing/);
 assert.match(styles, /prefers-reduced-motion/);
 
 console.log('SANAD Agent Visual v4 contract passed.');
