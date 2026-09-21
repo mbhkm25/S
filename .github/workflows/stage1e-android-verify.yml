@@ -1,0 +1,92 @@
+name: Stage 1E Android Native Verification
+
+on:
+  push:
+    branches:
+      - ops/stage1e-android-verify
+    paths:
+      - '.github/workflows/stage1e-android-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Build exact Stage 1E Android candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TARGET_SHA: 20cdad3039c1f22a529613ed31f0b262233b4297
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up icon generator
+        run: python -m pip install --disable-pip-version-check Pillow
+
+      - name: Restore optional Firebase config
+        env:
+          SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.SANAD_FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
+          SANAD_FIREBASE_REQUIRED: 'false'
+        run: bash scripts/restore-firebase-android-config.sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Stage 1E candidate
+        run: |
+          npm run lint
+          npm run check:routes
+          npm run check:android-release
+
+      - name: Build Android assets
+        run: npm run build:android
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleDebug
+
+      - name: Verify merged microphone permission
+        shell: bash
+        run: |
+          set -euo pipefail
+          MERGED_MANIFEST="$(find android/app/build/intermediates -path '*merged_manifest*' -o -path '*merged_manifests*' | head -n 1 || true)"
+          grep -R -q 'android.permission.RECORD_AUDIO' android/app/build/intermediates
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload verification APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1e-android-verification-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
