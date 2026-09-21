@@ -62,7 +62,8 @@ assert.match(
 
 assert.match(sidebar, /data-sidebar-density="compact"/);
 assert.match(sidebar, /مساعد سند/);
-assert.match(sidebar, /assistantStatus/);
+assert.match(sidebar, /assistantState/);
+assert.match(sidebar, /SanadAssistantStatus/);
 assert.match(sidebar, /businessLabel/);
 assert.doesNotMatch(
   sidebar,
