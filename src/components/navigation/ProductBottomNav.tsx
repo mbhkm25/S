@@ -66,16 +66,16 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
               onFocus={spaNavigation ? () => prefetchProductArea(item.id) : undefined}
               aria-current={selected ? 'page' : undefined}
               title={item.label}
-              className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'text-slate-950' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
+              className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
             >
-              <span className={`flex h-9 w-11 items-center justify-center rounded-2xl transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'bg-transparent group-hover:bg-white'}`}>
+              <span className="flex h-9 w-11 items-center justify-center rounded-2xl bg-transparent transition">
                 {item.id === 'assistant' ? (
                   <SanadIntelligenceMark state="idle" size={18} monochrome className={selected ? 'text-white' : 'text-current'} />
                 ) : Icon ? (
                   <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
                 ) : null}
               </span>
-              <span className={`max-w-full truncate text-[11px] ${selected ? 'font-semibold text-slate-950' : 'font-medium'}`}>{item.label}</span>
+              <span className={`max-w-full truncate text-[11px] ${selected ? 'font-semibold text-white' : 'font-medium'}`}>{item.label}</span>
             </a>
           );
         })}
