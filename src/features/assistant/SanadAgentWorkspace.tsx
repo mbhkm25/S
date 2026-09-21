@@ -128,12 +128,14 @@ function MessageBubble({
   onStar,
   onRate,
   onModifyAction,
+  onActionStatusChange,
 }: {
   message: WorkspaceMessage;
   onRetry?: () => void;
   onStar?: (value: boolean) => void;
   onRate?: (value: -1 | 1 | null) => void;
   onModifyAction?: (prompt: string) => void;
+  onActionStatusChange?: (status: string) => void;
 }) {
   const assistant = message.role === 'assistant';
   const result = message.result;
@@ -187,7 +189,11 @@ function MessageBubble({
 
         {assistant && result?.response ? (
           <div className="mt-3 w-full min-w-0 max-w-[72rem]" data-structured-response-surface="wide">
-            <SanadAgentResponseBlocks response={result.response} onModifyAction={onModifyAction} />
+            <SanadAgentResponseBlocks
+              response={result.response}
+              onModifyAction={onModifyAction}
+              onActionStatusChange={onActionStatusChange}
+            />
           </div>
         ) : null}
 
