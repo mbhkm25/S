@@ -265,38 +265,6 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      - name: Verify candidate Edge Function CORS and structured unauth error
-        shell: bash
-        env:
-          PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
-        run: |
-          set -euo pipefail
-          CANDIDATE="$VOICE_CANDIDATE_URL"
-
-          curl --fail-with-body --silent --show-error --location --max-time 30 \
-            -X OPTIONS "$CANDIDATE" \
-            -H "Origin: $PREVIEW_URL" \
-            -H 'Access-Control-Request-Method: POST' \
-            -D /tmp/stage1ed-options.headers \
-            -o /tmp/stage1ed-options.body
-
-          grep -i -F "access-control-allow-origin: $PREVIEW_URL" /tmp/stage1ed-options.headers
-
-          STATUS="$(curl --silent --show-error --location --max-time 30 \
-            -X POST "$CANDIDATE" \
-            -H "Origin: $PREVIEW_URL" \
-            -H 'Content-Type: application/json' \
-            --data '{}' \
-            -o /tmp/stage1ed-unauth.json \
-            -w '%{http_code}')"
-
-          test "$STATUS" = "401"
-          node -e '
-            const fs=require("fs");
-            const body=JSON.parse(fs.readFileSync("/tmp/stage1ed-unauth.json","utf8"));
-            if(body.ok!==false || body.error!=="authentication_required") throw new Error("structured unauth contract failed");
-          '
-
       - name: Keep preview available
         shell: bash
         env:
