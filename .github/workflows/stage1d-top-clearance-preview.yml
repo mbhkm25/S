@@ -3,9 +3,9 @@ name: Stage 1D PWA Runtime Preview
 on:
   push:
     branches:
-      - ops/stage1d-top-clearance-top-clearance-preview
+      - ops/stage1d-top-clearance-preview
     paths:
-      - '.github/workflows/stage1d-top-clearance-pwa-preview.yml'
+      - '.github/workflows/stage1d-top-clearance-preview.yml'
 
 permissions:
   contents: read
