@@ -40,6 +40,8 @@ export type SanadVoiceErrorCode =
   | 'transcription_failed'
   | 'service_unavailable'
   | 'audio_too_large'
+  | 'recording_too_long'
+  | 'unsupported_audio_type'
   | 'transcript_empty'
   | 'authentication_required'
   | 'cancelled';
@@ -188,6 +190,10 @@ export function voiceFailureMessage(code: SanadVoiceErrorCode): string {
       return 'خدمة تحويل الصوت غير متاحة مؤقتًا. يمكنك إعادة المحاولة.';
     case 'audio_too_large':
       return 'التسجيل أكبر من الحد المسموح. جرّب تسجيلًا أقصر.';
+    case 'recording_too_long':
+      return 'وصل التسجيل إلى الحد الأقصى. جرّب تسجيلًا أقصر.';
+    case 'unsupported_audio_type':
+      return 'صيغة التسجيل غير مدعومة على هذا الجهاز.';
     case 'transcript_empty':
       return 'لم أستطع استخراج نص واضح من التسجيل.';
     case 'authentication_required':
