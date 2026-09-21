@@ -112,7 +112,7 @@ jobs:
                   query = urllib.parse.parse_qs(parsed.query)
                   supplied = query.get("token", [""])[0]
                   mode = query.get("mode", [""])[0]
-                  if supplied != TOKEN or mode not in {"on", "off"}:
+                  if supplied != TOKEN or mode not in {"on", "off", "timeout"}:
                       self.send_body(b"Forbidden", status=403)
                       return True
                   FAILURE_FILE.write_text(mode)
@@ -153,8 +153,12 @@ jobs:
                   if parsed.path != "/__stage1ed_voice_proxy":
                       self.send_error(404)
                       return
-                  if FAILURE_FILE.read_text().strip() == "on":
+                  mode = FAILURE_FILE.read_text().strip()
+                  if mode == "on":
                       self.send_body(b'{"ok":false,"error":"service_unavailable"}', "application/json; charset=utf-8", 503)
+                      return
+                  if mode == "timeout":
+                      self.send_body(b'{"ok":false,"error":"timeout"}', "application/json; charset=utf-8", 504)
                       return
 
                   length = int(self.headers.get("Content-Length") or "0")
@@ -221,6 +225,7 @@ jobs:
           echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           echo "failure_on=$PREVIEW_URL/__stage1ed_voice_failure?mode=on&token=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "failure_off=$PREVIEW_URL/__stage1ed_voice_failure?mode=off&token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "timeout_on=$PREVIEW_URL/__stage1ed_voice_failure?mode=timeout&token=$TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Verify HTTPS resources
         shell: bash
@@ -244,6 +249,7 @@ jobs:
           PREVIEW_URL: ${{ steps.tunnel.outputs.preview_url }}
           FAILURE_ON: ${{ steps.tunnel.outputs.failure_on }}
           FAILURE_OFF: ${{ steps.tunnel.outputs.failure_off }}
+          TIMEOUT_ON: ${{ steps.tunnel.outputs.timeout_on }}
         run: |
           cat > /tmp/stage1ed-preview-access.txt <<EOF
           TARGET_SHA=$TARGET_SHA
@@ -252,6 +258,7 @@ jobs:
           STATUS_URL=$PREVIEW_URL/__stage1ed_status
           FAILURE_ON_URL=$FAILURE_ON
           FAILURE_OFF_URL=$FAILURE_OFF
+          TIMEOUT_ON_URL=$TIMEOUT_ON
           VOICE_CANDIDATE_URL=$VOICE_CANDIDATE_URL
           EOF
           cat /tmp/stage1ed-preview-access.txt
