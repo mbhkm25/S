@@ -21,7 +21,7 @@ jobs:
     env:
       TARGET_SHA: 'a7916638d466ba590809fbe3d5ab687a978cd790'
       PREVIEW_PORT: '4173'
-      VOICE_CANDIDATE_URL: 'https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-stage1g-hf-candidate'
+      VOICE_CANDIDATE_URL: 'https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-stage1g-hf-candidate'
 
     steps:
       - name: Checkout exact hotfix candidate
