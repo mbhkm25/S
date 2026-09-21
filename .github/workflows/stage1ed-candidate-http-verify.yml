@@ -1,0 +1,68 @@
+name: Stage 1E.D Candidate HTTP Verification
+
+on:
+  push:
+    branches:
+      - ops/stage1ed-candidate-http-verify
+    paths:
+      - '.github/workflows/stage1ed-candidate-http-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CANDIDATE_URL: 'https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-stage1e-candidate'
+      PREVIEW_ORIGIN: 'https://specify-bugs-lie-danny.trycloudflare.com'
+      OTHER_PREVIEW_ORIGIN: 'https://not-this-preview.trycloudflare.com'
+    steps:
+      - name: Verify exact preview CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30 \
+            -X OPTIONS "$CANDIDATE_URL" \
+            -H "Origin: $PREVIEW_ORIGIN" \
+            -H 'Access-Control-Request-Method: POST' \
+            -D /tmp/exact.headers \
+            -o /tmp/exact.body
+          grep -i -F "access-control-allow-origin: $PREVIEW_ORIGIN" /tmp/exact.headers
+
+      - name: Verify arbitrary preview origin is not allowed
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30 \
+            -X OPTIONS "$CANDIDATE_URL" \
+            -H "Origin: $OTHER_PREVIEW_ORIGIN" \
+            -H 'Access-Control-Request-Method: POST' \
+            -D /tmp/other.headers \
+            -o /tmp/other.body
+          if grep -i -F "access-control-allow-origin: $OTHER_PREVIEW_ORIGIN" /tmp/other.headers; then
+            echo "Unexpected wildcard/echo CORS acceptance" >&2
+            exit 1
+          fi
+          grep -i -F "access-control-allow-origin: https://app.sanadflow.com" /tmp/other.headers
+
+      - name: Verify structured authentication error
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl --silent --show-error --max-time 30 \
+            -X POST "$CANDIDATE_URL" \
+            -H "Origin: $PREVIEW_ORIGIN" \
+            -H 'Content-Type: application/json' \
+            --data '{}' \
+            -o /tmp/unauth.json \
+            -w '%{http_code}')"
+          test "$STATUS" = "401"
+          node -e '
+            const fs=require("fs");
+            const body=JSON.parse(fs.readFileSync("/tmp/unauth.json","utf8"));
+            if(body.ok!==false || body.error!=="authentication_required") {
+              throw new Error("structured auth error contract failed");
+            }
+          '
