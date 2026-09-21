@@ -99,7 +99,7 @@ assert.match(edge, /https:\/\/localhost/);
 assert.match(edge, /voiceError/);
 assert.match(edge, /publicTranscriptionFailure/);
 assert.match(edge, /record_sanad_agent_server_metric_v1/);
-assert.match(edge, /async function handleRequest\(req: Request, requestId: string\)/);
+assert.match(edge, /async function handleRequest\(req: Request, requestId: string, trace: VoiceTrace\)/);
 assert.match(edge, /sanad_voice_unhandled_exception/);
 assert.match(edge, /type VoiceTrace/);
 assert.match(edge, /phase: trace\.phase/);
