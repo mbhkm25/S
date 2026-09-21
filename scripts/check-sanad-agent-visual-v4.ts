@@ -1,62 +1,63 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const orb = readFileSync('src/features/assistant/SanadFluidOrb.tsx', 'utf8');
-const pulseCompat = readFileSync('src/features/assistant/SanadPulseMark.tsx', 'utf8');
+const mark = readFileSync('src/features/assistant/SanadIntelligenceMark.tsx', 'utf8');
+const state = readFileSync('src/features/assistant/sanadAssistantPresentation.ts', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const navigation = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 const voice = readFileSync('src/features/assistant/SanadVoiceDictationButton.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 
-for (const state of ['idle', 'listening', 'thinking', 'executing', 'success']) {
-  assert.ok(orb.includes(`'${state}'`), `fluid orb missing state ${state}`);
-  assert.ok(styles.includes(`.sanad-orb-${state}`), `fluid orb CSS missing state ${state}`);
-}
-
 for (const required of [
-  "canvas.getContext('2d'",
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  "matchMedia('(prefers-reduced-motion: reduce)')",
-  'sanad-orb-css-fallback',
-  'sanad-fluid-orb__fallback',
-  'preferCssFallback',
-  'data-orb-state',
-  "label = 'سند'",
+  'SanadIntelligenceMark',
+  'data-sanad-intelligence-mark',
+  'data-assistant-state',
+  'viewBox="0 0 24 24"',
+  'monochrome',
 ]) {
-  assert.ok(orb.includes(required), `fluid orb runtime missing ${required}`);
+  assert.ok(mark.includes(required), `intelligence mark missing ${required}`);
 }
 
-assert.match(styles, /sanad-fluid-orb__wave--a/);
-assert.match(styles, /sanad-fluid-orb__wave--b/);
-assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
-assert.match(styles, /sanad-orb-listening-shell/);
-assert.match(styles, /sanad-orb-executing-shell/);
-assert.match(styles, /sanad-orb-success-shell/);
-assert.doesNotMatch(styles, /sanad-pulse-working/, 'legacy working pulse CSS must not return');
-
-for (const required of [
-  'SanadFluidOrb',
-  "useState<SanadOrbState>('idle')",
-  "setOrbState('thinking')",
-  "setOrbState('executing')",
-  'markOrbSuccess',
-  'handleVoiceStateChange',
-  'onStateChange={handleVoiceStateChange}',
-  'aria-live="polite"',
+for (const assistantState of [
+  'idle',
+  'listening',
+  'transcribing',
+  'thinking',
+  'executing',
+  'waiting_approval',
+  'success',
+  'error',
 ]) {
-  assert.ok(workspace.includes(required), `workspace fluid-orb contract missing ${required}`);
+  assert.ok(state.includes(`'${assistantState}'`), `presentation state missing ${assistantState}`);
 }
 
-assert.doesNotMatch(workspace, /SanadPulseMark/, 'workspace must not render the retired pulse SVG');
-assert.doesNotMatch(workspace, /state="working"/, 'workspace must use explicit executing state');
-assert.match(sidebar, /SanadFluidOrb/);
-assert.match(sidebar, /state=\{props\.assistantState\}/, 'sidebar owns the live assistant identity/status in Stage 1C');
+assert.match(styles, /sanad-intelligence-mark--listening/);
+assert.match(styles, /sanad-intelligence-mark--transcribing/);
+assert.match(styles, /sanad-intelligence-mark--thinking/);
+assert.match(styles, /sanad-intelligence-mark--executing/);
+assert.match(styles, /sanad-intelligence-mark--waiting_approval/);
+assert.match(styles, /sanad-intelligence-mark--success/);
+assert.match(styles, /sanad-intelligence-mark--error/);
+assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*sanad-intelligence-mark/);
+assert.doesNotMatch(styles, /sanad-intelligence-mark--idle[^\{]*\{[^}]*animation:/s, 'idle identity must remain static');
+
+assert.match(workspace, /mapSanadAssistantPresentationState/);
+assert.match(workspace, /readSanadAssistantPreviewState/);
+assert.match(workspace, /SanadIntelligenceMark/);
+assert.match(workspace, /SanadAssistantStatus/);
+assert.doesNotMatch(workspace, /SanadFluidOrb/);
+assert.doesNotMatch(workspace, /SanadOrbState|orbState|setOrbState/);
+assert.match(sidebar, /SanadIntelligenceMark/);
+assert.match(sidebar, /SanadAssistantStatus/);
+assert.doesNotMatch(sidebar, /SanadFluidOrb/);
+
+assert.match(navigation, /SanadIntelligenceMark/);
+assert.doesNotMatch(navigation, /\bBot\b/, 'Primary navigation must not use a generic Bot icon for SANAD assistant');
 
 for (const required of [
   "export type { SanadVoiceState } from './sanadVoiceRuntime'",
   'onStateChange?:',
-  'reduceSanadVoiceState',
   'requesting_permission',
   'ready_to_send',
   'network_failed',
@@ -64,7 +65,4 @@ for (const required of [
   assert.ok(voice.includes(required), `voice state bridge missing ${required}`);
 }
 
-assert.match(pulseCompat, /SanadFluidOrb/);
-assert.match(pulseCompat, /SanadOrbState/);
-
-console.log('SANAD Agent Fluid Orb v1 / Phase 4 visual contract passed.');
+console.log('SANAD Assistant Identity & State Language visual contract passed.');
