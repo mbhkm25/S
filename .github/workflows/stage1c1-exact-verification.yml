@@ -1,0 +1,88 @@
+name: Stage 1C.1 Exact SHA Verification
+
+on:
+  push:
+    branches:
+      - ops/stage1c1-verification
+    paths:
+      - '.github/workflows/stage1c1-exact-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify Stage 1C.1 exact candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TARGET_SHA: 06dd29b72af96b722635d46ca953ba57fbc46458
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Verify SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          echo "Verified $TARGET_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            services/push-worker/package-lock.json
+
+      - name: Set up Android icon generator
+        run: python -m pip install --disable-pip-version-check Pillow
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Type-check application
+        run: npm run lint
+
+      - name: Validate application routes
+        run: npm run check:routes
+
+      - name: Check patch whitespace
+        run: git diff --check "$TARGET_SHA^" "$TARGET_SHA"
+
+      - name: Build production PWA
+        run: npm run build -- --mode production
+
+      - name: Enforce production bundle budget
+        run: npm run check:bundle-budget
+
+      - name: Build Android assets
+        run: npm run build:android
+
+      - name: Validate production artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test -f dist/reset-password.html
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          test -f dist/version.json
+          test -d dist/assets
+
+      - name: Install push worker dependencies
+        working-directory: services/push-worker
+        run: npm ci
+
+      - name: Type-check push worker
+        working-directory: services/push-worker
+        run: npm run lint
+
+      - name: Test push worker
+        working-directory: services/push-worker
+        run: npm test
