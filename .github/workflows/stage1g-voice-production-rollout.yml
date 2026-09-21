@@ -1,0 +1,102 @@
+name: Stage 1G Voice v2 Production Rollout
+
+on:
+  push:
+    branches:
+      - ops/stage1g-voice-production-rollout
+    paths:
+      - '.github/workflows/stage1g-voice-production-rollout.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stage1g-voice-production-rollout
+  cancel-in-progress: false
+
+jobs:
+  deploy-voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      TARGET_SHA: '0fa409a1bf704b9c494bad51d909c85222c85d02'
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+      FUNCTION_URL: https://api.sanadflow.com/functions/v1/sanad-ai-transcribe-v1
+    steps:
+      - name: Checkout exact integration candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          ! grep -R "trycloudflare\.com" supabase/functions/sanad-ai-transcribe-v1
+          ! grep -R "sanad-ai-transcribe-stage1e-candidate" supabase/functions/sanad-ai-transcribe-v1
+          grep -q '"https://app.sanadflow.com"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+          grep -q '"capacitor://localhost"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+          grep -q 'p_runtime_version:"sanad-voice-v2"' supabase/functions/sanad-ai-transcribe-v1/index.ts
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Voice v2 to production function name
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          supabase functions deploy sanad-ai-transcribe-v1             --project-ref "$SUPABASE_PROJECT_REF"             --use-api             --verify-jwt
+
+      - name: Verify function listing
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions list --project-ref "$SUPABASE_PROJECT_REF" | tee /tmp/functions.txt
+          grep -q 'sanad-ai-transcribe-v1' /tmp/functions.txt
+
+      - name: Verify production CORS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30             -X OPTIONS "$FUNCTION_URL"             -H 'Origin: https://app.sanadflow.com'             -H 'Access-Control-Request-Method: POST'             -D /tmp/app.headers -o /tmp/app.body
+          grep -i -F 'access-control-allow-origin: https://app.sanadflow.com' /tmp/app.headers
+
+          curl --silent --show-error --max-time 30             -X OPTIONS "$FUNCTION_URL"             -H 'Origin: https://unknown-stage1.trycloudflare.com'             -H 'Access-Control-Request-Method: POST'             -D /tmp/unknown.headers -o /tmp/unknown.body
+          if grep -i -F 'access-control-allow-origin: https://unknown-stage1.trycloudflare.com' /tmp/unknown.headers; then
+            echo 'Unexpected arbitrary trycloudflare origin acceptance' >&2
+            exit 1
+          fi
+
+      - name: Verify unauthenticated request is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl --silent --show-error --max-time 30             -X POST "$FUNCTION_URL"             -H 'Origin: https://app.sanadflow.com'             -H 'Content-Type: application/json'             --data '{"audio_base64":"AA==","mime_type":"audio/webm","duration_ms":1}'             -o /tmp/unauth.json -w '%{http_code}')"
+          test "$STATUS" = "401"
+          cat /tmp/unauth.json
+
+      - name: Record rollout evidence
+        shell: bash
+        run: |
+          {
+            echo "TARGET_SHA=$TARGET_SHA"
+            echo "FUNCTION=sanad-ai-transcribe-v1"
+            echo "RUNTIME=sanad-voice-v2"
+            echo "VERIFY_JWT=true"
+            echo "CORS_APP_ORIGIN=PASS"
+            echo "CORS_ARBITRARY_TRYCLOUDFLARE=REJECTED"
+            echo "UNAUTHENTICATED_REQUEST=401"
+          } | tee /tmp/stage1g-voice-rollout.txt
+
+      - name: Upload rollout evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage1g-voice-production-rollout
+          path: /tmp/stage1g-voice-rollout.txt
+          retention-days: 7
