@@ -442,7 +442,6 @@ article:hover .sanad-message-actions,
 
 /* SANAD Intelligence Mark v1 — state motion only, no perpetual idle animation. */
 .sanad-intelligence-mark {
-  color: #0f172a;
   transform-origin: 50% 50%;
   isolation: isolate;
 }
