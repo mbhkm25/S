@@ -11,7 +11,7 @@ const VOICE_PREVIEW_ENABLED = import.meta.env.VITE_SANAD_VOICE_PREVIEW === 'true
 const VOICE_FUNCTION_ENDPOINT = VOICE_PREVIEW_ENABLED
   ? String(import.meta.env.VITE_SANAD_VOICE_ENDPOINT || '').trim()
   : '';
-const CANONICAL_VOICE_ENDPOINT =
+const PRODUCTION_VOICE_ENDPOINT =
   'https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-ai-transcribe-v1';
 
 export type SanadVoiceTranscriptionResult = {
@@ -167,7 +167,7 @@ export async function transcribeSanadAudio(
         {
           body: requestBody,
           signal: request.signal,
-          endpointUrl: VOICE_FUNCTION_ENDPOINT || undefined,
+          endpointUrl: VOICE_FUNCTION_ENDPOINT || PRODUCTION_VOICE_ENDPOINT,
         },
       );
     } catch (primaryCause) {
@@ -184,7 +184,7 @@ export async function transcribeSanadAudio(
         {
           body: requestBody,
           signal: request.signal,
-          endpointUrl: CANONICAL_VOICE_ENDPOINT,
+          endpointUrl: PRODUCTION_VOICE_ENDPOINT,
         },
       );
     }
