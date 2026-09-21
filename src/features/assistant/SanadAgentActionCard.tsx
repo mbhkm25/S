@@ -19,6 +19,7 @@ import {
 type Props = {
   card: SanadAssistantActionReviewCard;
   onModify?: (prompt: string) => void;
+  onStatusChange?: (status: string) => void;
 };
 
 function statusMeta(status: string) {
@@ -42,7 +43,7 @@ function resultLabel(action: SanadAgentAction | null) {
   return null;
 }
 
-export default function SanadAgentActionCard({ card, onModify }: Props) {
+export default function SanadAgentActionCard({ card, onModify, onStatusChange }: Props) {
   const [action, setAction] = useState<SanadAgentAction | null>(null);
   const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | null>(null);
   const [error, setError] = useState('');
@@ -57,6 +58,10 @@ export default function SanadAgentActionCard({ card, onModify }: Props) {
 
   const status = action?.status || card.status;
   const version = action?.version || card.version;
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [onStatusChange, status]);
   const review = action?.review || {
     title: card.title,
     summary: card.summary || undefined,

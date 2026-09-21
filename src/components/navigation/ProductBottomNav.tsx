@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
-import { Bot, BriefcaseBusiness, UserRound, WalletCards } from 'lucide-react';
+import { BriefcaseBusiness, UserRound, WalletCards } from 'lucide-react';
+import SanadIntelligenceMark from '../../features/assistant/SanadIntelligenceMark';
 import {
   navigateProduct,
   productHref,
@@ -11,6 +12,7 @@ import { prefetchProductArea } from '../../features/financial/productRouteLoader
 type Props = {
   activeArea?: ProductArea;
   legacyPage?: string;
+  layoutMode?: 'document' | 'viewport';
 };
 
 function inferArea(pathname: string, legacyPage?: string): ProductArea {
@@ -26,7 +28,7 @@ function inferArea(pathname: string, legacyPage?: string): ProductArea {
 }
 
 const ITEMS = [
-  { id: 'assistant' as const, label: 'سند', path: 'sanad-ai', icon: Bot },
+  { id: 'assistant' as const, label: 'سند', path: 'sanad-ai', icon: null },
   { id: 'financial' as const, label: 'سند المالي', path: 'financial', icon: WalletCards },
   { id: 'business' as const, label: 'سند للأعمال', path: 'commercial', icon: BriefcaseBusiness },
   { id: 'account' as const, label: 'حسابي', path: 'account-center', icon: UserRound },
@@ -38,14 +40,16 @@ function handleProductClick(event: MouseEvent<HTMLAnchorElement>, path: string):
   navigateProduct(path);
 }
 
-export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
+export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 'document' }: Props) {
   const active = activeArea || inferArea(window.location.pathname, legacyPage);
   const spaNavigation = legacyPage === undefined;
+  const viewportMode = layoutMode === 'viewport';
 
   return (
     <nav
       data-product-navigation="primary"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[1.65rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_14px_40px_rgba(15,23,42,0.08)]"
+      data-layout-mode={layoutMode}
+      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[1.65rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_14px_40px_rgba(15,23,42,0.08)]`}
       aria-label="أقسام سند الرئيسية"
       dir="rtl"
     >
@@ -65,7 +69,11 @@ export default function ProductBottomNav({ activeArea, legacyPage }: Props) {
               className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'text-slate-950' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
             >
               <span className={`flex h-9 w-11 items-center justify-center rounded-2xl transition ${selected ? 'bg-slate-950 text-white shadow-sm' : 'bg-transparent group-hover:bg-white'}`}>
-                <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
+                {item.id === 'assistant' ? (
+                  <SanadIntelligenceMark state="idle" size={18} monochrome className={selected ? 'text-white' : 'text-current'} />
+                ) : Icon ? (
+                  <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
+                ) : null}
               </span>
               <span className={`max-w-full truncate text-[11px] ${selected ? 'font-semibold text-slate-950' : 'font-medium'}`}>{item.label}</span>
             </a>

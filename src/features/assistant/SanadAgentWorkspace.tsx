@@ -7,8 +7,6 @@ import {
   Menu,
   RotateCcw,
   SendHorizontal,
-  ShieldCheck,
-  Sparkles,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -35,14 +33,25 @@ import {
 } from './assistantWorkspaceApi';
 import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
+import SanadConversationMarkdown from './SanadConversationMarkdown';
 import SanadMessageActions from './SanadMessageActions';
-import SanadFluidOrb, { type SanadOrbState } from './SanadFluidOrb';
+import SanadIntelligenceMark from './SanadIntelligenceMark';
+import SanadAssistantStatus from './SanadAssistantStatus';
+import {
+  mapSanadAssistantPresentationState,
+  readSanadAssistantPreviewState,
+  type SanadAssistantActionStatus,
+  type SanadAssistantRunPhase,
+} from './sanadAssistantPresentation';
 import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDictationButton';
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 type BusinessOption = { id: string; name: string };
+type PreferenceKey = keyof Pick<SanadAgentPreferences,
+  'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
+>;
 
 type WorkspaceMessage = {
   id: string;
@@ -119,31 +128,34 @@ function MessageBubble({
   onStar,
   onRate,
   onModifyAction,
+  onActionStatusChange,
 }: {
   message: WorkspaceMessage;
   onRetry?: () => void;
   onStar?: (value: boolean) => void;
   onRate?: (value: -1 | 1 | null) => void;
   onModifyAction?: (prompt: string) => void;
+  onActionStatusChange?: (status: string) => void;
 }) {
   const assistant = message.role === 'assistant';
   const result = message.result;
   const trace = result?.tool_trace || [];
 
   return (
-    <article className={`flex w-full ${assistant ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[96%] md:max-w-[86%] 2xl:max-w-[78%] ${assistant ? '' : 'text-right'}`}>
+    <article className={`flex w-full min-w-0 ${assistant ? 'justify-start' : 'justify-end'}`}>
+      <div className={assistant ? 'w-full min-w-0' : 'max-w-[88%] text-right md:max-w-[72%] 2xl:max-w-[56rem]'}>
         <div
           className={
             assistant
-              ? `${message.failed ? 'rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3' : 'py-1'}`
+              ? `${message.failed ? 'max-w-[48rem] rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3' : 'max-w-[48rem] py-1'}`
               : 'rounded-2xl bg-slate-100 px-4 py-3 text-slate-900 md:px-5'
           }
+          data-message-surface={assistant ? 'assistant-flat' : 'user-bubble'}
         >
           {assistant ? (
-            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
-                <SanadFluidOrb state="idle" size={22} animated={false} />
+            <div className="mb-2.5 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+              <span className="flex h-7 w-7 items-center justify-center text-slate-700">
+                <SanadIntelligenceMark state="idle" size={18} />
               </span>
               سند
               {result?.model ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-500">{result.model}</span> : null}
@@ -160,11 +172,9 @@ function MessageBubble({
             </div>
           ) : null}
 
-          <p className={`whitespace-pre-wrap text-sm leading-7 md:text-[15px] ${assistant ? 'text-slate-800' : 'text-slate-900'}`}>
-            {message.content}
-          </p>
-
-          {assistant && result?.response ? <SanadAgentResponseBlocks response={result.response} onModifyAction={onModifyAction} /> : null}
+          {assistant
+            ? <SanadConversationMarkdown content={message.content} />
+            : <p className="whitespace-pre-wrap text-sm leading-7 text-slate-900 md:text-[15px]">{message.content}</p>}
 
           {message.failed && onRetry ? (
             <button
@@ -177,8 +187,18 @@ function MessageBubble({
           ) : null}
         </div>
 
+        {assistant && result?.response ? (
+          <div className="mt-3 w-full min-w-0 max-w-[72rem]" data-structured-response-surface="wide">
+            <SanadAgentResponseBlocks
+              response={result.response}
+              onModifyAction={onModifyAction}
+              onActionStatusChange={onActionStatusChange}
+            />
+          </div>
+        ) : null}
+
         {!message.failed ? (
-          <div className={`mt-1.5 flex ${assistant ? 'justify-start' : 'justify-end'} px-1`}>
+          <div className={`mt-1.5 flex ${assistant ? 'max-w-[48rem] justify-start' : 'justify-end'} px-1`}>
             <SanadMessageActions
               content={message.content}
               starred={Boolean(message.isStarred)}
@@ -191,7 +211,7 @@ function MessageBubble({
         ) : null}
 
         {assistant && result && !message.failed ? (
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 max-w-[48rem] space-y-2">
             <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] font-medium text-slate-400">
               {result.latency_ms !== undefined ? (
                 <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatLatency(result.latency_ms)}</span>
@@ -277,6 +297,14 @@ function storedMessagesToWorkspace(
   }));
 }
 
+function syncComposerTextareaHeight(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  const nextHeight = Math.min(textarea.scrollHeight, 60);
+  textarea.style.height = `${Math.max(nextHeight, 36)}px`;
+  textarea.style.overflowY = textarea.scrollHeight > 60 ? 'auto' : 'hidden';
+}
+
 export default function SanadAgentWorkspace() {
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
@@ -284,6 +312,7 @@ export default function SanadAgentWorkspace() {
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [preferences, setPreferences] = useState<SanadAgentPreferences | null>(null);
+  const [pendingPreferenceKey, setPendingPreferenceKey] = useState<PreferenceKey | null>(null);
   const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -298,37 +327,62 @@ export default function SanadAgentWorkspace() {
   const [liveTools, setLiveTools] = useState<SanadAiToolTrace[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<SanadAgentAttachment[]>([]);
-  const [orbState, setOrbState] = useState<SanadOrbState>('idle');
+  const [voiceState, setVoiceState] = useState<SanadVoiceState>('idle');
+  const [runPhase, setRunPhase] = useState<SanadAssistantRunPhase>('idle');
+  const [latestActionStatus, setLatestActionStatus] = useState<SanadAssistantActionStatus>(null);
 
   const endRef = useRef<HTMLDivElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const orbSuccessTimeoutRef = useRef<number | null>(null);
+  const assistantSuccessTimeoutRef = useRef<number | null>(null);
 
-  const clearOrbSuccessTimeout = useCallback(() => {
-    if (orbSuccessTimeoutRef.current !== null) {
-      window.clearTimeout(orbSuccessTimeoutRef.current);
-      orbSuccessTimeoutRef.current = null;
+  const clearAssistantSuccessTimeout = useCallback(() => {
+    if (assistantSuccessTimeoutRef.current !== null) {
+      window.clearTimeout(assistantSuccessTimeoutRef.current);
+      assistantSuccessTimeoutRef.current = null;
     }
   }, []);
 
-  const markOrbSuccess = useCallback(() => {
-    clearOrbSuccessTimeout();
-    setOrbState('success');
-    orbSuccessTimeoutRef.current = window.setTimeout(() => {
-      setOrbState('idle');
-      orbSuccessTimeoutRef.current = null;
-    }, 900);
-  }, [clearOrbSuccessTimeout]);
+  const markAssistantSuccess = useCallback(() => {
+    clearAssistantSuccessTimeout();
+    setRunPhase('success');
+    assistantSuccessTimeoutRef.current = window.setTimeout(() => {
+      setRunPhase('idle');
+      assistantSuccessTimeoutRef.current = null;
+    }, 700);
+  }, [clearAssistantSuccessTimeout]);
 
   const handleVoiceStateChange = useCallback((state: SanadVoiceState) => {
-    clearOrbSuccessTimeout();
-    setOrbState(state === 'listening' ? 'listening' : state === 'transcribing' ? 'thinking' : 'idle');
-  }, [clearOrbSuccessTimeout]);
+    setVoiceState(state);
+  }, []);
 
-  useEffect(() => () => clearOrbSuccessTimeout(), [clearOrbSuccessTimeout]);
+  const handleActionStatusChange = useCallback((status: string) => {
+    if (status === 'review') {
+      setLatestActionStatus('review');
+      return;
+    }
+    if (status === 'approved' || status === 'executing') {
+      setLatestActionStatus(status);
+      return;
+    }
+    setLatestActionStatus(null);
+    if (status === 'completed') {
+      markAssistantSuccess();
+    } else if (status === 'failed') {
+      clearAssistantSuccessTimeout();
+      setRunPhase('error');
+    } else if (status === 'cancelled') {
+      clearAssistantSuccessTimeout();
+      setRunPhase('idle');
+    }
+  }, [clearAssistantSuccessTimeout, markAssistantSuccess]);
+
+  useEffect(() => () => clearAssistantSuccessTimeout(), [clearAssistantSuccessTimeout]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+    timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
   const refreshThreads = async (preferred?: string | null) => {
@@ -505,19 +559,21 @@ export default function SanadAgentWorkspace() {
   };
 
   const changePreference = async (
-    key: keyof Pick<SanadAgentPreferences,
-      'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
-    >,
+    key: PreferenceKey,
     value: boolean,
   ) => {
-    if (!preferences) return;
+    if (!preferences || pendingPreferenceKey) return;
     const previous = preferences;
+    setWorkspaceError(null);
+    setPendingPreferenceKey(key);
     setPreferences({ ...preferences, [key]: value });
     try {
       setPreferences(await updateSanadAgentPreferences({ [key]: value }));
     } catch (cause) {
       setPreferences(previous);
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر حفظ إعداد المساعد.');
+    } finally {
+      setPendingPreferenceKey(null);
     }
   };
 
@@ -603,8 +659,9 @@ export default function SanadAgentWorkspace() {
     setMessages((current) => [...current, userMessage]);
     setDraft('');
     setSending(true);
-    clearOrbSuccessTimeout();
-    setOrbState('thinking');
+    clearAssistantSuccessTimeout();
+    setLatestActionStatus(null);
+    setRunPhase('thinking');
     setLastUserPrompt(prompt);
     setLiveStatus('بدأت معالجة الطلب…');
     setLiveTools([]);
@@ -619,22 +676,22 @@ export default function SanadAgentWorkspace() {
         history: historyFrom(priorMessages),
       }, (event) => {
         if (event.type === 'run.started') {
-          setOrbState('thinking');
+          setRunPhase('thinking');
           setLiveStatus('بدأ مساعد سند المعالجة…');
         } else if (event.type === 'agent.status') {
-          setOrbState('thinking');
+          setRunPhase('thinking');
           setLiveStatus(event.data.label);
         } else if (event.type === 'tool.started') {
-          setOrbState('executing');
+          setRunPhase('executing');
           setLiveStatus(`${toolLabel(event.data.name)}…`);
         } else if (event.type === 'tool.completed') {
-          setOrbState('executing');
+          setRunPhase('executing');
           setLiveTools((current) => [...current, event.data]);
           setLiveStatus(event.data.status === 'completed'
             ? `اكتملت: ${toolLabel(event.data.name)}`
             : `تعذرت: ${toolLabel(event.data.name)}`);
         } else if (event.type === 'answer.final') {
-          setOrbState('thinking');
+          setRunPhase('thinking');
           setLiveStatus('تم التحقق، أجهز الإجابة…');
         }
       });
@@ -648,7 +705,11 @@ export default function SanadAgentWorkspace() {
         result,
         persisted: false,
       }]);
-      markOrbSuccess();
+      const actionReview = result.response?.cards?.find((card) => card.type === 'action_review');
+      if (actionReview?.type === 'action_review') {
+        setLatestActionStatus(actionReview.status as SanadAssistantActionStatus);
+      }
+      markAssistantSuccess();
 
       setPendingAttachments([]);
       await refreshThreads(threadId);
@@ -667,8 +728,9 @@ export default function SanadAgentWorkspace() {
         setMemories(context.memories);
       }
     } catch (cause) {
-      clearOrbSuccessTimeout();
-      setOrbState('idle');
+      clearAssistantSuccessTimeout();
+      setLatestActionStatus(null);
+      setRunPhase('error');
       const message = cause instanceof Error && cause.message ? cause.message : 'تعذر إكمال الطلب الآن.';
       setMessages((current) => [...current, {
         id: createId(),
@@ -697,57 +759,42 @@ export default function SanadAgentWorkspace() {
     }
   }
 
+  useEffect(() => {
+    syncComposerTextareaHeight(textareaRef.current);
+  }, [draft]);
+
+  const mappedAssistantState = mapSanadAssistantPresentationState({
+    voiceState,
+    runPhase,
+    actionStatus: latestActionStatus,
+  });
+  const previewAssistantState = readSanadAssistantPreviewState(
+    window.location.search,
+    import.meta.env.VITE_SANAD_ASSISTANT_STATE_PREVIEW === 'true',
+  );
+  const assistantPresentationState = previewAssistantState || mappedAssistantState;
+
   const empty = messages.length === 0;
 
   return (
-    <section id="sanad-agent-workspace" className="flex h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[58rem] flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.045)]">
-      <div className="shrink-0 border-b border-slate-200/80 bg-white px-3 py-3 md:px-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 xl:hidden"
-              aria-label="فتح محادثات وإعدادات سند"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-            <span className="flex h-11 w-11 items-center justify-center">
-              <SanadFluidOrb state={orbState} size={38} />
-            </span>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold text-slate-950">سند</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  <ShieldCheck className="h-3 w-3" /> قراءة آمنة
-                </span>
-              </div>
-              <p className="mt-1 text-[13px] text-slate-500">
-                محادثات سحابية · ذاكرة طويلة · بيانات حية موثقة
-              </p>
-            </div>
-          </div>
-
-          {businessLoading ? (
-            <span className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> تحميل سياق النشاط…
-            </span>
-          ) : businessId ? (
-            <span className="inline-flex h-10 max-w-[230px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-medium text-slate-700">
-              <BriefcaseBusiness className="h-4 w-4 shrink-0 text-slate-400" />
-              <span className="truncate">{businesses.find((business) => business.id === businessId)?.name || 'نشاط مرتبط'}</span>
-            </span>
-          ) : businesses.length > 1 ? (
-            <button
-              type="button"
-              onClick={() => setBusinessSelectionOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-[13px] font-medium text-amber-800"
-            >
-              <BriefcaseBusiness className="h-4 w-4" /> اختر نشاط المحادثة
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <section
+      id="sanad-agent-workspace"
+      data-conversation-surface="open"
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white"
+    >
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(true)}
+        data-mobile-sidebar-trigger
+        className="absolute right-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/90 text-slate-600 shadow-sm backdrop-blur xl:hidden"
+        aria-label="فتح محادثات وإعدادات سند"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
+      />
 
       {workspaceError ? (
         <div className="border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700">
@@ -755,8 +802,13 @@ export default function SanadAgentWorkspace() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[284px_minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
+          assistantState={assistantPresentationState}
+          businessLabel={businessLoading ? null : (businesses.find((business) => business.id === businessId)?.name || null)}
+          businessLoading={businessLoading}
+          canChooseBusiness={!businessLoading && businesses.length > 1 && !businessId}
+          onChooseBusiness={() => setBusinessSelectionOpen(true)}
           threads={threads}
           selectedThreadId={selectedThreadId}
           loading={threadsLoading}
@@ -766,20 +818,25 @@ export default function SanadAgentWorkspace() {
           onNew={() => void newThread()}
           onArchive={(id) => void archiveThread(id)}
           preferences={preferences}
+          pendingPreferenceKey={pendingPreferenceKey}
           onPreferenceChange={(key, value) => void changePreference(key, value)}
           memories={memories}
           onForgetMemory={(id) => void forgetMemory(id)}
         />
 
-        <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-4 py-5 md:px-7 md:py-6">
+        <div className="relative flex min-h-0 min-w-0 flex-col">
+          <div
+            ref={timelineRef}
+            data-scroll-owner="timeline"
+            className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
+          >
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
               </div>
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
-                <SanadFluidOrb state="idle" size={74} label="سند جاهز" />
+                <SanadIntelligenceMark state="idle" size={42} className="text-slate-900" />
                 <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
@@ -831,6 +888,7 @@ export default function SanadAgentWorkspace() {
                     onStar={(value) => void updateMessageFeedback(message.id, { isStarred: value })}
                     onRate={(value) => void updateMessageFeedback(message.id, { rating: value })}
                     onModifyAction={modifyActionFromCard}
+                    onActionStatusChange={index === messages.length - 1 ? handleActionStatusChange : undefined}
                   />
                 </div>
               ))
@@ -840,10 +898,11 @@ export default function SanadAgentWorkspace() {
               <div className="flex justify-start">
                 <div role="status" aria-live="polite" className="rounded-[1.35rem] rounded-tr-md border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center">
-                      <SanadFluidOrb state={orbState === 'idle' ? 'thinking' : orbState} size={32} />
+                    <span className="flex h-9 w-9 items-center justify-center text-slate-800">
+                      <SanadIntelligenceMark state={assistantPresentationState} size={24} />
                     </span>
                     <div>
+                      <SanadAssistantStatus state={assistantPresentationState} className="mb-0.5" announce />
                       <p className="text-[13px] font-medium text-slate-700">{liveStatus || 'جاري التنفيذ…'}</p>
                       {liveTools.length ? (
                         <div className="mt-2 flex max-w-[70vw] flex-wrap gap-1.5">
@@ -866,8 +925,16 @@ export default function SanadAgentWorkspace() {
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={handleSubmit} className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/80 bg-white/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:p-4">
-            <div className="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_8px_26px_rgba(15,23,42,0.06)] transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]">
+          <form
+            data-workspace-slot="composer"
+            onSubmit={handleSubmit}
+            data-composer-density="compact"
+            className="shrink-0 border-t border-slate-200/80 bg-white/95 p-2 backdrop-blur-xl md:px-4 md:py-3"
+          >
+            <div
+              className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
+              data-composer-layout="single-row-controls"
+            >
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
@@ -876,52 +943,51 @@ export default function SanadAgentWorkspace() {
                 onChange={setPendingAttachments}
                 onRequestThread={ensureThread}
                 onError={(message) => setWorkspaceError(message)}
+                layout="inline-grid"
               />
 
               <textarea
                 ref={textareaRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  syncComposerTextareaHeight(event.currentTarget);
+                }}
                 onKeyDown={handleKeyDown}
                 disabled={sending}
-                rows={2}
-                placeholder="اسأل سند… مثال: أعطني كشف حساب محمد منصر بن هرهرة"
-                className="max-h-40 min-h-[56px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
+                rows={1}
+                placeholder="اسأل سند…"
+                className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
               />
-              <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <SanadVoiceDictationButton
-                    disabled={sending}
-                    onStateChange={handleVoiceStateChange}
-                    onTranscript={(text) => {
-                      setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-                      setWorkspaceError(null);
-                      window.setTimeout(() => textareaRef.current?.focus(), 40);
-                    }}
-                    onError={(message) => setWorkspaceError(message)}
-                  />
-                  <div className="hidden items-center gap-2 text-xs font-medium text-slate-400 md:flex">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    راجع النص الصوتي قبل الإرسال
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={
-                    sending
-                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
-                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
-                  }
-                  className="flex h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
-                  <span className="hidden sm:inline">إرسال</span>
-                </button>
-              </div>
+
+              <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
+              <SanadVoiceDictationButton
+                disabled={sending}
+                onStateChange={handleVoiceStateChange}
+                onTranscript={(text) => {
+                  setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+                  setWorkspaceError(null);
+                  window.setTimeout(() => {
+                    syncComposerTextareaHeight(textareaRef.current);
+                    textareaRef.current?.focus();
+                  }, 40);
+                }}
+                onError={(message) => setWorkspaceError(message)}
+              />
+              <button
+                type="submit"
+                disabled={
+                  sending
+                  || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                  || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                }
+                className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-slate-950 px-2.5 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                aria-label="إرسال"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                <span className="sr-only">إرسال</span>
+              </button>
             </div>
-            <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
-              Enter للإرسال • Shift + Enter لسطر جديد • أي إجراء مالي ينشئ مسودة مراجعة أولًا ولا يُنفذ إلا بعد اعتمادك الصريح.
-            </p>
           </form>
         </div>
       </div>

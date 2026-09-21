@@ -238,31 +238,45 @@ export default function FinancialWorkspaceRoute() {
   const current = META[kind];
   const CurrentIcon = current.icon;
   const businesses = Array.isArray(account?.businesses) ? account.businesses : [];
+  const viewportMode = kind === 'ai';
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic" dir="rtl">
-      <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
-            <div className="min-w-0">
-              <p className="text-[9px] font-bold text-slate-400">{current.eyebrow}</p>
-              <h1 className="truncate text-base font-black">{current.label}</h1>
+    <div
+      data-route-workspace-mode={viewportMode ? 'viewport' : 'document'}
+      className={viewportMode
+        ? 'flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F7F5] text-slate-900 font-arabic'
+        : 'min-h-screen bg-[#F7F7F5] text-slate-900 font-arabic'}
+      dir="rtl"
+    >
+      {!viewportMode ? (
+        <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-slate-400">{current.eyebrow}</p>
+                <h1 className="truncate text-base font-black">{current.label}</h1>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="hidden rounded-full bg-slate-100 px-3 py-1.5 text-[9px] font-black tracking-[0.16em] text-slate-500 sm:inline-flex">SANAD</span>
+              <button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm" aria-label="تحديث">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden rounded-full bg-slate-100 px-3 py-1.5 text-[9px] font-black tracking-[0.16em] text-slate-500 sm:inline-flex">SANAD</span>
-            <button onClick={() => void load()} className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm" aria-label="تحديث">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
-      </header>
+        </header>
+      ) : null}
 
-      <main className="mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10">
-        <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
-          <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
-        </section>
+      <main className={viewportMode
+        ? 'mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:pl-32'
+        : 'mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10'}
+      >
+        {!viewportMode ? (
+          <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+            <p className="text-[11px] leading-6 text-slate-600">{current.description}</p>
+          </section>
+        ) : null}
 
         {kind === 'financial' ? (
           <section>
@@ -307,7 +321,9 @@ export default function FinancialWorkspaceRoute() {
         ) : null}
 
         {loading ? (
-          <div className="flex min-h-52 items-center justify-center rounded-[1.75rem] bg-white"><Loader2 className="h-7 w-7 animate-spin text-slate-400" /></div>
+          <div className={viewportMode ? 'flex min-h-0 flex-1 items-center justify-center' : 'flex min-h-52 items-center justify-center rounded-[1.75rem] bg-white'}>
+            <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+          </div>
         ) : error ? <ErrorCard message={error} onRetry={() => void load()} /> : null}
 
         {!loading && !error && kind === 'financial' && finance ? (
@@ -364,9 +380,11 @@ export default function FinancialWorkspaceRoute() {
         ) : null}
 
         {!loading && !error && kind === 'ai' ? (
-          <Suspense fallback={<div className="min-h-[420px] rounded-[1.5rem] bg-white" aria-busy="true" />}>
-            <SanadAgentWorkspace />
-          </Suspense>
+          <div className="min-h-0 flex-1" data-conversation-route-surface="open">
+            <Suspense fallback={<div className="h-full min-h-0 bg-white" aria-busy="true" />}>
+              <SanadAgentWorkspace />
+            </Suspense>
+          </div>
         ) : null}
       </main>
     </div>

@@ -13,7 +13,8 @@ const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts', 'utf
 const presentation = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
 const migration = readFileSync('supabase/migrations/20260920071058_sanad_agent_workspace_v2.sql', 'utf8');
 const visualMigration = readFileSync('supabase/migrations/20260920121801_sanad_agent_message_feedback_v1.sql', 'utf8');
-const orb = readFileSync('src/features/assistant/SanadFluidOrb.tsx', 'utf8');
+const intelligenceMark = readFileSync('src/features/assistant/SanadIntelligenceMark.tsx', 'utf8');
+const assistantPresentation = readFileSync('src/features/assistant/sanadAssistantPresentation.ts', 'utf8');
 const messageActions = readFileSync('src/features/assistant/SanadMessageActions.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 const voiceButton = readFileSync('src/features/assistant/SanadVoiceDictationButton.tsx', 'utf8');
@@ -36,12 +37,13 @@ for (const required of [
   'streamSanadAiAgentTurn',
   'get_my_account_center_v1',
   'خطوات التنفيذ والمصادر',
-  'Shift + Enter',
+  'data-conversation-surface="open"',
   'thread_id',
   'AssistantWorkspaceSidebar',
   'SanadAgentResponseBlocks',
   'SanadMessageActions',
-  'SanadFluidOrb',
+  'SanadIntelligenceMark',
+  'mapSanadAssistantPresentationState',
 ]) {
   assert.ok(workspace.includes(required), `workspace missing ${required}`);
 }
@@ -123,9 +125,10 @@ assert.match(visualMigration, /rating smallint/);
 assert.match(visualMigration, /update_my_sanad_agent_message_feedback_v1/);
 assert.match(visualMigration, /security definer/i);
 assert.match(visualMigration, /auth\.uid\(\)/);
-assert.match(orb, /SanadOrbState/);
-assert.match(orb, /canvas\.getContext\('2d'/);
-assert.match(styles, /sanad-orb-executing/);
+assert.match(intelligenceMark, /data-sanad-intelligence-mark/);
+assert.match(assistantPresentation, /waiting_approval/);
+assert.match(assistantPresentation, /mapSanadAssistantPresentationState/);
+assert.match(styles, /sanad-intelligence-mark--executing/);
 assert.match(styles, /prefers-reduced-motion/);
 
 console.log('SANAD Agent Visual v4 contract passed.');
@@ -134,7 +137,7 @@ console.log('SANAD Agent Visual v4 contract passed.');
 for (const required of [
   'MediaRecorder',
   'getUserMedia',
-  'MAX_RECORDING_MS = 90_000',
+  'MAX_RECORDING_MS',
   'transcribeSanadAudio',
   'تم تحويل الصوت إلى نص. راجعه قبل الإرسال.',
 ]) {
@@ -142,7 +145,7 @@ for (const required of [
 }
 
 assert.match(voiceApi, /sanad-ai-transcribe-v1/);
-assert.match(voiceApi, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceApi, /MAX_AUDIO_BYTES/);
 assert.match(voiceApi, /invokeAuthenticatedSanadFunction/);
 assert.doesNotMatch(voiceApi, /functions\.invoke/, 'Voice must use explicit authenticated fetch transport');
 assert.match(voiceFunction, /gemini-3\.5-transcribe/);
@@ -153,6 +156,16 @@ assert.match(voiceFunction, /mode:\s*"smart"/);
 assert.match(voiceFunction, /auth\.getUser/);
 assert.match(voiceFunction, /method:\s*"DELETE"/);
 assert.match(voiceFunction, /MAX_AUDIO_BYTES = 4 \* 1024 \* 1024/);
+assert.match(voiceFunction, /MAX_RECORDING_MS = 90_000/);
+assert.match(voiceFunction, /SANAD_VOICE_PREVIEW_ORIGINS/);
+assert.doesNotMatch(voiceFunction, /trycloudflare\\.com/, 'Production voice CORS must not wildcard temporary preview domains.');
+assert.match(voiceFunction, /"https:\/\/localhost"/);
+assert.match(voiceFunction, /publicTranscriptionFailure/);
+assert.doesNotMatch(
+  voiceFunction,
+  /return\s+respond\([^\n]*error:\s*cleanText\(error,\s*800\)/,
+  'Voice responses must not expose raw provider errors',
+);
 assert.match(supabaseConfig, /\[functions\.sanad-ai-transcribe-v1\][\s\S]*verify_jwt = true/);
 assert.match(workspace, /SanadVoiceDictationButton/);
 assert.match(workspace, /راجع النص الصوتي قبل الإرسال/);
@@ -461,7 +474,8 @@ assert.match(styles, /font-display:\s*swap/);
 assert.match(styles, /font-weight:\s*100 900/);
 assert.match(styles, /Noto Sans Arabic/);
 assert.match(workspace, /id="sanad-agent-workspace"/);
-assert.match(workspace, /sticky bottom-0/);
+assert.match(workspace, /data-workspace-slot="composer"/);
+assert.doesNotMatch(workspace, /sticky bottom-0/, 'Viewport contract keeps the composer in normal layout flow');
 assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
 for (const source of [workspace, sidebar, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
   assert.doesNotMatch(source, /font-black/, 'Phase 2 must remove black font weight from Agent UI');
