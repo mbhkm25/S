@@ -1,4 +1,4 @@
-reason=deploy-stage1g-hotfix-production
-requested_at=2026-09-21T23:22:00+03:00
-source_main_sha=91507cb04b0d592ac63a72c7dc97439f38c4b57f
+reason=deploy-stage2a-visual-foundation-production
+requested_at=2026-09-22T21:35:00+03:00
+source_main_sha=2bc2b097e7a4c5f148b3968bfb5ae1c3c3568484
 scope=production-pwa
