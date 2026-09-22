@@ -1,6 +1,8 @@
 # SANAD Product Domain Architecture v1
 
-Status: Active design baseline for the 2026 SANAD product model.
+> **Superseded navigation model.** The active product architecture is `docs/architecture/sanad-conversation-operating-layer-v2.md`. Keep this file as a reference for canonical Financial/Commercial/Account/AI ownership boundaries; do not use its four-peer-section navigation as the target UI model.
+
+Status: Superseded for user-facing navigation and product composition as of 2026-09-22. Internal domain ownership rules remain active where they protect canonical financial/business truth.
 
 ## Product domains
 
