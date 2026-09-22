@@ -55,7 +55,7 @@ assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 
 assert.match(sidebar, /className="absolute inset-0 z-40/);
-assert.match(sidebar, /className=\{`absolute inset-y-0 right-0 z-50/);
+assert.match(sidebar, /className=\{`sanad-sidebar-surface absolute inset-y-0 right-0 z-50/);
 assert.doesNotMatch(
   sidebar,
   /fixed inset-(?:0|y-0)/,
