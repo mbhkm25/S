@@ -62,11 +62,12 @@ function rpcValue(name){ return Object.prototype.hasOwnProperty.call(rpc,name) ?
 
 const browser = await chromium.launch({headless:true});
 async function makeContext(viewport){
-  const context = await browser.newContext({viewport,locale:'ar-YE',colorScheme:'light'});
+  const context = await browser.newContext({viewport,locale:'ar-YE',colorScheme:'light',serviceWorkers:'block'});
   await context.addInitScript(({session})=>{
     localStorage.setItem('sb-hudbzlgclghlhazlduas-auth-token',JSON.stringify(session));
   },{session});
   await context.route('**/auth/v1/user',route=>route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify(session.user)}));
+  await context.route('**/auth/v1/token**',route=>route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify(session)}));
   await context.route('**/rest/v1/rpc/**',route=>{
     const name = new URL(route.request().url()).pathname.split('/').pop();
     return route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify(rpcValue(name))});
@@ -81,7 +82,11 @@ async function smoke(path,viewport,name){
   const errors=[];
   page.on('pageerror',e=>errors.push(String(e)));
   await page.goto(base+path,{waitUntil:'domcontentloaded'});
-  await page.waitForTimeout(1800);
+  if (path === '/sanad-ai') {
+    await page.locator('[data-scroll-owner="timeline"]').waitFor({state:'attached',timeout:12000}).catch(()=>undefined);
+  } else {
+    await page.waitForTimeout(1800);
+  }
   await page.evaluate(()=>document.fonts?.ready);
   const state = await page.evaluate(()=>({
     url:location.pathname,
@@ -97,7 +102,10 @@ async function smoke(path,viewport,name){
     composer:!!document.querySelector('[data-workspace-slot="composer"]'),
     sidebar:!!document.querySelector('.sanad-sidebar-surface'),
     structured:!!document.querySelector('.sanad-surface'),
+    bodyText:document.body.innerText.slice(0,1200),
+    rootHtml:document.getElementById('root')?.innerHTML.slice(0,1200) || '',
   }));
+  fs.writeFileSync(`postflight/${name}.json`,JSON.stringify({state,errors},null,2));
   await page.screenshot({path:`postflight/${name}.png`,fullPage:false});
   if (state.horizontalOverflow) throw new Error(`${name}: horizontal overflow`);
   if (!state.brandGreen) throw new Error(`${name}: Stage 2A semantic tokens missing`);
