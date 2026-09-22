@@ -104,7 +104,7 @@ Tokens:
 
 - `--sanad-safe-top`;
 - `--sanad-safe-bottom`;
-- `--sanad-mobile-system-clearance`;
+- `--sanad-mobile-bottom-clearance`;
 - `--sanad-mobile-nav-min-height`;
 - `--sanad-mobile-nav-stack-height`.
 
