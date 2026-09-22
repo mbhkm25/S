@@ -1,5 +1,7 @@
 # SANAD Product and Engineering Charter
 
+> **Superseded as the active product charter on 2026-09-22.** Use `docs/SANAD_PRODUCT_AND_ENGINEERING_CHARTER_V2.md` for current product philosophy and engineering direction. This file remains historical context for earlier MVP boundaries.
+
 This charter defines SANAD's product philosophy, engineering boundaries, architecture principles, and implementation guardrails. It is intended to guide human contributors and AI agents working on the SANAD repository.
 
 ## Product Identity
