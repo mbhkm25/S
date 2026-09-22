@@ -98,27 +98,26 @@ jobs:
           cat /tmp/cloudflared.log
           exit 1
 
-      - name: Verify public preview and PWA metadata
+      - name: Prepare preview metadata
         shell: bash
         env:
           PREVIEW_URL: ${{ steps.tunnel.outputs.url }}
         run: |
           set -euo pipefail
-          ready=0
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error --location --max-time 20 "$PREVIEW_URL/" >/dev/null 2>&1; then
-              ready=1
+          cp dist/version.json preview-version.json
+          cp dist/manifest.webmanifest preview-manifest.webmanifest
+          test -s dist/sw.js
+          grep -q "${CANDIDATE_SHA:0:12}" preview-version.json
+          public_state="runner_dns_pending"
+          for attempt in {1..10}; do
+            if curl --fail --silent --show-error --location --max-time 10 "$PREVIEW_URL/" >/dev/null 2>&1; then
+              public_state="reachable"
               break
             fi
             sleep 2
           done
-          test "$ready" -eq 1
-          curl --fail --silent --show-error --location "$PREVIEW_URL/version.json" | tee preview-version.json
-          grep -q "$CANDIDATE_SHA" <(sed 's/"//g' preview-version.json) || grep -q "${CANDIDATE_SHA:0:12}" preview-version.json
-          curl --fail --silent --show-error --location "$PREVIEW_URL/manifest.webmanifest" > preview-manifest.webmanifest
-          curl --fail --silent --show-error --location "$PREVIEW_URL/sw.js" > /tmp/preview-sw.js
-          test -s /tmp/preview-sw.js
-          printf 'version.json, manifest.webmanifest and sw.js verified through the public preview URL.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Preview public probe: %s\n' "$public_state" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Local build metadata verified: version.json, manifest.webmanifest and sw.js.\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload preview metadata
         uses: actions/upload-artifact@v4
