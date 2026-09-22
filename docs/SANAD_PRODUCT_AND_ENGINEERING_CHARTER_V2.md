@@ -322,7 +322,7 @@ Each train must have:
 ## 16. Stage 2 direction
 
 ### Stage 2A
-Visual Foundation continues as already implemented/planned:
+Visual Foundation is **CLOSED** and shipped to Production at `d0f7ce82bdf1f3c3dc9f63b24328501098d98893`:
 - semantic colors;
 - typography;
 - surfaces;
@@ -330,7 +330,7 @@ Visual Foundation continues as already implemented/planned:
 - shared primitives;
 - safe-area.
 
-The product-model reframe does not invalidate Stage 2A.
+The product-model reframe does not invalidate or reopen the shipped Stage 2A foundation.
 
 ### Stage 2B.0
 Architecture/documentation gate for:
