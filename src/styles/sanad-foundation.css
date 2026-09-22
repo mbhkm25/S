@@ -22,7 +22,7 @@
   /* Semantic text / strokes. */
   --sanad-text-strong: #0b1720;
   --sanad-text: #263740;
-  --sanad-text-muted: #68777f;
+  --sanad-text-muted: #607078;
   --sanad-text-subtle: #8b989e;
   --sanad-border-subtle: #e4eaea;
   --sanad-border: #d6dfe0;
@@ -87,13 +87,13 @@
   --sanad-signature-commercial: linear-gradient(120deg, rgba(15, 23, 42, .08), rgba(71, 85, 105, .08), rgba(79, 70, 229, .055));
   --sanad-signature-account: linear-gradient(120deg, rgba(100, 116, 139, .08), rgba(15, 23, 42, .035));
 
-  /* Safe-area contract. The design floor remains even when a browser/WebView reports 0px. */
+  /* Safe-area contract. The floor is SANAD interaction breathing room, not a measured system-bar height. */
   --sanad-safe-top: max(env(safe-area-inset-top, 0px), 0px);
   --sanad-safe-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
-  --sanad-mobile-system-clearance: max(var(--sanad-safe-bottom), 0.75rem);
+  --sanad-mobile-bottom-clearance: max(var(--sanad-safe-bottom), 0.75rem);
   --sanad-mobile-nav-padding-block: 0.5rem;
   --sanad-mobile-nav-min-height: 4.5rem;
-  --sanad-mobile-nav-stack-height: calc(var(--sanad-mobile-nav-min-height) + var(--sanad-mobile-system-clearance));
+  --sanad-mobile-nav-stack-height: calc(var(--sanad-mobile-nav-min-height) + var(--sanad-mobile-bottom-clearance));
   --sanad-composer-gap: 0px;
 }
 
@@ -237,7 +237,7 @@
   .sanad-primary-nav {
     min-height: var(--sanad-mobile-nav-min-height);
     padding-top: var(--sanad-mobile-nav-padding-block);
-    padding-bottom: var(--sanad-mobile-system-clearance);
+    padding-bottom: var(--sanad-mobile-bottom-clearance);
     border-color: var(--sanad-border-subtle);
     background: color-mix(in srgb, var(--sanad-surface-1) 96%, transparent);
   }
