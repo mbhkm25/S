@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/sanad-motion.css";
+@import "./styles/sanad-foundation.css";
 
 /* SANAD primary typeface: self-hosted Noto Sans Arabic variable WOFF2 (OFL). */
 @font-face {
