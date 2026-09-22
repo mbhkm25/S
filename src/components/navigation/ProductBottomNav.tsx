@@ -49,7 +49,7 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
     <nav
       data-product-navigation="primary"
       data-layout-mode={layoutMode}
-      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} sanad-primary-nav z-50 border-t border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-2 pb-[var(--sanad-mobile-system-clearance)] pt-2 shadow-[var(--sanad-shadow-2)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[var(--sanad-radius-xl)] lg:border lg:border-[var(--sanad-border)] lg:px-2 lg:py-3`}
+      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} sanad-primary-nav z-50 border-t border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-2 pb-[var(--sanad-mobile-bottom-clearance)] pt-2 shadow-[var(--sanad-shadow-2)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[var(--sanad-radius-xl)] lg:border lg:border-[var(--sanad-border)] lg:px-2 lg:py-3`}
       aria-label="أقسام سند الرئيسية"
       dir="rtl"
     >
