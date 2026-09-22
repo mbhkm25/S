@@ -1,0 +1,92 @@
+name: Stage 1 Final Cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/stage1-final-cleanup.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sanad-stage1-final-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: hudbzlgclghlhazlduas
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Remove temporary Voice candidate functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+
+          current="$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
+          printf '%s\n' "$current"
+
+          for fn in sanad-ai-transcribe-stage1e-candidate sanad-ai-transcribe-stage1g-hf-candidate; do
+            if grep -q "$fn" <<<"$current"; then
+              supabase functions delete "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
+          done
+
+          after="$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF")"
+          printf '%s\n' "$after"
+          ! grep -q 'sanad-ai-transcribe-stage1e-candidate' <<<"$after"
+          ! grep -q 'sanad-ai-transcribe-stage1g-hf-candidate' <<<"$after"
+          grep -q 'sanad-ai-transcribe-v1' <<<"$after"
+
+      - name: Delete only merged Stage 1 branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+
+          branches=(
+            "fix/sanad-viewport-scroll-contract-v1"
+            "feat/sanad-conversation-surface-simplification-v1"
+            "fix/sanad-settings-geometry-contract-v1"
+            "fix/sanad-voice-reliability-v2"
+            "feat/sanad-assistant-identity-state-v1"
+            "release/stage1-contract-hardening"
+            "release/stage1g-voice-backend-rollout"
+            "release/stage1g-production-trigger"
+            "hotfix/stage1g-production-closure-v1"
+            "release/stage1g-hf-production-trigger"
+            "hotfix/stage-1g-hf-v-voice-root-cause"
+            "hotfix/stage-1g-hf-v2-voice-preprovider-phase"
+            "hotfix/stage-1g-hf-v3-voice-metric-rpc"
+            "chore/stage1-final-cleanup"
+          )
+
+          for branch in "${branches[@]}"; do
+            if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+              if git merge-base --is-ancestor "origin/$branch" origin/main; then
+                git push origin --delete "$branch"
+              else
+                echo "SKIP non-ancestor branch: $branch"
+              fi
+            else
+              echo "SKIP missing branch: $branch"
+            fi
+          done
