@@ -1,0 +1,37 @@
+name: Stage 2A Release Preflight
+
+on:
+  push:
+    branches:
+      - preview/stage2a-v-64576de
+    paths:
+      - '.github/workflows/stage2a-release-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe current Production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preflight
+          curl --fail --silent --show-error --location https://app.sanadflow.com/version.json -o preflight/version.json
+          curl --fail --silent --show-error --location https://app.sanadflow.com/manifest.webmanifest -o preflight/manifest.webmanifest
+          curl --fail --silent --show-error --location https://app.sanadflow.com/sw.js -o preflight/sw.js
+          cat preflight/version.json
+          sha256sum preflight/sw.js | tee preflight/sw.sha256
+          sha256sum preflight/manifest.webmanifest | tee preflight/manifest.sha256
+          printf 'Production version.json: ' >> "$GITHUB_STEP_SUMMARY"
+          cat preflight/version.json >> "$GITHUB_STEP_SUMMARY"
+          printf '\nService Worker SHA256: ' >> "$GITHUB_STEP_SUMMARY"
+          cut -d' ' -f1 preflight/sw.sha256 >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage2a-production-preflight
+          path: preflight/
+          retention-days: 3
