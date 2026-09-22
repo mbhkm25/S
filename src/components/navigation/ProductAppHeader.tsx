@@ -60,7 +60,7 @@ export default function ProductAppHeader({ userId }: Props) {
   return (
     <header
       id="product_app_header"
-      className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 py-2.5 backdrop-blur-xl sm:px-4"
+      className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4"
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
