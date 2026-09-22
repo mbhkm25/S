@@ -125,6 +125,10 @@ This train replaces the former plan to refine the four-section shell.
 
 ## 2B.0 — Product Model Reframe
 
+**Status:** BLUEPRINT DRAFTED — awaiting product approval before runtime implementation.
+
+**Canonical blueprint:** `docs/architecture/STAGE2B0_SANAD_PRODUCT_ARCHITECTURE_BLUEPRINT_V1.md`
+
 **Documentation/architecture gate. No major implementation before approval.**
 
 Finalize:
@@ -171,6 +175,17 @@ Move account identity/settings to utility/profile position rather than peer navi
 
 ### Deliverable
 A signed-off Product Architecture Blueprint before shell refactor.
+
+The blueprint locks:
+- one global SANAD sidebar as navigation owner;
+- Desktop persistent/collapsible sidebar;
+- Mobile RTL drawer with no permanent product bottom navigation;
+- conversation as default intent surface;
+- migration of Account to Profile/Settings utility;
+- decomposition of Work Center into Today / Tasks / Approvals / Automations;
+- Capabilities vs Connections vs Businesses/Spaces taxonomy;
+- route compatibility during the first shell migration;
+- retirement plan for ProductBottomNav, ProductAppHeader, and Assistant-only navigation duplication.
 
 ---
 
