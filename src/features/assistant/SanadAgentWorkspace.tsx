@@ -780,7 +780,7 @@ export default function SanadAgentWorkspace() {
     <section
       id="sanad-agent-workspace"
       data-conversation-surface="open"
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white"
+      className="sanad-workspace-canvas relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
       <button
         type="button"
@@ -932,7 +932,7 @@ export default function SanadAgentWorkspace() {
             data-workspace-slot="composer"
             onSubmit={handleSubmit}
             data-composer-density="compact"
-            className="shrink-0 border-t border-slate-200/80 bg-white/95 p-2 backdrop-blur-xl md:px-4 md:py-3"
+            className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
           >
             <div
               className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
@@ -984,7 +984,7 @@ export default function SanadAgentWorkspace() {
                   || pendingAttachments.some((attachment) => attachment.status !== 'ready')
                   || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
                 }
-                className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-slate-950 px-2.5 text-[13px] font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="sanad-focus-ring flex h-9 min-w-9 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 aria-label="إرسال"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}

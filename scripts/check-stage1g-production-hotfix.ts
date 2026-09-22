@@ -37,8 +37,8 @@ assert.match(sidebar, /data-sidebar-scroll-region="memory"/);
 assert.match(sidebar, /overflow-y-auto overscroll-contain/);
 assert.match(sidebar, /shrink-0 border-b/);
 
-assert.match(navigation, /selected \? 'bg-slate-950 text-white shadow-sm'/);
-assert.match(navigation, /font-semibold text-white/);
+assert.match(navigation, /data-active=\{selected \? 'true' : 'false'\}/);
+assert.match(navigation, /sanad-primary-nav-item/);
 assert.match(navigation, /SanadIntelligenceMark state="idle" size=\{18\} monochrome/);
 assert.doesNotMatch(
   styles,

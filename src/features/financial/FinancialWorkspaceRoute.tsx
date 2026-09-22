@@ -249,7 +249,7 @@ export default function FinancialWorkspaceRoute() {
       dir="rtl"
     >
       {!viewportMode ? (
-        <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
+        <header data-section-signature={kind} className="sanad-section-route-header sticky top-0 z-20 border-b border-[var(--sanad-border-subtle)] bg-white/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>

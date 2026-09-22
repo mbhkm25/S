@@ -45,7 +45,7 @@ assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
 assert.match(shell, /layoutMode=\{assistant \? 'viewport' : 'document'\}/);
 assert.match(
   shell,
-  /: 'min-h-screen bg-\[#F8F8F6\] text-slate-900'/,
+  /: 'sanad-canvas min-h-screen'/,
   'Document workspaces must retain document flow.',
 );
 
@@ -55,7 +55,7 @@ assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 
 assert.match(sidebar, /className="absolute inset-0 z-40/);
-assert.match(sidebar, /className=\{`absolute inset-y-0 right-0 z-50/);
+assert.match(sidebar, /className=\{`sanad-sidebar-surface absolute inset-y-0 right-0 z-50/);
 assert.doesNotMatch(
   sidebar,
   /fixed inset-(?:0|y-0)/,
@@ -74,7 +74,7 @@ assert.match(
 
 assert.match(nav, /layoutMode\?: 'document' \| 'viewport'/);
 assert.match(nav, /viewportMode \? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'/);
-assert.match(nav, /pb-\[max\(\.45rem,env\(safe-area-inset-bottom\)\)\]/);
+assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
 assert.match(nav, /lg:fixed/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);

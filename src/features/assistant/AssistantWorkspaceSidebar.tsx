@@ -68,7 +68,7 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
       ) : null}
       <aside
         data-sidebar-density="compact"
-        className={`absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[320px] flex-col overflow-hidden border-l border-slate-200/80 bg-[#FBFBFA] shadow-xl transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`sanad-sidebar-surface absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[320px] flex-col overflow-hidden border-l shadow-[var(--sanad-shadow-3)] transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
@@ -160,7 +160,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             <button
               type="button"
               onClick={props.onNew}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
+              className="sanad-focus-ring flex w-full items-center justify-center gap-2 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
             >
               <MessageSquarePlus className="h-4 w-4" />
               محادثة جديدة
