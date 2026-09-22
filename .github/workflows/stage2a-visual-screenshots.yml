@@ -3,7 +3,7 @@ name: Stage 2A Visual Screenshots
 on:
   push:
     branches:
-      - preview/stage2a-v-64576de
+      - preview/stage2a-v-0e0fb7b
     paths:
       - '.github/workflows/stage2a-visual-screenshots.yml'
 
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CANDIDATE_SHA: 64576de66447d47527c939023969c8c9251e0bc8
+      CANDIDATE_SHA: 0e0fb7be4f5cebb836ca5911a2ca2e82bf04c9b3
 
     steps:
       - name: Checkout exact candidate
@@ -313,6 +313,6 @@ jobs:
       - name: Upload visual QA evidence
         uses: actions/upload-artifact@v4
         with:
-          name: stage2a-visual-qa-64576de
+          name: stage2a-visual-qa-0e0fb7b
           path: visual-qa/
           retention-days: 7
