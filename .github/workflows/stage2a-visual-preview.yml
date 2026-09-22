@@ -1,0 +1,128 @@
+name: Stage 2A Visual Preview
+
+on:
+  push:
+    branches:
+      - preview/stage2a-v-64576de
+    paths:
+      - '.github/workflows/stage2a-visual-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CANDIDATE_SHA: 64576de66447d47527c939023969c8c9251e0bc8
+
+    steps:
+      - name: Checkout exact Stage 2A candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate candidate
+        run: |
+          npm run lint
+          npm run check:routes
+          npm run build
+          npm run check:bundle-budget
+
+      - name: Verify PWA artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/version.json
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          cat dist/version.json
+          grep -q '"name"' dist/manifest.webmanifest
+
+      - name: Start local preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx vite preview --host 127.0.0.1 --port 4173 > /tmp/vite-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/vite-preview.log
+          exit 1
+
+      - name: Install cloudflared
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --silent --show-error             https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64             -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared --version
+
+      - name: Open temporary tunnel
+        id: tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4173 > /tmp/cloudflared.log 2>&1 &
+          for attempt in {1..60}; do
+            URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -n 1 || true)"
+            if [[ -n "$URL" ]]; then
+              echo "url=$URL" >> "$GITHUB_OUTPUT"
+              printf '%s\n' "$URL" > preview-url.txt
+              printf 'Candidate SHA: %s\nPreview URL: %s\n' "$CANDIDATE_SHA" "$URL" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/cloudflared.log
+          exit 1
+
+      - name: Verify public preview and PWA metadata
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "$PREVIEW_URL/" >/dev/null
+          curl --fail --silent --show-error --location "$PREVIEW_URL/version.json" | tee preview-version.json
+          curl --fail --silent --show-error --location "$PREVIEW_URL/manifest.webmanifest" > preview-manifest.webmanifest
+          curl --fail --silent --show-error --location "$PREVIEW_URL/sw.js" > /tmp/preview-sw.js
+          test -s /tmp/preview-sw.js
+          printf 'version.json, manifest.webmanifest and sw.js verified through the public preview URL.\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload preview metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2a-preview-metadata
+          path: |
+            preview-url.txt
+            preview-version.json
+            preview-manifest.webmanifest
+          retention-days: 1
+
+      - name: Keep preview available
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.tunnel.outputs.url }}
+        run: |
+          echo "Preview remains available temporarily at $PREVIEW_URL"
+          sleep 6600
