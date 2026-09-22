@@ -64,6 +64,7 @@ export default function FinancialWorkspaceShell() {
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
       <div
         data-workspace-mode={assistant ? 'viewport' : 'document'}
+        data-product-area={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'}
         className={assistant
           ? 'sanad-canvas flex h-dvh min-h-0 flex-col overflow-hidden'
           : 'sanad-canvas min-h-screen'}
