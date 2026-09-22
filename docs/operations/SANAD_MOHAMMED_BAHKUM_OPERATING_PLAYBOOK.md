@@ -1,11 +1,11 @@
 # SANAD / محمد باحكم — Operating Playbook & Personal Skill
 
 **Status:** Active handoff baseline  
-**Updated:** 2026-09-20  
+**Updated:** 2026-09-22  
 **Audience:** Any new ChatGPT / coding session that will work with محمد باحكم on SANAD  
 **Primary repository:** `mbhkm25/S`  
 **Production branch:** `main`  
-**Current main at this update:** `0ed19031bdd1689870ecc5b2d7c0f79f108fcf43`  
+**Stage 1 functional production baseline:** `7c2460169c0eb05279d4828b5fe7e0d3509c8c03`  
 **Historical Bridge consolidation commit:** `316bc48f33da84573cc7656a30debcfd25c2389d`  
 Always re-read the live `main` ref before starting work; these SHAs are context, not a permanent pointer.
 
@@ -605,7 +605,44 @@ This skill should preserve محمد's working preferences and SANAD operating me
 
 ---
 
-## 16. Final operating principle
+## 16. Stage 1 production closure baseline
+
+Stage 1 was closed after Production smoke and reconciliation on 2026-09-22.
+
+Verified closure facts:
+
+- Voice Production root cause: **non-fatal metrics RPC handling**.
+- Production Voice Function: `sanad-ai-transcribe-v1`.
+- Production function version: **v6**.
+- Voice runtime: `sanad-voice-v2`.
+- Stage 1 functional production baseline: `7c2460169c0eb05279d4828b5fe7e0d3509c8c03`.
+- Last full PWA/UI production deploy baseline before Voice-only closure commits: `8ebc5f7521df2f016681f252d0c161e39e4adb7a`.
+- Voice Production smoke: PASS; transcription inserts into the Composer for review and does not auto-send.
+- Message ordering Production invariants: PASS.
+- Sidebar scrolling, status/error presentation, Primary rail active state, and sidebar toggle geometry: PASS under the Stage 1G production hotfix contract and deployed frontend baseline.
+- Settings persistence: PASS.
+- Assistant Identity and production negative check for `assistantState`: PASS.
+- Financial, Commercial, and Account route/API contracts: PASS.
+- Temporary Voice candidate Edge Functions were removed during final cleanup.
+- Historical stacked PRs #347–#350 were closed as superseded/already integrated.
+
+Architecture rule established by the Voice incident:
+
+> **Observability telemetry must be non-fatal to the primary user operation.**
+
+This does **not** weaken mandatory financial audit requirements. Financial Audit is a separate integrity contract and must remain mandatory wherever the operation requires it.
+
+Rollback references:
+
+- Functional Stage 1 baseline: `7c2460169c0eb05279d4828b5fe7e0d3509c8c03`.
+- Last full UI/PWA deploy baseline: `8ebc5f7521df2f016681f252d0c161e39e4adb7a`.
+- Voice v6 deployed bundle SHA256: `cd1ee83d056a35c1ee3cb7430b66f3c53080fe99838ee4433d81fe8d2c26a176`.
+
+Repository cleanup/documentation commits after the functional baseline do not change the Stage 1 application runtime contract. Always inspect live `main` before beginning the next stage.
+
+---
+
+## 17. Final operating principle
 
 **Inspect reality first, preserve one source of truth, execute with evidence, verify production separately, and document the decision.**
 
