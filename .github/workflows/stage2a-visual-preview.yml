@@ -39,10 +39,12 @@ jobs:
         run: npm ci
 
       - name: Validate candidate
+        shell: bash
         run: |
+          set -euo pipefail
           npm run lint
           npm run check:routes
-          npm run build
+          GITHUB_SHA="$CANDIDATE_SHA" npm run build
           npm run check:bundle-budget
 
       - name: Verify PWA artifacts
@@ -102,8 +104,17 @@ jobs:
           PREVIEW_URL: ${{ steps.tunnel.outputs.url }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location "$PREVIEW_URL/" >/dev/null
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location --max-time 20 "$PREVIEW_URL/" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
           curl --fail --silent --show-error --location "$PREVIEW_URL/version.json" | tee preview-version.json
+          grep -q "$CANDIDATE_SHA" <(sed 's/"//g' preview-version.json) || grep -q "${CANDIDATE_SHA:0:12}" preview-version.json
           curl --fail --silent --show-error --location "$PREVIEW_URL/manifest.webmanifest" > preview-manifest.webmanifest
           curl --fail --silent --show-error --location "$PREVIEW_URL/sw.js" > /tmp/preview-sw.js
           test -s /tmp/preview-sw.js
