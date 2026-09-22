@@ -7,6 +7,7 @@ const nav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8
 const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
+const workspaceRoute = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
 const settings = readFileSync('src/components/settings/SettingsControls.tsx', 'utf8');
 const responses = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
@@ -75,6 +76,8 @@ assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
 assert.match(nav, /data-active=\{selected \? 'true' : 'false'\}/);
 assert.match(header, /sanad-product-header/);
 assert.match(shell, /data-product-area=/);
+assert.match(workspaceRoute, /data-section-signature=\{kind\}/);
+assert.match(workspaceRoute, /sanad-section-route-header/);
 assert.match(shell, /sanad-canvas/);
 assert.match(shell, /var\(--sanad-mobile-nav-stack-height\)/);
 assert.match(workspace, /sanad-workspace-canvas/);
