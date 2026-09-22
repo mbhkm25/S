@@ -60,7 +60,7 @@ export default function ProductAppHeader({ userId }: Props) {
   return (
     <header
       id="product_app_header"
-      className="sticky top-0 z-[60] shrink-0 border-b border-slate-200/75 bg-white/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl sm:px-4"
+      className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 py-2.5 backdrop-blur-xl sm:px-4"
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
@@ -81,7 +81,7 @@ export default function ProductAppHeader({ userId }: Props) {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <a
               href="/payment-inbox.html"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200/80 bg-slate-50 text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
+              className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
               aria-label="فتح وارد المدفوعات"
               title="وارد المدفوعات"
             >
@@ -91,7 +91,7 @@ export default function ProductAppHeader({ userId }: Props) {
 
             <a
               href={`${base}profile`}
-              className="flex min-h-11 items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50 p-1 pl-2.5 pr-1 transition hover:border-slate-300 hover:bg-white"
+              className="sanad-focus-ring flex min-h-11 items-center gap-2 rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] p-1 pl-2.5 pr-1 transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)]"
               aria-label="فتح الحساب"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white ring-2 ring-white shadow-sm">
