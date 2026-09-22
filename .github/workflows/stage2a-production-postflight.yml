@@ -1,0 +1,60 @@
+name: Stage 2A Production Postflight
+
+on:
+  push:
+    branches:
+      - qa/stage2a-production-postflight
+    paths:
+      - '.github/workflows/stage2a-production-postflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_PRODUCTION_SHA: d0f7ce82bdf1f3c3dc9f63b24328501098d98893
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa/stage2a-production-postflight
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Probe published PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p postflight
+          curl --fail --silent --show-error --location https://app.sanadflow.com/version.json -o postflight/version.json
+          curl --fail --silent --show-error --location https://app.sanadflow.com/manifest.webmanifest -o postflight/manifest.webmanifest
+          curl --fail --silent --show-error --location https://app.sanadflow.com/sw.js -o postflight/sw.js
+          cat postflight/version.json
+          grep -q "${EXPECTED_PRODUCTION_SHA:0:12}" postflight/version.json
+          sha256sum postflight/sw.js | tee postflight/sw.sha256
+          sha256sum postflight/manifest.webmanifest | tee postflight/manifest.sha256
+
+      - name: Install Playwright
+        run: |
+          npm ci
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run Production UI smoke
+        run: |
+          mkdir -p postflight
+          node qa/stage2a-production-smoke.mjs
+          cat postflight/runtime-smoke.json
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2a-production-postflight
+          path: postflight/
+          retention-days: 7
