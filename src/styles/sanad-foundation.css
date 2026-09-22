@@ -93,6 +93,7 @@
   --sanad-mobile-system-clearance: max(var(--sanad-safe-bottom), 0.75rem);
   --sanad-mobile-nav-padding-block: 0.5rem;
   --sanad-mobile-nav-min-height: 4.5rem;
+  --sanad-mobile-nav-stack-height: calc(var(--sanad-mobile-nav-min-height) + var(--sanad-mobile-system-clearance));
   --sanad-composer-gap: 0px;
 }
 
