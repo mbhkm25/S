@@ -1,5 +1,7 @@
 # SANAD Four-Section Delivery Roadmap
 
+> **Historical / superseded delivery model as of 2026-09-22.** The active roadmap is `docs/roadmaps/sanad-conversation-operating-layer-roadmap-v2.md`. Checked items remain useful implementation history; do not use the four-section structure as the target product IA.
+
 Scope: سند المالي، سند التجاري، حسابي، وSANAD AI. This roadmap intentionally excludes the Windows ERP Bridge validation that requires the shop machine.
 
 ## Delivery principles

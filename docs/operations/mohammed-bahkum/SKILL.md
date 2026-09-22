@@ -1,8 +1,8 @@
 ---
 name: mohammed-bahkum-operating-style
 description: Personal working style and execution preferences for collaborating with محمد باحكم on SANAD and related technical/product work.
-version: 1.0
-updated: 2026-09-19
+version: 1.1
+updated: 2026-09-22
 ---
 
 # محمد باحكم — Personal Working Skill
@@ -93,7 +93,7 @@ This skill contains working preferences only. It must not be used as a place to 
 ## UI/UX preferences
 
 - Arabic-first and real RTL.
-- IBM Plex Sans Arabic is the preferred font.
+- Current UI baseline uses self-hosted Noto Sans Arabic Variable with system fallbacks. Do not migrate font families during visual hardening without benchmark evidence.
 - Use Latin digits `0–9` in user-facing interfaces.
 - Prefer light colors and calm, professional surfaces.
 - Reduce visual congestion.
@@ -101,24 +101,37 @@ This skill contains working preferences only. It must not be used as a place to 
 - Use clear hierarchy, spacing and a single obvious primary action.
 - Avoid generic AI-generated dashboard aesthetics.
 - Animations should communicate state, not decorate.
-- Mobile-first remains important, but desktop must be a real desktop layout:
+- Current execution strategy is **Desktop-first → Mobile-safe → Android hardening at defined release checkpoints**.
+- Desktop must be a real desktop layout:
   - wider useful content area;
   - intentional responsive grids;
   - less unnecessary vertical stacking;
   - no narrow phone-like column floating in large empty space;
   - no accidental horizontal overflow;
   - retain RTL and clarity at all breakpoints.
+- Mobile-safe remains mandatory: safe-area, touch targets, keyboard, and responsive contracts must not regress while desktop work advances.
 
 ## Product-structure preference
 
-SANAD primary navigation is:
+The adopted product model is **SANAD as a Conversation-Centric Operating Layer**.
 
-1. مساعد سند
-2. سند المالي
-3. سند للأعمال
-4. حسابي
+Governing principles:
 
-Capabilities should live in the domain that owns them. Do not recreate a second “spaces” layer or duplicate business/personal capabilities inside حسابي.
+- **SANAD is the product; finance, business, and connections are capabilities of SANAD.**
+- **Conversation-first, not conversation-only.**
+- The old four-peer navigation (Assistant / Financial / Business / Account) is no longer the target IA.
+- The target shell is sidebar-centric and may expose: Today, Conversations, Library, Tasks, Approvals, Automations, Capabilities, Connections, Businesses/Spaces, Search/Command, and Profile/Settings.
+- Financial and Commercial domains remain important internal ownership boundaries for canonical data, authorization, audit, and accounting invariants.
+- My Account becomes a utility/profile layer, not a peer product.
+- The former Work Center idea is decomposed into Today, Tasks, Approvals, and Automations.
+- SANAD Bridge is a Connection/Adapter to legacy accounting systems, not a top-level product.
+- Structured work surfaces remain first-class for tables, statements, approvals, reports, inventory, and dense operational work.
+
+Canonical product architecture:
+`docs/architecture/sanad-conversation-operating-layer-v2.md`
+
+Active roadmap:
+`docs/roadmaps/sanad-conversation-operating-layer-roadmap-v2.md`
 
 ## Documentation preference
 
@@ -165,10 +178,15 @@ Avoid:
 
 ## Current SANAD priority at this checkpoint
 
-When opening a new SANAD development conversation, first verify whether this remains current:
+When opening a new SANAD development conversation, first verify live GitHub/runtime state.
 
-- improve desktop presentation, especially `سند للأعمال → النظام المحاسبي`;
-- diagnose the shared “تعذر تحميل البيانات” failure in `سند المالي` and `مساعد سند`;
-- inspect code + production logs + Supabase RPCs/functions/RLS before changing UI fallback behavior.
+Current strategic direction:
+
+- Stage 1 is closed.
+- Stage 2A Visual Foundation is CLOSED and deployed to Production (`d0f7ce82bdf1f3c3dc9f63b24328501098d98893`).
+- Do not reopen or invalidate the shipped Stage 2A foundation because of the IA reframe.
+- The next architecture gate is **Stage 2B.0 — Product Model Reframe**; finalize the sidebar/conversation-centered blueprint before any Stage 2B shell implementation.
+- Do not continue the old four-section navigation as the target IA.
+- Use short coherent Release Trains, then integrate and test on Production instead of accumulating long stacks of feature branches.
 
 If GitHub/runtime state has advanced, update the task from reality rather than preserving this checkpoint mechanically.

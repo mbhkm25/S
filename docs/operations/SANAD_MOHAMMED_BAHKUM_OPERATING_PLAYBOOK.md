@@ -10,6 +10,10 @@
 Always re-read the live `main` ref before starting work; these SHAs are context, not a permanent pointer.
 
 > This document is the project handoff and operating playbook. The dedicated personal working skill is `docs/operations/mohammed-bahkum/SKILL.md`. A new session should read both before substantial work.
+>
+> Active product architecture: `docs/architecture/sanad-conversation-operating-layer-v2.md`
+>
+> Active delivery roadmap: `docs/roadmaps/sanad-conversation-operating-layer-roadmap-v2.md`
 
 ---
 
@@ -105,70 +109,106 @@ Do not infer field state from GitHub alone.
 
 ## 3. SANAD product model
 
-SANAD currently uses four primary user-facing domains. The bottom navigation is the product architecture, not an incidental UI choice.
+SANAD has adopted a **Conversation-Centric Operating Layer** model.
 
-1. **مساعد سند** — SANAD AI
-2. **سند المالي** — SANAD Financial
-3. **سند للأعمال** — SANAD Commercial
-4. **حسابي** — My Account
+The target product architecture is no longer four peer sections. The governing principles are:
 
-There must not be a second “مساحات سند” switcher or duplicated ownership of capabilities across these sections.
+> **SANAD is the product; finance, business and connections are capabilities of SANAD.**
 
-### سند المالي
+> **Conversation-first, not conversation-only.**
 
-Owns personal financial truth and related tools:
+Target shell direction:
 
-- personal accounts
-- personal transactions/postings
-- categories
-- counterparties
-- budgets
-- goals
-- obligations
-- personal recurring rules
-- capture/QR entry points when they belong to personal financial intake
+```text
+SANAD
+├── New Conversation
+├── Today
+├── Conversations
+├── Library
+├── Work
+│   ├── Tasks
+│   ├── Approvals
+│   └── Automations
+├── Capabilities
+├── Connections
+├── Businesses / Spaces
+├── Search / Command
+└── Profile / Settings
+```
 
-Canonical balances come from canonical postings/read models, not UI totals.
+### Conversation
 
-### سند للأعمال
+Conversation is the primary intent surface for asking, analysis, drafting, navigation and orchestration. It must not become the only work surface. Large statements, inventory, reports, approval queues and settings remain structured views.
 
-Owns business operations:
+### Today
 
-- business profile and management
-- customers/parties
-- team and roles
-- catalog
-- commercial documents
-- statements
-- receipts/payments/settlements
-- reports
-- working hours
-- ERP/accounting-system integration
+`Today` is the operational briefing surface: what needs attention now, why, and what actions are available. It replaces part of the earlier monolithic Work Center concept.
 
-ERP read models may surface Edaa data here, but ERP synchronization must not create a second uncontrolled SANAD ledger.
+### Work
 
-### حسابي
+The former Work Center idea is decomposed into:
+- Tasks;
+- Approvals;
+- Automations;
+- Today as the briefing layer.
 
-Owns user/account-level concerns only:
+### Capabilities
 
-- identity/profile
-- security/sign-in
-- subscription
-- notifications
-- devices
-- account-level settings/support
+Capabilities are native SANAD abilities, such as:
+- Personal Finance;
+- Business Operations;
+- Reports/Analysis;
+- Documents;
+- Collections;
+- Inventory where supported.
 
-Do not move business operations or personal financial management here for convenience.
+They are not peer products competing with SANAD.
 
-### مساعد سند
+### Connections
 
-AI does not own financial truth.
+Connections integrate external systems:
+- SANAD Bridge;
+- Edaa;
+- future ERP/accounting adapters;
+- later approved external systems.
 
-It consumes authorized read models and records access. Current financial/business AI must remain read-only unless a future explicit execution contract is implemented as:
+SANAD Bridge is strategically a compatibility/adapter layer, not a separate product section.
 
-`Draft → Review/Approve → Execute`
+### Businesses / Spaces
 
-No silent AI mutation of accounting data.
+A user may operate in multiple contexts and relationships: personal, owner, customer, supplier, team member. A business/space may contribute conversations, entities, files, permissions, connections and automations.
+
+### Profile / Account
+
+Account identity, security, subscription, devices, notifications and preferences move to the utility/profile layer. “حسابي” is not a target peer product.
+
+### Internal domain ownership remains
+
+The navigation change does **not** erase canonical ownership boundaries.
+
+Personal Finance and Commercial/Business remain internal domains for:
+- canonical financial truth;
+- authorization;
+- accounting invariants;
+- RPC ownership;
+- audit/provenance;
+- test boundaries.
+
+AI still owns no financial ledger data.
+
+### Execution contract
+
+Financial/business writes continue to require governed execution:
+
+`Intent → Entity Resolution → Draft → Review → Explicit Approval → Deterministic Action → Audit → Result`
+
+No silent AI mutation of accounting truth.
+
+Canonical architecture:
+`docs/architecture/sanad-conversation-operating-layer-v2.md`
+
+Active roadmap:
+`docs/roadmaps/sanad-conversation-operating-layer-roadmap-v2.md`
 
 ---
 
@@ -450,7 +490,7 @@ These preferences are important and should be treated as explicit design constra
 
 - Arabic-first.
 - Real RTL layout, not only right-aligned text.
-- Preferred font: **IBM Plex Sans Arabic**.
+- Current UI baseline: **Noto Sans Arabic Variable** self-hosted with system fallbacks; do not change font family without benchmark evidence.
 - User-facing digits: Latin `0–9`.
 - Light visual language.
 - Professional, formal, modern, calm.
@@ -461,7 +501,7 @@ These preferences are important and should be treated as explicit design constra
 
 ### Mobile and desktop
 
-Historically SANAD is mobile-first, but محمد now explicitly expects a professional desktop surface as well.
+Current execution strategy is **Desktop-first → Mobile-safe → Android hardening at defined release checkpoints**.
 
 Do not simply stretch mobile cards into a centered narrow column on desktop.
 
@@ -478,15 +518,18 @@ For desktop:
 
 ### Current UI priority
 
-The previously reported ERP/Agent loading problem has been resolved at the root and verified against real Production Edaa data.
+Stage 1 is closed. Stage 2 is the active development program.
 
-Current product priority:
+Current sequence:
 
-1. Improve desktop layout, especially **سند للأعمال → النظام المحاسبي**.
-2. Continue SANAD Agent quality work using both Golden Eval and live authenticated ERP contract checks.
-3. Treat Bridge HTTP retry/backoff as resilience hardening, not as an unresolved data-correctness blocker.
+1. Complete and validate **Stage 2A — Visual Foundation** without restarting it because of the product-model change.
+2. Execute **Stage 2B.0 — SANAD Product Model Reframe** before a major shell/navigation rewrite.
+3. Build **Stage 2B — Unified SANAD Intelligence Shell** around the conversation-centric sidebar model.
+4. Use short coherent Release Trains (normally 2–3 related stages), integrate, CI, deploy to Production, use the real product, then continue.
+5. Preserve Desktop-first delivery while maintaining mobile-safe contracts and scheduling Android physical hardening at release checkpoints.
 
-For future generic loading failures, continue to inspect the real RPC/Edge Function/authorization/tool trace before changing UI error copy.
+Do not continue the old four-section navigation as the target architecture.
+
 
 ---
 
@@ -578,12 +621,14 @@ docs/operations/mohammed-bahkum/SKILL.md
 - AI المالي/التجاري read-only حتى وجود Draft → Approve → Execute.
 - التطوير الكبير: branch → CI → PR → main → deploy → verify → documentation.
 - لا تدّعِ النشر أو نجاح الإنتاج دون تحقق.
-- الواجهة: Arabic RTL، IBM Plex Sans Arabic، أرقام لاتينية، light/professional، Mobile-first مع Desktop حقيقي وليس تمديدًا للهاتف.
+- الواجهة: Arabic RTL، Noto Sans Arabic Variable حاليًا، أرقام لاتينية، light/professional، Desktop-first مع Mobile-safe وAndroid hardening عند نقاط الإصدار.
 - كن مباشرًا، دقيقًا وناقدًا. قدم مسارًا مفضلاً واضحًا بدل قائمة خيارات طويلة.
 
 الأولوية الحالية:
-- تحسين Desktop UI، خاصة سند للأعمال > النظام المحاسبي.
-- تشخيص وإصلاح خطأ تحميل البيانات في سند المالي ومساعد سند من الجذر.
+- Stage 2A Visual Foundation مستمرة كما هي.
+- النموذج المعتمد: SANAD كـ Conversation-Centric Operating Layer.
+- قبل إعادة بناء الـShell: Stage 2B.0 لتثبيت Sidebar IA / Today / Library / Work / Capabilities / Connections / Businesses-Spaces / Profile.
+- لا تعتبر الأقسام الأربعة القديمة هي Target IA.
 ```
 
 ---
