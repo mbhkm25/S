@@ -218,14 +218,14 @@ jobs:
           }
 
           async function stable(page) {
-            await page.waitForTimeout(1800);
+            await page.waitForTimeout(1200);
             await page.evaluate(() => document.fonts?.ready);
           }
 
           async function screenshot(name,path,viewport) {
             const context=await makeContext(viewport);
             const page=await context.newPage();
-            await page.goto(base+path,{waitUntil:'networkidle'});
+            await page.goto(base+path,{waitUntil:'domcontentloaded'});
             await stable(page);
             await page.screenshot({path:`visual-qa/${name}.png`,fullPage:false});
             const metrics=await page.evaluate(() => ({
@@ -253,9 +253,13 @@ jobs:
           const browser=await chromium.launch({headless:true});
           const results={candidate:process.env.CANDIDATE_SHA,screenshots:{},zoom:{},contrast:{}};
 
+          results.screenshots.ai1280=await screenshot('sanad-ai-1280x800','/sanad-ai',{width:1280,height:800});
           results.screenshots.ai1366=await screenshot('sanad-ai-1366x768','/sanad-ai',{width:1366,height:768});
+          results.screenshots.ai1440=await screenshot('sanad-ai-1440x900','/sanad-ai',{width:1440,height:900});
           results.screenshots.ai1920=await screenshot('sanad-ai-1920x1080','/sanad-ai',{width:1920,height:1080});
+          results.screenshots.mobile360=await screenshot('sanad-ai-mobile-360x800','/sanad-ai',{width:360,height:800});
           results.screenshots.mobile390=await screenshot('sanad-ai-mobile-390x844','/sanad-ai',{width:390,height:844});
+          results.screenshots.mobile430=await screenshot('sanad-ai-mobile-430x932','/sanad-ai',{width:430,height:932});
           results.screenshots.financial=await screenshot('financial-1366x768','/financial',{width:1366,height:768});
           results.screenshots.commercial=await screenshot('commercial-1366x768','/commercial',{width:1366,height:768});
           results.screenshots.account=await screenshot('account-1366x768','/account-center',{width:1366,height:768});
@@ -263,7 +267,7 @@ jobs:
           {
             const context=await makeContext({width:1366,height:768});
             const page=await context.newPage();
-            await page.goto(base+'/sanad-ai',{waitUntil:'networkidle'});
+            await page.goto(base+'/sanad-ai',{waitUntil:'domcontentloaded'});
             await stable(page);
             await page.getByRole('button',{name:'الضبط'}).click();
             await page.waitForTimeout(300);
@@ -271,15 +275,16 @@ jobs:
             await context.close();
           }
 
-          for (const zoom of [1.25,1.5]) {
-            const context=await makeContext({width:1366,height:768});
+          for (const [zoom, viewport] of [['1.25',{width:1093,height:614}],['1.50',{width:911,height:512}]]) {
+            // Browser zoom changes the effective CSS viewport. These dimensions model
+            // 1366x768 at 125% and 150% without using CSS zoom, which would mask layout behavior.
+            const context=await makeContext(viewport);
             const page=await context.newPage();
-            await page.goto(base+'/sanad-ai',{waitUntil:'networkidle'});
+            await page.goto(base+'/sanad-ai',{waitUntil:'domcontentloaded'});
             await stable(page);
-            await page.evaluate(z=>{document.documentElement.style.zoom=String(z)},zoom);
-            await page.waitForTimeout(200);
-            results.zoom[String(zoom)]=await page.evaluate(()=>({
+            results.zoom[zoom]=await page.evaluate(()=>({
               innerWidth:window.innerWidth,
+              innerHeight:window.innerHeight,
               scrollWidth:document.documentElement.scrollWidth,
               bodyScrollWidth:document.body.scrollWidth,
               horizontalOverflow:document.documentElement.scrollWidth > window.innerWidth + 2
