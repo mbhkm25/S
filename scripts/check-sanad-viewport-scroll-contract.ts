@@ -74,7 +74,7 @@ assert.match(
 
 assert.match(nav, /layoutMode\?: 'document' \| 'viewport'/);
 assert.match(nav, /viewportMode \? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'/);
-assert.match(nav, /pb-\[var\(--sanad-mobile-system-clearance\)\]/);
+assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
 assert.match(nav, /lg:fixed/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
