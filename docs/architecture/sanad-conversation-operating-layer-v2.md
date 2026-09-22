@@ -614,6 +614,9 @@ Stage 2A remains valid because color, typography, surfaces, spacing, safe-area, 
 
 ### Stage 2B.0 — Product Model Reframe
 
+Canonical blueprint:
+`docs/architecture/STAGE2B0_SANAD_PRODUCT_ARCHITECTURE_BLUEPRINT_V1.md`
+
 Documentation/architecture gate before shell implementation:
 - final sidebar IA;
 - Today;
