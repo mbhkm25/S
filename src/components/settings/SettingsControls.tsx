@@ -19,12 +19,12 @@ export function SettingRow({
   return (
     <div
       data-setting-row
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-slate-100 px-1 py-3 ${className}`}
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-[var(--sanad-border-subtle)] px-1 py-3 ${className}`}
     >
       <div data-setting-content className="min-w-0">
-        <div className="text-[13px] font-medium leading-5 text-slate-800">{label}</div>
+        <div className="text-[13px] font-medium leading-5 text-[var(--sanad-text)]">{label}</div>
         {description ? (
-          <div className="mt-1 break-words text-xs leading-5 text-slate-400">{description}</div>
+          <div className="mt-1 break-words text-xs leading-5 text-[var(--sanad-text-muted)]">{description}</div>
         ) : null}
         {meta ? <div className="mt-1.5 min-w-0">{meta}</div> : null}
       </div>
@@ -64,11 +64,11 @@ export function SettingSwitch({
       data-setting-switch
       data-state={checked ? 'on' : 'off'}
       data-pending={pending ? 'true' : 'false'}
-      className="group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55"
+      className="sanad-focus-ring group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)] outline-none transition disabled:cursor-not-allowed disabled:opacity-55"
     >
       <span
         aria-hidden="true"
-        className={`relative block h-6 w-10 rounded-full transition-colors ${checked ? 'bg-slate-950' : 'bg-slate-200'}`}
+        className={`relative block h-6 w-10 rounded-full transition-colors ${checked ? 'bg-[var(--sanad-interactive)]' : 'bg-[var(--sanad-surface-3)]'}`}
       >
         <span
           className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-[inset-inline-start] duration-150 ${checked ? '[inset-inline-start:1.25rem]' : '[inset-inline-start:0.25rem]'}`}
