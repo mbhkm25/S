@@ -49,7 +49,7 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
     <nav
       data-product-navigation="primary"
       data-layout-mode={layoutMode}
-      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-50 border-t border-slate-200/70 bg-white/95 px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[1.65rem] lg:border lg:border-slate-200/80 lg:px-2 lg:py-3 lg:shadow-[0_14px_40px_rgba(15,23,42,0.08)]`}
+      className={`${viewportMode ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} sanad-primary-nav z-50 border-t border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-2 pb-[var(--sanad-mobile-bottom-clearance)] pt-2 shadow-[var(--sanad-shadow-2)] backdrop-blur-xl lg:fixed lg:inset-x-auto lg:bottom-auto lg:left-5 lg:top-1/2 lg:w-[92px] lg:-translate-y-1/2 lg:rounded-[var(--sanad-radius-xl)] lg:border lg:border-[var(--sanad-border)] lg:px-2 lg:py-3`}
       aria-label="أقسام سند الرئيسية"
       dir="rtl"
     >
@@ -66,7 +66,8 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
               onFocus={spaNavigation ? () => prefetchProductArea(item.id) : undefined}
               aria-current={selected ? 'page' : undefined}
               title={item.label}
-              className={`group flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}
+              data-active={selected ? 'true' : 'false'}
+              className={`sanad-primary-nav-item sanad-focus-ring group flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-1.5 text-center transition active:scale-[.98] lg:px-2 lg:py-2.5 ${selected ? 'font-semibold text-white' : 'font-medium hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text)]'}`}
             >
               <span className="flex h-9 w-11 items-center justify-center rounded-2xl bg-transparent transition">
                 {item.id === 'assistant' ? (
@@ -75,7 +76,7 @@ export default function ProductBottomNav({ activeArea, legacyPage, layoutMode = 
                   <Icon className="h-[18px] w-[18px]" strokeWidth={selected ? 2 : 1.8} />
                 ) : null}
               </span>
-              <span className={`max-w-full truncate text-[11px] ${selected ? 'font-semibold text-white' : 'font-medium'}`}>{item.label}</span>
+              <span className="max-w-full truncate text-[11px]">{item.label}</span>
             </a>
           );
         })}

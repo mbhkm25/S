@@ -79,14 +79,14 @@ function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
 
 function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }> }) {
   return (
-    <section className="overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
+    <section className="sanad-surface overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
         <div className="flex items-start gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
+          <span className="sanad-icon-box bg-[var(--sanad-interactive-soft)] text-[var(--sanad-interactive)]">
             <UserRound className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-[15px] font-semibold text-slate-900">{card.title}</p>
+            <p className="sanad-section-title">{card.title}</p>
             <p className="mt-0.5 text-xs text-slate-400">
               حساب {card.account_number || card.account_id || '—'} · {card.movement_count} حركة
             </p>
@@ -122,7 +122,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
         {card.href && (
           <a
             href={card.href}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-slate-950 px-3.5 py-2.5 text-[13px] font-medium text-white shadow-sm transition hover:-translate-y-px hover:shadow-md"
+            className="sanad-focus-ring mt-3 inline-flex items-center gap-1.5 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3.5 py-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] transition hover:-translate-y-px hover:shadow-[var(--sanad-shadow-2)]"
           >
             فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
           </a>

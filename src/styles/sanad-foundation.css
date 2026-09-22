@@ -1,0 +1,305 @@
+/* SANAD Stage 2A — visual foundation and safe-area contract.
+   Tokens first: semantic roles, shared scales, section signatures and shell-safe spacing. */
+
+:root {
+  color-scheme: light;
+
+  /* Brand spectrum — identity only, never status. */
+  --sanad-brand-lime: #b9e769;
+  --sanad-brand-green: #16835f;
+  --sanad-brand-mint: #63d5b5;
+  --sanad-brand-aqua: #4bc9cf;
+  --sanad-brand-ink: #0b1720;
+
+  /* Semantic canvas / surfaces. */
+  --sanad-bg-canvas: #f7f9f9;
+  --sanad-bg-subtle: #f1f5f4;
+  --sanad-surface-1: #ffffff;
+  --sanad-surface-2: #f8faf9;
+  --sanad-surface-3: #eef3f2;
+  --sanad-surface-inverse: #0b1720;
+
+  /* Semantic text / strokes. */
+  --sanad-text-strong: #0b1720;
+  --sanad-text: #263740;
+  --sanad-text-muted: #607078;
+  --sanad-text-subtle: #8b989e;
+  --sanad-border-subtle: #e4eaea;
+  --sanad-border: #d6dfe0;
+  --sanad-border-strong: #b9c6c9;
+
+  /* Interactive roles. */
+  --sanad-interactive: #0f766e;
+  --sanad-interactive-hover: #0b665f;
+  --sanad-interactive-soft: #e8f7f3;
+  --sanad-focus: #0891b2;
+  --sanad-selection: rgba(75, 201, 207, 0.18);
+
+  /* Status roles — deliberately separate from brand green. */
+  --sanad-success: #15803d;
+  --sanad-success-soft: #edf8f0;
+  --sanad-warning: #b45309;
+  --sanad-warning-soft: #fff7e8;
+  --sanad-danger: #be123c;
+  --sanad-danger-soft: #fff0f3;
+  --sanad-info: #0369a1;
+  --sanad-info-soft: #eef8ff;
+
+  /* Typography scale — tuned for Arabic density and desktop readability. */
+  --sanad-text-xs: 0.75rem;
+  --sanad-text-sm: 0.84375rem;
+  --sanad-text-md: 0.9375rem;
+  --sanad-text-lg: 1.0625rem;
+  --sanad-text-xl: 1.25rem;
+  --sanad-text-2xl: 1.5rem;
+  --sanad-leading-tight: 1.4;
+  --sanad-leading-body: 1.75;
+  --sanad-leading-relaxed: 1.9;
+  --sanad-weight-regular: 400;
+  --sanad-weight-medium: 500;
+  --sanad-weight-heading: 580;
+  --sanad-weight-strong: 620;
+
+  /* Spacing rhythm. */
+  --sanad-space-1: 0.25rem;
+  --sanad-space-2: 0.5rem;
+  --sanad-space-3: 0.75rem;
+  --sanad-space-4: 1rem;
+  --sanad-space-5: 1.25rem;
+  --sanad-space-6: 1.5rem;
+  --sanad-space-8: 2rem;
+  --sanad-space-10: 2.5rem;
+  --sanad-space-12: 3rem;
+
+  /* Radius / elevation discipline. */
+  --sanad-radius-sm: 0.625rem;
+  --sanad-radius-md: 0.875rem;
+  --sanad-radius-lg: 1.125rem;
+  --sanad-radius-xl: 1.5rem;
+  --sanad-radius-pill: 999px;
+  --sanad-shadow-1: 0 1px 2px rgba(11, 23, 32, 0.04);
+  --sanad-shadow-2: 0 8px 24px rgba(11, 23, 32, 0.06);
+  --sanad-shadow-3: 0 18px 48px rgba(11, 23, 32, 0.09);
+
+  /* Section signatures: one SANAD system with restrained domain accents. */
+  --sanad-signature-assistant: linear-gradient(120deg, rgba(185, 231, 105, .26), rgba(99, 213, 181, .22) 46%, rgba(75, 201, 207, .20));
+  --sanad-signature-financial: linear-gradient(120deg, rgba(75, 201, 207, .14), rgba(45, 166, 168, .08));
+  --sanad-signature-commercial: linear-gradient(120deg, rgba(15, 23, 42, .08), rgba(71, 85, 105, .08), rgba(79, 70, 229, .055));
+  --sanad-signature-account: linear-gradient(120deg, rgba(100, 116, 139, .08), rgba(15, 23, 42, .035));
+
+  /* Safe-area contract. The floor is SANAD interaction breathing room, not a measured system-bar height. */
+  --sanad-safe-top: max(env(safe-area-inset-top, 0px), 0px);
+  --sanad-safe-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  --sanad-mobile-bottom-clearance: max(var(--sanad-safe-bottom), 0.75rem);
+  --sanad-mobile-nav-padding-block: 0.5rem;
+  --sanad-mobile-nav-min-height: 4.5rem;
+  --sanad-mobile-nav-stack-height: calc(var(--sanad-mobile-nav-min-height) + var(--sanad-mobile-bottom-clearance));
+  --sanad-composer-gap: 0px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --sanad-bg-canvas: #081116;
+  --sanad-bg-subtle: #0e1a20;
+  --sanad-surface-1: #111d23;
+  --sanad-surface-2: #142229;
+  --sanad-surface-3: #1b2a31;
+  --sanad-text-strong: #f4f8f7;
+  --sanad-text: #dbe5e3;
+  --sanad-text-muted: #a5b4b1;
+  --sanad-text-subtle: #7f918e;
+  --sanad-border-subtle: #203138;
+  --sanad-border: #2a4048;
+  --sanad-border-strong: #3d5962;
+  --sanad-interactive-soft: #10322e;
+  --sanad-selection: rgba(75, 201, 207, 0.24);
+}
+
+::selection {
+  background: var(--sanad-selection);
+}
+
+@layer components {
+  .sanad-canvas {
+    background: var(--sanad-bg-canvas);
+    color: var(--sanad-text-strong);
+  }
+
+  .sanad-canvas[data-product-area='assistant'] {
+    background: var(--sanad-signature-assistant) top / 100% 7rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='financial'] {
+    background: var(--sanad-signature-financial) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='business'] {
+    background: var(--sanad-signature-commercial) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='account'] {
+    background: var(--sanad-signature-account) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-surface {
+    background: var(--sanad-surface-1);
+    border: 1px solid var(--sanad-border-subtle);
+    border-radius: var(--sanad-radius-lg);
+    box-shadow: var(--sanad-shadow-1);
+  }
+
+  .sanad-surface-subtle {
+    background: var(--sanad-surface-2);
+    border: 1px solid transparent;
+    border-radius: var(--sanad-radius-lg);
+  }
+
+  .sanad-surface-flat {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .sanad-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sanad-space-4);
+  }
+
+  .sanad-section-title {
+    color: var(--sanad-text-strong);
+    font-size: var(--sanad-text-lg);
+    font-weight: var(--sanad-weight-heading);
+    line-height: var(--sanad-leading-tight);
+    letter-spacing: -0.012em;
+  }
+
+  .sanad-section-description {
+    margin-top: var(--sanad-space-1);
+    color: var(--sanad-text-muted);
+    font-size: var(--sanad-text-xs);
+    line-height: var(--sanad-leading-body);
+  }
+
+  .sanad-pill {
+    display: inline-flex;
+    min-height: 1.75rem;
+    align-items: center;
+    gap: var(--sanad-space-1);
+    border-radius: var(--sanad-radius-pill);
+    padding: 0.25rem 0.625rem;
+    font-size: var(--sanad-text-xs);
+    font-weight: var(--sanad-weight-medium);
+    line-height: 1.35;
+  }
+
+  .sanad-status-neutral { background: var(--sanad-surface-3); color: var(--sanad-text-muted); }
+  .sanad-status-brand { background: var(--sanad-interactive-soft); color: var(--sanad-interactive); }
+  .sanad-status-success { background: var(--sanad-success-soft); color: var(--sanad-success); }
+  .sanad-status-warning { background: var(--sanad-warning-soft); color: var(--sanad-warning); }
+  .sanad-status-danger { background: var(--sanad-danger-soft); color: var(--sanad-danger); }
+  .sanad-status-info { background: var(--sanad-info-soft); color: var(--sanad-info); }
+
+  .sanad-icon-box {
+    display: inline-flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--sanad-radius-md);
+    background: var(--sanad-surface-3);
+    color: var(--sanad-text);
+  }
+
+  .sanad-focus-ring {
+    outline: none;
+  }
+
+  .sanad-focus-ring:focus-visible {
+    box-shadow: 0 0 0 2px var(--sanad-surface-1), 0 0 0 4px var(--sanad-focus);
+  }
+
+  .sanad-workspace-canvas {
+    background:
+      var(--sanad-signature-assistant) top / 100% 5rem no-repeat,
+      var(--sanad-surface-1);
+  }
+
+  .sanad-product-header {
+    padding-top: max(0.625rem, var(--sanad-safe-top));
+    border-color: var(--sanad-border-subtle);
+    background: color-mix(in srgb, var(--sanad-surface-1) 95%, transparent);
+    box-shadow: var(--sanad-shadow-1);
+  }
+
+  .sanad-primary-nav {
+    min-height: var(--sanad-mobile-nav-min-height);
+    padding-top: var(--sanad-mobile-nav-padding-block);
+    padding-bottom: var(--sanad-mobile-bottom-clearance);
+    border-color: var(--sanad-border-subtle);
+    background: color-mix(in srgb, var(--sanad-surface-1) 96%, transparent);
+  }
+
+  .sanad-primary-nav-item {
+    min-height: 3rem;
+    border-radius: var(--sanad-radius-lg);
+    color: var(--sanad-text-muted);
+  }
+
+  .sanad-primary-nav-item[data-active='true'] {
+    background: var(--sanad-surface-inverse);
+    color: #fff;
+    box-shadow: var(--sanad-shadow-1);
+  }
+
+  .sanad-composer-surface {
+    border-color: var(--sanad-border-subtle);
+    background: color-mix(in srgb, var(--sanad-surface-1) 97%, transparent);
+  }
+
+  .sanad-sidebar-surface {
+    border-color: var(--sanad-border-subtle);
+    background: var(--sanad-surface-2);
+  }
+
+  .sanad-section-signature-assistant { background-image: var(--sanad-signature-assistant); }
+  .sanad-section-signature-financial { background-image: var(--sanad-signature-financial); }
+  .sanad-section-signature-commercial { background-image: var(--sanad-signature-commercial); }
+  .sanad-section-signature-account { background-image: var(--sanad-signature-account); }
+
+  .sanad-section-route-header {
+    background-repeat: no-repeat;
+    background-position: bottom;
+    background-size: 100% 2px;
+  }
+
+  .sanad-section-route-header[data-section-signature='financial'] {
+    background-image: linear-gradient(90deg, transparent 6%, rgba(75, 201, 207, .58) 50%, transparent 94%);
+  }
+
+  .sanad-section-route-header[data-section-signature='commercial'] {
+    background-image: linear-gradient(90deg, transparent 6%, rgba(71, 85, 105, .56) 43%, rgba(79, 70, 229, .26) 60%, transparent 94%);
+  }
+
+  .sanad-section-route-header[data-section-signature='account'] {
+    background-image: linear-gradient(90deg, transparent 6%, rgba(100, 116, 139, .42) 50%, transparent 94%);
+  }
+}
+
+@media (min-width: 1024px) {
+  .sanad-primary-nav {
+    min-height: 0;
+    padding: 0.75rem 0.5rem;
+    border-color: var(--sanad-border);
+    box-shadow: var(--sanad-shadow-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sanad-primary-nav-item,
+  .sanad-focus-ring {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -5,6 +5,7 @@ const controls = readFileSync('src/components/settings/SettingsControls.tsx', 'u
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const api = readFileSync('src/features/assistant/assistantWorkspaceApi.ts', 'utf8');
+const foundation = readFileSync('src/styles/sanad-foundation.css', 'utf8');
 
 for (const required of [
   'grid-cols-[minmax(0,1fr)_auto]',
@@ -22,7 +23,7 @@ for (const required of [
   'aria-busy={pending || undefined}',
   'disabled={unavailable}',
   'aria-label={label}',
-  'focus-visible:ring-2',
+  'sanad-focus-ring',
   'h-11 w-11',
   '[inset-inline-start:1.25rem]',
   '[inset-inline-start:0.25rem]',
@@ -36,6 +37,7 @@ assert.doesNotMatch(
   'Settings primitives must not manually invert geometry for RTL.',
 );
 assert.doesNotMatch(controls, /dangerouslySetInnerHTML/);
+assert.match(foundation, /\.sanad-focus-ring:focus-visible[\s\S]*--sanad-focus/);
 
 assert.ok(sidebar.includes("from '../../components/settings/SettingsControls'"));
 assert.match(sidebar, /<SettingRow/);
