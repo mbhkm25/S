@@ -3,7 +3,7 @@ name: Stage 2A Visual Preview
 on:
   push:
     branches:
-      - preview/stage2a-v-64576de
+      - preview/stage2a-v-0e0fb7b
     paths:
       - '.github/workflows/stage2a-visual-preview.yml'
 
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      CANDIDATE_SHA: 64576de66447d47527c939023969c8c9251e0bc8
+      CANDIDATE_SHA: 0e0fb7be4f5cebb836ca5911a2ca2e82bf04c9b3
 
     steps:
       - name: Checkout exact Stage 2A candidate
