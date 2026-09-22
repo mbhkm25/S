@@ -65,8 +65,8 @@ export default function FinancialWorkspaceShell() {
       <div
         data-workspace-mode={assistant ? 'viewport' : 'document'}
         className={assistant
-          ? 'flex h-dvh min-h-0 flex-col overflow-hidden bg-[#F8F8F6] text-slate-900'
-          : 'min-h-screen bg-[#F8F8F6] text-slate-900'}
+          ? 'sanad-canvas flex h-dvh min-h-0 flex-col overflow-hidden'
+          : 'sanad-canvas min-h-screen'}
       >
         <ProductAppHeader userId={userId} />
         {assistant ? (
@@ -93,7 +93,7 @@ export default function FinancialWorkspaceShell() {
             onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}
             onPointerEnter={() => void loadFinancialActionRoute()}
             onFocus={() => void loadFinancialActionRoute()}
-            className="fixed bottom-[86px] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-[13px] font-medium text-white shadow-[0_14px_36px_rgba(15,23,42,0.20)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
+            className="sanad-focus-ring fixed bottom-[calc(var(--sanad-mobile-nav-stack-height)+0.75rem)] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--sanad-surface-inverse)] px-5 py-3 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-3)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
             aria-label={commercial ? 'فتح إجراءات سند التجاري' : 'فتح إجراءات سند المالي'}
           >
             <Plus className="h-4 w-4" />
