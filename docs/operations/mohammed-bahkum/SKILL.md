@@ -183,9 +183,9 @@ When opening a new SANAD development conversation, first verify live GitHub/runt
 Current strategic direction:
 
 - Stage 1 is closed.
-- Stage 2A Visual Foundation continues under the new product model.
-- Do not restart or invalidate Stage 2A because of the IA reframe.
-- Before the next shell rewrite, execute **Stage 2B.0 — Product Model Reframe** and finalize the sidebar/conversation-centered architecture.
+- Stage 2A Visual Foundation is CLOSED and deployed to Production (`d0f7ce82bdf1f3c3dc9f63b24328501098d98893`).
+- Do not reopen or invalidate the shipped Stage 2A foundation because of the IA reframe.
+- The next architecture gate is **Stage 2B.0 — Product Model Reframe**; finalize the sidebar/conversation-centered blueprint before any Stage 2B shell implementation.
 - Do not continue the old four-section navigation as the target IA.
 - Use short coherent Release Trains, then integrate and test on Production instead of accumulating long stacks of feature branches.
 
