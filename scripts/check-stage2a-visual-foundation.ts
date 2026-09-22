@@ -65,13 +65,13 @@ for (const signature of ['assistant', 'financial', 'commercial', 'account']) {
 }
 
 assert.match(foundation, /--sanad-safe-bottom:\s*max\(env\(safe-area-inset-bottom, 0px\), 0px\)/);
-assert.match(foundation, /--sanad-mobile-system-clearance:\s*max\(var\(--sanad-safe-bottom\), 0\.75rem\)/);
+assert.match(foundation, /--sanad-mobile-bottom-clearance:\s*max\(var\(--sanad-safe-bottom\), 0\.75rem\)/);
 assert.match(foundation, /--sanad-mobile-nav-stack-height:/);
 assert.match(html, /viewport-fit=cover/);
 assert.match(html, /interactive-widget=resizes-content/);
 
 assert.match(nav, /sanad-primary-nav/);
-assert.match(nav, /pb-\[var\(--sanad-mobile-system-clearance\)\]/);
+assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
 assert.match(nav, /data-active=\{selected \? 'true' : 'false'\}/);
 assert.match(header, /sanad-product-header/);
 assert.match(shell, /data-product-area=/);
