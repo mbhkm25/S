@@ -61,9 +61,9 @@ Finance and Business remain canonical internal domains but become capabilities a
 
 # Release Train 2A — Visual Foundation
 
-**Status:** In progress
+**Status:** CLOSED — Production baseline `d0f7ce82bdf1f3c3dc9f63b24328501098d98893`
 
-The current Stage 2A implementation remains valid and should not be restarted because of the product-model change.
+Stage 2A shipped the visual foundation to Production and remains valid under the conversation-centric product model.
 
 ## 2A.1 — Semantic Color System
 - brand / accent;
@@ -597,7 +597,7 @@ Current sequence:
 ```text
 Stage 2A
 Visual Foundation
-→ complete/validate/release
+→ CLOSED / Production
 
 then
 
