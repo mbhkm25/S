@@ -77,6 +77,8 @@ jobs:
             "hotfix/stage-1g-hf-v2-voice-preprovider-phase"
             "hotfix/stage-1g-hf-v3-voice-metric-rpc"
             "chore/stage1-final-cleanup"
+            "chore/trigger-stage1a-production-release"
+            "chore/stage1-final-handoff"
           )
 
           for branch in "${branches[@]}"; do
