@@ -125,6 +125,22 @@
     color: var(--sanad-text-strong);
   }
 
+  .sanad-canvas[data-product-area='assistant'] {
+    background: var(--sanad-signature-assistant) top / 100% 7rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='financial'] {
+    background: var(--sanad-signature-financial) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='business'] {
+    background: var(--sanad-signature-commercial) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
+  .sanad-canvas[data-product-area='account'] {
+    background: var(--sanad-signature-account) top / 100% 6rem no-repeat, var(--sanad-bg-canvas);
+  }
+
   .sanad-surface {
     background: var(--sanad-surface-1);
     border: 1px solid var(--sanad-border-subtle);
