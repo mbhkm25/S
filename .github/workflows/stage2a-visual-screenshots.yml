@@ -1,0 +1,313 @@
+name: Stage 2A Visual Screenshots
+
+on:
+  push:
+    branches:
+      - preview/stage2a-v-64576de
+    paths:
+      - '.github/workflows/stage2a-visual-screenshots.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CANDIDATE_SHA: 64576de66447d47527c939023969c8c9251e0bc8
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$CANDIDATE_SHA" npm run build
+          npm run check:bundle-budget
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local preview
+        shell: bash
+        run: |
+          nohup npx vite preview --host 127.0.0.1 --port 4173 > /tmp/vite-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/vite-preview.log
+          exit 1
+
+      - name: Run visual QA screenshots
+        shell: bash
+        run: |
+          mkdir -p visual-qa
+          cat > /tmp/stage2a-visual-qa.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+
+          const base = 'http://127.0.0.1:4173';
+          const userId = '11111111-1111-4111-8111-111111111111';
+          const threadId = '22222222-2222-4222-8222-222222222222';
+          const businessId = '33333333-3333-4333-8333-333333333333';
+          const nowIso = '2026-09-22T11:00:00.000Z';
+
+          function b64u(value) {
+            return Buffer.from(JSON.stringify(value)).toString('base64url');
+          }
+          const now = Math.floor(Date.now() / 1000);
+          const jwt = `${b64u({alg:'HS256',typ:'JWT'})}.${b64u({
+            aud:'authenticated', exp:now + 7200, iat:now, sub:userId, email:'qa@sanadflow.local',
+            phone:'', app_metadata:{provider:'email',providers:['email']}, user_metadata:{full_name:'مستخدم اختبار سند'},
+            role:'authenticated', aal:'aal1', session_id:'44444444-4444-4444-8444-444444444444'
+          })}.qa`;
+          const session = {
+            access_token: jwt,
+            refresh_token: 'qa-refresh-token',
+            token_type: 'bearer',
+            expires_in: 7200,
+            expires_at: now + 7200,
+            user: {
+              id:userId, aud:'authenticated', role:'authenticated', email:'qa@sanadflow.local',
+              email_confirmed_at: nowIso, phone:'', confirmed_at:nowIso, last_sign_in_at:nowIso,
+              app_metadata:{provider:'email',providers:['email']},
+              user_metadata:{full_name:'مستخدم اختبار سند'},
+              identities:[], created_at:nowIso, updated_at:nowIso
+            }
+          };
+
+          const thread = {
+            id:threadId, business_id:businessId,
+            title:'محادثة اختبار بصري بعنوان عربي طويل لاختبار القص والمحاذاة داخل الشريط الجانبي',
+            status:'active', summary:null, last_message_at:nowIso, message_count:2, created_at:nowIso, updated_at:nowIso
+          };
+
+          const response = {
+            answer:'عرض مختصر',
+            cards:[{
+              type:'customer_statement',
+              title:'كشف حساب العميل — إبراهيم محمد بعلي',
+              account_number:'ACC-2026-001',
+              account_id:'165',
+              movement_count:14,
+              currency_summaries:[{
+                currency:'SAR', opening_balance:1053, debit:551.12, credit:501.88, closing_balance:551.12
+              }],
+              from_date:'2026-08-01', to_date:'2026-09-22',
+              copy_text:'كشف حساب العميل إبراهيم محمد بعلي — الرصيد 551.12 ر.س',
+              href:'#'
+            }],
+            attention:[{
+              severity:'warning',
+              title:'رصيد يحتاج متابعة',
+              body:'الرصيد الحالي ما يزال مفتوحًا ويستحق المتابعة وفق بيانات الاختبار البصري.',
+              source_label:'دفتر العميل'
+            }],
+            entities:[]
+          };
+
+          const messages = [
+            {
+              id:'55555555-5555-4555-8555-555555555555', sequence_no:1, role:'user',
+              content:'أعطني كشف حساب العميل مع توضيح الرصيد والحركات الأخيرة. هذا نص عربي طويل نسبيًا لاختبار سلوك السطر والمسافات والقراءة ضمن عرض المحادثة على الشاشات المختلفة.',
+              response:null, tool_trace:[], request_id:null, model:null, thinking_level:null,
+              is_starred:false, rating:null, attachment_ids:[], created_at:'2026-09-22T10:58:00.000Z'
+            },
+            {
+              id:'66666666-6666-4666-8666-666666666666', sequence_no:2, role:'assistant',
+              content:'هذا كشف الحساب المطلوب. تظهر البيانات أن **الرصيد الختامي 551.12 ر.س**، مع المحافظة على التسلسل الزمني للحركات ومصدر البيانات. كما نختبر هنا نصًا عربيًا أطول للتأكد من أن Noto Sans Arabic لا يسبب قصًا أو تراكبًا، مع رقم 1,053.00 SAR ونص English mixed داخل الفقرة.',
+              response, tool_trace:[{name:'erp_get_customer_statement',source:'ERP Cloud Replica',status:'completed',latency_ms:312}],
+              request_id:'qa-request-1', model:'gemini-3.8-flash', thinking_level:'medium',
+              is_starred:false, rating:null, attachment_ids:[], created_at:'2026-09-22T10:59:00.000Z'
+            }
+          ];
+
+          const rpc = {
+            get_my_account_center_v1: {
+              profile:{full_name:'مستخدم اختبار سند'},
+              subscription:{plan_code:'PRO',status:'active'},
+              notifications:{unread:3,total_active:5},
+              devices:{active_push:2,last_seen_at:nowIso},
+              businesses:[{id:businessId,name:'متجر باحكم للعسل — فرع المكلا',slug:'bahkum-honey',verification_status:'verified'}],
+              finance:{active_accounts:4,active_budgets:2,active_goals:1,open_obligations:3}
+            },
+            get_my_sanad_agent_preferences_v1: {
+              user_id:userId, save_history_enabled:true, memory_enabled:true,
+              proactive_insights_enabled:true, response_cards_enabled:true, created_at:nowIso, updated_at:nowIso
+            },
+            list_my_sanad_agent_threads_v1: [thread],
+            get_my_sanad_agent_thread_v1: {thread,messages},
+            get_my_sanad_agent_context_v1: {memories:[{
+              id:'77777777-7777-4777-8777-777777777777', memory_key:'qa-long-memory', category:'تفضيلات',
+              value_text:'يفضل المستخدم إجابات عملية ومباشرة مع تفاصيل مالية واضحة، وهذا نص طويل لاختبار التفاف المحتوى في مساحة الذاكرة دون قص أو تمدد أفقي.',
+              confidence:0.95, updated_at:nowIso
+            }]},
+            list_my_sanad_agent_attachments_v1: [],
+            record_sanad_agent_client_metric_v1: true,
+            get_my_sanad_agent_performance_v1: {
+              scopes:[
+                {scope:'agent_client_turn',p50_total_ms:1220,p95_total_ms:2550,failure_rate:0.01},
+                {scope:'thread_load',p50_total_ms:180,p95_total_ms:420,failure_rate:0},
+                {scope:'voice_transcription',p50_total_ms:4042,p95_total_ms:4689,failure_rate:0}
+              ]
+            },
+            get_my_finance_dashboard_v1: {
+              cashflow_by_currency:[{currency:'SAR',income:12840.5,expense:8420.25,net:4420.25}],
+              accounts:4, open_obligations:[{currency:'SAR',payable:2100,receivable:6450}],
+              due_soon_count:2, active_budgets:2, active_goals:1
+            },
+            get_business_commercial_dashboard_v1: {
+              business_id:businessId,
+              totals_by_currency:[{currency:'SAR',sales:108247.54,purchases:248014,receipts:108422.13,payments:282959,expenses:13250}],
+              receivables_by_currency:[{currency:'SAR',outstanding:52031}],
+              payables_by_currency:[{currency:'SAR',outstanding:87000}],
+              overdue_count:4
+            }
+          };
+
+          function responseForRpc(name) {
+            return Object.prototype.hasOwnProperty.call(rpc,name) ? rpc[name] : [];
+          }
+
+          async function makeContext(viewport) {
+            const context = await browser.newContext({
+              viewport,
+              locale:'ar-YE',
+              colorScheme:'light',
+              reducedMotion:'no-preference',
+            });
+            await context.addInitScript(({key,session}) => {
+              localStorage.setItem(key, JSON.stringify(session));
+            }, {key:'sb-hudbzlgclghlhazlduas-auth-token',session});
+
+            await context.route('**/rest/v1/rpc/**', async route => {
+              const url = new URL(route.request().url());
+              const name = url.pathname.split('/').pop();
+              await route.fulfill({
+                status:200,
+                contentType:'application/json',
+                headers:{'access-control-allow-origin':'*'},
+                body:JSON.stringify(responseForRpc(name))
+              });
+            });
+            await context.route('**/rest/v1/profiles*', async route => {
+              const accept = route.request().headers()['accept'] || '';
+              const body = accept.includes('vnd.pgrst.object') ?
+                {full_name:'مستخدم اختبار سند',avatar_path:null} :
+                [{full_name:'مستخدم اختبار سند',avatar_path:null}];
+              await route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify(body)});
+            });
+            return context;
+          }
+
+          async function stable(page) {
+            await page.waitForTimeout(1800);
+            await page.evaluate(() => document.fonts?.ready);
+          }
+
+          async function screenshot(name,path,viewport) {
+            const context=await makeContext(viewport);
+            const page=await context.newPage();
+            await page.goto(base+path,{waitUntil:'networkidle'});
+            await stable(page);
+            await page.screenshot({path:`visual-qa/${name}.png`,fullPage:false});
+            const metrics=await page.evaluate(() => ({
+              innerWidth:window.innerWidth, innerHeight:window.innerHeight,
+              scrollWidth:document.documentElement.scrollWidth,
+              scrollHeight:document.documentElement.scrollHeight,
+              bodyFont:getComputedStyle(document.body).fontFamily,
+              bodyWeight:getComputedStyle(document.body).fontWeight,
+            }));
+            await context.close();
+            return metrics;
+          }
+
+          function srgb(hex) {
+            const h=hex.replace('#','');
+            const rgb=[0,2,4].map(i=>parseInt(h.slice(i,i+2),16)/255);
+            return rgb.map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4);
+          }
+          function ratio(a,b) {
+            const [ar,ag,ab]=srgb(a), [br,bg,bb]=srgb(b);
+            const la=.2126*ar+.7152*ag+.0722*ab, lb=.2126*br+.7152*bg+.0722*bb;
+            return (Math.max(la,lb)+.05)/(Math.min(la,lb)+.05);
+          }
+
+          const browser=await chromium.launch({headless:true});
+          const results={candidate:process.env.CANDIDATE_SHA,screenshots:{},zoom:{},contrast:{}};
+
+          results.screenshots.ai1366=await screenshot('sanad-ai-1366x768','/sanad-ai',{width:1366,height:768});
+          results.screenshots.ai1920=await screenshot('sanad-ai-1920x1080','/sanad-ai',{width:1920,height:1080});
+          results.screenshots.mobile390=await screenshot('sanad-ai-mobile-390x844','/sanad-ai',{width:390,height:844});
+          results.screenshots.financial=await screenshot('financial-1366x768','/financial',{width:1366,height:768});
+          results.screenshots.commercial=await screenshot('commercial-1366x768','/commercial',{width:1366,height:768});
+          results.screenshots.account=await screenshot('account-1366x768','/account-center',{width:1366,height:768});
+
+          {
+            const context=await makeContext({width:1366,height:768});
+            const page=await context.newPage();
+            await page.goto(base+'/sanad-ai',{waitUntil:'networkidle'});
+            await stable(page);
+            await page.getByRole('button',{name:'الضبط'}).click();
+            await page.waitForTimeout(300);
+            await page.screenshot({path:'visual-qa/sanad-ai-settings-1366x768.png',fullPage:false});
+            await context.close();
+          }
+
+          for (const zoom of [1.25,1.5]) {
+            const context=await makeContext({width:1366,height:768});
+            const page=await context.newPage();
+            await page.goto(base+'/sanad-ai',{waitUntil:'networkidle'});
+            await stable(page);
+            await page.evaluate(z=>{document.documentElement.style.zoom=String(z)},zoom);
+            await page.waitForTimeout(200);
+            results.zoom[String(zoom)]=await page.evaluate(()=>({
+              innerWidth:window.innerWidth,
+              scrollWidth:document.documentElement.scrollWidth,
+              bodyScrollWidth:document.body.scrollWidth,
+              horizontalOverflow:document.documentElement.scrollWidth > window.innerWidth + 2
+            }));
+            await context.close();
+          }
+
+          results.contrast={
+            bodyTextOnSurface:ratio('#263740','#ffffff'),
+            mutedTextOnSurface:ratio('#607078','#ffffff'),
+            strongTextOnCanvas:ratio('#0b1720','#f7f9f9'),
+            selectedNav:ratio('#ffffff','#0b1720'),
+            focusOnSurface:ratio('#0891b2','#ffffff'),
+            successOnSoft:ratio('#15803d','#edf8f0'),
+            warningOnSoft:ratio('#b45309','#fff7e8'),
+            dangerOnSoft:ratio('#be123c','#fff0f3'),
+            infoOnSoft:ratio('#0369a1','#eef8ff')
+          };
+
+          fs.writeFileSync('visual-qa/results.json',JSON.stringify(results,null,2));
+          await browser.close();
+          EOF
+          CANDIDATE_SHA="$CANDIDATE_SHA" node /tmp/stage2a-visual-qa.mjs
+          cat visual-qa/results.json
+
+      - name: Upload visual QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2a-visual-qa-64576de
+          path: visual-qa/
+          retention-days: 7
