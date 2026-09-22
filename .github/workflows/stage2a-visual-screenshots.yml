@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p visual-qa
-          cat > /tmp/stage2a-visual-qa.mjs <<'EOF'
+          cat > visual-qa/run.mjs <<'EOF'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
 
@@ -302,7 +302,7 @@ jobs:
           fs.writeFileSync('visual-qa/results.json',JSON.stringify(results,null,2));
           await browser.close();
           EOF
-          CANDIDATE_SHA="$CANDIDATE_SHA" node /tmp/stage2a-visual-qa.mjs
+          CANDIDATE_SHA="$CANDIDATE_SHA" node visual-qa/run.mjs
           cat visual-qa/results.json
 
       - name: Upload visual QA evidence
