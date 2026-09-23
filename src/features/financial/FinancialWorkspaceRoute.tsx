@@ -250,7 +250,7 @@ export default function FinancialWorkspaceRoute() {
     >
       {!viewportMode ? (
         <header data-section-signature={kind} className="sanad-section-route-header sticky top-0 z-20 border-b border-[var(--sanad-border-subtle)] bg-white/95 px-4 py-3 backdrop-blur-md">
-          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6 lg:pl-32">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 lg:px-6">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white"><CurrentIcon className="h-5 w-5" /></span>
               <div className="min-w-0">
@@ -269,8 +269,8 @@ export default function FinancialWorkspaceRoute() {
       ) : null}
 
       <main className={viewportMode
-        ? 'mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6 lg:pl-32'
-        : 'mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pl-32 lg:pb-10'}
+        ? 'mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col overflow-hidden lg:px-6'
+        : 'mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 pb-32 lg:px-6 lg:pb-10'}
       >
         {!viewportMode ? (
           <section className="rounded-[1.6rem] border border-slate-200/70 bg-white px-5 py-4 shadow-sm">

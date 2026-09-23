@@ -63,8 +63,8 @@ export default function ProductAppHeader({ userId }: Props) {
       className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4"
       dir="rtl"
     >
-      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
-        <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3 lg:justify-end">
+        <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2 lg:hidden" aria-label="العودة إلى سند">
           <div className="flex flex-col items-start">
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}

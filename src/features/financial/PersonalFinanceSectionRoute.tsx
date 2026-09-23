@@ -165,7 +165,7 @@ export default function PersonalFinanceSectionRoute() {
   return (
     <div dir="rtl" className="min-h-screen bg-[#F7F7F5] pb-24 font-arabic text-slate-900 lg:pb-8">
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/95 px-4 py-3 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-3 lg:px-6 lg:pl-32">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-3 lg:px-6">
           <button type="button" onClick={() => go('financial')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label="العودة إلى سند المالي">
             <ArrowRight className="h-5 w-5" />
           </button>
@@ -180,7 +180,7 @@ export default function PersonalFinanceSectionRoute() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 lg:px-6 lg:pl-32">
+      <main className="mx-auto w-full max-w-[1440px] space-y-5 px-4 py-5 lg:px-6">
         <section className="rounded-[1.6rem] border border-slate-200 bg-white p-4 shadow-sm lg:p-5">
           <p className="text-[11px] leading-6 text-slate-500">{meta.description}</p>
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
