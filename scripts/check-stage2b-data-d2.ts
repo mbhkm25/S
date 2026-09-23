@@ -9,6 +9,10 @@ const connections = readFileSync(
   'supabase/migrations/20260923190500_stage2b_connections_registry_v1.sql',
   'utf8',
 );
+const rlsHardening = readFileSync(
+  'supabase/migrations/20260923191000_stage2b_shared_conversation_rls_hardening_v2.sql',
+  'utf8',
+);
 
 for (const fn of [
   'private.can_access_sanad_agent_thread_v2',
@@ -33,6 +37,10 @@ assert.match(collaboration, /grant select on public\.sanad_agent_threads to auth
 assert.match(collaboration, /grant select on public\.sanad_agent_messages to authenticated/i);
 assert.match(collaboration, /sanad thread participants receive private collaboration/i);
 assert.match(collaboration, /sanad thread members send private collaboration/i);
+assert.match(rlsHardening, /sanad_agent_threads_read_v2/i);
+assert.match(rlsHardening, /sanad_agent_messages_read_v2/i);
+assert.match(rlsHardening, /drop policy if exists sanad_agent_threads_own/i);
+assert.match(rlsHardening, /drop policy if exists sanad_agent_messages_own/i);
 assert.match(collaboration, /extension in \('broadcast','presence'\)/i);
 assert.match(collaboration, /revoke all on function public\.save_sanad_agent_turn_v3[\s\S]*authenticated/i);
 assert.match(collaboration, /grant execute on function public\.save_sanad_agent_turn_v3[\s\S]*service_role/i);
