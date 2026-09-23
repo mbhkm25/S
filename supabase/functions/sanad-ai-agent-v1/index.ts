@@ -184,6 +184,7 @@ type AgentCloudContext = {
   summary: string | null;
   memories: string[];
   messageCount: number;
+  myRole: "owner" | "member" | "viewer" | null;
   preferences: {
     save_history_enabled: boolean;
     memory_enabled: boolean;
@@ -210,6 +211,7 @@ async function loadAgentCloudContext(
       summary: null,
       memories: [],
       messageCount: fallbackHistory.length,
+      myRole: null,
       preferences: {
         save_history_enabled: false,
         memory_enabled: false,
@@ -219,13 +221,14 @@ async function loadAgentCloudContext(
     };
   }
 
-  const payload = await rpc<Json>(userClient, "get_my_sanad_agent_context_v1", {
+  const payload = await rpc<Json>(userClient, "get_my_sanad_agent_context_v2", {
     p_thread_id: threadId,
     p_recent_limit: 24,
     p_memory_limit: 30,
   });
   const thread = payload.thread && typeof payload.thread === "object" ? payload.thread as Json : {};
   const preferences = payload.preferences && typeof payload.preferences === "object" ? payload.preferences as Json : {};
+  const role = cleanText(thread.my_role, 20);
   const history = sanitizeHistory(payload.recent_messages);
   const memories = Array.isArray(payload.memories)
     ? payload.memories.flatMap((item) => {
@@ -243,6 +246,7 @@ async function loadAgentCloudContext(
     summary: cleanText(thread.summary, 4000) || null,
     memories,
     messageCount: Number(thread.message_count || history.length) || history.length,
+    myRole: role === "owner" || role === "member" || role === "viewer" ? role : null,
     preferences: {
       save_history_enabled: bool(preferences.save_history_enabled, true),
       memory_enabled: bool(preferences.memory_enabled, true),
@@ -269,7 +273,7 @@ async function loadAttachmentContext(
   if (!threadId) throw new Error("attachment_thread_required");
 
   const rows = await Promise.all(attachmentIds.map((id) =>
-    rpc<Json>(userClient, "get_my_sanad_agent_attachment_v1", { p_attachment_id: id })
+    rpc<Json>(userClient, "get_my_sanad_agent_attachment_v2", { p_attachment_id: id })
   ));
 
   const summaries: string[] = [];
@@ -357,8 +361,7 @@ async function maybeRefreshThreadSummary(
     await adminClient
       .from("sanad_agent_threads")
       .update({ summary, summary_updated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", cloud.threadId)
-      .eq("user_id", authUserId);
+      .eq("id", cloud.threadId);
   } catch {
     // Summary refresh is best-effort and must never block the user turn.
   }
@@ -377,8 +380,8 @@ async function persistAgentTurn(
   attachmentIds: string[] = [],
 ) {
   if (!cloud.threadId || !cloud.preferences.save_history_enabled) return;
-  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v2", {
-    p_user_id: authUserId,
+  await bestEffortRpc(adminClient, "save_sanad_agent_turn_v3", {
+    p_actor_user_id: authUserId,
     p_thread_id: cloud.threadId,
     p_user_message: message,
     p_assistant_message: responseText,
@@ -1081,6 +1084,9 @@ Deno.serve(async (req) => {
     return respond(req, { ok: false, error: contextError }, contextError.includes("not_found") ? 404 : 403);
   }
   const contextLoadMs = Date.now() - contextStartedAt;
+  if (cloud.threadId && cloud.myRole === "viewer") {
+    return respond(req, { ok: false, error: "thread_read_only" }, 403);
+  }
   let attachmentContext: { ids: string[]; summaries: string[] };
   const attachmentContextStartedAt = Date.now();
   try {
