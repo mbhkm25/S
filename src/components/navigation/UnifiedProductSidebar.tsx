@@ -70,11 +70,11 @@ function NavItem({
       onPointerEnter={() => prefetchProductArea(item.id)}
       onFocus={() => prefetchProductArea(item.id)}
       aria-current={active ? 'page' : undefined}
-      title={effectiveCollapsed ? item.label : undefined}
+      title={collapsed ? item.label : undefined}
       data-active={active ? 'true' : 'false'}
       className={[
         'sanad-focus-ring group flex min-h-12 items-center rounded-[var(--sanad-radius-md)] transition',
-        effectiveCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
+        collapsed ? 'justify-center px-2' : 'gap-3 px-3',
         active
           ? 'bg-[var(--sanad-surface-inverse)] text-white shadow-[var(--sanad-shadow-1)]'
           : 'text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]',
@@ -93,7 +93,7 @@ function NavItem({
         ) : null}
       </span>
 
-      {!effectiveCollapsed ? (
+      {!collapsed ? (
         <span className="min-w-0 flex-1 text-right">
           <strong className="block truncate text-[13px] font-semibold">{item.label}</strong>
           <span className={`mt-0.5 block truncate text-[10px] ${active ? 'text-white/65' : 'text-[var(--sanad-text-subtle)]'}`}>
@@ -164,7 +164,7 @@ export default function UnifiedProductSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {effectiveCollapsed ? (
+        {effectiveCollapsed && !compactOnly ? (
           <button
             type="button"
             onClick={() => onCollapsedChange(false)}
@@ -174,9 +174,9 @@ export default function UnifiedProductSidebar({
           >
             <PanelRightOpen className="h-4 w-4" />
           </button>
-        ) : effectiveCollapsed ? null : (
+        ) : !effectiveCollapsed ? (
           <p className="mb-2 px-3 text-[10px] font-medium text-[var(--sanad-text-subtle)]">مساحات سند</p>
-        )}
+        ) : null}
 
         <nav className="space-y-1" aria-label="مساحات سند">
           {PRIMARY_ITEMS.map((item) => (
@@ -198,7 +198,7 @@ export default function UnifiedProductSidebar({
           title={effectiveCollapsed ? 'الحساب والإعدادات' : undefined}
           className={[
             'sanad-focus-ring flex min-h-11 items-center rounded-[var(--sanad-radius-md)] transition',
-            effectiveCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
+            collapsed ? 'justify-center px-2' : 'gap-3 px-3',
             activeArea === 'account'
               ? 'bg-[var(--sanad-surface-2)] text-[var(--sanad-text-strong)]'
               : 'text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]',
