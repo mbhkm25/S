@@ -187,18 +187,28 @@ export default function AssistantWorkspaceSidebar(props: Props) {
                       <p className={`truncate text-[13px] font-medium ${active ? 'text-slate-950' : 'text-slate-700'}`}>
                         {thread.title}
                       </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {thread.message_count} رسالة
-                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>{thread.message_count} رسالة</span>
+                        {thread.unread_count ? (
+                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            {thread.unread_count > 99 ? '99+' : thread.unread_count}
+                          </span>
+                        ) : null}
+                        {thread.my_role && thread.my_role !== 'owner' ? (
+                          <span>{thread.my_role === 'viewer' ? 'قراءة فقط' : 'مشتركة'}</span>
+                        ) : null}
+                      </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onArchive(thread.id)}
-                      title="أرشفة"
-                      className="ml-1 hidden rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-700 group-hover:block"
-                    >
-                      <Archive className="h-3.5 w-3.5" />
-                    </button>
+                    {(!thread.my_role || thread.my_role === 'owner') ? (
+                      <button
+                        type="button"
+                        onClick={() => props.onArchive(thread.id)}
+                        title="أرشفة"
+                        className="ml-1 hidden rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-700 group-hover:block"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                     {active ? <ChevronLeft className="ml-2 h-3.5 w-3.5 text-slate-500" /> : null}
                   </div>
                 );
