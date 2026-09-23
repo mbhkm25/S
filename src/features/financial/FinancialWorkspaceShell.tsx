@@ -15,6 +15,7 @@ const FinancialActionRoute = lazy(loadFinancialActionRoute);
 const FinancialWorkspaceRoute = lazy(loadFinancialWorkspaceRoute);
 const PersonalFinanceSectionRoute = lazy(loadPersonalFinanceSectionRoute);
 const SanadUnifiedEntryRoute = lazy(() => import('../shell/SanadUnifiedEntryRoute'));
+const BusinessCapabilityRoute = lazy(() => import('../shell/BusinessCapabilityRoute'));
 
 function locationKey(): string {
   return `${window.location.pathname}${window.location.search}`;
@@ -56,10 +57,13 @@ export default function FinancialWorkspaceShell() {
   const commercial = /\/commercial(?:\/|$)/.test(pathname);
   const assistant = /\/sanad-ai\/?$/.test(pathname);
   const isUnifiedEntryRoute = /\/(today|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
+  const isBusinessCapabilityRoute = /\/business\/manage(?:\/(?:operations|team|profile|whatsapp-catalog|customers))?\/?$/.test(pathname);
 
-  const content = isUnifiedEntryRoute
-    ? <SanadUnifiedEntryRoute key={routeKey} />
-    : isActionRoute
+  const content = isBusinessCapabilityRoute
+    ? <BusinessCapabilityRoute key={routeKey} />
+    : isUnifiedEntryRoute
+      ? <SanadUnifiedEntryRoute key={routeKey} />
+      : isActionRoute
     ? <FinancialActionRoute key={routeKey} />
     : isPersonalSectionRoute
         ? <PersonalFinanceSectionRoute key={routeKey} />
