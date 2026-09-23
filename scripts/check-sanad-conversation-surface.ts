@@ -61,7 +61,8 @@ assert.match(
 );
 
 assert.match(sidebar, /data-sidebar-density="compact"/);
-assert.match(sidebar, /مساعد سند/);
+assert.match(sidebar, />سند</, 'Unified product identity should render SANAD rather than the legacy assistant-only label.');
+assert.doesNotMatch(sidebar, />مساعد سند</, 'Legacy assistant-only sidebar label must not return after the unified shell migration.');
 assert.match(sidebar, /assistantState/);
 assert.match(sidebar, /SanadAssistantStatus/);
 assert.match(sidebar, /businessLabel/);
