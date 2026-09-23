@@ -133,8 +133,22 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-slate-100 px-2 py-2">
-        <SanadUnifiedNavLinks dense onNavigate={props.onCloseMobile} />
+      <div className="shrink-0 border-b border-slate-100 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={props.onNew}
+          className="sanad-focus-ring flex w-full items-center justify-center gap-2 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          محادثة جديدة
+        </button>
+        <div className="mt-2">
+          <SanadUnifiedNavLinks
+            dense
+            sections={['primary']}
+            onNavigate={props.onCloseMobile}
+          />
+        </div>
       </div>
 
       <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
@@ -161,16 +175,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
 
       {tab === 'chats' ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="px-3 py-2.5">
-            <button
-              type="button"
-              onClick={props.onNew}
-              className="sanad-focus-ring flex w-full items-center justify-center gap-2 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
-            >
-              <MessageSquarePlus className="h-4 w-4" />
-              محادثة جديدة
-            </button>
-          </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
             {props.loading ? (
               <p className="p-4 text-center text-xs text-slate-400">جارٍ تحميل المحادثات…</p>
@@ -382,6 +386,14 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           </div>
         </div>
       ) : null}
+
+      <div className="max-h-[38vh] shrink-0 overflow-y-auto border-t border-slate-100 px-2 py-2 [scrollbar-gutter:stable]">
+        <SanadUnifiedNavLinks
+          dense
+          sections={['work', 'capabilities', 'utility']}
+          onNavigate={props.onCloseMobile}
+        />
+      </div>
     </Shell>
   );
 }
