@@ -180,12 +180,13 @@ export default function UnifiedProductSidebar({
 
         <nav className="space-y-1" aria-label="مساحات سند">
           {PRIMARY_ITEMS.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              active={activeArea === item.id}
-              collapsed={effectiveCollapsed}
-            />
+            <div key={item.id}>
+              <NavItem
+                item={item}
+                active={activeArea === item.id}
+                collapsed={effectiveCollapsed}
+              />
+            </div>
           ))}
         </nav>
       </div>
