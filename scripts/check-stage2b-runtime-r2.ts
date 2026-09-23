@@ -8,6 +8,7 @@ const nav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx', '
 const sidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const agentSidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
 const entry = readFileSync('src/features/shell/SanadUnifiedEntryRoute.tsx', 'utf8');
+const businessCapability = readFileSync('src/features/shell/BusinessCapabilityRoute.tsx', 'utf8');
 const bottomNav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 
 assert.match(shell, /SanadUnifiedSidebar/);
