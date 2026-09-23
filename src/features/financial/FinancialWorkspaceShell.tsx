@@ -80,6 +80,7 @@ export default function FinancialWorkspaceShell() {
       >
         <ProductAppHeader
           userId={userId}
+          utilityOnly
           onOpenNavigation={assistant ? undefined : () => setNavigationOpen(true)}
         />
         {assistant ? (
