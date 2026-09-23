@@ -62,7 +62,7 @@ export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly
   return (
     <header
       id="product_app_header"
-      className={`sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4 ${utilityOnly ? 'pb-1.5' : 'pb-2'}`}
+      className={`sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4 ${utilityOnly ? '!pt-1.5 !pb-1.5' : 'pb-2'}`}
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
@@ -89,7 +89,7 @@ export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly
               <button
                 type="button"
                 onClick={onOpenNavigation}
-                className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] lg:hidden"
+                className={`sanad-focus-ring flex items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] lg:hidden ${utilityOnly ? 'h-9 w-9' : 'h-11 w-11'}`}
                 aria-label="فتح تنقل سند"
               >
                 <Menu className="h-4.5 w-4.5" />
@@ -97,7 +97,7 @@ export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly
             ) : null}
             <a
               href="/payment-inbox.html"
-              className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
+              className={`sanad-focus-ring flex items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)] ${utilityOnly ? 'h-9 w-9' : 'h-11 w-11'}`}
               aria-label="فتح وارد المدفوعات"
               title="وارد المدفوعات"
             >
@@ -107,10 +107,10 @@ export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly
 
             <a
               href={`${base}profile`}
-              className="sanad-focus-ring flex min-h-11 items-center gap-2 rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] p-1 pl-2.5 pr-1 transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)]"
+              className={`sanad-focus-ring flex items-center gap-2 rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] p-1 pl-2.5 pr-1 transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] ${utilityOnly ? 'min-h-9' : 'min-h-11'}`}
               aria-label="فتح الحساب"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white ring-2 ring-white shadow-sm">
+              <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white ring-2 ring-white shadow-sm ${utilityOnly ? 'h-7 w-7' : 'h-9 w-9'}`}>
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : profile?.avatar_path ? (
