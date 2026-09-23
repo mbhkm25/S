@@ -10,6 +10,7 @@ const attachmentIndex = readFileSync(
   'utf8',
 );
 const runtime = readFileSync('supabase/functions/sanad-ai-agent-v1/index.ts','utf8');
+const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts','utf8');
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts','utf8');
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts','utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx','utf8');
@@ -57,7 +58,7 @@ for (const rpc of [
   assert.ok(attachmentApi.includes(rpc), 'attachment API missing ' + rpc);
 }
 
-assert.match(runtime, /RUNTIME_VERSION = "sanad-ai-agent-v2-shared"/);
+assert.match(core, /RUNTIME_VERSION = "sanad-ai-agent-v2-shared"/);
 assert.match(runtime, /get_my_sanad_agent_context_v2/);
 assert.match(runtime, /save_sanad_agent_turn_v3/);
 assert.match(runtime, /p_actor_user_id:\s*authUserId/);
