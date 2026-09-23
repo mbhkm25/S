@@ -53,6 +53,9 @@ export type SanadAgentAttachmentSuggestion = {
 export type SanadAgentAttachment = {
   id: string;
   user_id?: string;
+  uploader_name?: string | null;
+  uploader_avatar_path?: string | null;
+  is_mine?: boolean;
   thread_id: string;
   business_id?: string | null;
   storage_bucket: string;
@@ -125,7 +128,7 @@ export function validateSanadAttachmentFile(file: File) {
 }
 
 export async function getSanadAgentAttachment(attachmentId: string): Promise<SanadAgentAttachment> {
-  const { data, error } = await supabase.rpc('get_my_sanad_agent_attachment_v1', {
+  const { data, error } = await supabase.rpc('get_my_sanad_agent_attachment_v2', {
     p_attachment_id: attachmentId,
   });
   if (error) throw new Error(error.message || 'تعذر تحميل المرفق.');
@@ -133,7 +136,7 @@ export async function getSanadAgentAttachment(attachmentId: string): Promise<San
 }
 
 export async function listSanadAgentAttachments(threadId: string): Promise<SanadAgentAttachment[]> {
-  const { data, error } = await supabase.rpc('list_my_sanad_agent_attachments_v1', {
+  const { data, error } = await supabase.rpc('list_my_sanad_agent_attachments_v2', {
     p_thread_id: threadId,
   });
   if (error) throw new Error(error.message || 'تعذر تحميل مرفقات المحادثة.');
@@ -184,7 +187,7 @@ export async function uploadSanadAgentAttachment(
 
   let attachmentId = '';
   try {
-    const { data, error } = await supabase.rpc('create_my_sanad_agent_attachment_v1', {
+    const { data, error } = await supabase.rpc('create_my_sanad_agent_attachment_v2', {
       p_thread_id: threadId,
       p_business_id: businessId || null,
       p_storage_path: storagePath,
