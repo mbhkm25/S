@@ -198,7 +198,7 @@ export default function UnifiedProductSidebar({
           title={effectiveCollapsed ? 'الحساب والإعدادات' : undefined}
           className={[
             'sanad-focus-ring flex min-h-11 items-center rounded-[var(--sanad-radius-md)] transition',
-            collapsed ? 'justify-center px-2' : 'gap-3 px-3',
+            effectiveCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
             activeArea === 'account'
               ? 'bg-[var(--sanad-surface-2)] text-[var(--sanad-text-strong)]'
               : 'text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]',
