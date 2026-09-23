@@ -13,6 +13,18 @@
 
 **Important:** Stage 2B.0 is now a combined Product + Data Architecture gate. Unified Shell implementation must not begin until the database/relationship/connection/event/knowledge architecture is approved at design level.
 
+**Stage 2B.0 data architecture package now includes:**
+- `STAGE2B0_DATABASE_ARCHITECTURE_GAP_REPORT_V1.md`
+- `STAGE2B0_DB_A_IDENTITY_RELATIONSHIP_SCOPE_V1.md`
+- `STAGE2B0_DB_B_CONVERSATION_COLLABORATION_V1.md`
+- `STAGE2B0_DB_C_CONNECTIONS_ARCHITECTURE_V1.md`
+- `STAGE2B0_DB_D_EVENTS_WORK_NOTIFICATIONS_V1.md`
+- `STAGE2B0_DB_E_KNOWLEDGE_MEMORY_GLOSSARY_V1.md`
+- `STAGE2B0_DB_F_INTELLIGENCE_ACTION_RECONCILIATION_AGREEMENTS_V1.md`
+- `STAGE2B0_EDAA_PROFIT_COST_COVERAGE_AUDIT_V1.md`
+- `STAGE2B0_PROPOSED_DATA_ARCHITECTURE_V2.md`
+- `STAGE2B0_DATA_MIGRATION_COMPATIBILITY_PLAN_V1.md`
+
 ---
 
 ## 0. Executive decision
@@ -1462,6 +1474,8 @@ Stage 2B.0 is complete when:
 - DB-D Events/Work/Notifications is resolved at design level;
 - DB-E Knowledge is resolved at design level;
 - Edaa profit/cost data coverage has an explicit audit result;
+- DB-F Intelligence/Action/Reconciliation/Agreements is resolved at design level;
+- proposed Data Architecture v2 and migration compatibility plan are approved;
 - target sidebar IA is approved;
 - desktop/mobile shell contracts are approved;
 - route migration strategy is approved;
