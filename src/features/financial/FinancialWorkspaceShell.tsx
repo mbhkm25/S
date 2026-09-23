@@ -87,6 +87,7 @@ export default function FinancialWorkspaceShell() {
         <UnifiedProductSidebar
           activeArea={activeArea}
           collapsed={sidebarCollapsed}
+          compactOnly={assistant}
           onCollapsedChange={setSidebarCollapsed}
         />
 
