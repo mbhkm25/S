@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import ProductBottomNav from '../../components/navigation/ProductBottomNav';
+import SanadUnifiedSidebar from '../../components/navigation/SanadUnifiedSidebar';
 import ProductAppHeader from '../../components/navigation/ProductAppHeader';
 import { navigateProduct, subscribeProductNavigation } from '../../lib/productNavigation';
 import { NotificationProvider } from '../notifications/NotificationProvider';
@@ -14,6 +14,7 @@ import {
 const FinancialActionRoute = lazy(loadFinancialActionRoute);
 const FinancialWorkspaceRoute = lazy(loadFinancialWorkspaceRoute);
 const PersonalFinanceSectionRoute = lazy(loadPersonalFinanceSectionRoute);
+const SanadUnifiedEntryRoute = lazy(() => import('../shell/SanadUnifiedEntryRoute'));
 
 function locationKey(): string {
   return `${window.location.pathname}${window.location.search}`;
@@ -30,6 +31,7 @@ function RouteFallback() {
 export default function FinancialWorkspaceShell() {
   const [routeKey, setRouteKey] = useState(locationKey);
   const [userId, setUserId] = useState<string | null>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const pathname = routeKey.split('?')[0];
 
   useEffect(() => subscribeProductNavigation(() => setRouteKey(locationKey())), []);
@@ -53,12 +55,15 @@ export default function FinancialWorkspaceShell() {
   const personal = /\/financial(?:\/|$)/.test(pathname);
   const commercial = /\/commercial(?:\/|$)/.test(pathname);
   const assistant = /\/sanad-ai\/?$/.test(pathname);
+  const isUnifiedEntryRoute = /\/(today|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
 
-  const content = isActionRoute
+  const content = isUnifiedEntryRoute
+    ? <SanadUnifiedEntryRoute key={routeKey} />
+    : isActionRoute
     ? <FinancialActionRoute key={routeKey} />
     : isPersonalSectionRoute
-      ? <PersonalFinanceSectionRoute key={routeKey} />
-      : <FinancialWorkspaceRoute key={routeKey} />;
+        ? <PersonalFinanceSectionRoute key={routeKey} />
+        : <FinancialWorkspaceRoute key={routeKey} />;
 
   return (
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
@@ -67,9 +72,12 @@ export default function FinancialWorkspaceShell() {
         data-product-area={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'}
         className={assistant
           ? 'sanad-canvas flex h-dvh min-h-0 flex-col overflow-hidden'
-          : 'sanad-canvas min-h-screen'}
+          : 'sanad-canvas flex min-h-screen flex-col'}
       >
-        <ProductAppHeader userId={userId} />
+        <ProductAppHeader
+          userId={userId}
+          onOpenNavigation={assistant ? undefined : () => setNavigationOpen(true)}
+        />
         {assistant ? (
           <div
             data-workspace-body="viewport"
@@ -80,21 +88,25 @@ export default function FinancialWorkspaceShell() {
             </Suspense>
           </div>
         ) : (
-          <Suspense fallback={<RouteFallback />}>
-            {content}
-          </Suspense>
+          <div data-unified-shell-body="true" className="relative flex min-h-0 flex-1 items-stretch">
+            <SanadUnifiedSidebar
+              mobileOpen={navigationOpen}
+              onCloseMobile={() => setNavigationOpen(false)}
+            />
+            <div className="min-w-0 flex-1">
+              <Suspense fallback={<RouteFallback />}>
+                {content}
+              </Suspense>
+            </div>
+          </div>
         )}
-        <ProductBottomNav
-          activeArea={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'}
-          layoutMode={assistant ? 'viewport' : 'document'}
-        />
         {!isActionRoute && (personal || commercial) ? (
           <button
             type="button"
             onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}
             onPointerEnter={() => void loadFinancialActionRoute()}
             onFocus={() => void loadFinancialActionRoute()}
-            className="sanad-focus-ring fixed bottom-[calc(var(--sanad-mobile-nav-stack-height)+0.75rem)] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--sanad-surface-inverse)] px-5 py-3 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-3)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
+            className="sanad-focus-ring fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--sanad-surface-inverse)] px-5 py-3 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-3)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
             aria-label={commercial ? 'فتح إجراءات سند التجاري' : 'فتح إجراءات سند المالي'}
           >
             <Plus className="h-4 w-4" />
