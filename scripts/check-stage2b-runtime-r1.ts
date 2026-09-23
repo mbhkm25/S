@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const migration = readFileSync(
-  'supabase/migrations/20260923195500_stage2b_shared_runtime_contracts_v1.sql',
+  'supabase/migrations/20260923170714_stage2b_shared_runtime_contracts_v1.sql',
   'utf8',
 );
 const attachmentIndex = readFileSync(
-  'supabase/migrations/20260923200000_stage2b_shared_runtime_attachment_index_v1.sql',
+  'supabase/migrations/20260923170718_stage2b_shared_runtime_attachment_index_v1.sql',
   'utf8',
 );
 const runtime = readFileSync('supabase/functions/sanad-ai-agent-v1/index.ts','utf8');
