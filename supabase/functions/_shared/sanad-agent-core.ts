@@ -2,7 +2,7 @@ export type Json = Record<string, unknown>;
 export type ToolCall = { id: string; name: string; arguments: Json };
 export type HistoryTurn = { role: "user" | "assistant"; content: string };
 
-export const RUNTIME_VERSION = "sanad-ai-agent-v1";
+export const RUNTIME_VERSION = "sanad-ai-agent-v2-shared";
 export const MODEL = "gemini-3.8-flash";
 export const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
 export const MAX_TOOL_CALLS = 8;

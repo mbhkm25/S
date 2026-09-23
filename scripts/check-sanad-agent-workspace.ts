@@ -71,20 +71,28 @@ for (const required of [
 
 for (const rpc of [
   'create_my_sanad_agent_thread_v1',
-  'list_my_sanad_agent_threads_v1',
-  'get_my_sanad_agent_thread_v1',
   'get_my_sanad_agent_preferences_v1',
   'update_my_sanad_agent_preferences_v1',
-  'get_my_sanad_agent_context_v1',
   'forget_my_sanad_agent_memory_v1',
 ]) {
   assert.ok(workspaceApi.includes(rpc), `workspace API missing ${rpc}`);
   assert.ok(migration.includes(rpc), `migration missing ${rpc}`);
 }
 
+for (const rpc of [
+  'list_my_sanad_agent_threads_v2',
+  'get_my_sanad_agent_thread_v2',
+  'get_my_sanad_agent_context_v2',
+  'mark_my_sanad_agent_thread_read_v1',
+]) {
+  assert.ok(workspaceApi.includes(rpc), `workspace API missing shared runtime RPC ${rpc}`);
+}
+
 for (const required of [
   'loadAgentCloudContext',
-  'save_sanad_agent_turn_v2',
+  'get_my_sanad_agent_context_v2',
+  'save_sanad_agent_turn_v3',
+  'thread_read_only',
   'upsert_sanad_agent_memory_v1',
   'buildAgentPresentation',
   'maybeRefreshThreadSummary',

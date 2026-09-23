@@ -3,12 +3,16 @@ import type { SanadAiAgentTurnResult, SanadAiToolTrace } from './assistantAgentA
 
 export type SanadAgentThreadSummary = {
   id: string;
+  owner_user_id?: string;
   business_id: string | null;
   title: string;
   status: 'active' | 'archived';
   summary?: string | null;
   last_message_at?: string | null;
   message_count: number;
+  my_role?: 'owner' | 'member' | 'viewer';
+  last_read_sequence_no?: number;
+  unread_count?: number;
   created_at: string;
   updated_at: string;
 };
@@ -27,6 +31,9 @@ export type SanadAgentStoredMessage = {
   rating?: -1 | 1 | null;
   rating_updated_at?: string | null;
   attachment_ids?: string[];
+  author_user_id?: string | null;
+  author_name?: string | null;
+  author_avatar_path?: string | null;
   created_at: string;
 };
 
@@ -59,7 +66,7 @@ function rpcError(error: { message?: string } | null, fallback: string): never {
 }
 
 export async function listSanadAgentThreads(limit = 50): Promise<SanadAgentThreadSummary[]> {
-  const { data, error } = await supabase.rpc('list_my_sanad_agent_threads_v1', { p_limit: limit });
+  const { data, error } = await supabase.rpc('list_my_sanad_agent_threads_v2', { p_limit: limit });
   if (error) rpcError(error, 'تعذر تحميل محادثات مساعد سند.');
   return Array.isArray(data) ? data as SanadAgentThreadSummary[] : [];
 }
@@ -81,7 +88,7 @@ export async function getSanadAgentThread(
   threadId: string,
   limit = 160,
 ): Promise<SanadAgentThreadDetail> {
-  const { data, error } = await supabase.rpc('get_my_sanad_agent_thread_v1', {
+  const { data, error } = await supabase.rpc('get_my_sanad_agent_thread_v2', {
     p_thread_id: threadId,
     p_message_limit: limit,
   });
@@ -91,6 +98,65 @@ export async function getSanadAgentThread(
     thread: payload.thread as SanadAgentThreadSummary,
     messages: Array.isArray(payload.messages) ? payload.messages as SanadAgentStoredMessage[] : [],
   };
+}
+
+export type SanadAgentThreadParticipant = {
+  user_id: string;
+  role: 'owner' | 'member' | 'viewer';
+  status: 'active' | 'removed';
+  joined_at?: string | null;
+  left_at?: string | null;
+  last_read_sequence_no?: number;
+  notification_level?: string;
+  full_name?: string | null;
+  avatar_path?: string | null;
+};
+
+export async function listSanadAgentThreadParticipants(
+  threadId: string,
+): Promise<SanadAgentThreadParticipant[]> {
+  const { data, error } = await supabase.rpc('list_my_sanad_agent_thread_participants_v1', {
+    p_thread_id: threadId,
+  });
+  if (error) rpcError(error, 'تعذر تحميل المشاركين في المحادثة.');
+  return Array.isArray(data) ? data as SanadAgentThreadParticipant[] : [];
+}
+
+export async function addSanadAgentThreadParticipant(
+  threadId: string,
+  userId: string,
+  role: 'member' | 'viewer' = 'member',
+): Promise<SanadAgentThreadParticipant> {
+  const { data, error } = await supabase.rpc('add_my_sanad_agent_thread_participant_v1', {
+    p_thread_id: threadId,
+    p_user_id: userId,
+    p_role: role,
+  });
+  if (error) rpcError(error, 'تعذر إضافة المشارك إلى المحادثة.');
+  return data as SanadAgentThreadParticipant;
+}
+
+export async function removeSanadAgentThreadParticipant(
+  threadId: string,
+  userId: string,
+): Promise<SanadAgentThreadParticipant> {
+  const { data, error } = await supabase.rpc('remove_my_sanad_agent_thread_participant_v1', {
+    p_thread_id: threadId,
+    p_user_id: userId,
+  });
+  if (error) rpcError(error, 'تعذر إزالة المشارك من المحادثة.');
+  return data as SanadAgentThreadParticipant;
+}
+
+export async function markSanadAgentThreadRead(
+  threadId: string,
+  sequenceNo?: number | null,
+): Promise<void> {
+  const { error } = await supabase.rpc('mark_my_sanad_agent_thread_read_v1', {
+    p_thread_id: threadId,
+    p_sequence_no: sequenceNo ?? null,
+  });
+  if (error) rpcError(error, 'تعذر تحديث حالة قراءة المحادثة.');
 }
 
 export async function renameSanadAgentThread(threadId: string, title: string): Promise<void> {
@@ -157,7 +223,7 @@ export async function updateSanadAgentPreferences(
 }
 
 export async function getSanadAgentContext(threadId: string): Promise<{ memories: SanadAgentMemory[] }> {
-  const { data, error } = await supabase.rpc('get_my_sanad_agent_context_v1', {
+  const { data, error } = await supabase.rpc('get_my_sanad_agent_context_v2', {
     p_thread_id: threadId,
     p_recent_limit: 1,
     p_memory_limit: 60,
