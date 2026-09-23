@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react';
 import { useEffect, useState } from 'react';
-import { Inbox, Loader2 } from 'lucide-react';
+import { Inbox, Loader2, Menu } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SANAD_APP_VERSION } from '../../lib/appVersion';
 import { getUserAvatarUrl } from '../../lib/userAvatar';
@@ -9,6 +9,7 @@ import { navigateProduct, productHref, shouldHandleProductLinkClick } from '../.
 
 type Props = {
   userId: string | null;
+  onOpenNavigation?: () => void;
 };
 
 type HeaderProfile = {
@@ -27,7 +28,7 @@ function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
   navigateProduct('sanad-ai');
 }
 
-export default function ProductAppHeader({ userId }: Props) {
+export default function ProductAppHeader({ userId, onOpenNavigation }: Props) {
   const [profile, setProfile] = useState<HeaderProfile | null>(null);
   const [loading, setLoading] = useState(Boolean(userId));
   const base = basePath();
@@ -79,6 +80,16 @@ export default function ProductAppHeader({ userId }: Props) {
 
         {userId ? (
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {onOpenNavigation ? (
+              <button
+                type="button"
+                onClick={onOpenNavigation}
+                className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] lg:hidden"
+                aria-label="فتح تنقل سند"
+              >
+                <Menu className="h-4.5 w-4.5" />
+              </button>
+            ) : null}
             <a
               href="/payment-inbox.html"
               className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
