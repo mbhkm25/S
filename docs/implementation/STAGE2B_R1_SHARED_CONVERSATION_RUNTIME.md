@@ -1,7 +1,13 @@
 # Stage 2B Runtime R1 — Shared Conversation Runtime
 
-Status: implementation candidate
-Production mutation: not yet applied at authoring time
+Status: Production database and agent runtime released; Web/PWA source reconciliation pending PR merge
+Production migrations:
+- 20260923170714_stage2b_shared_runtime_contracts_v1
+- 20260923170718_stage2b_shared_runtime_attachment_index_v1
+Production Edge Function:
+- sanad-ai-agent-v1 ACTIVE v6
+- verify_jwt=true
+- bundle 401b94dea609001e2c45dd70cc216be83ad1c8fa1279e55a3a7efbc63d6007a4
 
 ## Goal
 
@@ -190,6 +196,40 @@ Before applying:
 - every thread has an active owner participant;
 - exact candidate passes all CI gates;
 - current production sanad-ai-agent-v1 source hash is recorded.
+
+## Production database / agent postflight
+
+The R1 database migrations were applied only after all six required CI gates passed on candidate `6ac452e5f966af50ca86714a3e04655b77dc3a26`.
+
+The agent Edge Function was then deployed from the same branch source.
+
+Postflight:
+
+~~~text
+threads                              8
+messages                             30
+user messages                        15
+participants                         8
+missing owner participants           0
+missing user authors                 0
+sequence counter mismatches          0
+
+attachment v2 create/get/list        present
+message broadcast trigger            present
+user Work private topic policy       present
+storage shared insert policy         present
+storage shared select policy         present
+
+attachments                          0
+Work Items                           12
+payment review_required              12
+
+sanad-ai-agent-v1                    ACTIVE v6
+verify_jwt                           true
+runtime source                       sanad-ai-agent-v2-shared
+~~~
+
+No Stage 1 ordering, D3 Work Item, or payment-review invariant changed during the DB/agent rollout.
 
 ## Production rollout
 
