@@ -44,13 +44,17 @@ for (const path of [
   assert.ok(nav.includes(path), 'unified SANAD route missing ' + path);
 }
 
-for (const routeToken of ['today', 'library', 'connections', 'work\\/(?:tasks|approvals|automations)']) {
+for (const routeToken of ['today', 'library', 'connections', 'work\\/(?:tasks|approvals|automations)', 'business\\/manage']) {
   assert.ok(main.includes(routeToken), 'main route matcher missing ' + routeToken);
   assert.ok(shell.includes(routeToken), 'shell route matcher missing ' + routeToken);
 }
 
 assert.match(agentSidebar, /SanadUnifiedNavLinks/);
 assert.match(agentSidebar, />سند</);
+assert.ok(
+  agentSidebar.indexOf('محادثة جديدة') < agentSidebar.indexOf("sections={['work', 'capabilities', 'utility']}"),
+  'Conversation sidebar must prioritize New Chat/history before secondary product navigation.',
+);
 assert.doesNotMatch(agentSidebar, />مساعد سند</);
 
 assert.match(entry, /get_my_sanad_today_v1/);
@@ -63,6 +67,12 @@ assert.match(entry, /p_limit:/);
 assert.match(sidebar, /data-sanad-global-sidebar="true"/);
 assert.match(sidebar, /lg:static/);
 assert.match(sidebar, /SanadUnifiedNavLinks/);
+assert.match(nav, /title="القدرات"/);
+assert.doesNotMatch(nav, /القدرات والاتصالات/);
+assert.match(businessCapability, /BusinessManage/);
+assert.match(businessCapability, /business\/manage\/operations/);
+assert.match(businessCapability, /business\/manage\/team/);
+assert.match(businessCapability, /business\/manage\/customers/);
 assert.doesNotMatch(sidebar, /fixed inset-(?:0|y-0)/);
 
 assert.ok(bottomNav.includes('TRANSITIONAL') || bottomNav.includes('ProductBottomNav'),
