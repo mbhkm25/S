@@ -5,7 +5,7 @@ const main = readFileSync('src/main.tsx', 'utf8');
 const home = readFileSync('src/components/Home.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const workspace = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
-const productNav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
+const unifiedNav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx', 'utf8');
 const actionRoute = readFileSync('src/features/financial/FinancialActionRoute.tsx', 'utf8');
 const sectionRoute = readFileSync('src/features/financial/PersonalFinanceSectionRoute.tsx', 'utf8');
 const overview = readFileSync('src/features/financial/PersonalFinanceOverview.tsx', 'utf8');
@@ -20,9 +20,11 @@ const styles = readFileSync('src/index.css', 'utf8');
 assert.match(home, /window\.location\.replace\(financialUrl\(\)\)/, 'authenticated root must hand off into a product workspace');
 assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['سند', 'سند المالي', 'سند للأعمال', 'حسابي']) {
-  assert.match(productNav, new RegExp(label), `four-domain navigation must include ${label}`);
+for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات', 'الحساب والإعدادات']) {
+  assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
 }
+assert.match(shell, /SanadUnifiedSidebar/);
+assert.doesNotMatch(shell, /ProductBottomNav/, 'target workspace shell must not render the legacy four-product navigation');
 
 assert.match(productHeader, /payment-inbox\.html/, 'shared product header must expose Payment Inbox');
 assert.match(productHeader, /وارد المدفوعات/, 'shared product header must label Payment Inbox access');
@@ -32,7 +34,7 @@ assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/, 'Noto Sans Ara
 assert.match(styles, /font-display:\s*swap/, 'self-hosted Noto Sans Arabic must use font-display swap');
 assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'primary SANAD typography must not depend on Google Fonts at runtime');
 
-for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai']) {
+for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai', 'today', 'library', 'connections', 'tasks', 'approvals', 'automations']) {
   assert.match(main, new RegExp(route.replace('-', '\\-')), `main.tsx must recognize /${route}`);
 }
 
