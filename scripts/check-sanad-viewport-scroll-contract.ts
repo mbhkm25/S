@@ -46,8 +46,8 @@ assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
 assert.match(shell, /layoutMode=\{assistant \? 'viewport' : 'document'\}/);
 assert.match(
   shell,
-  /: 'sanad-canvas min-h-screen'/,
-  'Document workspaces must retain document flow.',
+  /: 'sanad-canvas flex min-h-screen'/,
+  'Document workspaces must retain document flow inside the unified shell.',
 );
 
 assert.match(route, /const viewportMode = kind === 'ai'/);
@@ -76,7 +76,7 @@ assert.match(
 assert.match(nav, /layoutMode\?: 'document' \| 'viewport'/);
 assert.match(nav, /viewportMode \? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'/);
 assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
-assert.match(nav, /lg:fixed/);
+assert.match(nav, /lg:hidden/, 'Mobile ProductBottomNav must leave desktop navigation ownership to the unified sidebar.');
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
 
