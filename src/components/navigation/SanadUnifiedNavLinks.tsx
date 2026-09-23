@@ -23,9 +23,12 @@ type NavItem = {
   icon: typeof CalendarCheck2;
 };
 
+type NavSection = 'primary' | 'work' | 'capabilities' | 'utility';
+
 type Props = {
   dense?: boolean;
   onNavigate?: () => void;
+  sections?: NavSection[];
 };
 
 const PRIMARY: NavItem[] = [
@@ -115,13 +118,18 @@ function Group({
   );
 }
 
-export default function SanadUnifiedNavLinks({ dense = false, onNavigate }: Props) {
+export default function SanadUnifiedNavLinks({
+  dense = false,
+  onNavigate,
+  sections = ['primary', 'work', 'capabilities', 'utility'],
+}: Props) {
+  const visible = new Set(sections);
   return (
     <nav aria-label="تنقل سند" data-sanad-unified-navigation="true" className={dense ? 'space-y-1' : 'space-y-2'}>
-      <Group items={PRIMARY} dense={dense} onNavigate={onNavigate} />
-      <Group title="العمل" items={WORK} dense={dense} onNavigate={onNavigate} />
-      <Group title="القدرات والاتصالات" items={CAPABILITIES} dense={dense} onNavigate={onNavigate} />
-      <Group items={UTILITY} dense={dense} onNavigate={onNavigate} />
+      {visible.has('primary') ? <Group items={PRIMARY} dense={dense} onNavigate={onNavigate} /> : null}
+      {visible.has('work') ? <Group title="العمل" items={WORK} dense={dense} onNavigate={onNavigate} /> : null}
+      {visible.has('capabilities') ? <Group title="القدرات" items={CAPABILITIES} dense={dense} onNavigate={onNavigate} /> : null}
+      {visible.has('utility') ? <Group items={UTILITY} dense={dense} onNavigate={onNavigate} /> : null}
     </nav>
   );
 }
