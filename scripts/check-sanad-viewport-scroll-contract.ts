@@ -38,7 +38,8 @@ assert.doesNotMatch(
 );
 
 assert.match(shell, /data-workspace-mode=\{assistant \? 'viewport' : 'document'\}/);
-assert.match(shell, /flex h-dvh min-h-0 flex-col overflow-hidden/);
+assert.match(shell, /sanad-canvas flex h-dvh min-h-0 overflow-hidden/);
+assert.match(shell, /flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden/);
 assert.match(shell, /min-h-0 flex-1 overflow-hidden/);
 assert.match(shell, /data-workspace-body="viewport"/);
 assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
