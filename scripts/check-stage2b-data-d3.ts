@@ -9,6 +9,10 @@ const adapters = readFileSync(
   'supabase/migrations/20260923193500_stage2b_work_projection_adapters_v1.sql',
   'utf8',
 );
+const paymentMirrorHardening = readFileSync(
+  'supabase/migrations/20260923194000_stage2b_payment_event_mirror_contract_hardening_v1.sql',
+  'utf8',
+);
 
 for (const token of [
   'public.sanad_domain_events',
@@ -52,5 +56,9 @@ assert.match(adapters, /'payment_inbox:'/i);
 assert.match(adapters, /'connection_issue:'/i);
 assert.match(adapters, /where i\.status in \('new','released','claimed','review_required'\)/i);
 assert.match(adapters, /Backfill only currently unhealthy connection states/i);
+assert.match(paymentMirrorHardening, /business_payment_review_required/i);
+assert.match(paymentMirrorHardening, /business_payment_review_resumed/i);
+assert.match(paymentMirrorHardening, /business_payment_claim_conflict/i);
+assert.match(paymentMirrorHardening, /business_payment_stale_action_rejected/i);
 
 console.log('SANAD Stage 2B Data Train D3 domain events/work/Today contract checks passed.');
