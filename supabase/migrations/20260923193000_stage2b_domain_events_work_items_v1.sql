@@ -41,6 +41,10 @@ create index if not exists sanad_domain_events_user_time_idx
 create index if not exists sanad_domain_events_type_time_idx
   on public.sanad_domain_events(event_type,occurred_at desc);
 
+create index if not exists sanad_domain_events_actor_time_idx
+  on public.sanad_domain_events(actor_user_id,occurred_at desc)
+  where actor_user_id is not null;
+
 alter table public.sanad_domain_events enable row level security;
 revoke all on table public.sanad_domain_events from anon,authenticated;
 grant select,insert,update,delete on table public.sanad_domain_events to service_role;
@@ -253,7 +257,7 @@ create or replace function public.list_my_sanad_work_items_v1(
 returns jsonb
 language plpgsql
 stable
-security definer
+security invoker
 set search_path to ''
 as $function$
 declare
@@ -317,7 +321,7 @@ create or replace function public.get_my_sanad_today_v1(
 returns jsonb
 language plpgsql
 stable
-security definer
+security invoker
 set search_path to ''
 as $function$
 declare
@@ -385,7 +389,7 @@ create or replace function public.get_my_sanad_work_item_v1(
 returns jsonb
 language plpgsql
 stable
-security definer
+security invoker
 set search_path to ''
 as $function$
 declare
