@@ -9,6 +9,10 @@
 **Depends on:** Stage 2A CLOSED, Production baseline d0f7ce82bdf1f3c3dc9f63b24328501098d98893  
 **Current repository main when drafted:** 7a6371e79e6c47ac9a48d430db35c86c4406e802
 
+**Database gap report:** `docs/architecture/STAGE2B0_DATABASE_ARCHITECTURE_GAP_REPORT_V1.md`
+
+**Important:** Stage 2B.0 is now a combined Product + Data Architecture gate. Unified Shell implementation must not begin until the database/relationship/connection/event/knowledge architecture is approved at design level.
+
 ---
 
 ## 0. Executive decision
@@ -1451,6 +1455,13 @@ These should be resolved with concrete prototypes/runtime evidence, not abstract
 Stage 2B.0 is complete when:
 
 - this blueprint is approved;
+- the Production database architecture gap report is approved;
+- DB-A Identity/Relationship/Scope is resolved at design level;
+- DB-B Conversation/Collaboration is resolved at design level;
+- DB-C Connections is resolved at design level;
+- DB-D Events/Work/Notifications is resolved at design level;
+- DB-E Knowledge is resolved at design level;
+- Edaa profit/cost data coverage has an explicit audit result;
 - target sidebar IA is approved;
 - desktop/mobile shell contracts are approved;
 - route migration strategy is approved;
