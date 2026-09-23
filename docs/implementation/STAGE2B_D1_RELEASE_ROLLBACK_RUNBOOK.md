@@ -3,10 +3,10 @@
 ## Scope
 
 Migrations:
-- 20260923152621_stage2b_multi_business_ownership_v1
-- 20260923152638_stage2b_shared_conversation_additive_v1
-- 20260923152737_stage2b_shared_conversation_additive_hardening_v1
-- 20260923152833_stage2b_shared_conversation_dual_write_v1
+- 20260923153802_stage2b_multi_business_ownership_v1
+- 20260923153807_stage2b_shared_conversation_additive_v1
+- 20260923153811_stage2b_shared_conversation_additive_hardening_v1
+- 20260923153814_stage2b_shared_conversation_dual_write_v1
 
 ## Preflight
 
