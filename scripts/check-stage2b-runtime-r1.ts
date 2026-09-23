@@ -5,6 +5,10 @@ const migration = readFileSync(
   'supabase/migrations/20260923195500_stage2b_shared_runtime_contracts_v1.sql',
   'utf8',
 );
+const attachmentIndex = readFileSync(
+  'supabase/migrations/20260923200000_stage2b_shared_runtime_attachment_index_v1.sql',
+  'utf8',
+);
 const runtime = readFileSync('supabase/functions/sanad-ai-agent-v1/index.ts','utf8');
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts','utf8');
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts','utf8');
@@ -31,6 +35,7 @@ assert.match(migration, /'message\.changed'/i);
 assert.match(migration, /'sanad-thread:'\|\|new\.thread_id::text/i);
 assert.match(migration, /sanad_thread_message_realtime_broadcast_failed/i);
 assert.match(migration, /realtime\.topic\(\).*'user:'\|\|/is);
+assert.match(attachmentIndex, /sanad_agent_attachments_thread_created_idx/i);
 
 for (const rpc of [
   'list_my_sanad_agent_threads_v2',
