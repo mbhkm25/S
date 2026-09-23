@@ -1,7 +1,11 @@
 # Stage 2B Data Train D3 — Domain Events / Work Items / Today Runbook
 
-Status: implementation candidate
-Production mutation: not yet applied at authoring time
+Status: released to Production database; repository reconciliation pending PR merge
+Production migrations:
+- 20260923163515_stage2b_domain_events_work_items_v1
+- 20260923163519_stage2b_work_projection_adapters_v1
+- 20260923163523_stage2b_payment_event_mirror_contract_hardening_v1
+- 20260923163526_stage2b_work_projection_resilience_v1
 
 ## 1. Goal
 
@@ -251,7 +255,52 @@ Before applying:
 - current sequence ordering remains clean;
 - exact candidate CI is green.
 
-## 12. Production postflight
+## 12. Production release and postflight
+
+D3 was applied to Production only after all six CI gates passed on the implementation candidate.
+
+Production postflight:
+
+~~~text
+threads                              8
+messages                             30
+user messages                        15
+participants                         8
+missing owner participants           0
+missing user authors                 0
+sequence counter mismatches          0
+
+Domain Events table                  present
+Work Items table                     present
+Domain Events rows                   0
+Work Items rows                      12
+Work Items kind=attention            12
+Work Items status=open               12
+
+payment review_required              12
+payment projected open               12
+payment projection missing           0
+
+unhealthy connections                0
+open connection issues               0
+
+projection triggers                  4
+payment event taxonomy aligned       true
+
+authenticated Work Item SELECT        true
+authenticated Work Item INSERT        false
+authenticated Domain Event SELECT     false
+~~~
+
+The conversation counters increased from the preflight baseline (7/28/14) to 8/30/15 during the release window, with zero ordering/participant/authorship inconsistency. This is treated as normal concurrent product use, not migration-created chat data.
+
+Advisor postflight:
+- no new D3 foreign-key indexing gap;
+- new D3 indexes report unused-index INFO before meaningful Production traffic;
+- Domain Events RLS/no-policy INFO is intentional because authenticated users have no table access;
+- create/complete/reopen task RPCs retain intentional SECURITY DEFINER warnings as guarded write gateways.
+
+## 12A. Verification checklist
 
 Verify:
 - Domain Event/Work Item tables exist;
