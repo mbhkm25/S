@@ -26,7 +26,7 @@ const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNati
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
-const isFinancialWorkspaceRoute = /\/(financial(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?|commercial(?:\/actions)?|account-center|sanad-ai)\/?$/.test(window.location.pathname);
+const isFinancialWorkspaceRoute = /\/(financial(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?|commercial(?:\/actions)?|account-center|sanad-ai|today|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(window.location.pathname);
 const isLegacyApplicationRoute = !isPublicInteractiveReport && !isFinancialWorkspaceRoute;
 
 if (isAndroidNative && !import.meta.env.DEV) {
