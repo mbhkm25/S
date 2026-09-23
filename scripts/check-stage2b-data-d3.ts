@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const core = readFileSync(
+  'supabase/migrations/20260923193000_stage2b_domain_events_work_items_v1.sql',
+  'utf8',
+);
+const adapters = readFileSync(
+  'supabase/migrations/20260923193500_stage2b_work_projection_adapters_v1.sql',
+  'utf8',
+);
+
+for (const token of [
+  'public.sanad_domain_events',
+  'public.sanad_work_items',
+  'private.emit_sanad_domain_event_v1',
+  'private.upsert_sanad_work_item_v1',
+  'public.list_my_sanad_work_items_v1',
+  'public.get_my_sanad_today_v1',
+  'public.get_my_sanad_work_item_v1',
+  'public.create_my_sanad_task_v1',
+  'public.complete_my_sanad_task_v1',
+  'public.reopen_my_sanad_task_v1',
+  'private.broadcast_sanad_work_item_v1',
+]) {
+  assert.ok(core.includes(token), `missing D3 core contract: ${token}`);
+}
+
+assert.match(core, /item_kind in \('task','approval','attention','follow_up','connection_issue'\)/i);
+assert.match(core, /status in \('open','in_progress','done','dismissed','cancelled'\)/i);
+assert.match(core, /unique \(recipient_user_id,dedupe_key\)/i);
+assert.match(core, /recipient_user_id=\(select auth\.uid\(\)\)/i);
+assert.match(core, /realtime\.send\(/i);
+assert.match(core, /'user:'\|\|v_row\.recipient_user_id::text/i);
+assert.match(core, /revoke all on table public\.sanad_domain_events from anon,authenticated/i);
+assert.match(core, /grant select on table public\.sanad_work_items to authenticated/i);
+assert.match(core, /source-domain state remains canonical/i);
+
+for (const token of [
+  'private.project_sanad_agent_action_event_to_work_v1',
+  'private.project_payment_inbox_event_to_work_v1',
+  'private.project_sanad_connection_to_work_v1',
+]) {
+  assert.ok(adapters.includes(token), `missing D3 projection adapter: ${token}`);
+}
+
+assert.match(adapters, /after insert on public\.sanad_agent_action_events/i);
+assert.match(adapters, /after insert on public\.business_payment_inbox_events/i);
+assert.match(adapters, /after insert or update of status,health_status,last_error_code,last_error_at/i);
+assert.match(adapters, /'agent_action_review:'/i);
+assert.match(adapters, /'payment_inbox:'/i);
+assert.match(adapters, /'connection_issue:'/i);
+assert.match(adapters, /where i\.status in \('new','released','claimed','review_required'\)/i);
+assert.match(adapters, /Backfill only currently unhealthy connection states/i);
+
+console.log('SANAD Stage 2B Data Train D3 domain events/work/Today contract checks passed.');
