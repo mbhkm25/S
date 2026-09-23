@@ -10,6 +10,7 @@ import { navigateProduct, productHref, shouldHandleProductLinkClick } from '../.
 type Props = {
   userId: string | null;
   onOpenNavigation?: () => void;
+  utilityOnly?: boolean;
 };
 
 type HeaderProfile = {
@@ -28,7 +29,7 @@ function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
   navigateProduct('sanad-ai');
 }
 
-export default function ProductAppHeader({ userId, onOpenNavigation }: Props) {
+export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly = false }: Props) {
   const [profile, setProfile] = useState<HeaderProfile | null>(null);
   const [loading, setLoading] = useState(Boolean(userId));
   const base = basePath();
@@ -61,22 +62,26 @@ export default function ProductAppHeader({ userId, onOpenNavigation }: Props) {
   return (
     <header
       id="product_app_header"
-      className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4"
+      className={`sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4 ${utilityOnly ? 'pb-1.5' : 'pb-2'}`}
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
-        <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
-          <div className="flex flex-col items-start">
-            <img
-              src={`${import.meta.env.BASE_URL}logo.png`}
-              alt="سند"
-              className="h-9 w-auto object-contain sm:h-10"
-            />
-            <span className="-mt-1 self-center font-mono text-[11px] font-medium tracking-wider text-slate-400" dir="ltr">
-              V{SANAD_APP_VERSION}
-            </span>
-          </div>
-        </a>
+        {utilityOnly && userId ? (
+          <span className="min-w-0 flex-1" aria-hidden="true" />
+        ) : (
+          <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
+            <div className="flex flex-col items-start">
+              <img
+                src={`${import.meta.env.BASE_URL}logo.png`}
+                alt="سند"
+                className="h-9 w-auto object-contain sm:h-10"
+              />
+              <span className="-mt-1 self-center font-mono text-[11px] font-medium tracking-wider text-slate-400" dir="ltr">
+                V{SANAD_APP_VERSION}
+              </span>
+            </div>
+          </a>
+        )}
 
         {userId ? (
           <div className="flex items-center gap-1.5 sm:gap-2">
