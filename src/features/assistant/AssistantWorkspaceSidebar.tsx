@@ -5,7 +5,9 @@ import {
   Brain,
   BriefcaseBusiness,
   Check,
+  ChevronDown,
   ChevronLeft,
+  Layers3,
   MessageSquare,
   MessageSquarePlus,
   RefreshCcw,
@@ -81,6 +83,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
   const [tab, setTab] = useState<SidebarTab>('chats');
   const [performanceSummary, setPerformanceSummary] = useState<SanadAgentPerformanceSummary | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [secondaryNavOpen, setSecondaryNavOpen] = useState(false);
 
   const loadPerformance = async () => {
     setPerformanceLoading(true);
@@ -387,12 +390,26 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       ) : null}
 
-      <div className="max-h-[38vh] shrink-0 overflow-y-auto border-t border-slate-100 px-2 py-2 [scrollbar-gutter:stable]">
-        <SanadUnifiedNavLinks
-          dense
-          sections={['work', 'capabilities', 'utility']}
-          onNavigate={props.onCloseMobile}
-        />
+      <div className="shrink-0 border-t border-slate-100 px-2 py-2">
+        <button
+          type="button"
+          onClick={() => setSecondaryNavOpen((value) => !value)}
+          aria-expanded={secondaryNavOpen}
+          className="sanad-focus-ring flex min-h-9 w-full items-center gap-2 rounded-[var(--sanad-radius-md)] px-2.5 text-[12px] font-medium text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
+        >
+          <Layers3 className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 text-right">العمل والقدرات</span>
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${secondaryNavOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {secondaryNavOpen ? (
+          <div className="mt-1 max-h-[34vh] overflow-y-auto overscroll-contain pb-1 [scrollbar-gutter:stable]">
+            <SanadUnifiedNavLinks
+              dense
+              sections={['work', 'capabilities', 'utility']}
+              onNavigate={props.onCloseMobile}
+            />
+          </div>
+        ) : null}
       </div>
     </Shell>
   );
