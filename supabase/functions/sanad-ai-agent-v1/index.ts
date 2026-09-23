@@ -333,7 +333,6 @@ async function maybeStoreExplicitMemory(
 async function maybeRefreshThreadSummary(
   adminClient: SupabaseClient,
   cloud: AgentCloudContext,
-  authUserId: string,
   latestUserMessage: string,
   latestAssistantMessage: string,
 ) {
@@ -394,7 +393,7 @@ async function persistAgentTurn(
     p_attachment_ids: attachmentIds,
   });
   await maybeStoreExplicitMemory(adminClient, authUserId, cloud, message);
-  await maybeRefreshThreadSummary(adminClient, cloud, authUserId, message, responseText);
+  await maybeRefreshThreadSummary(adminClient, cloud, message, responseText);
 }
 
 function safeSearchTerm(value: unknown, max = 120) {
