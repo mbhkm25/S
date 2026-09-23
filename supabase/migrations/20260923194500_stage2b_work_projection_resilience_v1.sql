@@ -34,7 +34,7 @@ begin
   perform private.emit_sanad_domain_event_v1(
     'work.task.completed','sanad_work_item',v_row.id::text,v_uid,v_row.business_id,v_uid,
     'sanad_work_item',v_row.id::text,'{}'::jsonb,'private',
-    'work_task_completed:'||v_row.id::text||':'||md5(v_row.updated_at::text),now()
+    'work_task_completed:'||v_row.id::text||':'||gen_random_uuid()::text,now()
   );
 
   return jsonb_build_object('item',to_jsonb(v_row),'contract_version',1);
@@ -71,7 +71,7 @@ begin
     raise exception 'manual_task_not_reopenable' using errcode='22023';
   end if;
 
-  v_event_key := 'work_task_reopened:'||v_row.id::text||':'||md5(v_row.updated_at::text);
+  v_event_key := 'work_task_reopened:'||v_row.id::text||':'||gen_random_uuid()::text;
   perform private.emit_sanad_domain_event_v1(
     'work.task.reopened','sanad_work_item',v_row.id::text,v_uid,v_row.business_id,v_uid,
     'sanad_work_item',v_row.id::text,'{}'::jsonb,'private',v_event_key,now()
