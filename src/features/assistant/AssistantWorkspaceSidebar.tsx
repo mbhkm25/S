@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import SanadIntelligenceMark from './SanadIntelligenceMark';
 import SanadAssistantStatus from './SanadAssistantStatus';
+import SanadUnifiedNavLinks from '../../components/navigation/SanadUnifiedNavLinks';
 import type { SanadAssistantPresentationState } from './sanadAssistantPresentation';
 import { SettingRow, SettingSwitch, SettingsSection } from '../../components/settings/SettingsControls';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
@@ -107,7 +108,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               <SanadIntelligenceMark state={props.assistantState} size={28} />
             </span>
             <div className="min-w-0">
-              <strong className="block truncate text-sm font-semibold tracking-[-0.01em] text-slate-950">مساعد سند</strong>
+              <strong className="block truncate text-sm font-semibold tracking-[-0.01em] text-slate-950">سند</strong>
               <SanadAssistantStatus state={props.assistantState} className="mt-0.5" announce />
             </div>
           </div>
@@ -130,6 +131,10 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             <span>بدون سياق نشاط</span>
           )}
         </div>
+      </div>
+
+      <div className="shrink-0 border-b border-slate-100 px-2 py-2">
+        <SanadUnifiedNavLinks dense onNavigate={props.onCloseMobile} />
       </div>
 
       <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
