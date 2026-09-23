@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const core = readFileSync(
-  'supabase/migrations/20260923193000_stage2b_domain_events_work_items_v1.sql',
+  'supabase/migrations/20260923163515_stage2b_domain_events_work_items_v1.sql',
   'utf8',
 );
 const adapters = readFileSync(
-  'supabase/migrations/20260923193500_stage2b_work_projection_adapters_v1.sql',
+  'supabase/migrations/20260923163519_stage2b_work_projection_adapters_v1.sql',
   'utf8',
 );
 const paymentMirrorHardening = readFileSync(
-  'supabase/migrations/20260923194000_stage2b_payment_event_mirror_contract_hardening_v1.sql',
+  'supabase/migrations/20260923163523_stage2b_payment_event_mirror_contract_hardening_v1.sql',
   'utf8',
 );
 const resilience = readFileSync(
-  'supabase/migrations/20260923194500_stage2b_work_projection_resilience_v1.sql',
+  'supabase/migrations/20260923163526_stage2b_work_projection_resilience_v1.sql',
   'utf8',
 );
 
