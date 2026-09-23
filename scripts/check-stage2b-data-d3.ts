@@ -68,7 +68,7 @@ assert.match(resilience, /sanad_work_item_realtime_broadcast_failed/i);
 assert.match(resilience, /sanad_agent_action_work_projection_failed/i);
 assert.match(resilience, /payment_inbox_work_projection_failed/i);
 assert.match(resilience, /sanad_connection_work_projection_failed/i);
-assert.match(resilience, /work_task_completed:[^\n]*md5\(v_row\.updated_at::text\)/i);
-assert.match(resilience, /work_task_reopened:[^\n]*md5\(v_row\.updated_at::text\)/i);
+assert.match(resilience, /work_task_completed:[^\n]*gen_random_uuid\(\)/i);
+assert.match(resilience, /work_task_reopened:[^\n]*gen_random_uuid\(\)/i);
 
 console.log('SANAD Stage 2B Data Train D3 domain events/work/Today contract checks passed.');
