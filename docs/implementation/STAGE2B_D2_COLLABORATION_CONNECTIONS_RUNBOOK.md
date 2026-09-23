@@ -1,7 +1,10 @@
 # Stage 2B Data Train D2 — Collaboration + Connections Release Runbook
 
-Status: implementation candidate
-Production mutation: not yet applied at authoring time
+Status: released to Production database; repository reconciliation pending PR merge
+Production migrations:
+- 20260923160631_stage2b_shared_conversation_contracts_v2
+- 20260923160635_stage2b_connections_registry_v1
+- 20260923160639_stage2b_shared_conversation_rls_hardening_v2
 
 ## Scope
 
@@ -141,6 +144,35 @@ Relevant Supabase remediation references:
 - https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
 - https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
 - https://supabase.com/docs/guides/realtime/authorization
+
+## Production validation
+
+Applied to Production `sanad_verify_v3` only after all candidate CI gates passed.
+
+Production postflight:
+
+~~~text
+threads                             7
+messages                            28
+user messages                       14
+participants                        7
+missing owner participants          0
+missing user authors                0
+sequence counter mismatches         0
+
+thread participant read policy      present
+message participant read policy     present
+Realtime participant read policy    present
+Realtime member write policy        present
+
+accounting connections              1
+registry accounting connections     1
+read-only write_back=true           0
+authenticated direct registry read  false
+authenticated direct participant read false
+~~~
+
+The existing accounting connection was backfilled into the generic registry without changing its specialized source record.
 
 ## Production preflight
 
