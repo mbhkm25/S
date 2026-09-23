@@ -2,15 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const collaboration = readFileSync(
-  'supabase/migrations/20260923190000_stage2b_shared_conversation_contracts_v2.sql',
+  'supabase/migrations/20260923160631_stage2b_shared_conversation_contracts_v2.sql',
   'utf8',
 );
 const connections = readFileSync(
-  'supabase/migrations/20260923190500_stage2b_connections_registry_v1.sql',
+  'supabase/migrations/20260923160635_stage2b_connections_registry_v1.sql',
   'utf8',
 );
 const rlsHardening = readFileSync(
-  'supabase/migrations/20260923191000_stage2b_shared_conversation_rls_hardening_v2.sql',
+  'supabase/migrations/20260923160639_stage2b_shared_conversation_rls_hardening_v2.sql',
   'utf8',
 );
 
