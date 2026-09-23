@@ -25,6 +25,7 @@ import {
   getSanadAgentPreferences,
   getSanadAgentThread,
   listSanadAgentThreads,
+  markSanadAgentThreadRead,
   updateSanadAgentMessageFeedback,
   updateSanadAgentPreferences,
   type SanadAgentMemory,
@@ -335,6 +336,7 @@ export default function SanadAgentWorkspace() {
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const assistantSuccessTimeoutRef = useRef<number | null>(null);
+  const realtimeReloadTimeoutRef = useRef<number | null>(null);
 
   const clearAssistantSuccessTimeout = useCallback(() => {
     if (assistantSuccessTimeoutRef.current !== null) {
@@ -377,7 +379,13 @@ export default function SanadAgentWorkspace() {
     }
   }, [clearAssistantSuccessTimeout, markAssistantSuccess]);
 
-  useEffect(() => () => clearAssistantSuccessTimeout(), [clearAssistantSuccessTimeout]);
+  useEffect(() => () => {
+    clearAssistantSuccessTimeout();
+    if (realtimeReloadTimeoutRef.current !== null) {
+      window.clearTimeout(realtimeReloadTimeoutRef.current);
+      realtimeReloadTimeoutRef.current = null;
+    }
+  }, [clearAssistantSuccessTimeout]);
 
   useEffect(() => {
     const timeline = timelineRef.current;
@@ -470,6 +478,15 @@ export default function SanadAgentWorkspace() {
         setMemories(context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
+        const lastSequence = detail.messages.at(-1)?.sequence_no ?? 0;
+        void markSanadAgentThreadRead(selectedThreadId, lastSequence).then(() => {
+          if (!alive) return;
+          setThreads((current) => current.map((thread) =>
+            thread.id === selectedThreadId
+              ? { ...thread, unread_count: 0, last_read_sequence_no: lastSequence }
+              : thread
+          ));
+        }).catch(() => null);
         void recordSanadAgentClientMetric({
           scope: 'thread_load',
           threadId: selectedThreadId,
@@ -492,6 +509,60 @@ export default function SanadAgentWorkspace() {
       }
     })();
     return () => { alive = false; };
+  }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!selectedThreadId) return;
+
+    let alive = true;
+    const channel = supabase
+      .channel(`sanad-thread:${selectedThreadId}`, { config: { private: true } })
+      .on('broadcast', { event: 'message.changed' }, () => {
+        if (realtimeReloadTimeoutRef.current !== null) {
+          window.clearTimeout(realtimeReloadTimeoutRef.current);
+        }
+        realtimeReloadTimeoutRef.current = window.setTimeout(() => {
+          realtimeReloadTimeoutRef.current = null;
+          void (async () => {
+            try {
+              const [detail, attachments] = await Promise.all([
+                getSanadAgentThread(selectedThreadId),
+                listSanadAgentAttachments(selectedThreadId),
+              ]);
+              if (!alive) return;
+              setMessages(storedMessagesToWorkspace(detail.messages, attachments));
+              setPendingAttachments(unsentAttachments(detail.messages, attachments));
+              const lastSequence = detail.messages.at(-1)?.sequence_no ?? 0;
+              await markSanadAgentThreadRead(selectedThreadId, lastSequence).catch(() => null);
+              if (!alive) return;
+              setThreads((current) => current.map((thread) =>
+                thread.id === selectedThreadId
+                  ? {
+                      ...thread,
+                      title: detail.thread.title,
+                      message_count: detail.thread.message_count,
+                      last_message_at: detail.thread.last_message_at,
+                      unread_count: 0,
+                      last_read_sequence_no: lastSequence,
+                    }
+                  : thread
+              ));
+            } catch {
+              // Realtime is an invalidation hint only. The next explicit load remains canonical.
+            }
+          })();
+        }, 90);
+      })
+      .subscribe();
+
+    return () => {
+      alive = false;
+      if (realtimeReloadTimeoutRef.current !== null) {
+        window.clearTimeout(realtimeReloadTimeoutRef.current);
+        realtimeReloadTimeoutRef.current = null;
+      }
+      void supabase.removeChannel(channel);
+    };
   }, [selectedThreadId]);
 
   const createThreadForBusiness = async (nextBusinessId: string | null) => {
@@ -546,6 +617,11 @@ export default function SanadAgentWorkspace() {
 
   const archiveThread = async (threadId: string) => {
     if (sending) return;
+    const target = threads.find((thread) => thread.id === threadId);
+    if (target?.my_role && target.my_role !== 'owner') {
+      setWorkspaceError('أرشفة المحادثة متاحة لمالك المحادثة فقط.');
+      return;
+    }
     try {
       await archiveSanadAgentThread(threadId);
       const result = await refreshThreads(threadId === selectedThreadId ? null : selectedThreadId);
@@ -623,6 +699,11 @@ export default function SanadAgentWorkspace() {
   };
 
   async function sendPrompt(rawPrompt?: string) {
+    const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+    if (selectedThread?.my_role === 'viewer') {
+      setWorkspaceError('هذه المحادثة مشتركة للقراءة فقط.');
+      return;
+    }
     const readyAttachments = pendingAttachments.filter((attachment) => attachment.status === 'ready');
     const requestedPrompt = (rawPrompt ?? draft).trim();
     const prompt = requestedPrompt || (readyAttachments.length
@@ -775,6 +856,8 @@ export default function SanadAgentWorkspace() {
   const assistantPresentationState = previewAssistantState || mappedAssistantState;
 
   const empty = messages.length === 0;
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+  const threadReadOnly = selectedThread?.my_role === 'viewer';
 
   return (
     <section
@@ -941,7 +1024,7 @@ export default function SanadAgentWorkspace() {
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
                 businessId={businessId || null}
-                disabled={sending}
+                disabled={sending || threadReadOnly}
                 attachments={pendingAttachments}
                 onChange={setPendingAttachments}
                 onRequestThread={ensureThread}
@@ -957,7 +1040,7 @@ export default function SanadAgentWorkspace() {
                   syncComposerTextareaHeight(event.currentTarget);
                 }}
                 onKeyDown={handleKeyDown}
-                disabled={sending}
+                disabled={sending || threadReadOnly}
                 rows={1}
                 placeholder="اسأل سند…"
                 className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
@@ -965,7 +1048,7 @@ export default function SanadAgentWorkspace() {
 
               <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
               <SanadVoiceDictationButton
-                disabled={sending}
+                disabled={sending || threadReadOnly}
                 onStateChange={handleVoiceStateChange}
                 onTranscript={(text) => {
                   setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
@@ -981,6 +1064,7 @@ export default function SanadAgentWorkspace() {
                 type="submit"
                 disabled={
                   sending
+                  || threadReadOnly
                   || pendingAttachments.some((attachment) => attachment.status !== 'ready')
                   || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
                 }
