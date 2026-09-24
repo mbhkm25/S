@@ -73,51 +73,59 @@ export default function FinancialWorkspaceShell() {
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
       <div
         data-workspace-mode={assistant ? 'viewport' : 'document'}
-        data-product-area={assistant ? 'assistant' : personal ? 'financial' : commercial ? 'business' : 'account'}
+        data-product-area={assistant ? 'assistant' : personal ? 'financial' : commercial || isBusinessCapabilityRoute ? 'business' : 'account'}
+        data-sanad-persistent-shell="true"
         className={assistant
-          ? 'sanad-canvas flex h-dvh min-h-0 flex-col overflow-hidden'
-          : 'sanad-canvas flex min-h-screen flex-col'}
+          ? 'sanad-canvas relative flex h-dvh min-h-0 overflow-hidden'
+          : 'sanad-canvas relative flex min-h-screen items-stretch'}
+        dir="rtl"
       >
-        <ProductAppHeader
-          userId={userId}
-          utilityOnly
-          onOpenNavigation={assistant ? undefined : () => setNavigationOpen(true)}
+        <SanadUnifiedSidebar
+          mobileOpen={navigationOpen}
+          onCloseMobile={() => setNavigationOpen(false)}
+          viewportMode={assistant}
         />
-        {assistant ? (
-          <div
-            data-workspace-body="viewport"
-            className="relative min-h-0 flex-1 overflow-hidden pt-1.5"
-          >
-            <Suspense fallback={<RouteFallback />}>
-              {content}
-            </Suspense>
-          </div>
-        ) : (
-          <div data-unified-shell-body="true" className="relative flex min-h-0 flex-1 items-stretch">
-            <SanadUnifiedSidebar
-              mobileOpen={navigationOpen}
-              onCloseMobile={() => setNavigationOpen(false)}
-            />
-            <div className="min-w-0 flex-1">
+        <div
+          data-sanad-main-column="true"
+          className={assistant
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+            : 'flex min-h-screen min-w-0 flex-1 flex-col'}
+        >
+          <ProductAppHeader
+            userId={userId}
+            utilityOnly
+            onOpenNavigation={() => setNavigationOpen(true)}
+          />
+          {assistant ? (
+            <div
+              data-workspace-body="viewport"
+              className="relative min-h-0 flex-1 overflow-hidden pt-1.5"
+            >
               <Suspense fallback={<RouteFallback />}>
                 {content}
               </Suspense>
             </div>
-          </div>
-        )}
-        {!isActionRoute && (personal || commercial) ? (
-          <button
-            type="button"
-            onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}
-            onPointerEnter={() => void loadFinancialActionRoute()}
-            onFocus={() => void loadFinancialActionRoute()}
-            className="sanad-focus-ring fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--sanad-surface-inverse)] px-5 py-3 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-3)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
-            aria-label={commercial ? 'فتح إجراءات سند التجاري' : 'فتح إجراءات سند المالي'}
-          >
-            <Plus className="h-4 w-4" />
-            {commercial ? 'إجراء تجاري جديد' : 'إجراء مالي جديد'}
-          </button>
-        ) : null}
+          ) : (
+            <main data-unified-shell-body="true" className="relative min-w-0 flex-1">
+              <Suspense fallback={<RouteFallback />}>
+                {content}
+              </Suspense>
+            </main>
+          )}
+          {!isActionRoute && (personal || commercial) ? (
+            <button
+              type="button"
+              onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}
+              onPointerEnter={() => void loadFinancialActionRoute()}
+              onFocus={() => void loadFinancialActionRoute()}
+              className="sanad-focus-ring fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--sanad-surface-inverse)] px-5 py-3 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-3)] transition active:scale-[0.98] lg:bottom-6 lg:left-1/2"
+              aria-label={commercial ? 'فتح إجراءات سند التجاري' : 'فتح إجراءات سند المالي'}
+            >
+              <Plus className="h-4 w-4" />
+              {commercial ? 'إجراء تجاري جديد' : 'إجراء مالي جديد'}
+            </button>
+          ) : null}
+        </div>
       </div>
     </NotificationProvider>
   );
