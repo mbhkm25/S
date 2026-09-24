@@ -64,6 +64,6 @@ assert.match(action, /describeSanadActionStatus/);
 assert.match(action, /!verified/, 'Review buttons must be disabled until the authoritative action read succeeds.');
 assert.match(blocks, /formatSanadSourceAmount/);
 assert.match(blocks, /formatSanadSourceDate/);
-assert.match(today, /<WorkItemRow key=\{item.id\} item=\{item\}/);
+assert.match(today, /<div key=\{item.id\}><WorkItemRow item=\{item\}/);
 assert.match(today, /describeSanadWorkItem/);
 console.log('R4 truthful action states, exact source formatting and identifiable Today contract PASS');
