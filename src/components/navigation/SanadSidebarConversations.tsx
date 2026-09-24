@@ -193,8 +193,15 @@ export default function SanadSidebarConversations({ userId, compact = false, onN
                     title={thread.title}
                   >
                     <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-[var(--sanad-text-subtle)]" aria-hidden="true" />
-                    <span className={`min-w-0 flex-1 truncate ${active ? 'font-semibold text-[var(--sanad-text-strong)]' : 'text-[var(--sanad-text-muted)]'}`}>
-                      {thread.title}
+                    <span className="min-w-0 flex-1 py-1.5">
+                      <span className={`block truncate ${active ? 'font-semibold text-[var(--sanad-text-strong)]' : 'text-[var(--sanad-text-muted)]'}`}>
+                        {thread.title}
+                      </span>
+                      {(thread.my_role === 'viewer' || thread.my_role === 'member') ? (
+                        <span className="block truncate text-[10px] text-[var(--sanad-text-subtle)]">
+                          {thread.my_role === 'viewer' ? 'قراءة فقط' : 'مشتركة'} · {thread.message_count} رسالة
+                        </span>
+                      ) : null}
                     </span>
                     {thread.unread_count ? (
                       <span className="inline-flex min-w-5 shrink-0 justify-center rounded-full bg-[var(--sanad-interactive-soft)] px-1 py-0.5 text-[10px] font-semibold text-[var(--sanad-interactive)]">
