@@ -5,34 +5,41 @@
   color-scheme: light;
 
   /* Brand spectrum — identity only, never status. */
-  --sanad-brand-lime: #b9e769;
-  --sanad-brand-green: #16835f;
-  --sanad-brand-mint: #63d5b5;
-  --sanad-brand-aqua: #4bc9cf;
-  --sanad-brand-ink: #0b1720;
+  --sanad-brand-lime: #c8f18a;
+  --sanad-brand-green: #29bd86;
+  --sanad-brand-mint: #3fe3a0;
+  --sanad-brand-aqua: #79d9d5;
+  --sanad-brand-ink: #292e32;
 
   /* Semantic canvas / surfaces. */
-  --sanad-bg-canvas: #f7f9f9;
-  --sanad-bg-subtle: #f1f5f4;
-  --sanad-surface-1: #ffffff;
-  --sanad-surface-2: #f8faf9;
-  --sanad-surface-3: #eef3f2;
-  --sanad-surface-inverse: #0b1720;
+  --sanad-bg-canvas: #fbfaf6;
+  --sanad-bg-subtle: #f5f4f0;
+  --sanad-surface-1: #fffefa;
+  --sanad-surface-2: #f5f4ef;
+  --sanad-surface-3: #eaece8;
+  --sanad-surface-inverse: #292e32;
 
   /* Semantic text / strokes. */
-  --sanad-text-strong: #0b1720;
-  --sanad-text: #263740;
-  --sanad-text-muted: #607078;
-  --sanad-text-subtle: #8b989e;
-  --sanad-border-subtle: #e4eaea;
-  --sanad-border: #d6dfe0;
-  --sanad-border-strong: #b9c6c9;
+  --sanad-text-strong: #292f33;
+  --sanad-text: #3b4549;
+  --sanad-text-muted: #626b6e;
+  --sanad-text-subtle: #777f81;
+  --sanad-border-subtle: #e8e8e1;
+  --sanad-border: #d7dbd5;
+  --sanad-border-strong: #b9c6c0;
+
+  /* R2 cream-neutral interface signature; mint remains a restrained accent. */
+  --sanad-sidebar-bg: linear-gradient(165deg, #fffefa 0%, #f8f7f2 65%, #f1f4f0 100%);
+  --sanad-sidebar-footer-bg: #f8f8f3;
+  --sanad-nav-action-bg: #f8fbf6;
+  --sanad-nav-active-bg: #e9f2eb;
+  --sanad-nav-hover-bg: #eff1ec;
 
   /* Interactive roles. */
-  --sanad-interactive: #0f766e;
-  --sanad-interactive-hover: #0b665f;
-  --sanad-interactive-soft: #e8f7f3;
-  --sanad-focus: #0891b2;
+  --sanad-interactive: #237b67;
+  --sanad-interactive-hover: #176b5b;
+  --sanad-interactive-soft: #eaf8ef;
+  --sanad-focus: #158578;
   --sanad-selection: rgba(75, 201, 207, 0.18);
 
   /* Status roles — deliberately separate from brand green. */
@@ -111,6 +118,11 @@
   --sanad-border-subtle: #203138;
   --sanad-border: #2a4048;
   --sanad-border-strong: #3d5962;
+  --sanad-sidebar-bg: #111d23;
+  --sanad-sidebar-footer-bg: #142229;
+  --sanad-nav-action-bg: #192d2a;
+  --sanad-nav-active-bg: #24413a;
+  --sanad-nav-hover-bg: #1c332d;
   --sanad-interactive-soft: #10322e;
   --sanad-selection: rgba(75, 201, 207, 0.24);
 }
@@ -261,7 +273,7 @@
 
   .sanad-sidebar-surface {
     border-color: var(--sanad-border-subtle);
-    background: var(--sanad-surface-2);
+    background: var(--sanad-sidebar-bg);
   }
 
   .sanad-section-signature-assistant { background-image: var(--sanad-signature-assistant); }
