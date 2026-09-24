@@ -9,7 +9,7 @@
 ## 1. Verified vs unverified checkpoint
 
 - **GitHub:** R2.V2 PR #373 squash-merged; current main verified at `356fcaa0d1aad181a6375125230b7222018d1618`; earlier exact candidate `d93c20452495c3a452c4323a34ccb99a4accc8f4` passed four CI suites, followed by accepted desktop/preview interaction tests.
-- **Runtime evidence:** user reports Production deployment and supplies screens of SANAD in Windows/PWA and Android mirrored window. These demonstrate the new global sidebar/history design is running. **Live Production deploy ID and /version.json SHA have not been independently retrieved in this planning pass**; do not claim a specific deployed SHA until postflight evidence is captured.
+- **Runtime evidence:** user reports Production deployment and supplies screens of SANAD in Windows/PWA and Android mirrored window. These demonstrate the new global sidebar/history design is running. **GitHub deploy logs now confirm** workflow #81 / run `36009231310` successfully published `356fcaa0d1aad181a6375125230b7222018d1618` and its HTTP app/APK-path postflight passed. Public `/version.json` response and signed Android updater metadata are still independently unverified; do not claim a specific deployed SHA until postflight evidence is captured.
 - **Confirmed UX defect:** `AssistantWorkspaceSidebar` is still a separate overlay for `memory/settings`. Conversation history was moved into the global sidebar, but memory/preferences were not. This is the reason a second pane/backdrop still appears.
 - **Header distinction:** unified ProductAppHeader is already unmounted from target routes. Source retains a 44px `data-sanad-mobile-menu-slot` below desktop breakpoint: eligible for elimination/replacement. The dark bar with X/minimize/extension controls in Windows/PWA is **native host title chrome**; Android OS status/navigation bars are system chrome. They cannot be eliminated by merely deleting React header CSS.
 - **Product rule:** one sidebar across /sanad-ai, /today, /financial, /commercial and /business/manage. Business/account/assistant remain capabilities, not four products.
@@ -17,7 +17,7 @@
 ## 2. Immediate trains and acceptance gates
 
 ### Gate P0 — Release truth / source alignment (short audit)
-- Capture deployed Web/PWA `version.json`, deploy workflow run, SHA and signed Android updater state **separately** (Android build CI PASS ≠ published APK).
+- GitHub R2 deployment truth captured: workflow #81 / `36009231310`, deployed SHA `356fcaa0d1aad181a6375125230b7222018d1618`, deploy and HTTP postflight PASS. Still capture direct public Web/PWA `/version.json` bytes and verify signed Android updater metadata **separately** (APK-path HTTP HEAD ≠ signed Android publish).
 - Verify critical Production threads, read-only Edaa, Today, profile/notifications and mobile safe-area.
 - Reconcile documentation; preserve actual rollback reference before new release.
 
