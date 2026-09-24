@@ -26,7 +26,6 @@ type NavItem = {
 type NavSection = 'primary' | 'work' | 'capabilities' | 'utility';
 
 type Props = {
-  dense?: boolean;
   onNavigate?: () => void;
   sections?: NavSection[];
 };
@@ -45,6 +44,9 @@ const WORK: NavItem[] = [
 const CAPABILITIES: NavItem[] = [
   { id: 'financial', label: 'المال الشخصي', path: 'financial', icon: WalletCards },
   { id: 'business', label: 'الأعمال', path: 'commercial', icon: BriefcaseBusiness },
+];
+
+const CONNECTIONS: NavItem[] = [
   { id: 'connections', label: 'الاتصالات', path: 'connections', icon: Plug },
 ];
 
@@ -52,65 +54,52 @@ const UTILITY: NavItem[] = [
   { id: 'settings', label: 'الحساب والإعدادات', path: 'account-center', icon: Settings2 },
 ];
 
-function normalizedPathname(): string {
-  return window.location.pathname.replace(/\/+$/, '') || '/';
-}
-
 function isActive(path: string): boolean {
-  const pathname = normalizedPathname();
+  const current = window.location.pathname.replace(/\/+$/, '') || '/';
   const target = productHref(path).replace(/\/+$/, '');
-  if (path === 'financial') return pathname === target || pathname.startsWith(`${target}/`);
-  if (path === 'commercial') return pathname === target || pathname.startsWith(`${target}/`);
-  if (path === 'work/tasks') return pathname === target;
-  if (path === 'work/approvals') return pathname === target;
-  if (path === 'work/automations') return pathname === target;
-  return pathname === target;
+  if (path === 'commercial') {
+    return current === target
+      || current.startsWith(`${target}/`)
+      || /\/business\/manage(?:\/|$)/.test(current);
+  }
+  if (path === 'financial') return current === target || current.startsWith(`${target}/`);
+  return current === target;
 }
 
-function handleClick(
-  event: MouseEvent<HTMLAnchorElement>,
-  path: string,
-  onNavigate?: () => void,
-): void {
+function handleClick(event: MouseEvent<HTMLAnchorElement>, path: string, onNavigate?: () => void): void {
   if (!shouldHandleProductLinkClick(event)) return;
   event.preventDefault();
   navigateProduct(path);
   onNavigate?.();
 }
 
-function Group({
-  title,
-  items,
-  dense,
-  onNavigate,
-}: {
+function Group({ title, items, onNavigate }: {
   title?: string;
   items: NavItem[];
-  dense: boolean;
   onNavigate?: () => void;
 }) {
   return (
-    <div className={dense ? 'space-y-0.5' : 'space-y-1'}>
+    <div className="space-y-0.5">
       {title ? (
-        <p className="px-2 pb-1 pt-2 text-[10px] font-medium text-[var(--sanad-text-subtle)]">
+        <p className="px-3 pb-1 pt-3 text-[11px] font-medium leading-5 tracking-normal text-[var(--sanad-text-subtle)]">
           {title}
         </p>
       ) : null}
-      {items.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(item.path);
+      {items.map(({ id, path, label, icon: Icon }) => {
+        const active = isActive(path);
         return (
           <a
-            key={item.id}
-            href={productHref(item.path)}
-            onClick={(event) => handleClick(event, item.path, onNavigate)}
+            key={id}
+            href={productHref(path)}
+            onClick={(event) => handleClick(event, path, onNavigate)}
             aria-current={active ? 'page' : undefined}
-            className={`sanad-focus-ring flex min-h-9 items-center gap-2.5 rounded-[var(--sanad-radius-md)] px-2.5 text-[12px] transition ${active
-              ? 'bg-[var(--sanad-surface-inverse)] font-medium text-white'
-              : 'font-medium text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]'}`}
+            title={label}
+            className={`sanad-focus-ring flex min-h-10 min-w-0 items-center gap-3 rounded-[var(--sanad-radius-md)] border-r-2 px-2.5 text-[13px] leading-5 transition-colors ${active
+              ? 'border-[var(--sanad-interactive)] bg-[var(--sanad-surface-2)] font-semibold text-[var(--sanad-text-strong)]'
+              : 'border-transparent font-medium text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]'}`}
           >
-            <Icon className="h-4 w-4 shrink-0" strokeWidth={active ? 2 : 1.8} />
-            <span className="truncate">{item.label}</span>
+            <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={active ? 2 : 1.75} aria-hidden="true" />
+            <span className="min-w-0 truncate">{label}</span>
           </a>
         );
       })}
@@ -119,17 +108,21 @@ function Group({
 }
 
 export default function SanadUnifiedNavLinks({
-  dense = false,
   onNavigate,
   sections = ['primary', 'work', 'capabilities', 'utility'],
 }: Props) {
   const visible = new Set(sections);
   return (
-    <nav aria-label="تنقل سند" data-sanad-unified-navigation="true" className={dense ? 'space-y-1' : 'space-y-2'}>
-      {visible.has('primary') ? <Group items={PRIMARY} dense={dense} onNavigate={onNavigate} /> : null}
-      {visible.has('work') ? <Group title="العمل" items={WORK} dense={dense} onNavigate={onNavigate} /> : null}
-      {visible.has('capabilities') ? <Group title="القدرات" items={CAPABILITIES} dense={dense} onNavigate={onNavigate} /> : null}
-      {visible.has('utility') ? <Group items={UTILITY} dense={dense} onNavigate={onNavigate} /> : null}
+    <nav aria-label="تنقل سند" data-sanad-unified-navigation="true" className="space-y-1">
+      {visible.has('primary') ? <Group items={PRIMARY} onNavigate={onNavigate} /> : null}
+      {visible.has('work') ? <Group title="العمل" items={WORK} onNavigate={onNavigate} /> : null}
+      {visible.has('capabilities') ? (
+        <>
+          <Group title="القدرات" items={CAPABILITIES} onNavigate={onNavigate} />
+          <Group items={CONNECTIONS} onNavigate={onNavigate} />
+        </>
+      ) : null}
+      {visible.has('utility') ? <Group items={UTILITY} onNavigate={onNavigate} /> : null}
     </nav>
   );
 }
