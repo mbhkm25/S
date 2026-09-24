@@ -5,9 +5,7 @@ import {
   Brain,
   BriefcaseBusiness,
   Check,
-  ChevronDown,
   ChevronLeft,
-  Layers3,
   MessageSquare,
   MessageSquarePlus,
   RefreshCcw,
@@ -17,7 +15,6 @@ import {
 } from 'lucide-react';
 import SanadIntelligenceMark from './SanadIntelligenceMark';
 import SanadAssistantStatus from './SanadAssistantStatus';
-import SanadUnifiedNavLinks from '../../components/navigation/SanadUnifiedNavLinks';
 import type { SanadAssistantPresentationState } from './sanadAssistantPresentation';
 import { SettingRow, SettingSwitch, SettingsSection } from '../../components/settings/SettingsControls';
 import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from './assistantObservabilityApi';
@@ -71,7 +68,7 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
       ) : null}
       <aside
         data-sidebar-density="compact"
-        className={`sanad-sidebar-surface absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[320px] flex-col overflow-hidden border-l shadow-[var(--sanad-shadow-3)] transition-transform xl:static xl:z-auto xl:w-[284px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`sanad-sidebar-surface absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[290px] flex-col overflow-hidden border-l border-[var(--sanad-border-subtle)] shadow-[var(--sanad-shadow-3)] transition-transform xl:static xl:z-auto xl:w-[252px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
@@ -83,7 +80,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
   const [tab, setTab] = useState<SidebarTab>('chats');
   const [performanceSummary, setPerformanceSummary] = useState<SanadAgentPerformanceSummary | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
-  const [secondaryNavOpen, setSecondaryNavOpen] = useState(false);
 
   const loadPerformance = async () => {
     setPerformanceLoading(true);
@@ -111,7 +107,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               <SanadIntelligenceMark state={props.assistantState} size={28} />
             </span>
             <div className="min-w-0">
-              <strong className="block truncate text-sm font-semibold tracking-[-0.01em] text-slate-950">سند</strong>
+              <strong className="block truncate text-[13px] font-semibold tracking-[-0.01em] text-slate-950">مساحة المحادثة</strong>
               <SanadAssistantStatus state={props.assistantState} className="mt-0.5" announce />
             </div>
           </div>
@@ -145,13 +141,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           <MessageSquarePlus className="h-4 w-4" />
           محادثة جديدة
         </button>
-        <div className="mt-2">
-          <SanadUnifiedNavLinks
-            dense
-            sections={['primary']}
-            onNavigate={props.onCloseMobile}
-          />
-        </div>
       </div>
 
       <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
@@ -390,27 +379,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       ) : null}
 
-      <div className="shrink-0 border-t border-slate-100 px-2 py-2">
-        <button
-          type="button"
-          onClick={() => setSecondaryNavOpen((value) => !value)}
-          aria-expanded={secondaryNavOpen}
-          className="sanad-focus-ring flex min-h-9 w-full items-center gap-2 rounded-[var(--sanad-radius-md)] px-2.5 text-[12px] font-medium text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
-        >
-          <Layers3 className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 text-right">العمل والقدرات</span>
-          <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${secondaryNavOpen ? 'rotate-180' : ''}`} />
-        </button>
-        {secondaryNavOpen ? (
-          <div className="mt-1 max-h-[34vh] overflow-y-auto overscroll-contain pb-1 [scrollbar-gutter:stable]">
-            <SanadUnifiedNavLinks
-              dense
-              sections={['work', 'capabilities', 'utility']}
-              onNavigate={props.onCloseMobile}
-            />
-          </div>
-        ) : null}
-      </div>
     </Shell>
   );
 }
