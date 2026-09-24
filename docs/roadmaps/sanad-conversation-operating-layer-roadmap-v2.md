@@ -1,10 +1,14 @@
 # SANAD Conversation-Centric Operating Layer Roadmap v2
 
-**Status:** Active roadmap  
+**Status:** Approved architectural scope; execution scheduling superseded by `SANAD_EXECUTION_PROGRAM_V3_2026-09-24.md` (docs PR pending review).  
 **Adopted:** 2026-09-22  
 **Product model:** SANAD as a Conversation-Centric Operating Layer  
 **Primary architecture:** `docs/architecture/sanad-conversation-operating-layer-v2.md`  
 **Supersedes for delivery planning:** `docs/roadmaps/sanad-financial-commercial-account-ai-roadmap.md`
+
+---
+
+**2026-09-24 rebaseline:** R2.V2 is merged to `main` and user reports deployment. The older “Immediate next steps” at the foot of this v2 roadmap is historical; consult the v3 program and its GitHub issues for live execution ordering. In particular, R3 consolidates memory/assistant preferences into the *one* global sidebar; the native Windows/PWA title bar is not an in-app React header.
 
 ---
 
