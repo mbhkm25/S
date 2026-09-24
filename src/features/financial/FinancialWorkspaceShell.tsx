@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Menu, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import SanadUnifiedSidebar from '../../components/navigation/SanadUnifiedSidebar';
+// The global sidebar owns participant-aware history and account utilities.
+ // Keep it out of the shell's critical entry chunk; Suspense reserves its geometry.
+const SanadUnifiedSidebar = lazy(() => import('../../components/navigation/SanadUnifiedSidebar'));
 import { navigateProduct, subscribeProductNavigation } from '../../lib/productNavigation';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import {
@@ -79,12 +81,19 @@ export default function FinancialWorkspaceShell() {
           : 'sanad-canvas relative flex min-h-screen items-stretch'}
         dir="rtl"
       >
-        <SanadUnifiedSidebar
-          userId={userId}
-          mobileOpen={navigationOpen}
-          onCloseMobile={() => setNavigationOpen(false)}
-          viewportMode={assistant}
-        />
+        <Suspense fallback={
+          <div
+            aria-hidden="true"
+            className="hidden h-dvh shrink-0 border-l border-[var(--sanad-border-subtle)] bg-[var(--sanad-bg-subtle)] lg:block lg:w-[254px]"
+          />
+        }>
+          <SanadUnifiedSidebar
+            userId={userId}
+            mobileOpen={navigationOpen}
+            onCloseMobile={() => setNavigationOpen(false)}
+            viewportMode={assistant}
+          />
+        </Suspense>
         <div
           data-sanad-main-column="true"
           className={assistant
