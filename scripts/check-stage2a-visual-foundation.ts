@@ -10,7 +10,7 @@ const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'u
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const workspaceRoute = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
 const settings = readFileSync('src/components/settings/SettingsControls.tsx', 'utf8');
 const responses = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 const primitives = readFileSync('src/components/ui/SanadVisualPrimitives.tsx', 'utf8');
@@ -90,7 +90,8 @@ assert.match(unifiedSidebar, /var\(--sanad-nav-action-bg\)/);
 assert.match(unifiedSidebar, /sanad-sidebar-surface/);
 assert.match(workspace, /sanad-workspace-canvas/);
 assert.match(workspace, /sanad-composer-surface/);
-assert.match(sidebar, /sanad-sidebar-surface/);
+assert.match(sidebar, /sanad-sidebar-section-heading/);
+assert.match(unifiedSidebar, /sanad-sidebar-surface/);
 assert.match(settings, /var\(--sanad-interactive\)/);
 assert.match(responses, /sanad-surface overflow-hidden/);
 assert.match(responses, /sanad-section-title/);
