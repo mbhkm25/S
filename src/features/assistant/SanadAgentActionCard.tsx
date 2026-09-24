@@ -66,8 +66,9 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   const version = action?.version || card.version;
 
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [onStatusChange, status]);
+    // The message-level activity indicator must not report a stale card as verified.
+    if (verified) onStatusChange?.(status);
+  }, [onStatusChange, status, verified]);
   const review = action?.review || {
     title: card.title,
     summary: card.summary || undefined,
