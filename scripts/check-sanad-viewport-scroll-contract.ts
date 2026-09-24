@@ -38,16 +38,19 @@ assert.doesNotMatch(
 );
 
 assert.match(shell, /data-workspace-mode=\{assistant \? 'viewport' : 'document'\}/);
-assert.match(shell, /flex h-dvh min-h-0 flex-col overflow-hidden/);
+assert.match(shell, /relative flex h-dvh min-h-0 overflow-hidden/);
 assert.match(shell, /min-h-0 flex-1 overflow-hidden/);
 assert.match(shell, /data-workspace-body="viewport"/);
 assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
 assert.doesNotMatch(shell, /ProductBottomNav/, 'target shell must not retain permanent legacy bottom navigation');
 assert.match(shell, /data-unified-shell-body="true"/);
+assert.match(shell, /data-sanad-persistent-shell="true"/);
+assert.match(shell, /data-sanad-main-column="true"/);
+assert.ok(shell.indexOf('<SanadUnifiedSidebar') < shell.indexOf('{assistant ? ('), 'Primary sidebar must be a persistent shell child on every route.');
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(
   shell,
-  /: 'sanad-canvas flex min-h-screen flex-col'/,
+  /: 'sanad-canvas relative flex min-h-screen items-stretch'/,
   'Document workspaces must retain document flow inside the unified shell.',
 );
 
@@ -75,13 +78,11 @@ assert.match(
 );
 
 assert.match(unifiedSidebar, /data-sanad-global-sidebar="true"/);
-assert.match(unifiedSidebar, /absolute inset-y-0 right-0/);
+assert.match(unifiedSidebar, /fixed inset-y-0 right-0/);
 assert.match(unifiedSidebar, /lg:static/);
-assert.doesNotMatch(
-  unifiedSidebar,
-  /fixed inset-(?:0|y-0)/,
-  'Unified sidebar must stay shell-owned rather than guessing viewport chrome.',
-);
+assert.match(unifiedSidebar, /lg:sticky lg:top-0/);
+assert.match(unifiedSidebar, /data-sanad-sidebar-position=/);
+assert.match(unifiedSidebar, /onCloseMobile/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
 
