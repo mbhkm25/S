@@ -1,7 +1,8 @@
-reason=deploy-stage2b-r3-one-sidebar
-source_pr=378
-accepted_candidate_sha=93962c31f34ac0cc6fdf1abe7d2d519b04a3cdd7
-source_main_sha=b77eee0961dfc816513525995234b3278ff80d4a
-release_gate=owner-accepted-local-preview-and-four-same-sha-ci-passed
-scope=production-web-pwa
-android_publish=unchanged
+reason=deploy-stage2b-r4-web
+source_pr=381
+owner_approved_candidate_sha=5cb85ecf88bb43574413b6ed8af8d8068b5258ce
+integrated_main_sha=344934f9246d3514ebef973bed59bf4bbab445cf
+release_gate=owner-accepted-preview-and-four-same-sha-ci-passed
+scope=production-web-pwa-only
+edge_function_release=separate-reviewed-stage
+android_signed_publish=unchanged
