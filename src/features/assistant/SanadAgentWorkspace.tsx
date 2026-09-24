@@ -906,6 +906,22 @@ export default function SanadAgentWorkspace() {
             data-scroll-owner="timeline"
             className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
+            {!businessLoading && (businessId || businesses.length > 1) ? (
+              <div data-sanad-inline-business-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
+                <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {businessId ? (
+                  <span className="truncate">{businesses.find((option) => option.id === businessId)?.name || 'سياق النشاط'}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setBusinessSelectionOpen(true)}
+                    className="sanad-focus-ring rounded-md px-1.5 py-1 font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]"
+                  >
+                    اختر نشاط المحادثة
+                  </button>
+                )}
+              </div>
+            ) : null}
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
