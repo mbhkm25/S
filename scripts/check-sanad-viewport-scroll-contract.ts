@@ -85,6 +85,8 @@ assert.match(unifiedSidebar, /data-sanad-sidebar-position=/);
 assert.match(unifiedSidebar, /onCloseMobile/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
+assert.doesNotMatch(shell, /<ProductAppHeader/, 'Unified shell must not render the legacy top product header.');
+assert.match(shell, /data-sanad-mobile-menu-slot="true"/);
 
 assert.match(html, /viewport-fit=cover/);
 assert.match(html, /interactive-widget=resizes-content/);
