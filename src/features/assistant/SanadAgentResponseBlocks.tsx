@@ -102,7 +102,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             <div key={item.currency} className="border-b border-slate-100 py-3.5 last:border-b-0 sm:border-b-0 sm:border-l sm:px-4 sm:last:border-l-0">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-slate-400">الرصيد الختامي</span>
-                <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600">{item.currency}</span>
+                <bdi dir="ltr" className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600">{item.currency}</bdi>
               </div>
               <p className="mt-1 text-xl font-semibold text-slate-950" dir="ltr">{number(item.closing_balance, item.currency)}</p>
               <dl className="mt-3 grid grid-cols-3 gap-1 text-center">
@@ -116,7 +116,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
 
         {(card.from_date || card.to_date) && (
           <p className="mt-3 text-xs text-slate-400">
-            الفترة: {card.from_date || 'البداية'} — {card.to_date || 'اليوم'}
+            الفترة: <bdi dir="auto">{card.from_date ? sourceDate(card.from_date) : 'البداية'}</bdi> — <bdi dir="auto">{card.to_date ? sourceDate(card.to_date) : 'اليوم'}</bdi>
           </p>
         )}
 
