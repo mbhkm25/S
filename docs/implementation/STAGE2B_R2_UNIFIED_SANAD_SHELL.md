@@ -43,22 +43,17 @@ SANAD
 
 The existing Assistant Workspace remains the primary conversation surface.
 
-Its sidebar now carries the global SANAD navigation before the local conversation tabs:
-
-- conversations;
-- memory;
-- assistant preferences.
+The global sidebar belongs to the persistent SANAD shell, not to the Assistant Workspace.
+Its contextual panel displays only Conversations, Memory and assistant-specific preferences.
 
 Shared conversation R1 contracts remain unchanged.
 
 ### Non-conversation structured surfaces
 
-Document/structured routes now render inside:
+All target routes use the same geometry:
 
 ~~~text
-ProductAppHeader
-→ Unified SANAD Sidebar
-→ Structured surface
+Persistent Unified SANAD Sidebar | Main Column (compact utility header + active route)
 ~~~
 
 The legacy ProductBottomNav is no longer rendered by the target product shell.
@@ -100,9 +95,8 @@ These deliberately avoid fake data or premature storage/automation implementatio
 
 ## Mobile
 
-Structured routes use a shell-owned RTL drawer opened from ProductAppHeader.
-
-Conversation keeps its existing workspace-owned mobile sidebar behavior, now with the same global navigation entries.
+Every target route opens the SAME shell-owned global RTL drawer via ProductAppHeader.
+Only the conversation route additionally has a workspace-owned contextual drawer (history, memory, assistant settings).
 
 No Android-specific hardcoded navigation-bar height is reintroduced.
 
