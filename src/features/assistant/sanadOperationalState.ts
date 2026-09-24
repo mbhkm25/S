@@ -37,13 +37,13 @@ export function describeSanadActionStatus(
     tone: 'danger',
   };
   if (status === 'completed' && actionType === 'commercial_document_draft') {
-    const verifiedReference = typeof result?.document_id === 'string' || typeof result?.document_id === 'number';
+    const verifiedReference = (typeof result?.document_id === 'string' && result.document_id.trim().length > 0) || (typeof result?.document_id === 'number' && Number.isFinite(result.document_id));
     return verifiedReference
       ? { label: 'أُنشئت مسودة المستند', detail: 'المستند مسودة داخل سند، ولم يُرحَّل إلى الدفاتر.', tone: 'success' }
       : { label: 'اكتمل إعداد المسودة — المرجع غير متاح', detail: 'لا يوجد مرجع مستند متحقق؛ لا تفترض وجود قيد مُرحَّل.', tone: 'warning' };
   }
   if (status === 'completed' && actionType === 'personal_transaction') {
-    const verifiedReference = typeof result?.transaction_id === 'string' || typeof result?.transaction_id === 'number';
+    const verifiedReference = (typeof result?.transaction_id === 'string' && result.transaction_id.trim().length > 0) || (typeof result?.transaction_id === 'number' && Number.isFinite(result.transaction_id));
     return verifiedReference
       ? { label: 'سُجّلت العملية في سند', detail: 'نتيجة تنفيذ موثقة بمرجع عملية داخل سند بعد الاعتماد؛ لا تعني ترحيلًا إلى إبداع.', tone: 'success' }
       : { label: 'اكتمل الإجراء — مرجع العملية غير متاح', detail: 'النتيجة غير مكتملة للعرض؛ تحقق من سجل العمليات قبل افتراض تسجيل القيد.', tone: 'warning' };
