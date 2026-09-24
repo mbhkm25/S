@@ -72,6 +72,7 @@ function handleClick(event: MouseEvent<HTMLAnchorElement>, path: string, onNavig
 
 function NavRow({ item, compact, onNavigate }: {
   item: NavItem;
+  key?: string;
   compact: boolean;
   onNavigate?: () => void;
 }) {
