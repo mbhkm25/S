@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { buildAgentInsights } from '../supabase/functions/_shared/sanad-agent-insights.ts';
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
+const settingsProvider = readFileSync('src/features/shell/SanadAssistantSettingsContext.tsx', 'utf8');
 const globalHistory = readFileSync('src/components/navigation/SanadSidebarConversations.tsx', 'utf8');
 const responseBlocks = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts', 'utf8');
@@ -40,7 +42,7 @@ for (const required of [
   'خطوات التنفيذ والمصادر',
   'data-conversation-surface="open"',
   'thread_id',
-  'AssistantWorkspaceSidebar',
+  'useSanadAssistantSettings',
   'SanadAgentResponseBlocks',
   'SanadMessageActions',
   'SanadIntelligenceMark',
@@ -50,14 +52,15 @@ for (const required of [
 }
 
 for (const required of [
-  'محادثة جديدة',
   'الذاكرة',
-  'الضبط',
+  'ضبط المساعد',
   'تنبيهات ذكية',
   'بطاقات البيانات',
 ]) {
-  assert.ok(sidebar.includes(required), `contextual assistant panel missing ${required}`);
+  assert.ok(sidebar.includes(required), `inline SANAD assistant options missing ${required}`);
 }
+assert.match(unifiedSidebar, /محادثة جديدة/);
+assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
 assert.match(globalHistory, /المحادثات/);
 assert.match(globalHistory, /listSanadAgentThreads/);
 
@@ -113,7 +116,7 @@ assert.doesNotMatch(route, /p_purpose:\s*'financial_workspace'/, 'legacy AI cont
 assert.match(api, /sanad-ai-agent-v1/);
 assert.match(api, /thread_id/);
 
-for (const source of [workspace, sidebar, responseBlocks, workspaceApi]) {
+for (const source of [workspace, sidebar, settingsProvider, responseBlocks, workspaceApi]) {
   assert.doesNotMatch(source, /service_role/i);
   assert.doesNotMatch(source, /business_erp_snapshot_rows/);
 }
