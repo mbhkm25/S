@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   Activity,
-  Archive,
   Brain,
   BriefcaseBusiness,
   Check,
-  ChevronLeft,
-  MessageSquare,
   MessageSquarePlus,
   RefreshCcw,
   Settings2,
@@ -21,7 +18,6 @@ import { getMySanadAgentPerformance, type SanadAgentPerformanceSummary } from '.
 import type {
   SanadAgentMemory,
   SanadAgentPreferences,
-  SanadAgentThreadSummary,
 } from './assistantWorkspaceApi';
 
 type Props = {
@@ -30,14 +26,9 @@ type Props = {
   businessLoading?: boolean;
   canChooseBusiness?: boolean;
   onChooseBusiness?: () => void;
-  threads: SanadAgentThreadSummary[];
-  selectedThreadId: string | null;
-  loading?: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  onSelect: (threadId: string) => void;
   onNew: () => void;
-  onArchive: (threadId: string) => void;
   preferences: SanadAgentPreferences | null;
   onPreferenceChange: (key: keyof Pick<SanadAgentPreferences,
     'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
@@ -49,7 +40,7 @@ type Props = {
   onForgetMemory: (memoryId: string) => void;
 };
 
-type SidebarTab = 'chats' | 'memory' | 'settings';
+type SidebarTab = 'memory' | 'settings';
 
 function Shell({ children, mobileOpen, onCloseMobile }: {
   children: React.ReactNode;
@@ -61,14 +52,15 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
       {mobileOpen ? (
         <button
           type="button"
-          aria-label="إغلاق الشريط الجانبي"
+          aria-label="إغلاق لوحة سياق المحادثة"
           onClick={onCloseMobile}
-          className="absolute inset-0 z-40 bg-slate-950/25 backdrop-blur-[1px] xl:hidden"
+          className="absolute inset-0 z-40 bg-slate-950/20 backdrop-blur-[1px]"
         />
       ) : null}
       <aside
         data-sidebar-density="compact"
-        className={`sanad-sidebar-surface absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[84vw] max-w-[290px] flex-col overflow-hidden border-l border-[var(--sanad-border-subtle)] shadow-[var(--sanad-shadow-3)] transition-transform xl:static xl:z-auto xl:w-[252px] xl:max-w-none xl:translate-x-0 xl:shadow-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        data-sanad-context-panel="memory-settings-only"
+        className={`sanad-sidebar-surface absolute inset-y-0 right-0 z-50 flex h-full min-h-0 w-[min(82vw,296px)] flex-col overflow-hidden border-l border-[var(--sanad-border-subtle)] shadow-[var(--sanad-shadow-2)] transition-transform ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {children}
       </aside>
@@ -77,7 +69,7 @@ function Shell({ children, mobileOpen, onCloseMobile }: {
 }
 
 export default function AssistantWorkspaceSidebar(props: Props) {
-  const [tab, setTab] = useState<SidebarTab>('chats');
+  const [tab, setTab] = useState<SidebarTab>('memory');
   const [performanceSummary, setPerformanceSummary] = useState<SanadAgentPerformanceSummary | null>(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
 
@@ -121,7 +113,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
             >
               <MessageSquarePlus className="h-4 w-4" />
             </button>
-            <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500 xl:hidden" aria-label="إغلاق الشريط الجانبي">
+            <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500" aria-label="إغلاق الشريط الجانبي">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -143,9 +135,8 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       </div>
 
-      <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
+      <div className="grid shrink-0 grid-cols-2 border-b border-[var(--sanad-border-subtle)] px-2">
         {[
-          ['chats', MessageSquare, 'المحادثات'],
           ['memory', Brain, 'الذاكرة'],
           ['settings', Settings2, 'الضبط'],
         ].map(([id, Icon, label]) => {
@@ -164,60 +155,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           );
         })}
       </div>
-
-      {tab === 'chats' ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-            {props.loading ? (
-              <p className="p-4 text-center text-xs text-slate-400">جارٍ تحميل المحادثات…</p>
-            ) : props.threads.length === 0 ? (
-              <div className="px-3 py-6 text-center">
-                <MessageSquare className="mx-auto h-5 w-5 text-slate-300" />
-                <p className="mt-2 text-xs leading-5 text-slate-400">ستظهر محادثاتك المحفوظة هنا.</p>
-              </div>
-            ) : (
-              props.threads.filter((thread) => thread.status === 'active').map((thread) => {
-                const active = thread.id === props.selectedThreadId;
-                return (
-                  <div key={thread.id} className={`group flex items-center border-b border-slate-100 transition ${active ? 'bg-white' : 'hover:bg-white/60'}`}>
-                    <button
-                      type="button"
-                      onClick={() => props.onSelect(thread.id)}
-                      className="min-w-0 flex-1 px-2 py-3 text-right"
-                    >
-                      <p className={`truncate text-[13px] font-medium ${active ? 'text-slate-950' : 'text-slate-700'}`}>
-                        {thread.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-                        <span>{thread.message_count} رسالة</span>
-                        {thread.unread_count ? (
-                          <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                            {thread.unread_count > 99 ? '99+' : thread.unread_count}
-                          </span>
-                        ) : null}
-                        {thread.my_role && thread.my_role !== 'owner' ? (
-                          <span>{thread.my_role === 'viewer' ? 'قراءة فقط' : 'مشتركة'}</span>
-                        ) : null}
-                      </div>
-                    </button>
-                    {(!thread.my_role || thread.my_role === 'owner') ? (
-                      <button
-                        type="button"
-                        onClick={() => props.onArchive(thread.id)}
-                        title="أرشفة"
-                        className="ml-1 hidden rounded-lg p-2 text-slate-400 hover:bg-white hover:text-slate-700 group-hover:block"
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                    {active ? <ChevronLeft className="ml-2 h-3.5 w-3.5 text-slate-500" /> : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ) : null}
 
       {tab === 'memory' ? (
         <div data-sidebar-scroll-region="memory" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]">
