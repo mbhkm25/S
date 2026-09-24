@@ -111,9 +111,20 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               <SanadAssistantStatus state={props.assistantState} className="mt-0.5" announce />
             </div>
           </div>
-          <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500 xl:hidden" aria-label="إغلاق الشريط الجانبي">
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={props.onNew}
+              aria-label="محادثة جديدة"
+              title="محادثة جديدة"
+              className="sanad-focus-ring flex h-8 w-8 items-center justify-center rounded-lg text-[var(--sanad-interactive)] hover:bg-[var(--sanad-nav-hover-bg)]"
+            >
+              <MessageSquarePlus className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={props.onCloseMobile} className="rounded-lg p-1.5 text-slate-500 xl:hidden" aria-label="إغلاق الشريط الجانبي">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="mt-2 flex min-h-6 items-center gap-2 text-[11px] text-slate-500">
@@ -132,17 +143,6 @@ export default function AssistantWorkspaceSidebar(props: Props) {
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-slate-100 px-3 py-2.5">
-        <button
-          type="button"
-          onClick={props.onNew}
-          className="sanad-focus-ring flex w-full items-center justify-center gap-2 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3 py-2.5 text-[13px] font-medium text-white transition active:scale-[.99]"
-        >
-          <MessageSquarePlus className="h-4 w-4" />
-          محادثة جديدة
-        </button>
-      </div>
-
       <div className="grid shrink-0 grid-cols-3 border-b border-slate-100 px-2">
         {[
           ['chats', MessageSquare, 'المحادثات'],
@@ -156,7 +156,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
               key={String(id)}
               type="button"
               onClick={() => setTab(id as SidebarTab)}
-              className={`flex min-h-10 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium transition ${active ? 'border-slate-950 text-slate-950' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              className={`flex min-h-10 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium transition ${active ? 'border-[var(--sanad-interactive)] text-[var(--sanad-text-strong)]' : 'border-transparent text-[var(--sanad-text-muted)] hover:text-[var(--sanad-text-strong)]'}`}
             >
               <Component className="h-3.5 w-3.5" />
               {String(label)}
