@@ -187,7 +187,7 @@ function replicaPresentation(row: AgentToolOutput) {
   const currentSync = object(ctx.current_sync);
   const received = object(ctx.received_counts);
   const tableCount = Object.keys(received).length;
-  const rowCount = Object.values(received).reduce((sum, value) => sum + (num(value) ?? 0), 0);
+  const rowCount = Object.values(received).reduce<number>((sum, value) => sum + (num(value) ?? 0), 0);
 
   const cards: Card[] = [{
     type: "replica_status",
