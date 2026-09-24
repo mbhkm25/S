@@ -44,6 +44,12 @@ export function formatSanadSourceDate(value?: string | null): { text: string; va
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
     return { text: raw, valid: false };
   }
+  // JavaScript may normalize impossible calendar dates (e.g. February 30).
+  const [y, m, d] = raw.slice(0, 10).split('-').map(Number);
+  const calendar = new Date(Date.UTC(y, m - 1, d));
+  if (calendar.getUTCFullYear() !== y || calendar.getUTCMonth() + 1 !== m || calendar.getUTCDate() !== d) {
+    return { text: raw, valid: false };
+  }
   const parsed = new Date(raw);
   if (!Number.isFinite(parsed.getTime())) return { text: raw, valid: false };
   const formatted = new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
