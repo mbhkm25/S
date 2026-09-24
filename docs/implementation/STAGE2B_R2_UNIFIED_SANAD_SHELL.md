@@ -255,3 +255,76 @@ not copied branding).
   contextual panel so global destination hierarchy stays spatially stable.
 - No database, ledger, ERP write, notifications engine, new app integrations or
   user-wallet implementation in this visual shell train.
+
+## R2.V2 — Unified Conversation History and Vertical SANAD Brand (2026-09-24)
+
+**Status:** candidate implementation within PR #373. Exact candidate SHA must be taken
+from the PR at validation time. No merge or Production rollout has been authorized.
+
+### Approved UI decisions
+
+1. The current SANAD logo image already contains the Arabic wordmark. Remove the
+   duplicate adjacent text "سند", increase the logo display size (expanded sidebar
+   ~48px high) and stack the description **مساحة الذكاء والتشغيل below the logo**.
+   This is a lockup/layout change using the existing asset, not a new logo design.
+2. Make the primary category headings **المحادثات / العمل / القدرات** visually
+   distinct with semibold 12px labels and restrained cream/soft-green tinted
+   background; do not convert each navigation link into an oversized card.
+3. Move the participant-aware **conversation history into the ONE persistent
+   global sidebar**, including read/unread badges, shared/viewer role cues,
+   owner-only archive, and local title/summary search for the latest 50 returned
+   threads. The history lists a limited initial set with an explicit More control
+   rather than consuming the full sidebar height by default.
+4. Preserve contextual memory and assistant settings inside a separate
+   **on-demand** workspace overlay. Do not maintain another constantly visible
+   sidebar for basic conversation navigation.
+5. Offer desktop sidebar collapse/expand, with a local UI preference preserved
+   in localStorage; mobile always expands its drawer independent of that desktop
+   preference. This UI preference is not a financial source or account-wide
+   backend preference.
+6. Consolidate account/profile/settings into one expandable footer control,
+   preserving notifications and the payment-inbox shortcut. Do not duplicate
+   "الحساب والإعدادات" as both a permanent nav destination and a separate
+   profile footer entry.
+7. Keep global New Conversation as the main action; local contextual memory
+   panel may retain a compact secondary keyboard-accessible shortcut.
+
+### Source of truth and state contract
+
+- Global history reads ONLY `listSanadAgentThreads(50)` backed by the existing
+  participant-aware R1 RPC, with no new database table or bypass.
+- Selecting a thread from the global sidebar dispatches a UI selection event
+  if the assistant is mounted, or navigates with a one-time `?thread=`
+  request. The assistant resolves the requested ID against its own authorized
+  active-thread listing before loading the thread.
+- Archiving from the global sidebar uses the existing owner-gated archive RPC
+  and notifies the assistant to reconcile selected state.
+- The assistant notifies the shell on thread/read-state changes. The shell
+  refreshes its read model when the app regains focus; do not claim realtime
+  cross-device history synchronization beyond R1's existing thread events.
+- Timeline remains the sole chat scroll owner; Composer remains the non-scrolling
+  workspace slot. Only the sidebar's global navigation list scrolls.
+- Future full-history search/pagination, pinned conversations, delete/reference-
+  conversation actions and advanced global entity search remain independently
+  scoped features. The current quick filter searches only fetched metadata.
+
+### Follow-up sequencing
+
+- **R2.V2 gate:** same-SHA CI + local preview on /sanad-ai, /today, /financial,
+  /business/manage, mobile drawer, zoom 125/150, creation from two routes,
+  sidebar collapse, owner archive, viewer restrictions, account utilities and
+  a no-double-sidebar visual review.
+- **R2.V3:** conversation response/status/card polish: explicitly distinguish
+  `draft_created` / pending approval / posted operations, avoid generic
+  `تم التنفيذ` when only a draft was created, correct currency decimals
+  by ISO currency/unit convention and maintain provenance/freshness badges.
+- **R2.V4 / later trains:** broader finance/business surface migration,
+  selected mobile native safe-area revalidation, and cross-device visual QA.
+  No mass screen recoloring is a dependency for the R2.V2 gate.
+- **D-ARCH → Context/Actions/Connections:** retain existing roadmap and schema
+  governance; this sidebar work adds no schema migration, ERP writes or
+  financial action changes.
+
+**Release discipline:** PR remains open; Production remains on the last
+separately verified deployment. Do not merge until visual/runtime proof is
+accepted on the exact passing CI candidate.
