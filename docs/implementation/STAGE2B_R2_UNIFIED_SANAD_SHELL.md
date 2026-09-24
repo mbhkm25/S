@@ -135,3 +135,71 @@ Before merge:
 9. Desktop visual smoke required before Production deploy.
 
 Production rollout is separate from merge.
+
+## R2.V — Persistent Sidebar Correction (2026-09-24)
+
+Status: implementation candidate; Production unchanged.
+
+### Root cause
+
+The first R2 preview rendered different global sidebars: the SANAD conversation route
+owned a navigation sidebar inside the Assistant Workspace, while /today, /financial
+and /business/manage mounted the separate global sidebar. Passing route tests did not
+prove stable information architecture or consistent spatial memory.
+
+### Corrected ownership contract
+
+FinancialWorkspaceShell mounts exactly ONE SanadUnifiedSidebar *above* route selection.
+It stays mounted across client-side transitions among all target product routes.
+The compact ProductAppHeader and active route belong to a separate main column.
+
+Global sidebar contents, identical on every route:
+- SANAD brand/identity and one prominent Open SANAD action;
+- Today and Library;
+- Work: Tasks / Approvals / Automations;
+- Capabilities: Personal Finance / Business;
+- Connections as its own destination;
+- account/settings pinned to footer.
+
+The global sidebar is 248px wide at desktop, with 13px nav labels, 17px icons,
+11px group labels and 40px minimum navigation rows. Active routes receive a
+semantic surface and narrow accent rather than a full dark secondary button.
+Business stays selected for both /commercial and /business/manage descendants.
+
+AssistantWorkspaceSidebar is now exclusively a CONTEXTUAL panel inside /sanad-ai:
+- assistant state and selected business context;
+- New Conversation;
+- Conversations / participant-aware history;
+- Memory;
+- assistant-specific Settings.
+
+No global destination or SANAD brand duplicate is allowed in that panel.
+At xl, its width is 252px alongside the timeline; below xl, it opens as an
+in-workspace drawer. Conversation timeline retains exclusive scroll ownership,
+and the compact composer remains in the workspace layout slot.
+
+### Desktop / mobile geometry
+
+Viewport routes: shell uses h-dvh with the global sidebar beside the main column.
+Document routes: the same global sidebar is sticky at viewport top while the main
+content retains document flow. Header is compact utility-only inside the main
+column, not full-width chrome above the sidebar.
+
+On mobile, every route exposes the SAME global drawer from the utility header.
+The conversation-context drawer is separate and cannot replace that global drawer.
+No Android system-bar height is hardcoded or double-counted.
+
+### Non-goals and safety
+
+No DB migrations, notification changes, Edaa write permissions, financial ledger
+modification, R1 collaboration changes or new semantic-response work.
+The legacy ProductBottomNav remains unmounted in the target shell.
+
+### Release gates
+
+1. All GitHub CI checks pass against the exact final candidate SHA.
+2. /sanad-ai, /today, /financial, /business/manage share identical global sidebar.
+3. Context panel is confined to /sanad-ai; conversation history remains accessible.
+4. Desktop 1280/1366/1440/1920, zoom 125/150, mobile 360/390/430.
+5. No duplicated global/sidebar navigation and no regression to Stage 1 scroll.
+6. Separate Preview and visual approval before merge/Production rollout.
