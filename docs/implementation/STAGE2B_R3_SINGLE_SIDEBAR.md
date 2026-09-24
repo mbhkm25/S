@@ -1,7 +1,7 @@
 # Stage 2B R3 — Single-Sidebar Runtime & Preview Contract
 
 **Status:** implementation candidate in PR #378; NOT merged; Production remains unchanged by this PR.
-**Source baseline:** main `356fcaa0d1aad181a6375125230b7222018d1618`. User reports this R2.V2 tree published, but its live Production version SHA/deploy ID was not independently collected in this R3 pass.
+**Source baseline:** main `356fcaa0d1aad181a6375125230b7222018d1618`. GitHub Deploy SANAD Production workflow #81 (run 36009231310) and its deploy-job logs verify R2.V2 SHA `356fcaa0d1aad181a6375125230b7222018d1618` was published successfully on 2026-09-24; HTTP app and APK-path postflight also passed. Public `/version.json` bytes and signed Android updater metadata remain separately unverified (do not equate an APK HEAD check with a signed Android release).
 **Owner workstation:** user's *personal laptop*, project checkout `C:\sanad-v3`. This is not the authorized Edaa Bridge shop workstation. Do not start or modify Edaa Bridge agents from the laptop.
 
 ## Architectural correction
