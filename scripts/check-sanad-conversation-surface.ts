@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const assistantSections = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
+const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const markdown = readFileSync('src/features/assistant/SanadConversationMarkdown.tsx', 'utf8');
 const attachmentComposer = readFileSync('src/features/assistant/SanadAttachmentComposer.tsx', 'utf8');
 
@@ -17,7 +19,8 @@ assert.doesNotMatch(
   /id="sanad-agent-workspace"[^>]*className="[^"]*(?:rounded-\[1\.5rem\]|shadow-\[0_10px_32px|border border-slate-200\/70)/s,
   'The conversation workspace must not regress into an outer framed card.',
 );
-assert.match(workspace, /data-mobile-sidebar-trigger/);
+assert.doesNotMatch(workspace, /data-mobile-sidebar-trigger/);
+assert.match(shell, /data-sanad-mobile-menu-fab="true"/);
 assert.match(workspace, /data-scroll-owner="timeline"/);
 assert.match(workspace, /data-workspace-slot="composer"/);
 assert.match(workspace, /data-composer-density="compact"/);
@@ -60,18 +63,11 @@ assert.match(
   'Assistant narrative must use Markdown while user messages may remain plain text.',
 );
 
-assert.match(sidebar, /data-sidebar-density="compact"/);
-assert.match(sidebar, /data-sanad-context-panel="memory-settings-only"/);
-assert.doesNotMatch(sidebar, /tab === 'chats'/);
-assert.match(sidebar, /مساحة المحادثة/, 'Contextual conversation panel must be labeled as workspace-specific, not duplicate the global SANAD brand.');
-assert.doesNotMatch(sidebar, /SanadUnifiedNavLinks/, 'Only the shell-owned sidebar may render global navigation.');
-assert.match(sidebar, /assistantState/);
-assert.match(sidebar, /SanadAssistantStatus/);
-assert.match(sidebar, /businessLabel/);
-assert.doesNotMatch(
-  sidebar,
-  /bg-white text-slate-950 shadow-sm ring-1 ring-slate-200/,
-  'Sidebar tabs must stay flat rather than card-like.',
-);
+assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.match(assistantSections, /data-sanad-inline-memory="true"/);
+assert.match(assistantSections, /data-sanad-inline-settings="true"/);
+assert.match(assistantSections, /ضبط المساعد/);
+assert.doesNotMatch(workspace, /AssistantWorkspaceSidebar/, 'Do not recreate a second assistant sidebar.');
+assert.doesNotMatch(assistantSections, /SanadUnifiedNavLinks/, 'The global shell alone owns navigation.');
 
 console.log('SANAD conversation surface simplification contract passed.');
