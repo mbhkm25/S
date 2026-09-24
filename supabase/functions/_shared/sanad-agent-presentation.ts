@@ -31,9 +31,9 @@ export function money(value: unknown): string {
   const raw = typeof value === "number" && Number.isFinite(value)
     ? value.toString()
     : typeof value === "string" ? value.trim() : "";
-  const match = /^(-?)(\\d+)(?:\\.(\\d+))?$/.exec(raw);
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
   if (!match) return raw || "—";
-  const integer = match[2].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ",");
+  const integer = match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return `${match[1]}${integer}${match[3] ? "." + match[3] : ""}`;
 }
 
