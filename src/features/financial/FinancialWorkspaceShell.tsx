@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 const SanadUnifiedSidebar = lazy(() => import('../../components/navigation/SanadUnifiedSidebar'));
 import { navigateProduct, subscribeProductNavigation } from '../../lib/productNavigation';
 import { NotificationProvider } from '../notifications/NotificationProvider';
+import { SanadAssistantSettingsProvider } from '../shell/SanadAssistantSettingsContext';
 import {
   loadFinancialActionRoute,
   loadFinancialWorkspaceRoute,
@@ -72,6 +73,7 @@ export default function FinancialWorkspaceShell() {
 
   return (
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
+      <SanadAssistantSettingsProvider userId={userId}>
       <div
         data-workspace-mode={assistant ? 'viewport' : 'document'}
         data-product-area={assistant ? 'assistant' : personal ? 'financial' : commercial || isBusinessCapabilityRoute ? 'business' : 'account'}
@@ -100,16 +102,16 @@ export default function FinancialWorkspaceShell() {
             ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
             : 'flex min-h-screen min-w-0 flex-1 flex-col'}
         >
-          <div data-sanad-mobile-menu-slot="true" className="flex h-11 shrink-0 items-center justify-start border-b border-[var(--sanad-border-subtle)] bg-[var(--sanad-bg-canvas)] px-3 lg:hidden">
-            <button
-              type="button"
-              onClick={() => setNavigationOpen(true)}
-              aria-label="فتح تنقل سند"
-              className="sanad-focus-ring flex h-9 w-9 items-center justify-center rounded-[var(--sanad-radius-md)] text-[var(--sanad-text-strong)] hover:bg-[var(--sanad-nav-hover-bg)]"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            data-sanad-mobile-menu-fab="true"
+            onClick={() => setNavigationOpen(true)}
+            aria-label="فتح تنقل سند"
+            aria-expanded={navigationOpen}
+            className="sanad-focus-ring fixed right-2 top-[calc(var(--sanad-safe-top)+0.5rem)] z-[60] flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--sanad-border)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-strong)] shadow-[var(--sanad-shadow-1)] lg:hidden"
+          >
+            <Menu className="h-[18px] w-[18px]" />
+          </button>
           {assistant ? (
             <div
               data-workspace-body="viewport"
@@ -120,7 +122,7 @@ export default function FinancialWorkspaceShell() {
               </Suspense>
             </div>
           ) : (
-            <main data-unified-shell-body="true" className="relative min-w-0 flex-1">
+            <main data-unified-shell-body="true" className="relative min-w-0 flex-1 max-lg:pt-10">
               <Suspense fallback={<RouteFallback />}>
                 {content}
               </Suspense>
@@ -141,6 +143,7 @@ export default function FinancialWorkspaceShell() {
           ) : null}
         </div>
       </div>
+      </SanadAssistantSettingsProvider>
     </NotificationProvider>
   );
 }
