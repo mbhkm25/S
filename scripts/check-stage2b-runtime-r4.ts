@@ -3,7 +3,21 @@ import { readFileSync } from 'node:fs';
 import { describeSanadActionStatus } from '../src/features/assistant/sanadOperationalState';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../src/utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from '../src/features/shell/sanadWorkItemPresentation';
-import { buildAgentPresentation, money } from '../supabase/functions/_shared/sanad-agent-presentation.ts';
+import { runInNewContext } from 'node:vm';
+import { transpileModule, ModuleKind, ScriptTarget } from 'typescript';
+
+// Exercise the actual Edge presentation source without making frontend tsc
+// typecheck Deno's server-only runtime or relying on a production Edge deploy.
+const edgeExports: Record<string, unknown> = {};
+const edgeSource = readFileSync('supabase/functions/_shared/sanad-agent-presentation.ts', 'utf8');
+const edgeJs = transpileModule(edgeSource, {
+  compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+}).outputText;
+runInNewContext(edgeJs, { exports: edgeExports, Intl }, { filename: 'sanad-agent-presentation.fixture.js' });
+const money = edgeExports.money as (value: unknown) => string;
+const buildAgentPresentation = edgeExports.buildAgentPresentation as (outputs: Array<{
+  name: string; args: Record<string, unknown>; output: unknown;
+}>) => { cards: Array<Record<string, unknown>>; copy_text?: string };
 
 // Business document approval creates a SANAD DRAFT; it never proves posting in ERP.
 const draft = describeSanadActionStatus('completed', 'commercial_document_draft', { document_id: 'doc-7' });
