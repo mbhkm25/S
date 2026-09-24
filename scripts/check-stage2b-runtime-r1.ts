@@ -15,6 +15,7 @@ const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts','utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx','utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx','utf8');
+const globalHistory = readFileSync('src/components/navigation/SanadSidebarConversations.tsx','utf8');
 
 for (const token of [
   'public.create_my_sanad_agent_attachment_v2',
@@ -73,8 +74,10 @@ assert.match(workspace, /event:\s*'message\.changed'/);
 assert.match(workspace, /markSanadAgentThreadRead/);
 assert.match(workspace, /threadReadOnly/);
 assert.match(workspace, /my_role === 'viewer'/);
-assert.match(sidebar, /thread\.unread_count/);
-assert.match(sidebar, /thread\.my_role === 'viewer'/);
-assert.match(sidebar, /thread\.my_role === 'owner'/);
+assert.match(globalHistory, /thread\.unread_count/);
+assert.match(globalHistory, /thread\.my_role === 'viewer'/);
+assert.match(globalHistory, /thread\.my_role === 'owner'/);
+assert.match(globalHistory, /listSanadAgentThreads/);
+assert.doesNotMatch(sidebar, /tab === 'chats'/, 'The contextual panel must not duplicate global chat history.');
 
 console.log('SANAD Stage 2B Runtime R1 shared conversation contract checks passed.');
