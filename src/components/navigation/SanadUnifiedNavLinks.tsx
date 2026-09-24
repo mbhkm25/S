@@ -94,12 +94,15 @@ function Group({ title, items, onNavigate }: {
             onClick={(event) => handleClick(event, path, onNavigate)}
             aria-current={active ? 'page' : undefined}
             title={label}
-            className={`sanad-focus-ring flex min-h-10 min-w-0 items-center gap-3 rounded-[var(--sanad-radius-md)] border-r-2 px-2.5 text-[13px] leading-5 transition-colors ${active
-              ? 'border-[var(--sanad-interactive)] bg-[var(--sanad-surface-2)] font-semibold text-[var(--sanad-text-strong)]'
-              : 'border-transparent font-medium text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-surface-2)] hover:text-[var(--sanad-text-strong)]'}`}
+            data-sanad-nav-item={id}
+            data-active={active ? 'true' : 'false'}
+            className={`sanad-focus-ring group flex min-h-10 min-w-0 items-center gap-2.5 rounded-[var(--sanad-radius-md)] px-2.5 text-[13px] leading-5 transition-colors ${active
+              ? 'bg-[var(--sanad-nav-active-bg)] font-medium text-[var(--sanad-text-strong)]'
+              : 'font-normal text-[var(--sanad-text-muted)] hover:bg-[var(--sanad-nav-hover-bg)] hover:text-[var(--sanad-text-strong)]'}`}
           >
             <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={active ? 2 : 1.75} aria-hidden="true" />
-            <span className="min-w-0 truncate">{label}</span>
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--sanad-brand-mint)] transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`} />
           </a>
         );
       })}
