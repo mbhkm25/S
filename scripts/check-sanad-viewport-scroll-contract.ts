@@ -5,7 +5,7 @@ const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx',
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
-const nav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
+const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
 const html = readFileSync('index.html', 'utf8');
@@ -38,15 +38,20 @@ assert.doesNotMatch(
 );
 
 assert.match(shell, /data-workspace-mode=\{assistant \? 'viewport' : 'document'\}/);
-assert.match(shell, /flex h-dvh min-h-0 flex-col overflow-hidden/);
+assert.match(shell, /relative flex h-dvh min-h-0 overflow-hidden/);
 assert.match(shell, /min-h-0 flex-1 overflow-hidden/);
 assert.match(shell, /data-workspace-body="viewport"/);
 assert.match(shell, /relative min-h-0 flex-1 overflow-hidden pt-1\.5/);
-assert.match(shell, /layoutMode=\{assistant \? 'viewport' : 'document'\}/);
+assert.doesNotMatch(shell, /ProductBottomNav/, 'target shell must not retain permanent legacy bottom navigation');
+assert.match(shell, /data-unified-shell-body="true"/);
+assert.match(shell, /data-sanad-persistent-shell="true"/);
+assert.match(shell, /data-sanad-main-column="true"/);
+assert.ok(shell.indexOf('<SanadUnifiedSidebar') < shell.indexOf('{assistant ? ('), 'Primary sidebar must be a persistent shell child on every route.');
+assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(
   shell,
-  /: 'sanad-canvas min-h-screen'/,
-  'Document workspaces must retain document flow.',
+  /: 'sanad-canvas relative flex min-h-screen items-stretch'/,
+  'Document workspaces must retain document flow inside the unified shell.',
 );
 
 assert.match(route, /const viewportMode = kind === 'ai'/);
@@ -72,18 +77,22 @@ assert.match(
   'Document route geometry must remain available for non-AI workspaces.',
 );
 
-assert.match(nav, /layoutMode\?: 'document' \| 'viewport'/);
-assert.match(nav, /viewportMode \? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'/);
-assert.match(nav, /pb-\[var\(--sanad-mobile-bottom-clearance\)\]/);
-assert.match(nav, /lg:fixed/);
+assert.match(unifiedSidebar, /data-sanad-global-sidebar="true"/);
+assert.match(unifiedSidebar, /fixed inset-y-0 right-0/);
+assert.match(unifiedSidebar, /lg:static/);
+assert.match(unifiedSidebar, /lg:sticky lg:top-0/);
+assert.match(unifiedSidebar, /data-sanad-sidebar-position=/);
+assert.match(unifiedSidebar, /onCloseMobile/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
+assert.doesNotMatch(shell, /<ProductAppHeader/, 'Unified shell must not render the legacy top product header.');
+assert.match(shell, /data-sanad-mobile-menu-slot="true"/);
 
 assert.match(html, /viewport-fit=cover/);
 assert.match(html, /interactive-widget=resizes-content/);
 assert.match(manifest, /android:windowSoftInputMode="adjustResize"/);
 
-for (const source of [shell, route, agent, nav]) {
+for (const source of [shell, route, agent, unifiedSidebar]) {
   assert.doesNotMatch(
     source,
     /visualViewport/,

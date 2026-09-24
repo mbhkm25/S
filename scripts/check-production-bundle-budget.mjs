@@ -8,7 +8,7 @@ const budgets = [
   { label: 'application entry', pattern: /^app-[A-Za-z0-9_-]+\.js$/, maxKb: 20 },
   { label: 'product shell', pattern: /^FinancialWorkspaceShell-[A-Za-z0-9_-]+\.js$/, maxKb: 15 },
   { label: 'workspace route', pattern: /^FinancialWorkspaceRoute-[A-Za-z0-9_-]+\.js$/, maxKb: 35 },
-  { label: 'product navigation', pattern: /^ProductBottomNav-[A-Za-z0-9_-]+\.js$/, maxKb: 30 },
+  { label: 'unified entry route', pattern: /^SanadUnifiedEntryRoute-[A-Za-z0-9_-]+\.js$/, maxKb: 20 },
   { label: 'SANAD Agent workspace', pattern: /^SanadAgentWorkspace-[A-Za-z0-9_-]+\.js$/, maxKb: 120 },
   { label: 'legacy application gate', pattern: /^OperationEntryGate-[A-Za-z0-9_-]+\.js$/, maxKb: 425 },
   {

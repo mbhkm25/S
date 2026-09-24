@@ -316,6 +316,7 @@ export default function SanadAgentWorkspace() {
   const [pendingPreferenceKey, setPendingPreferenceKey] = useState<PreferenceKey | null>(null);
   const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const initialNewConversationHandledRef = useRef(false);
 
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
@@ -433,7 +434,16 @@ export default function SanadAgentWorkspace() {
         }
         setPreferences(prefs);
         setThreads(loadedThreads);
-        const first = loadedThreads.find((thread) => thread.status === 'active') || null;
+        // A sidebar deep link is resolved exclusively against the participant-aware
+        // thread list already authorized by the backend.
+        const url = new URL(window.location.href);
+        const requested = url.searchParams.has('new') ? null : url.searchParams.get('thread');
+        const first = (requested && loadedThreads.find((thread) => thread.status === 'active' && thread.id === requested))
+          || loadedThreads.find((thread) => thread.status === 'active') || null;
+        if (url.searchParams.has('thread')) {
+          url.searchParams.delete('thread');
+          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        }
         if (first) {
           setSelectedThreadId(first.id);
         } else if (options.length === 1) {
@@ -608,12 +618,68 @@ export default function SanadAgentWorkspace() {
     }
   };
 
+  // The global sidebar owns the primary New Conversation action on every route.
+  // A route request is consumed once after the account/business context has loaded.
+  useEffect(() => {
+    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('new')) return;
+    initialNewConversationHandledRef.current = true;
+    url.searchParams.delete('new');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    void newThread();
+  }, [threadsLoading, businessLoading]);
+
+  useEffect(() => {
+    const handleGlobalNewConversation = () => {
+      if (threadsLoading || businessLoading) return;
+      void newThread();
+    };
+    window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
+    return () => window.removeEventListener('sanad:new-conversation', handleGlobalNewConversation);
+  }, [threadsLoading, businessLoading, sending, businesses]);
+
+  // Global history stays available in the persistent shell on every route.
+  // This is a notification to refresh its participant-aware read model; it is
+  // not an alternate persistence path or an additional financial data store.
+  useEffect(() => {
+    window.dispatchEvent(new Event('sanad:threads-updated'));
+  }, [threads]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('sanad:thread-selected', { detail: selectedThreadId }));
+  }, [selectedThreadId]);
+
   const selectThread = (threadId: string) => {
     if (sending) return;
     setPendingAttachments([]);
     setSelectedThreadId(threadId);
     setSidebarOpen(false);
   };
+
+  useEffect(() => {
+    const onGlobalSelect = (event: Event) => {
+      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
+      if (!threadId || threadsLoading || sending) return;
+      // Never trust a synthetic UI event as authorization; only use an active
+      // thread returned by the participant-aware listing RPC.
+      if (!threads.some((thread) => thread.id === threadId && thread.status === 'active')) return;
+      selectThread(threadId);
+    };
+    const onGlobalArchive = (event: Event) => {
+      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
+      if (!threadId || threadsLoading || sending) return;
+      void refreshThreads().then(({ target }) => {
+        if (selectedThreadId === threadId && !target) setMessages([]);
+      }).catch(() => setWorkspaceError('تعذر تحديث سجل المحادثات بعد الأرشفة.'));
+    };
+    window.addEventListener('sanad:select-conversation', onGlobalSelect);
+    window.addEventListener('sanad:thread-archived', onGlobalArchive);
+    return () => {
+      window.removeEventListener('sanad:select-conversation', onGlobalSelect);
+      window.removeEventListener('sanad:thread-archived', onGlobalArchive);
+    };
+  }, [threads, threadsLoading, sending, selectedThreadId]);
 
   const archiveThread = async (threadId: string) => {
     if (sending) return;
@@ -869,8 +935,8 @@ export default function SanadAgentWorkspace() {
         type="button"
         onClick={() => setSidebarOpen(true)}
         data-mobile-sidebar-trigger
-        className="absolute right-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 xl:hidden"
-        aria-label="فتح محادثات وإعدادات سند"
+        className="absolute right-2 top-2 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-nav-hover-bg)] hover:text-[var(--sanad-text-strong)]"
+        aria-label="فتح ذاكرة وإعدادات المساعد"
       >
         <PanelRightOpen className="h-4 w-4" />
       </button>
@@ -879,21 +945,16 @@ export default function SanadAgentWorkspace() {
         className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
       />
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[284px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
           assistantState={assistantPresentationState}
           businessLabel={businessLoading ? null : (businesses.find((business) => business.id === businessId)?.name || null)}
           businessLoading={businessLoading}
           canChooseBusiness={!businessLoading && businesses.length > 1 && !businessId}
           onChooseBusiness={() => setBusinessSelectionOpen(true)}
-          threads={threads}
-          selectedThreadId={selectedThreadId}
-          loading={threadsLoading}
           mobileOpen={sidebarOpen}
           onCloseMobile={() => setSidebarOpen(false)}
-          onSelect={selectThread}
           onNew={() => void newThread()}
-          onArchive={(id) => void archiveThread(id)}
           preferences={preferences}
           pendingPreferenceKey={pendingPreferenceKey}
           onPreferenceChange={(key, value) => void changePreference(key, value)}

@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react';
 import { useEffect, useState } from 'react';
-import { Inbox, Loader2 } from 'lucide-react';
+import { Inbox, Loader2, Menu } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { SANAD_APP_VERSION } from '../../lib/appVersion';
 import { getUserAvatarUrl } from '../../lib/userAvatar';
@@ -9,6 +9,8 @@ import { navigateProduct, productHref, shouldHandleProductLinkClick } from '../.
 
 type Props = {
   userId: string | null;
+  onOpenNavigation?: () => void;
+  utilityOnly?: boolean;
 };
 
 type HeaderProfile = {
@@ -27,7 +29,7 @@ function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
   navigateProduct('sanad-ai');
 }
 
-export default function ProductAppHeader({ userId }: Props) {
+export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly = false }: Props) {
   const [profile, setProfile] = useState<HeaderProfile | null>(null);
   const [loading, setLoading] = useState(Boolean(userId));
   const base = basePath();
@@ -60,28 +62,42 @@ export default function ProductAppHeader({ userId }: Props) {
   return (
     <header
       id="product_app_header"
-      className="sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4"
+      className={`sanad-product-header sticky top-0 z-[60] shrink-0 border-b px-3 backdrop-blur-xl sm:px-4 ${utilityOnly ? '!pt-1.5 !pb-1.5' : 'pb-2'}`}
       dir="rtl"
     >
       <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
-        <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
-          <div className="flex flex-col items-start">
-            <img
-              src={`${import.meta.env.BASE_URL}logo.png`}
-              alt="سند"
-              className="h-9 w-auto object-contain sm:h-10"
-            />
-            <span className="-mt-1 self-center font-mono text-[11px] font-medium tracking-wider text-slate-400" dir="ltr">
-              V{SANAD_APP_VERSION}
-            </span>
-          </div>
-        </a>
+        {utilityOnly && userId ? (
+          <span className="min-w-0 flex-1" aria-hidden="true" />
+        ) : (
+          <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
+            <div className="flex flex-col items-start">
+              <img
+                src={`${import.meta.env.BASE_URL}logo.png`}
+                alt="سند"
+                className="h-9 w-auto object-contain sm:h-10"
+              />
+              <span className="-mt-1 self-center font-mono text-[11px] font-medium tracking-wider text-slate-400" dir="ltr">
+                V{SANAD_APP_VERSION}
+              </span>
+            </div>
+          </a>
+        )}
 
         {userId ? (
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {onOpenNavigation ? (
+              <button
+                type="button"
+                onClick={onOpenNavigation}
+                className={`sanad-focus-ring flex items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-surface-1)] lg:hidden ${utilityOnly ? 'h-9 w-9' : 'h-11 w-11'}`}
+                aria-label="فتح تنقل سند"
+              >
+                <Menu className="h-4.5 w-4.5" />
+              </button>
+            ) : null}
             <a
               href="/payment-inbox.html"
-              className="sanad-focus-ring flex h-11 w-11 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)]"
+              className={`sanad-focus-ring flex items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-muted)] transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] hover:text-[var(--sanad-text-strong)] ${utilityOnly ? 'h-9 w-9' : 'h-11 w-11'}`}
               aria-label="فتح وارد المدفوعات"
               title="وارد المدفوعات"
             >
@@ -91,10 +107,10 @@ export default function ProductAppHeader({ userId }: Props) {
 
             <a
               href={`${base}profile`}
-              className="sanad-focus-ring flex min-h-11 items-center gap-2 rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] p-1 pl-2.5 pr-1 transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)]"
+              className={`sanad-focus-ring flex items-center gap-2 rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-2)] p-1 pl-2.5 pr-1 transition hover:border-[var(--sanad-border)] hover:bg-[var(--sanad-surface-1)] ${utilityOnly ? 'min-h-9' : 'min-h-11'}`}
               aria-label="فتح الحساب"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white ring-2 ring-white shadow-sm">
+              <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-950 text-white ring-2 ring-white shadow-sm ${utilityOnly ? 'h-7 w-7' : 'h-9 w-9'}`}>
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : profile?.avatar_path ? (

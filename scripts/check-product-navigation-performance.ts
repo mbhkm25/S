@@ -7,6 +7,7 @@ const workspace = readFileSync('src/features/financial/FinancialWorkspaceRoute.t
 const sectionRoute = readFileSync('src/features/financial/PersonalFinanceSectionRoute.tsx', 'utf8');
 const actionRoute = readFileSync('src/features/financial/FinancialActionRoute.tsx', 'utf8');
 const productNav = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
+const unifiedNav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx', 'utf8');
 const productHeader = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const navigation = readFileSync('src/lib/productNavigation.ts', 'utf8');
 const loaders = readFileSync('src/features/financial/productRouteLoaders.ts', 'utf8');
@@ -27,6 +28,12 @@ assert.match(shell, /lazy\(loadPersonalFinanceSectionRoute\)/);
 assert.match(shell, /subscribeProductNavigation/);
 assert.match(shell, /navigateProduct/);
 assert.match(shell, /<Suspense fallback=\{<RouteFallback/);
+assert.match(shell, /SanadUnifiedSidebar/);
+assert.match(shell, /SanadUnifiedEntryRoute/);
+assert.doesNotMatch(shell, /<ProductBottomNav/, 'legacy product rail/bottom nav must not be rendered by the target product shell');
+assert.match(unifiedNav, /navigateProduct/);
+assert.match(unifiedNav, /shouldHandleProductLinkClick/);
+assert.match(unifiedNav, /data-sanad-unified-navigation/);
 
 assert.match(productNav, /spaNavigation = legacyPage === undefined/);
 assert.match(productNav, /navigateProduct/);

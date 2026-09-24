@@ -4,6 +4,7 @@ import { buildAgentInsights } from '../supabase/functions/_shared/sanad-agent-in
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const globalHistory = readFileSync('src/components/navigation/SanadSidebarConversations.tsx', 'utf8');
 const responseBlocks = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts', 'utf8');
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
@@ -50,14 +51,15 @@ for (const required of [
 
 for (const required of [
   'محادثة جديدة',
-  'المحادثات',
   'الذاكرة',
   'الضبط',
   'تنبيهات ذكية',
   'بطاقات البيانات',
 ]) {
-  assert.ok(sidebar.includes(required), `sidebar missing ${required}`);
+  assert.ok(sidebar.includes(required), `contextual assistant panel missing ${required}`);
 }
+assert.match(globalHistory, /المحادثات/);
+assert.match(globalHistory, /listSanadAgentThreads/);
 
 for (const required of [
   'customer_statement',
