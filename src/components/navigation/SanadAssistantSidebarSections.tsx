@@ -174,6 +174,7 @@ export default function SanadAssistantSidebarSections({ compact = false }: { com
                 <RefreshCcw className={`h-3.5 w-3.5 ${loadingSummary ? 'animate-spin' : ''}`} />
               </button>
             </div>
+            <p className="text-[10px] leading-4 text-[var(--sanad-text-muted)]">قياسات زمنية فقط، دون حفظ محتوى رسائلك.</p>
             {summaryError ? <p className="text-[10px] text-[var(--sanad-danger)]">تعذر تحميل المؤشرات.</p> : null}
             {(summary?.scopes || []).filter((s) => labels[s.scope]).map((scope) => (
               <div key={scope.scope} className="my-1 rounded-md bg-[var(--sanad-surface-2)] px-2 py-1.5">
