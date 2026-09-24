@@ -1,4 +1,7 @@
-reason=deploy-stage2b-r1-shared-conversation-runtime
-requested_at=2026-09-23T20:14:00+03:00
-source_main_sha=815c5f242c1e531c140723af592feafa5389d0d8
-scope=production-pwa
+reason=deploy-stage2b-r3-one-sidebar
+source_pr=378
+accepted_candidate_sha=93962c31f34ac0cc6fdf1abe7d2d519b04a3cdd7
+source_main_sha=b77eee0961dfc816513525995234b3278ff80d4a
+release_gate=owner-accepted-local-preview-and-four-same-sha-ci-passed
+scope=production-web-pwa
+android_publish=unchanged
