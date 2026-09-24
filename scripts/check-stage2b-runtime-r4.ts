@@ -90,9 +90,9 @@ const erp = buildAgentPresentation([{
   },
 }]);
 const copy = String(erp.copy_text || '');
-assert.match(copy, /SAR: افتتاحي 1,234\\.56789/);
-assert.match(copy, /دائن 100\\.035/);
-assert.match(copy, /YER: افتتاحي — \\| مدين —/);
+assert.match(copy, /SAR: افتتاحي 1,234\.56789/);
+assert.match(copy, /دائن 100\.035/);
+assert.match(copy, /YER: افتتاحي — \| مدين —/);
 const summaries = erp.cards[0]?.currency_summaries as Array<{ currency: string; opening_balance: number | null }> | undefined;
 assert.equal(summaries?.[1]?.opening_balance, null);
 
