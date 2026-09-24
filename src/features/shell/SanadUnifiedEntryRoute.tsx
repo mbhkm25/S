@@ -232,7 +232,7 @@ export default function SanadUnifiedEntryRoute() {
                 <FileText className="mx-auto h-5 w-5 text-[var(--sanad-text-subtle)]" />
                 <p className="mt-2 text-[13px] text-[var(--sanad-text-muted)]">لا توجد عناصر تحتاج إلى عرض الآن.</p>
               </div>
-            ) : items.map((item) => <WorkItemRow key={item.id} item={item} />)}
+            ) : items.map((item) => <div key={item.id}><WorkItemRow item={item} /></div>)}
           </div>
         ) : null}
 
