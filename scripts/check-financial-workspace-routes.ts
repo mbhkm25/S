@@ -21,10 +21,11 @@ const styles = readFileSync('src/index.css', 'utf8');
 assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open unified SANAD conversation');
 assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات', 'الحساب والإعدادات']) {
+for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
 }
 assert.match(shell, /SanadUnifiedSidebar/);
+assert.match(unifiedSidebar, /الحساب والإعدادات/, 'Account/settings belongs to the global sidebar account menu.');
 assert.doesNotMatch(shell, /<ProductAppHeader/, 'The legacy product header is no longer mounted by SANAD unified shell.');
 assert.match(unifiedSidebar, /payment-inbox\.html/, 'Global sidebar must preserve payment inbox utility.');
 assert.match(unifiedSidebar, /NotificationBell/, 'Global sidebar must preserve notifications utility.');
