@@ -8,7 +8,8 @@ const sidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx'
 const history = readFileSync('src/components/navigation/SanadSidebarConversations.tsx', 'utf8');
 const foundation = readFileSync('src/styles/sanad-foundation.css', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const contextPanel = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const assistantSections = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const settingsProvider = readFileSync('src/features/shell/SanadAssistantSettingsContext.tsx', 'utf8');
 const entry = readFileSync('src/features/shell/SanadUnifiedEntryRoute.tsx', 'utf8');
 const businessCapability = readFileSync('src/features/shell/BusinessCapabilityRoute.tsx', 'utf8');
 
@@ -19,7 +20,8 @@ assert.ok(shell.indexOf('<SanadUnifiedSidebar') < shell.indexOf('{assistant ? ('
   'Product sidebar must be mounted outside route-specific workspaces.');
 assert.match(shell, /data-sanad-main-column="true"/);
 assert.match(shell, /data-unified-shell-body="true"/);
-assert.match(shell, /data-sanad-mobile-menu-slot="true"/);
+assert.match(shell, /data-sanad-mobile-menu-fab="true"/);
+assert.doesNotMatch(shell, /data-sanad-mobile-menu-slot=/);
 assert.doesNotMatch(shell, /<ProductAppHeader/);
 assert.doesNotMatch(shell, /ProductBottomNav/);
 assert.match(sidebar, /data-sanad-global-sidebar="true"/);
@@ -28,6 +30,8 @@ assert.match(sidebar, /lg:static lg:self-stretch/);
 assert.match(sidebar, /fixed inset-y-0 right-0/);
 assert.match(sidebar, /SanadUnifiedNavLinks/);
 assert.match(sidebar, /SanadSidebarConversations/);
+assert.match(sidebar, /SanadAssistantSidebarSections/);
+assert.match(sidebar, /data-sanad-global-nav-scroll="true"/);
 
 // Visual/IA refinements approved for R2.V2.
 assert.match(sidebar, /data-sanad-brand-lockup="vertical"/);
@@ -76,7 +80,9 @@ assert.match(history, /المحادثات/);
 assert.doesNotMatch(history, /supabase\.from\(['"]sanad_agent_threads/, 'History must read R1 authorized RPCs.');
 
 assert.match(agent, /data-conversation-surface="open"/);
-assert.match(agent, /AssistantWorkspaceSidebar/);
+assert.doesNotMatch(agent, /AssistantWorkspaceSidebar/);
+assert.match(agent, /useSanadAssistantSettings/);
+assert.match(shell, /SanadAssistantSettingsProvider/);
 assert.match(agent, /grid-cols-\[minmax\(0,1fr\)\]/);
 assert.match(agent, /sanad:select-conversation/);
 assert.match(agent, /sanad:thread-selected/);
@@ -84,13 +90,17 @@ assert.match(agent, /sanad:threads-updated/);
 assert.match(agent, /sanad:thread-archived/);
 assert.match(agent, /data-scroll-owner="timeline"/);
 assert.match(agent, /data-workspace-slot="composer"/);
-assert.match(contextPanel, /data-sanad-context-panel="memory-settings-only"/);
-assert.match(contextPanel, /الذاكرة/);
-assert.match(contextPanel, /الضبط/);
-assert.doesNotMatch(contextPanel, /listSanadAgentThreads/);
-assert.doesNotMatch(contextPanel, /SanadUnifiedNavLinks/);
-assert.doesNotMatch(contextPanel, /tab === 'chats'/);
-assert.doesNotMatch(contextPanel, /xl:static/, 'The contextual memory panel must be on-demand rather than a permanent second sidebar.');
+assert.match(assistantSections, /data-sanad-assistant-inline="true"/);
+assert.match(assistantSections, /data-sanad-inline-memory="true"/);
+assert.match(assistantSections, /data-sanad-inline-settings="true"/);
+assert.match(assistantSections, /الذاكرة/);
+assert.match(assistantSections, /ضبط المساعد/);
+assert.match(settingsProvider, /getSanadAgentPreferences/);
+assert.match(settingsProvider, /getSanadAgentContext/);
+assert.match(settingsProvider, /forgetSanadAgentMemory/);
+assert.doesNotMatch(agent, /data-mobile-sidebar-trigger|data-sanad-context-panel/);
+assert.doesNotMatch(assistantSections, /listSanadAgentThreads/);
+assert.doesNotMatch(assistantSections, /SanadUnifiedNavLinks/);
 
 for (const token of ['today','library','connections','work\\/(?:tasks|approvals|automations)','business\\/manage']) {
   assert.ok(main.includes(token), 'Router missing ' + token);
