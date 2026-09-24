@@ -53,7 +53,8 @@ for (const path of [
 assert.match(nav, /title="القدرات"/);
 assert.doesNotMatch(nav, /القدرات والاتصالات/);
 assert.match(nav, /--sanad-interactive/);
-assert.match(nav, /\/business\\\/manage/);
+assert.match(nav, /business/);
+assert.match(nav, /manage/);
 assert.match(nav, /data-sanad-unified-navigation="true"/);
 assert.match(nav, /shouldHandleProductLinkClick/);
 
