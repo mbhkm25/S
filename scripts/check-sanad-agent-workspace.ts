@@ -437,7 +437,7 @@ assert.match(attachmentApi, /attachment_upload/);
 assert.match(sidebar, /أداء سند · آخر 7 أيام/);
 assert.match(sidebar, /P50/);
 assert.match(sidebar, /P95/);
-assert.match(sidebar, /دون حفظ محتوى رسائلك/);
+assert.match(sidebar, /الحقائق المالية تُقرأ دائمًا من مصادرها الحية/);
 
 assert.match(runtime, /recordAgentServerMetric/);
 assert.match(runtime, /modelLatencyMs/);
