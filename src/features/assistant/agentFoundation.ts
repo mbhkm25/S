@@ -371,10 +371,10 @@ export type SanadAssistantCustomerStatementCard = {
   movement_count: number;
   currency_summaries: Array<{
     currency: string;
-    opening_balance: number;
-    debit: number;
-    credit: number;
-    closing_balance: number;
+    opening_balance: number | null;
+    debit: number | null;
+    credit: number | null;
+    closing_balance: number | null;
   }>;
   copy_text?: string;
   href?: string | null;
