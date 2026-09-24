@@ -140,7 +140,7 @@ export default function AssistantWorkspaceSidebar(props: Props) {
           ['memory', Brain, 'الذاكرة'],
           ['settings', Settings2, 'الضبط'],
         ].map(([id, Icon, label]) => {
-          const Component = Icon as typeof MessageSquare;
+          const Component = Icon as typeof Brain;
           const active = tab === id;
           return (
             <button
