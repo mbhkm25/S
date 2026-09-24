@@ -7,6 +7,7 @@ import { navigateProduct, productHref } from '../../lib/productNavigation';
 import NotificationBell from '../notifications/NotificationBell';
 import SanadUnifiedNavLinks from './SanadUnifiedNavLinks';
 import SanadSidebarConversations from './SanadSidebarConversations';
+import SanadAssistantSidebarSections from './SanadAssistantSidebarSections';
 
 
 type Props = {
@@ -121,11 +122,15 @@ export default function SanadUnifiedSidebar({
             onClick={(event) => {
               if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
               event.preventDefault();
+              if (collapsed && window.matchMedia('(min-width: 1024px)').matches) {
+                toggleCollapsed();
+                return;
+              }
               navigateProduct('sanad-ai');
               onCloseMobile();
             }}
             className={`sanad-focus-ring flex min-w-0 flex-col items-start rounded-lg text-right ${collapsed ? 'lg:items-center' : ''}`}
-            aria-label="العودة إلى محادثة سند"
+            aria-label={collapsed ? 'توسيع الشريط الجانبي' : 'العودة إلى محادثة سند'}
           >
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
@@ -182,6 +187,7 @@ export default function SanadUnifiedSidebar({
               onNavigate={onCloseMobile}
             />
           </div>
+          <SanadAssistantSidebarSections compact={collapsed} />
         </div>
 
         <div data-sanad-sidebar-utilities="true" className={`shrink-0 border-t border-[var(--sanad-border-subtle)] bg-[var(--sanad-sidebar-footer-bg)] pb-[max(env(safe-area-inset-bottom,0px),0.5rem)] pt-2 ${collapsed ? 'px-1 lg:px-1' : 'px-3'}`}>
