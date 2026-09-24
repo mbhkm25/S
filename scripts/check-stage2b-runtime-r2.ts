@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 
 const main = readFileSync('src/main.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
-const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const nav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx', 'utf8');
 const sidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
@@ -18,11 +17,10 @@ assert.ok(shell.indexOf('<SanadUnifiedSidebar') < shell.indexOf('{assistant ? ('
   'Global sidebar must be mounted above route-specific conditional rendering.');
 assert.match(shell, /data-sanad-main-column="true"/);
 assert.match(shell, /data-unified-shell-body="true"/);
-assert.match(shell, /onOpenNavigation=\{\(\) => setNavigationOpen\(true\)\}/);
+assert.match(shell, /data-sanad-mobile-menu-slot="true"/);
+assert.match(shell, /onClick=\{\(\) => setNavigationOpen\(true\)\}/);
+assert.doesNotMatch(shell, /<ProductAppHeader/, 'No main product header in the unified shell.');
 assert.doesNotMatch(shell, /ProductBottomNav/);
-assert.match(header, /onOpenNavigation/);
-assert.match(header, /utilityOnly/);
-assert.match(header, /فتح تنقل سند/);
 
 // The primary sidebar is desktop-sticky for document routes and shell-owned for viewport routes.
 // Only the global drawer is viewport-fixed on mobile; the contextual conversation panel stays
@@ -35,7 +33,11 @@ assert.match(sidebar, /fixed inset-y-0 right-0/);
 assert.match(sidebar, /SanadUnifiedNavLinks/);
 assert.match(sidebar, /sections=\{\['primary', 'work', 'capabilities'\]\}/);
 assert.match(sidebar, /sections=\{\['utility'\]\}/);
-assert.match(sidebar, /فتح سند/);
+assert.match(sidebar, /data-sanad-primary-action="new-conversation"/);
+assert.match(sidebar, /محادثة جديدة/);
+assert.match(sidebar, /NotificationBell/);
+assert.match(sidebar, /getUserAvatarUrl/);
+assert.doesNotMatch(sidebar, />فتح سند</);
 
 for (const label of [
   'اليوم', 'المكتبة', 'المهام', 'الموافقات',
@@ -52,7 +54,9 @@ for (const path of [
 }
 assert.match(nav, /title="القدرات"/);
 assert.doesNotMatch(nav, /القدرات والاتصالات/);
-assert.match(nav, /--sanad-interactive/);
+assert.match(nav, /--sanad-nav-active-bg/);
+assert.match(nav, /--sanad-brand-mint/);
+assert.doesNotMatch(nav, /border-r-2/);
 assert.match(nav, /business/);
 assert.match(nav, /manage/);
 assert.match(nav, /data-sanad-unified-navigation="true"/);
@@ -64,6 +68,7 @@ assert.match(agent, /xl:grid-cols-\[252px_minmax\(0,1fr\)\]/);
 assert.match(agentSidebar, /data-sidebar-density="compact"/);
 assert.match(agentSidebar, /مساحة المحادثة/);
 assert.match(agentSidebar, /محادثة جديدة/);
+assert.doesNotMatch(agentSidebar, /bg-\[var\(--sanad-surface-inverse\)\]/, 'Context panel must not duplicate the primary full-width New Chat action.');
 assert.match(agentSidebar, /المحادثات/);
 assert.match(agentSidebar, /الذاكرة/);
 assert.doesNotMatch(agentSidebar, /SanadUnifiedNavLinks/);
