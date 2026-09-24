@@ -86,6 +86,10 @@ export function SanadAssistantSettingsProvider({
     return request;
   }, [preferences]);
 
+  useEffect(() => {
+    if (userId) void ensurePreferences();
+  }, [userId, ensurePreferences]);
+
   const changePreference = useCallback(async (key: AssistantPreferenceKey, value: boolean) => {
     if (!userRef.current || !preferences || pendingPreferenceRef.current) return;
     const account = userRef.current;
