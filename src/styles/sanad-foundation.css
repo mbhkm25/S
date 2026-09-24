@@ -34,6 +34,7 @@
   --sanad-nav-action-bg: #f8fbf6;
   --sanad-nav-active-bg: #e9f2eb;
   --sanad-nav-hover-bg: #eff1ec;
+  --sanad-sidebar-section-bg: linear-gradient(95deg, #eaf4e9 0%, #f1f1eb 72%, #f4f3ee 100%);
 
   /* Interactive roles. */
   --sanad-interactive: #237b67;
@@ -123,6 +124,7 @@
   --sanad-nav-action-bg: #192d2a;
   --sanad-nav-active-bg: #24413a;
   --sanad-nav-hover-bg: #1c332d;
+  --sanad-sidebar-section-bg: linear-gradient(95deg, #244037 0%, #1a2d2b 100%);
   --sanad-interactive-soft: #10322e;
   --sanad-selection: rgba(75, 201, 207, 0.24);
 }
@@ -271,7 +273,16 @@
     background: color-mix(in srgb, var(--sanad-surface-1) 97%, transparent);
   }
 
-  .sanad-sidebar-surface {
+  .sanad-sidebar-section-heading {
+  background: var(--sanad-sidebar-section-bg);
+  border: 1px solid var(--sanad-border-subtle);
+  border-radius: var(--sanad-radius-sm);
+  min-height: 2.1rem;
+  margin-block: 0.25rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.sanad-sidebar-surface {
     border-color: var(--sanad-border-subtle);
     background: var(--sanad-sidebar-bg);
   }
