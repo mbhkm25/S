@@ -85,7 +85,7 @@ assert.match(shell, /sanad-canvas/);
 assert.doesNotMatch(shell, /var\(--sanad-mobile-nav-stack-height\)/, 'unified shell must not reserve legacy bottom-nav stack height');
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(unifiedNav, /var\(--sanad-nav-active-bg\)/);
-assert.match(unifiedNav, /var\(--sanad-surface-2\)/);
+assert.match(unifiedNav, /var\(--sanad-nav-hover-bg\)/);
 assert.match(unifiedSidebar, /var\(--sanad-nav-action-bg\)/);
 assert.match(unifiedSidebar, /sanad-sidebar-surface/);
 assert.match(workspace, /sanad-workspace-canvas/);
