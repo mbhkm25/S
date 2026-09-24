@@ -23,9 +23,18 @@ function num(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function money(value: unknown): string {
-  const n = num(value) ?? 0;
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
+// Display only. Never round an already-parsed ERP value again in copied
+// statements; the JSON transport may already have lost original decimal text.
+// Full decimal-string fidelity is a separate canonical RPC contract.
+export function money(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const raw = typeof value === "number" && Number.isFinite(value)
+    ? value.toString()
+    : typeof value === "string" ? value.trim() : "";
+  const match = /^(-?)(\\d+)(?:\\.(\\d+))?$/.exec(raw);
+  if (!match) return raw || "—";
+  const integer = match[2].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ",");
+  return `${match[1]}${integer}${match[3] ? "." + match[3] : ""}`;
 }
 
 function currency(row: Json): string {
