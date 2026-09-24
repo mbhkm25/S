@@ -879,7 +879,7 @@ export default function SanadAgentWorkspace() {
         className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
       />
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[284px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[252px_minmax(0,1fr)]">
         <AssistantWorkspaceSidebar
           assistantState={assistantPresentationState}
           businessLabel={businessLoading ? null : (businesses.find((business) => business.id === businessId)?.name || null)}
