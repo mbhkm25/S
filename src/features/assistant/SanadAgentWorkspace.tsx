@@ -316,6 +316,7 @@ export default function SanadAgentWorkspace() {
   const [pendingPreferenceKey, setPendingPreferenceKey] = useState<PreferenceKey | null>(null);
   const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const initialNewConversationHandledRef = useRef(false);
 
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
@@ -607,6 +608,27 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
     }
   };
+
+  // The global sidebar owns the primary New Conversation action on every route.
+  // A route request is consumed once after the account/business context has loaded.
+  useEffect(() => {
+    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('new')) return;
+    initialNewConversationHandledRef.current = true;
+    url.searchParams.delete('new');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    void newThread();
+  }, [threadsLoading, businessLoading]);
+
+  useEffect(() => {
+    const handleGlobalNewConversation = () => {
+      if (threadsLoading || businessLoading) return;
+      void newThread();
+    };
+    window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
+    return () => window.removeEventListener('sanad:new-conversation', handleGlobalNewConversation);
+  }, [threadsLoading, businessLoading, sending, businesses]);
 
   const selectThread = (threadId: string) => {
     if (sending) return;
