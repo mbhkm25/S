@@ -12,6 +12,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import SanadAgentActionCard from './SanadAgentActionCard';
+import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import type {
   SanadAssistantAnswerCard,
   SanadAssistantAttention,
@@ -19,17 +20,17 @@ import type {
   SanadAssistantResponseContract,
 } from './agentFoundation';
 
-function number(value: number | null | undefined) {
-  return new Intl.NumberFormat('ar-YE-u-nu-latn', { maximumFractionDigits: 2 }).format(Number(value || 0));
+function number(value: number | null | undefined, currency?: string | null) {
+  return formatSanadSourceAmount(value, currency).text;
+}
+
+function sourceDate(value?: string | null) {
+  const source = formatSanadSourceDate(value);
+  return source.valid ? source.text : source.text === '—' ? '—' : `صيغة التاريخ في المصدر: ${source.text}`;
 }
 
 function dateTime(value?: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(date);
+  return sourceDate(value);
 }
 
 function CopyButton({ text, label = 'نسخ' }: { text?: string; label?: string }) {
@@ -101,13 +102,13 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             <div key={item.currency} className="border-b border-slate-100 py-3.5 last:border-b-0 sm:border-b-0 sm:border-l sm:px-4 sm:last:border-l-0">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-slate-400">الرصيد الختامي</span>
-                <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600">{item.currency}</span>
+                <bdi dir="ltr" className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600">{item.currency}</bdi>
               </div>
-              <p className="mt-1 text-xl font-semibold text-slate-950" dir="ltr">{number(item.closing_balance)}</p>
+              <p className="mt-1 text-xl font-semibold text-slate-950" dir="ltr">{number(item.closing_balance, item.currency)}</p>
               <dl className="mt-3 grid grid-cols-3 gap-1 text-center">
-                <div><dt className="text-[11px] text-slate-400">افتتاحي</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.opening_balance)}</dd></div>
-                <div><dt className="text-[11px] text-slate-400">مدين</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.debit)}</dd></div>
-                <div><dt className="text-[11px] text-slate-400">دائن</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.credit)}</dd></div>
+                <div><dt className="text-[11px] text-slate-400">افتتاحي</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.opening_balance, item.currency)}</dd></div>
+                <div><dt className="text-[11px] text-slate-400">مدين</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.debit, item.currency)}</dd></div>
+                <div><dt className="text-[11px] text-slate-400">دائن</dt><dd className="mt-0.5 text-xs font-medium text-slate-700" dir="ltr">{number(item.credit, item.currency)}</dd></div>
               </dl>
             </div>
           ))}
@@ -115,7 +116,7 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
 
         {(card.from_date || card.to_date) && (
           <p className="mt-3 text-xs text-slate-400">
-            الفترة: {card.from_date || 'البداية'} — {card.to_date || 'اليوم'}
+            الفترة: <bdi dir="auto">{card.from_date ? sourceDate(card.from_date) : 'البداية'}</bdi> — <bdi dir="auto">{card.to_date ? sourceDate(card.to_date) : 'اليوم'}</bdi>
           </p>
         )}
 
@@ -156,12 +157,14 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
             <div className="min-w-0">
               <p className="truncate text-[13px] font-medium text-slate-800">{item.label}</p>
               <p className="mt-0.5 truncate text-xs text-slate-400">
-                {[item.party_name, item.date, item.currency].filter(Boolean).join(' · ')}
+                {[item.party_name, item.date ? sourceDate(item.date) : null, item.currency].filter(Boolean).map((part, partIndex) => (
+                  <span key={partIndex}><bdi dir="auto">{part}</bdi>{partIndex < [item.party_name, item.date, item.currency].filter(Boolean).length - 1 ? ' · ' : ''}</span>
+                ))}
               </p>
             </div>
             <div className="shrink-0 text-left">
               {typeof item.source_line_total === 'number' && (
-                <p className="text-[13px] font-medium text-slate-700" dir="ltr">{number(item.source_line_total)}</p>
+                <p className="text-[13px] font-medium text-slate-700" dir="ltr">{number(item.source_line_total, item.currency)} {item.currency ? <bdi>{item.currency}</bdi> : null}</p>
               )}
               <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
             </div>
@@ -225,12 +228,14 @@ function PaymentInboxCard({ card }: { card: Extract<SanadAssistantAnswerCard, { 
                 {[item.financial_entity, item.receiver_name].filter(Boolean).join(' · ') || 'عملية دفع'}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                {[item.reference_number ? `مرجع ${item.reference_number}` : null, item.transaction_datetime, item.status].filter(Boolean).join(' · ')}
+                {[item.reference_number ? `مرجع ${item.reference_number}` : null, item.transaction_datetime ? sourceDate(item.transaction_datetime) : null, item.status].filter(Boolean).map((part, idx, parts) => (
+                  <span key={idx}><bdi dir="auto">{part}</bdi>{idx < parts.length - 1 ? ' · ' : ''}</span>
+                ))}
               </p>
             </div>
             <div className="shrink-0 text-left">
               {typeof item.amount === 'number' ? (
-                <p className="text-[13px] font-medium text-slate-800" dir="ltr">{number(item.amount)} {item.currency || ''}</p>
+                <p className="text-[13px] font-medium text-slate-800" dir="ltr">{number(item.amount, item.currency)} {item.currency || ''}</p>
               ) : null}
               <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
             </div>

@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { SanadAssistantActionReviewCard } from './agentFoundation';
+import { describeSanadActionStatus } from './sanadOperationalState';
 import {
   approveSanadAgentAction,
   cancelSanadAgentAction,
@@ -22,12 +23,16 @@ type Props = {
   onStatusChange?: (status: string) => void;
 };
 
-function statusMeta(status: string) {
-  if (status === 'completed') return { label: 'تم التنفيذ', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
-  if (status === 'cancelled') return { label: 'ملغاة', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
-  if (status === 'failed') return { label: 'تعذر التنفيذ', cls: 'bg-rose-50 text-rose-700 border-rose-100' };
-  if (status === 'approved' || status === 'executing') return { label: 'جارٍ التنفيذ', cls: 'bg-amber-50 text-amber-700 border-amber-100' };
-  return { label: 'بانتظار اعتمادك', cls: 'bg-indigo-50 text-indigo-700 border-indigo-100' };
+function statusMeta(status: string, actionType: string, result: Record<string, unknown> | null) {
+  const state = describeSanadActionStatus(status, actionType, result);
+  const classes = {
+    success: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    pending: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+    warning: 'bg-amber-50 text-amber-700 border-amber-100',
+    muted: 'bg-slate-100 text-slate-500 border-slate-200',
+    danger: 'bg-rose-50 text-rose-700 border-rose-100',
+  } as const;
+  return { ...state, cls: classes[state.tone] };
 }
 
 function resultLabel(action: SanadAgentAction | null) {
@@ -47,12 +52,13 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   const [action, setAction] = useState<SanadAgentAction | null>(null);
   const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | null>(null);
   const [error, setError] = useState('');
+  const [verified, setVerified] = useState(false);
 
   useEffect(() => {
     let alive = true;
     void getSanadAgentAction(card.action_id)
-      .then((row) => { if (alive) setAction(row); })
-      .catch(() => null);
+      .then((row) => { if (alive) { setAction(row); setVerified(true); } })
+      .catch(() => { if (alive) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
     return () => { alive = false; };
   }, [card.action_id]);
 
@@ -60,8 +66,9 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   const version = action?.version || card.version;
 
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [onStatusChange, status]);
+    // The message-level activity indicator must not report a stale card as verified.
+    if (verified) onStatusChange?.(status);
+  }, [onStatusChange, status, verified]);
   const review = action?.review || {
     title: card.title,
     summary: card.summary || undefined,
@@ -71,8 +78,8 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
     approval_effect: card.approval_effect || undefined,
     writes_to_erp: card.writes_to_erp,
   };
-  const meta = statusMeta(status);
-  const locked = status !== 'review' || busy !== null || review.writes_to_erp === true;
+  const meta = statusMeta(status, action?.action_type || card.action_type, action?.result || null);
+  const locked = status !== 'review' || busy !== null || review.writes_to_erp === true || !verified;
   const target = resultLabel(action);
 
   const approve = async () => {
@@ -154,14 +161,12 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
         ) : null}
 
         {status === 'completed' ? (
-          <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-emerald-800">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className={`flex items-start gap-2 rounded-xl p-3 ${meta.tone === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}>
+            {meta.tone === 'success'
+              ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
             <div>
-              <p className="text-xs font-semibold">
-                {action?.action_type === 'commercial_document_draft'
-                  ? 'تم إنشاء المستند كمسودة داخل سند — لم يتم ترحيله.'
-                  : 'تم تنفيذ العملية المالية داخل سند بعد اعتمادك.'}
-              </p>
+              <p className="text-xs font-semibold">{meta.detail}</p>
               {target ? (
                 <a href={target.href} className="mt-2 inline-flex rounded-lg bg-white px-2.5 py-1.5 text-sm font-semibold shadow-sm">
                   {target.label}

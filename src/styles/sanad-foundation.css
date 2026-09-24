@@ -140,7 +140,7 @@
   }
 
   .sanad-canvas[data-product-area='assistant'] {
-    background: var(--sanad-signature-assistant) top / 100% 7rem no-repeat, var(--sanad-bg-canvas);
+    background: var(--sanad-bg-canvas);
   }
 
   .sanad-canvas[data-product-area='financial'] {
@@ -236,9 +236,7 @@
   }
 
   .sanad-workspace-canvas {
-    background:
-      var(--sanad-signature-assistant) top / 100% 5rem no-repeat,
-      var(--sanad-surface-1);
+    background: var(--sanad-surface-1);
   }
 
   .sanad-product-header {

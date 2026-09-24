@@ -19,13 +19,23 @@ function text(value: unknown): string {
 }
 
 function num(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-function money(value: unknown): string {
-  const n = num(value) ?? 0;
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
+// Display only. Never round an already-parsed ERP value again in copied
+// statements; the JSON transport may already have lost original decimal text.
+// Full decimal-string fidelity is a separate canonical RPC contract.
+export function money(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const raw = typeof value === "number" && Number.isFinite(value)
+    ? value.toString()
+    : typeof value === "string" ? value.trim() : "";
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!match) return raw || "—";
+  const integer = match[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${match[1]}${integer}${match[3] ? "." + match[3] : ""}`;
 }
 
 function currency(row: Json): string {
@@ -54,10 +64,10 @@ function customerStatementPresentation(row: AgentToolOutput) {
 
   const currencySummaries = totals.map((item) => ({
     currency: currency(item),
-    opening_balance: num(item.opening_balance) ?? 0,
-    debit: num(item.debit) ?? 0,
-    credit: num(item.credit) ?? 0,
-    closing_balance: num(item.closing_balance) ?? 0,
+    opening_balance: num(item.opening_balance),
+    debit: num(item.debit),
+    credit: num(item.credit),
+    closing_balance: num(item.closing_balance),
   }));
 
   const copyLines = [
@@ -177,7 +187,7 @@ function replicaPresentation(row: AgentToolOutput) {
   const currentSync = object(ctx.current_sync);
   const received = object(ctx.received_counts);
   const tableCount = Object.keys(received).length;
-  const rowCount = Object.values(received).reduce((sum, value) => sum + (num(value) ?? 0), 0);
+  const rowCount = Object.values(received).reduce<number>((sum, value) => sum + (num(value) ?? 0), 0);
 
   const cards: Card[] = [{
     type: "replica_status",

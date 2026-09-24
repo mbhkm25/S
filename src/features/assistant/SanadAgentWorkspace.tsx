@@ -885,11 +885,6 @@ export default function SanadAgentWorkspace() {
       data-assistant-state={assistantPresentationState}
       className="sanad-workspace-canvas relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
-      />
-
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)]">
         <div className="relative flex min-h-0 min-w-0 flex-col">
           {workspaceError ? (

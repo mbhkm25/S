@@ -11,6 +11,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
+import { describeSanadWorkItem } from './sanadWorkItemPresentation';
 
 type WorkItem = {
   id: string;
@@ -22,6 +24,8 @@ type WorkItem = {
   due_at?: string | null;
   source_type: string;
   source_id: string;
+  business_id?: string | null;
+  action_payload?: Record<string, unknown> | null;
   action_type?: string;
   metadata?: Record<string, unknown>;
 };
@@ -88,15 +92,35 @@ const META: Record<EntryKind, { title: string; eyebrow: string; description: str
 };
 
 function formatDate(value?: string | null): string {
-  if (!value) return '—';
-  try {
-    return new Intl.DateTimeFormat('ar-YE-u-nu-latn', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
+  const date = formatSanadSourceDate(value);
+  return date.valid ? date.text : date.text === '—' ? '—' : `صيغة التاريخ في المصدر: ${date.text}`;
+}
+
+function WorkItemRow({ item }: { item: WorkItem }) {
+  const shown = describeSanadWorkItem(item);
+  return (
+    <article className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">{item.title}</h2>
+          {item.priority >= 90 ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">عاجل</span> : null}
+        </div>
+        {item.summary ? <p className="mt-1 text-[12px] leading-5 text-[var(--sanad-text-muted)]">{item.summary}</p> : null}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--sanad-text-subtle)]">
+          <span>{shown.sourceLabel}</span>
+          <span>· {shown.statusLabel}</span>
+          <span>· المرجع <bdi dir="ltr" title={shown.rawRef} className="font-medium">{shown.reference}</bdi></span>
+          {shown.details.map((part, index) => <span key={index}>· <bdi dir="auto">{part}</bdi></span>)}
+        </div>
+        {shown.incomplete ? (
+          <p className="mt-1 text-[10px] text-[var(--sanad-text-subtle)]">لم يُرجع المصدر الحالي اسم الطرف أو المبلغ؛ المرجع أعلاه يميّز هذا العنصر.</p>
+        ) : null}
+      </div>
+      <div className="text-[11px] text-[var(--sanad-text-subtle)]">
+        {item.due_at ? <bdi dir="auto">{formatDate(item.due_at)}</bdi> : 'بدون موعد'}
+      </div>
+    </article>
+  );
 }
 
 export default function SanadUnifiedEntryRoute() {
@@ -208,19 +232,7 @@ export default function SanadUnifiedEntryRoute() {
                 <FileText className="mx-auto h-5 w-5 text-[var(--sanad-text-subtle)]" />
                 <p className="mt-2 text-[13px] text-[var(--sanad-text-muted)]">لا توجد عناصر تحتاج إلى عرض الآن.</p>
               </div>
-            ) : items.map((item) => (
-              <article key={item.id} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">{item.title}</h2>
-                    {item.priority >= 90 ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">عاجل</span> : null}
-                  </div>
-                  {item.summary ? <p className="mt-1 text-[12px] leading-5 text-[var(--sanad-text-muted)]">{item.summary}</p> : null}
-                  <p className="mt-2 text-[10px] text-[var(--sanad-text-subtle)]">{item.source_type} · {item.status}</p>
-                </div>
-                <div className="text-[11px] text-[var(--sanad-text-subtle)]">{item.due_at ? formatDate(item.due_at) : 'بدون موعد'}</div>
-              </article>
-            ))}
+            ) : items.map((item) => <div key={item.id}><WorkItemRow item={item} /></div>)}
           </div>
         ) : null}
 
