@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
-  PanelRightOpen,
   RotateCcw,
   SendHorizontal,
   Wrench,
@@ -20,19 +19,14 @@ import {
 import {
   archiveSanadAgentThread,
   createSanadAgentThread,
-  forgetSanadAgentMemory,
   getSanadAgentContext,
-  getSanadAgentPreferences,
   getSanadAgentThread,
   listSanadAgentThreads,
   markSanadAgentThreadRead,
   updateSanadAgentMessageFeedback,
-  updateSanadAgentPreferences,
-  type SanadAgentMemory,
-  type SanadAgentPreferences,
   type SanadAgentThreadSummary,
 } from './assistantWorkspaceApi';
-import AssistantWorkspaceSidebar from './AssistantWorkspaceSidebar';
+import { useSanadAssistantSettings } from '../shell/SanadAssistantSettingsContext';
 import SanadAgentResponseBlocks from './SanadAgentResponseBlocks';
 import SanadConversationMarkdown from './SanadConversationMarkdown';
 import SanadMessageActions from './SanadMessageActions';
@@ -50,10 +44,6 @@ import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistan
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
 type BusinessOption = { id: string; name: string };
-type PreferenceKey = keyof Pick<SanadAgentPreferences,
-  'save_history_enabled' | 'memory_enabled' | 'proactive_insights_enabled' | 'response_cards_enabled'
->;
-
 type WorkspaceMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -312,10 +302,7 @@ export default function SanadAgentWorkspace() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
-  const [preferences, setPreferences] = useState<SanadAgentPreferences | null>(null);
-  const [pendingPreferenceKey, setPendingPreferenceKey] = useState<PreferenceKey | null>(null);
-  const [memories, setMemories] = useState<SanadAgentMemory[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { preferences, setMemorySnapshot } = useSanadAssistantSettings();
   const initialNewConversationHandledRef = useRef(false);
 
   const [draft, setDraft] = useState('');
@@ -414,9 +401,8 @@ export default function SanadAgentWorkspace() {
       setThreadsLoading(true);
       setWorkspaceError(null);
       try {
-        const [{ data, error }, prefs, loadedThreads] = await Promise.all([
+        const [{ data, error }, loadedThreads] = await Promise.all([
           supabase.rpc('get_my_account_center_v1'),
-          getSanadAgentPreferences(),
           listSanadAgentThreads(),
         ]);
         if (!alive) return;
@@ -432,7 +418,6 @@ export default function SanadAgentWorkspace() {
           });
           setBusinesses(options);
         }
-        setPreferences(prefs);
         setThreads(loadedThreads);
         // A sidebar deep link is resolved exclusively against the participant-aware
         // thread list already authorized by the backend.
@@ -468,7 +453,6 @@ export default function SanadAgentWorkspace() {
   useEffect(() => {
     if (!selectedThreadId) {
       setMessages([]);
-      setMemories([]);
       return;
     }
     let alive = true;
@@ -485,7 +469,7 @@ export default function SanadAgentWorkspace() {
         if (!alive) return;
         setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
         setBusinessSelectionOpen(false);
-        setMemories(context.memories);
+        setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
         const lastSequence = detail.messages.at(-1)?.sequence_no ?? 0;
@@ -583,7 +567,6 @@ export default function SanadAgentWorkspace() {
     setBusinessId(nextBusinessId || '');
     setSelectedThreadId(id);
     setBusinessSelectionOpen(false);
-    setSidebarOpen(false);
     await refreshThreads(id);
     window.setTimeout(() => textareaRef.current?.focus(), 50);
     return id;
@@ -608,7 +591,6 @@ export default function SanadAgentWorkspace() {
       setSelectedThreadId(null);
       setBusinessId('');
       setBusinessSelectionOpen(true);
-      setSidebarOpen(false);
       return;
     }
     try {
@@ -654,7 +636,6 @@ export default function SanadAgentWorkspace() {
     if (sending) return;
     setPendingAttachments([]);
     setSelectedThreadId(threadId);
-    setSidebarOpen(false);
   };
 
   useEffect(() => {
@@ -697,34 +678,6 @@ export default function SanadAgentWorkspace() {
       }
     } catch (cause) {
       setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر أرشفة المحادثة.');
-    }
-  };
-
-  const changePreference = async (
-    key: PreferenceKey,
-    value: boolean,
-  ) => {
-    if (!preferences || pendingPreferenceKey) return;
-    const previous = preferences;
-    setWorkspaceError(null);
-    setPendingPreferenceKey(key);
-    setPreferences({ ...preferences, [key]: value });
-    try {
-      setPreferences(await updateSanadAgentPreferences({ [key]: value }));
-    } catch (cause) {
-      setPreferences(previous);
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر حفظ إعداد المساعد.');
-    } finally {
-      setPendingPreferenceKey(null);
-    }
-  };
-
-  const forgetMemory = async (memoryId: string) => {
-    try {
-      await forgetSanadAgentMemory(memoryId);
-      setMemories((current) => current.filter((item) => item.id !== memoryId));
-    } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر نسيان الذاكرة.');
     }
   };
 
@@ -872,7 +825,7 @@ export default function SanadAgentWorkspace() {
       }
       if (/^(?:تذكر|تذكّر|احفظ|احتفظ)\b/i.test(prompt)) {
         const context = await getSanadAgentContext(threadId);
-        setMemories(context.memories);
+        setMemorySnapshot(threadId, context.memories);
       }
     } catch (cause) {
       clearAssistantSuccessTimeout();
@@ -929,39 +882,15 @@ export default function SanadAgentWorkspace() {
     <section
       id="sanad-agent-workspace"
       data-conversation-surface="open"
+      data-assistant-state={assistantPresentationState}
       className="sanad-workspace-canvas relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
-      <button
-        type="button"
-        onClick={() => setSidebarOpen(true)}
-        data-mobile-sidebar-trigger
-        className="absolute right-2 top-2 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)] transition hover:bg-[var(--sanad-nav-hover-bg)] hover:text-[var(--sanad-text-strong)]"
-        aria-label="فتح ذاكرة وإعدادات المساعد"
-      >
-        <PanelRightOpen className="h-4 w-4" />
-      </button>
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-white via-white/80 to-transparent"
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)]">
-        <AssistantWorkspaceSidebar
-          assistantState={assistantPresentationState}
-          businessLabel={businessLoading ? null : (businesses.find((business) => business.id === businessId)?.name || null)}
-          businessLoading={businessLoading}
-          canChooseBusiness={!businessLoading && businesses.length > 1 && !businessId}
-          onChooseBusiness={() => setBusinessSelectionOpen(true)}
-          mobileOpen={sidebarOpen}
-          onCloseMobile={() => setSidebarOpen(false)}
-          onNew={() => void newThread()}
-          preferences={preferences}
-          pendingPreferenceKey={pendingPreferenceKey}
-          onPreferenceChange={(key, value) => void changePreference(key, value)}
-          memories={memories}
-          onForgetMemory={(id) => void forgetMemory(id)}
-        />
-
         <div className="relative flex min-h-0 min-w-0 flex-col">
           {workspaceError ? (
             <div
