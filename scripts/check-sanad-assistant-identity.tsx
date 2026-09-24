@@ -76,7 +76,7 @@ assert.equal(readSanadAssistantPreviewState('?assistantState=thinking', true), '
 assert.equal(readSanadAssistantPreviewState('?assistantState=bogus', true), null);
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
 const navigation = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 

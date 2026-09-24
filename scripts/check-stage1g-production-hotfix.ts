@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 
 const voice = readFileSync('src/features/assistant/assistantVoiceApi.ts', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
+const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const navigation = readFileSync('src/components/navigation/ProductBottomNav.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 const voiceWorkflow = readFileSync('.github/workflows/deploy-sanad-ai-transcribe-production.yml', 'utf8');
@@ -24,18 +26,14 @@ assert.doesNotMatch(
 
 assert.match(workspace, /data-assistant-status-slot="error"/);
 assert.match(workspace, /relative z-30[^"]*shrink-0/);
-assert.match(workspace, /PanelRightOpen/);
-assert.doesNotMatch(
-  workspace,
-  /data-mobile-sidebar-trigger[\s\S]{0,260}rounded-full/,
-  'Sidebar trigger must not regress to the detached floating-circle treatment.',
-);
-
-assert.match(sidebar, /flex h-full min-h-0[^"]*overflow-hidden/);
-assert.match(sidebar, /data-sidebar-scroll-region="settings"/);
-assert.match(sidebar, /data-sidebar-scroll-region="memory"/);
-assert.match(sidebar, /overflow-y-auto overscroll-contain/);
-assert.match(sidebar, /shrink-0 border-b/);
+// Original sidebar-hotfix intent is preserved by a single shell-owned scroll
+// region and inline, independently expandable settings and memory content.
+assert.doesNotMatch(workspace, /PanelRightOpen|data-mobile-sidebar-trigger/);
+assert.match(shell, /data-sanad-mobile-menu-fab="true"/);
+assert.match(unifiedSidebar, /data-sanad-global-nav-scroll="true"/);
+assert.match(unifiedSidebar, /overflow-y-auto overscroll-contain/);
+assert.match(sidebar, /data-sanad-inline-settings="true"/);
+assert.match(sidebar, /data-sanad-inline-memory="true"/);
 
 assert.match(navigation, /data-active=\{selected \? 'true' : 'false'\}/);
 assert.match(navigation, /sanad-primary-nav-item/);

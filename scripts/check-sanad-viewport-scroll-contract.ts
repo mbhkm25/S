@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx', 'utf8');
+const assistantSections = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
 const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
@@ -59,18 +59,11 @@ assert.match(route, /flex h-full min-h-0 flex-col overflow-hidden/);
 assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 
-assert.match(sidebar, /className="absolute inset-0 z-40/);
-assert.match(sidebar, /className=\{`sanad-sidebar-surface absolute inset-y-0 right-0 z-50/);
-assert.doesNotMatch(
-  sidebar,
-  /fixed inset-(?:0|y-0)/,
-  'Assistant sidebar and backdrop must stay inside the shell-owned workspace body, not the viewport.',
-);
-assert.doesNotMatch(
-  sidebar,
-  /top-\[[^\]]+\]|top:\s*\d|calc\([^)]*header/i,
-  'Sidebar must not guess global header height with magic top offsets.',
-);
+// R3: the memory and settings sections live INSIDE the one global sidebar.
+assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.match(assistantSections, /data-sanad-assistant-inline="true"/);
+assert.doesNotMatch(agent, /AssistantWorkspaceSidebar|data-mobile-sidebar-trigger/);
+
 assert.match(
   route,
   /: 'mx-auto w-full max-w-\[1440px\] space-y-5 px-4 py-5 pb-32/,
@@ -86,7 +79,8 @@ assert.match(unifiedSidebar, /onCloseMobile/);
 
 assert.match(header, /sticky top-0 z-\[60\] shrink-0/);
 assert.doesNotMatch(shell, /<ProductAppHeader/, 'Unified shell must not render the legacy top product header.');
-assert.match(shell, /data-sanad-mobile-menu-slot="true"/);
+assert.match(shell, /data-sanad-mobile-menu-fab="true"/);
+assert.doesNotMatch(shell, /data-sanad-mobile-menu-slot=/);
 
 assert.match(html, /viewport-fit=cover/);
 assert.match(html, /interactive-widget=resizes-content/);
