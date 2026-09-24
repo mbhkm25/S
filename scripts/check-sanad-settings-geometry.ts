@@ -42,12 +42,12 @@ assert.match(foundation, /\.sanad-focus-ring:focus-visible[\s\S]*--sanad-focus/)
 
 // R3 retains the exact SettingsSwitch primitive and optimistic rollback
 // contract, but moves their ownership from assistant panel to shell provider.
-assert.match(sidebar, /SettingSwitch/);
-assert.match(sidebar, /from '..\\/settings\\/SettingsControls'/);
+assert.ok(sidebar.includes("from '../settings/SettingsControls'"));
+assert.match(sidebar, /<SettingSwitch/);
 assert.doesNotMatch(sidebar, /type="checkbox"/);
-assert.match(sidebar, /pendingPreferenceKey/);
-assert.match(sidebar, /disabled=\\{pendingPreferenceKey !== null && pendingPreferenceKey !== key\\}/);
-assert.match(sidebar, /pending=\\{pendingPreferenceKey === key\\}/);
+assert.ok(sidebar.includes('pendingPreferenceKey'));
+assert.ok(sidebar.includes('disabled={pendingPreferenceKey !== null && pendingPreferenceKey !== key}'));
+assert.ok(sidebar.includes('pending={pendingPreferenceKey === key}'));
 
 for (const key of [
   'save_history_enabled',
@@ -59,12 +59,16 @@ for (const key of [
   assert.ok(api.includes(key), `API persistence missing ${key}`);
 }
 assert.match(workspace, /useSanadAssistantSettings/);
-assert.match(provider, /pendingPreferenceRef\\.current/);
-assert.match(provider, /setPreferences\\(\\{ \\.\\.\\.preferences, \\[key\\]: value \\}\\)/);
-assert.match(provider, /setPreferences\\(previous\\)/);
-assert.match(provider, /setPendingPreferenceKey\\(key\\)/);
-assert.match(provider, /setPendingPreferenceKey\\(null\\)/);
-assert.match(provider, /updateSanadAgentPreferences\\(\\{ \\[key\\]: value \\}\\)/);
+for (const required of [
+  'pendingPreferenceRef.current',
+  'setPreferences({ ...preferences, [key]: value })',
+  'setPreferences(previous)',
+  'setPendingPreferenceKey(key)',
+  'setPendingPreferenceKey(null)',
+  'updateSanadAgentPreferences({ [key]: value })',
+]) {
+  assert.ok(provider.includes(required), `Shell-owned preference transaction missing ${required}`);
+}
 
 assert.match(api, /get_my_sanad_agent_preferences_v1/);
 assert.match(api, /update_my_sanad_agent_preferences_v1/);
