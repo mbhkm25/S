@@ -61,8 +61,8 @@ assert.match(
 );
 
 assert.match(sidebar, /data-sidebar-density="compact"/);
-assert.match(sidebar, />سند</, 'Unified product identity should render SANAD rather than the legacy assistant-only label.');
-assert.doesNotMatch(sidebar, />مساعد سند</, 'Legacy assistant-only sidebar label must not return after the unified shell migration.');
+assert.match(sidebar, /مساحة المحادثة/, 'Contextual conversation panel must be labeled as workspace-specific, not duplicate the global SANAD brand.');
+assert.doesNotMatch(sidebar, /SanadUnifiedNavLinks/, 'Only the shell-owned sidebar may render global navigation.');
 assert.match(sidebar, /assistantState/);
 assert.match(sidebar, /SanadAssistantStatus/);
 assert.match(sidebar, /businessLabel/);
