@@ -1,6 +1,6 @@
 # Stage 2B R2 — Unified SANAD Intelligence Shell
 
-Status: implementation candidate
+Status: R2.V1 refinement candidate — same PR #373, Production unchanged
 
 ## Product decision
 
@@ -53,7 +53,7 @@ Shared conversation R1 contracts remain unchanged.
 All target routes use the same geometry:
 
 ~~~text
-Persistent Unified SANAD Sidebar | Main Column (compact utility header + active route)
+Persistent Unified SANAD Sidebar (profile + notifications) | Main Column (active route + mobile-only menu trigger)
 ~~~
 
 The legacy ProductBottomNav is no longer rendered by the target product shell.
@@ -95,7 +95,7 @@ These deliberately avoid fake data or premature storage/automation implementatio
 
 ## Mobile
 
-Every target route opens the SAME shell-owned global RTL drawer via ProductAppHeader.
+Every target route opens the SAME shell-owned global RTL drawer via a compact mobile-only menu trigger in the main column.
 Only the conversation route additionally has a workspace-owned contextual drawer (history, memory, assistant settings).
 
 No Android-specific hardcoded navigation-bar height is reintroduced.
@@ -145,19 +145,19 @@ prove stable information architecture or consistent spatial memory.
 
 FinancialWorkspaceShell mounts exactly ONE SanadUnifiedSidebar *above* route selection.
 It stays mounted across client-side transitions among all target product routes.
-The compact ProductAppHeader and active route belong to a separate main column.
+The active route belongs to the main column. The old ProductAppHeader is no longer mounted; its notification, inbox and profile utilities now live in the global sidebar. A mobile-only minimal menu trigger remains.
 
 Global sidebar contents, identical on every route:
-- SANAD brand/identity and one prominent Open SANAD action;
+- SANAD brand/identity and one prominent New Conversation action;
 - Today and Library;
 - Work: Tasks / Approvals / Automations;
 - Capabilities: Personal Finance / Business;
 - Connections as its own destination;
 - account/settings pinned to footer.
 
-The global sidebar is 248px wide at desktop, with 13px nav labels, 17px icons,
+The global sidebar is 254px wide at desktop, with 13px nav labels, 17px icons,
 11px group labels and 40px minimum navigation rows. Active routes receive a
-semantic surface and narrow accent rather than a full dark secondary button.
+soft cream-gray semantic surface and a small mint dot rather than a dark rectangle or thick active border.
 Business stays selected for both /commercial and /business/manage descendants.
 
 AssistantWorkspaceSidebar is now exclusively a CONTEXTUAL panel inside /sanad-ai:
@@ -176,10 +176,10 @@ and the compact composer remains in the workspace layout slot.
 
 Viewport routes: shell uses h-dvh with the global sidebar beside the main column.
 Document routes: the same global sidebar is sticky at viewport top while the main
-content retains document flow. Header is compact utility-only inside the main
-column, not full-width chrome above the sidebar.
+content retains document flow. The main product header is removed; on mobile,
+a minimal global-menu trigger is still required for access.
 
-On mobile, every route exposes the SAME global drawer from the utility header.
+On mobile, every route exposes the SAME global drawer from the minimal menu trigger.
 The conversation-context drawer is separate and cannot replace that global drawer.
 No Android system-bar height is hardcoded or double-counted.
 
@@ -197,3 +197,61 @@ The legacy ProductBottomNav remains unmounted in the target shell.
 4. Desktop 1280/1366/1440/1920, zoom 125/150, mobile 360/390/430.
 5. No duplicated global/sidebar navigation and no regression to Stage 1 scroll.
 6. Separate Preview and visual approval before merge/Production rollout.
+
+## R2.V1 — Conversation-Centric Shell Simplification / Creamy Surface Direction
+
+Status: implemented on PR #373 candidate; **not merged or deployed** until final CI/preview acceptance.
+Source decision: user's September 24 review of the real SANAD desktop screenshots and
+the supplied talke.to visual reference (reference for restraint and mint accents,
+not copied branding).
+
+### Removed shell redundancy
+- The prominent global action **فتح سند** is replaced with **محادثة جديدة**.
+- From /sanad-ai, the global action dispatches a scoped in-app new-thread request.
+- From other unified routes, it navigates to /sanad-ai?new=<timestamp>;
+  the assistant consumes the request only after account/business context is loaded,
+  clears the request from URL history and applies the existing domain-specific
+  new-conversation workflow. No new free-form DB write path is introduced.
+- Contextual conversation panel no longer duplicates the full-width primary CTA;
+  it keeps a compact, accessible New Chat icon and the conversation/history tabs.
+
+### Utility migration / header
+- The old global ProductAppHeader is **unmounted** from FinancialWorkspaceShell.
+- SANAD identity, account name/avatar, NotificationBell (including accessible business
+  workspaces), payment inbox shortcut and account/settings now live in one persistent
+  global sidebar. Existing providers/auth permissions are unchanged.
+- Only mobile (<lg) gets a minimal menu-trigger strip to open the same global drawer.
+  This is not a revived product-brand header or permanent bottom navigation.
+- Global navigation stays identical on /sanad-ai, /today, /financial,
+  /business/manage and all existing target shell routes.
+
+### Design foundation, scoped
+- Inspired by the *visual restraint* of the reference, **not** its brand mark or
+  heavy black background: base canvas/surfaces become creamy off-white + neutral
+  gray with muted mint/aqua/lime accents.
+- Charcoal replaces pure black for major typography and inverse token; semantic
+  status colors remain unchanged and distinct from brand green.
+- New semantic aliases: --sanad-sidebar-bg, --sanad-sidebar-footer-bg,
+  --sanad-nav-action-bg, --sanad-nav-active-bg, --sanad-nav-hover-bg.
+- Active destination uses one subtle gray/mint surface + 6px mint indicator,
+  restrained font weight, consistent 13px labels; *no thick active edge or dark
+  stacked rectangles*. Active state of Business includes /business/manage descendants.
+- Full page-by-page visual migration of legacy business/finance surfaces remains
+  explicitly outside R2.V1.
+
+### Validation and safety
+- Updated R2, Stage 2A and viewport contract tests to reflect the no-header shell.
+- **Pending**: final SHA CI pass + Desktop/Mobile Preview, New Chat from both
+  /sanad-ai and /today, header utility parity, notifications, R1 collaboration
+  smoke, viewport/scroll and Android safe-area revalidation.
+- Production is unchanged and PR #373 remains open pending approval.
+
+### Follow-ups / do not silently include in this PR
+- Authenticated application-root (/) entrypoint audit: currently legacy routing may
+  still enter the legacy application before target /sanad-ai; address as a separate
+  compatibility-reviewed bootstrap gate, preserving unauthenticated login/public URLs.
+- Evaluate merging conversation-history UI into global sidebar in a later controlled
+  UX train only if proven superior; current contract preserves a route-local
+  contextual panel so global destination hierarchy stays spatially stable.
+- No database, ledger, ERP write, notifications engine, new app integrations or
+  user-wallet implementation in this visual shell train.
