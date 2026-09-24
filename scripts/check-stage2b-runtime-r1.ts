@@ -14,7 +14,7 @@ const core = readFileSync('supabase/functions/_shared/sanad-agent-core.ts','utf8
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts','utf8');
 const attachmentApi = readFileSync('src/features/assistant/assistantAttachmentApi.ts','utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx','utf8');
-const sidebar = readFileSync('src/features/assistant/AssistantWorkspaceSidebar.tsx','utf8');
+const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx','utf8');
 const globalHistory = readFileSync('src/components/navigation/SanadSidebarConversations.tsx','utf8');
 
 for (const token of [
@@ -78,6 +78,6 @@ assert.match(globalHistory, /thread\.unread_count/);
 assert.match(globalHistory, /thread\.my_role === 'viewer'/);
 assert.match(globalHistory, /thread\.my_role === 'owner'/);
 assert.match(globalHistory, /listSanadAgentThreads/);
-assert.doesNotMatch(sidebar, /tab === 'chats'/, 'The contextual panel must not duplicate global chat history.');
+assert.match(sidebar, /data-sanad-assistant-inline="true"/, 'R1 shared conversation history coexists with inline memory/settings, never a duplicate history panel.');
 
 console.log('SANAD Stage 2B Runtime R1 shared conversation contract checks passed.');
