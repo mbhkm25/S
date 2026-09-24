@@ -13,17 +13,21 @@ const masterActions = readFileSync('src/features/financial/FinancialMasterDataAc
 const financeActions = readFileSync('src/features/financial/FinancialWorkspaceActions.tsx', 'utf8');
 const api = readFileSync('src/features/financial/api/financialApi.ts', 'utf8');
 const productHeader = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
+const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const app = readFileSync('src/App.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 
 
-assert.match(home, /window\.location\.replace\(financialUrl\(\)\)/, 'authenticated root must hand off into a product workspace');
+assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open unified SANAD conversation');
 assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
 for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات', 'الحساب والإعدادات']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
 }
 assert.match(shell, /SanadUnifiedSidebar/);
+assert.doesNotMatch(shell, /<ProductAppHeader/, 'The legacy product header is no longer mounted by SANAD unified shell.');
+assert.match(unifiedSidebar, /payment-inbox\.html/, 'Global sidebar must preserve payment inbox utility.');
+assert.match(unifiedSidebar, /NotificationBell/, 'Global sidebar must preserve notifications utility.');
 assert.doesNotMatch(shell, /ProductBottomNav/, 'target workspace shell must not render the legacy four-product navigation');
 
 assert.match(productHeader, /payment-inbox\.html/, 'shared product header must expose Payment Inbox');
