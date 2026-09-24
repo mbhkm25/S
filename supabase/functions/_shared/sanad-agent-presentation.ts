@@ -63,10 +63,10 @@ function customerStatementPresentation(row: AgentToolOutput) {
 
   const currencySummaries = totals.map((item) => ({
     currency: currency(item),
-    opening_balance: num(item.opening_balance) ?? 0,
-    debit: num(item.debit) ?? 0,
-    credit: num(item.credit) ?? 0,
-    closing_balance: num(item.closing_balance) ?? 0,
+    opening_balance: num(item.opening_balance),
+    debit: num(item.debit),
+    credit: num(item.credit),
+    closing_balance: num(item.closing_balance),
   }));
 
   const copyLines = [
