@@ -61,6 +61,8 @@ assert.match(
 );
 
 assert.match(sidebar, /data-sidebar-density="compact"/);
+assert.match(sidebar, /data-sanad-context-panel="memory-settings-only"/);
+assert.doesNotMatch(sidebar, /tab === 'chats'/);
 assert.match(sidebar, /مساحة المحادثة/, 'Contextual conversation panel must be labeled as workspace-specific, not duplicate the global SANAD brand.');
 assert.doesNotMatch(sidebar, /SanadUnifiedNavLinks/, 'Only the shell-owned sidebar may render global navigation.');
 assert.match(sidebar, /assistantState/);
