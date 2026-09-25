@@ -19,9 +19,10 @@ type CardProps = {
   creating: boolean;
   onNew: () => void;
   pendingContract?: boolean;
+  disableNew?: boolean;
 };
 
-function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract }: CardProps) {
+function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract, disableNew = false }: CardProps) {
   const business = kind === 'business';
   const Icon = business ? BriefcaseBusiness : UserRound;
   const path = business ? `commercial?view=conversations&business=${encodeURIComponent(id || '')}` : 'financial?view=conversations';
@@ -78,7 +79,7 @@ function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract 
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--sanad-border-subtle)] pt-3">
-        <button type="button" onClick={onNew} disabled={creating} className="sanad-focus-ring sanad-home-new-chat inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[11px] font-semibold disabled:opacity-50">
+        <button type="button" onClick={onNew} disabled={creating || disableNew} title={disableNew ? "بانتظار اعتماد ونشر عقد المحادثات الشخصية الجديدة" : undefined} className="sanad-focus-ring sanad-home-new-chat inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[11px] font-semibold disabled:opacity-50">
           {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           محادثة جديدة
         </button>
@@ -135,6 +136,7 @@ export default function SanadQuickProjectHome() {
           name="المدير الشخصي"
           recent={data?.personal || []}
           pendingContract={data?.awaitingProjectContract}
+          disableNew={Boolean(data?.awaitingProjectContract)}
           creating={creating === 'personal'}
           onNew={() => void create('personal')}
         />
@@ -142,7 +144,7 @@ export default function SanadQuickProjectHome() {
           <div className="sanad-home-project flex min-h-[232px] items-center justify-center gap-2 text-[11px] text-[var(--sanad-text-subtle)]" aria-busy="true">
             <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل مساحات الأعمال…
           </div>
-        ) : data?.businesses.length ? data.businesses.map(business => (
+        ) : data?.businesses.length ? data.businesses.slice(0, 3).map(business => (
           <ProjectCard
             key={business.id}
             kind="business"
@@ -164,6 +166,12 @@ export default function SanadQuickProjectHome() {
           </button>
         )}
       </div>
+      {data && data.businesses.length > 3 ? (
+        <button type="button" onClick={() => navigateProduct('commercial')}
+          className="sanad-focus-ring mt-3 inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]">
+          عرض بقية الأنشطة ({data.businesses.length - 3}) <ArrowUpLeft className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
     </section>
   );
 }
