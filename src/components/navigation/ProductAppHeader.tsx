@@ -26,7 +26,7 @@ function basePath(): string {
 function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
   if (!shouldHandleProductLinkClick(event)) return;
   event.preventDefault();
-  navigateProduct('sanad-ai');
+  navigateProduct('today');
 }
 
 export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly = false }: Props) {
