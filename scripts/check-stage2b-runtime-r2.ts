@@ -61,7 +61,7 @@ assert.match(projects, /createSanadProjectThread/);
 assert.match(projects, /setSanadProjectThreadPinned/);
 assert.match(projects, /legacy_unclassified/);
 assert.match(projects, /المحادثات/);
-assert.match(projects, /البحث في محادثات هذه المساحة/);
+assert.match(projects, /ابحث في محادثات هذه المساحة/);
 
 assert.match(agent, /data-conversation-surface="open"/);
 assert.doesNotMatch(agent, /AssistantWorkspaceSidebar/);
