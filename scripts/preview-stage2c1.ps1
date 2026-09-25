@@ -14,8 +14,8 @@ function Invoke-CheckedGit([string[]]$ArgsList) {
   if ($LASTEXITCODE -ne 0) { throw ('Git failed: ' + ($ArgsList -join ' ')) }
 }
 if (-not (Test-Path -LiteralPath $Repo -PathType Container)) { throw "Missing repository: $Repo" }
-Invoke-CheckedGit @('-C', $Repo, 'rev-parse', '--is-inside-work-tree') | Out-Null
-Invoke-CheckedGit @('-C', $Repo, 'fetch', 'origin', "refs/heads/$($branch):refs/remotes/origin/$branch") | Out-Null
+Invoke-CheckedGit -ArgsList @('-C', $Repo, 'rev-parse', '--is-inside-work-tree') | Out-Null
+Invoke-CheckedGit -ArgsList @('-C', $Repo, 'fetch', 'origin', "refs/heads/$($branch):refs/remotes/origin/$branch") | Out-Null
 $head = (& git -C $Repo rev-parse "refs/remotes/origin/$branch").Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $head -ne $ExpectedSha.ToLowerInvariant()) {
   throw "PR candidate changed. Expected=$ExpectedSha remote=$head. Use the latest reviewed exact SHA."
@@ -26,9 +26,9 @@ if (Test-Path -LiteralPath $Worktree) {
   }
   $dirty = @(& git -C $Worktree status --porcelain)
   if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) { throw 'Preview has local changes. Inspect or save before refresh.' }
-  Invoke-CheckedGit @('-C', $Worktree, 'switch', '--detach', $head) | Out-Null
+  Invoke-CheckedGit -ArgsList @('-C', $Worktree, 'switch', '--detach', $head) | Out-Null
 } else {
-  Invoke-CheckedGit @('-C', $Repo, 'worktree', 'add', '--detach', $Worktree, $head) | Out-Null
+  Invoke-CheckedGit -ArgsList @('-C', $Repo, 'worktree', 'add', '--detach', $Worktree, $head) | Out-Null
 }
 $actual = (& git -C $Worktree rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $actual -ne $head) { throw 'Local worktree SHA check failed.' }
