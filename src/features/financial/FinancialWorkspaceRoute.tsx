@@ -105,7 +105,7 @@ const META: Record<WorkspaceKind, { label: string; eyebrow: string; description:
 };
 
 function resolveKind(pathname: string): WorkspaceKind {
-  if (/\\/commercial(?:\\/overview)?\\/?$/.test(pathname)) return 'commercial';
+  if (/\/commercial(?:\/overview)?\/?$/.test(pathname)) return 'commercial';
   if (/\/account-center\/?$/.test(pathname)) return 'account';
   if (/\/sanad-ai\/?$/.test(pathname)) return 'ai';
   return 'financial';
