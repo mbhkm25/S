@@ -10,11 +10,11 @@ interface HomeProps {
 function sanadUrl(): string {
   const base = import.meta.env.VITE_APP_BASE_PATH || '/';
   const cleanBase = base.endsWith('/') ? base : `${base}/`;
-  return `${cleanBase}sanad-ai`;
+  return `${cleanBase}today`;
 }
 
 /**
- * The authenticated root is intentionally not a fifth SANAD workspace.
+ * The authenticated root opens Today inside the single SANAD workspace shell.
  * After successful authentication it hands the user into the conversation-centric SANAD shell.
  */
 export default function Home({ profile: _profile, onNavigate: _onNavigate }: HomeProps) {
