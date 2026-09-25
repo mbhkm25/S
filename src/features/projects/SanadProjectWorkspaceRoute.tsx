@@ -521,9 +521,6 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
                 <button type="button" onClick={() => navigateProduct('business/manage')} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-5 text-right">
                   <Settings2 className="h-5 w-5 text-[var(--sanad-interactive)]" /><strong className="mt-4 block text-[14px]">إدارة النشاط التجاري</strong><span className="mt-2 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">الملف، العملاء، الفريق، الكتالوج والنظام المحاسبي عبر واجهات الإدارة الحالية.</span>
                 </button>
-                <button type="button" onClick={() => navigateProduct('connections')} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-5 text-right">
-                  <Database className="h-5 w-5 text-[var(--sanad-interactive)]" /><strong className="mt-4 block text-[14px]">الاتصالات والمزامنة</strong><span className="mt-2 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">إدارة اتصال سند بالمصادر دون تغيير سياسة Bridge الحالية للقراءة فقط.</span>
-                </button>
               </div>
             </section>
           ) : (
