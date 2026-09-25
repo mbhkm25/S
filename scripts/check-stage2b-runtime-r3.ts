@@ -28,7 +28,7 @@ assert.match(globalSidebar, /data-sanad-header-notifications="true"/);
 assert.match(globalSidebar, /getUserAvatarUrl/);
 assert.match(history, /list_my_sanad_project_threads_v1/);
 assert.match(history, /thread\.my_role === 'viewer'/);
-assert.match(history, /thread\.my_role === 'owner'/);
+assert.match(history, /thread\.my_role !== 'owner'/);
 
 assert.match(inline, /data-sanad-assistant-inline="true"/);
 assert.match(inline, /data-sanad-inline-memory="true"/);
