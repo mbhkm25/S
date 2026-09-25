@@ -12,6 +12,7 @@ const settingsProvider = readFileSync('src/features/shell/SanadAssistantSettings
 const entry = readFileSync('src/features/shell/SanadUnifiedEntryRoute.tsx', 'utf8');
 const businessCapability = readFileSync('src/features/shell/BusinessCapabilityRoute.tsx', 'utf8');
 const projects = readFileSync('src/features/projects/SanadProjectWorkspaceRoute.tsx', 'utf8');
+const projectData = readFileSync('src/features/projects/projectQuickAccess.ts', 'utf8');
 
 // One persistent shell/sidebar remains the only global navigation owner.
 assert.match(shell, /data-sanad-persistent-shell="true"/);
@@ -56,9 +57,9 @@ assert.match(nav, /shouldHandleProductLinkClick/);
 assert.match(foundation, /--sanad-sidebar-section-bg/);
 
 // Conversation history is now project-owned rather than a global sidebar list.
-assert.match(projects, /listSanadProjectThreads/);
-assert.match(projects, /createSanadProjectThread/);
-assert.match(projects, /setSanadProjectThreadPinned/);
+assert.match(projectData, /listSanadProjectThreads/);
+assert.match(projectData, /createSanadProjectThread/);
+assert.match(projectData, /setSanadProjectThreadPinned/);
 assert.match(projects, /legacy_unclassified/);
 assert.match(projects, /المحادثات/);
 assert.match(projects, /ابحث في محادثات هذه المساحة/);
