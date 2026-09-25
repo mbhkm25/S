@@ -19,7 +19,7 @@ export type ProjectQuickData = {
   awaitingProjectContract: boolean;
 };
 
-const TTL_MS = 25_000;
+const TTL_MS = 120_000; // Safe navigation reads, scoped per signed-in user; explicit mutations invalidate.
 let currentUser: string | null = null;
 let contextsCache: { expires: number; promise: Promise<BusinessContexts> } | null = null;
 let legacyCache: { expires: number; promise: Promise<SanadAgentThreadSummary[]> } | null = null;
