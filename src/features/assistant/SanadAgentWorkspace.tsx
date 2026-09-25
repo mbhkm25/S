@@ -616,11 +616,6 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
       return;
     }
-    if (!selectedThreadId && businesses.length > 1 && !businessId) {
-      setBusinessSelectionOpen(true);
-      return;
-    }
-
     let threadId: string;
     try {
       threadId = await ensureThread();
