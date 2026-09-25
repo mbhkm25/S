@@ -38,7 +38,7 @@ const productionDeploy = readFileSync('.github/workflows/deploy-production.yml',
 
 for (const required of [
   'streamSanadAiAgentTurn',
-  'get_my_account_center_v1',
+  'get_user_business_contexts',
   'خطوات التنفيذ والمصادر',
   'data-conversation-surface="open"',
   'thread_id',
