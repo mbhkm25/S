@@ -268,13 +268,13 @@ export default function SanadUnifiedEntryRoute() {
 
         {!loading && kind === 'more' ? (
           <div className="grid gap-3 py-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[
+            {([
               { label: 'المكتبة', desc: 'التقارير والمستندات والمخرجات العامة الحالية.', icon: Library, path: 'library' },
               { label: 'الاتصالات', desc: 'مصادر البيانات والأنظمة المرتبطة وحالة المزامنة.', icon: Plug, path: 'connections' },
               { label: 'الأتمتة', desc: 'القواعد والمهام المجدولة فوق عقود التنفيذ المحكومة.', icon: Clock3, path: 'work/automations' },
               { label: 'وارد المدفوعات', desc: 'فتح الوارد التشغيلي الحالي في مساره المخصص.', icon: Inbox, href: '/payment-inbox.html' },
               { label: 'الحساب والإعدادات', desc: 'الحساب والخصوصية وإدارة مساعد سند.', icon: Settings2, path: 'account-center' },
-            ].map((entry) => {
+            ] as Array<{ label: string; desc: string; icon: typeof CalendarCheck2; path?: string; href?: string }>).map((entry) => {
               const EntryIcon = entry.icon;
               return entry.href ? (
                 <a key={entry.label} href={entry.href} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
