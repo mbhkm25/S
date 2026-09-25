@@ -10,6 +10,8 @@ import {
 import type { SanadAgentThreadSummary } from '../assistant/assistantWorkspaceApi';
 
 type CardProps = {
+  /** React list identity, consumed by JSX rather than by the card component. */
+  key?: string;
   name: string;
   kind: 'personal' | 'business';
   id?: string;
