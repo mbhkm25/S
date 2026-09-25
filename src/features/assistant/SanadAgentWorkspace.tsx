@@ -461,7 +461,7 @@ export default function SanadAgentWorkspace() {
         if (projectScope?.kind === 'business' && !byId.has(projectScope.businessId)) {
           throw new Error('لم تعد لديك صلاحية الوصول إلى هذا المشروع التجاري.');
         }
-        const loadedThreads: SanadAgentThreadSummary[] = [...page.items];
+        const loadedThreads: SanadAgentThreadSummary[] = page.items.map(thread => ({ ...thread, updated_at: thread.created_at }));
         const url = new URL(window.location.href);
         const requested = url.searchParams.has('new') ? null : url.searchParams.get('thread');
 
