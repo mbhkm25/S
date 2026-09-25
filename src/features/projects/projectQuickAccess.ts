@@ -24,6 +24,7 @@ let currentUser: string | null = null;
 let contextsCache: { expires: number; promise: Promise<BusinessContexts> } | null = null;
 let legacyCache: { expires: number; promise: Promise<SanadAgentThreadSummary[]> } | null = null;
 let projectRpcMissing = false;
+let projectRpcRecheckAt = 0;
 const projectPageCache = new Map<string, { expires: number; promise: Promise<SanadProjectThreadPage> }>();
 
 async function sessionScope(): Promise<string> {
@@ -34,6 +35,7 @@ async function sessionScope(): Promise<string> {
     currentUser = id;
     invalidateProjectQuickAccess();
     projectRpcMissing = false;
+    projectRpcRecheckAt = 0;
   }
   return id;
 }
@@ -89,12 +91,16 @@ export async function projectThreads(params: {
   const status = params.status || 'active';
   const limit = params.limit ?? 50, offset = params.offset ?? 0;
   const key = JSON.stringify([user, params.projectKind, params.businessId || '', status, params.search || '', limit, offset]);
+  if (projectRpcMissing && Date.now() >= projectRpcRecheckAt) projectRpcMissing = false;
   if (!projectRpcMissing) {
     let entry = projectPageCache.get(key);
     if (!entry || entry.expires <= Date.now()) {
       const promise = listSanadProjectThreads(params).catch((error: unknown) => {
         projectPageCache.delete(key);
-        if (isMissingContract(error)) projectRpcMissing = true;
+        if (isMissingContract(error)) {
+          projectRpcMissing = true;
+          projectRpcRecheckAt = Date.now() + 30_000;
+        }
         throw error;
       });
       entry = { expires: Date.now() + TTL_MS, promise };
@@ -165,6 +171,10 @@ export async function openNewProjectConversation(projectKind: Scope, businessId?
   if (projectKind === 'business' && !businessId) throw new Error('حدد النشاط التجاري أولًا.');
   try {
     const id = await createSanadProjectThread({ projectKind, businessId: businessId || null });
+    // Once the approved migration is available, re-enable scoped reads in the
+    // same session rather than requiring the user to sign out or reload.
+    projectRpcMissing = false;
+    projectRpcRecheckAt = 0;
     invalidateProjectQuickAccess();
     return id;
   } catch (error) {
