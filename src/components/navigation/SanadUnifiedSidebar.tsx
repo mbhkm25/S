@@ -124,12 +124,6 @@ export default function SanadUnifiedSidebar({
               />
             </a>
             <div className={`flex shrink-0 items-center gap-1 ${collapsed ? 'lg:flex-col' : ''}`}>
-              {userId ? (
-                <NotificationBell
-                  showWorkspaces={false}
-                  onNavigate={() => navigateProduct('notifications')}
-                />
-              ) : null}
               <button
                 type="button"
                 onClick={toggleCollapsed}
@@ -150,9 +144,14 @@ export default function SanadUnifiedSidebar({
               </button>
             </div>
           </div>
-          <div className={`mt-0.5 flex items-center justify-between gap-2 px-1 ${collapsed ? 'lg:sr-only' : ''}`}>
-            <span className="text-[10px] font-medium leading-4 text-[var(--sanad-text-muted)]">مساحة الذكاء والتشغيل</span>
-            {userId ? <span className="text-[9px] text-[var(--sanad-text-subtle)]">الإشعارات ↑</span> : null}
+          <div className={`mt-0.5 flex min-h-11 items-center justify-between gap-2 px-1 ${collapsed ? 'lg:justify-center' : ''}`}>
+            <span className={`text-[10px] font-medium leading-4 text-[var(--sanad-text-muted)] ${collapsed ? 'lg:sr-only' : ''}`}>مساحة الذكاء والتشغيل</span>
+            {userId ? (
+              <NotificationBell
+                showWorkspaces={false}
+                onNavigate={() => navigateProduct('notifications')}
+              />
+            ) : null}
           </div>
         </div>
 
