@@ -37,7 +37,7 @@ assert.match(projectData,/getUserBusinessContexts/);
 assert.match(projectData,/authorizedProjectBusinesses/);
 assert.match(projectData,/listSanadProjectThreads/);
 assert.match(projectData,/createSanadProjectThread/);
-assert.match(projectData,/setSanadProjectThreadPinned/);
+assert.match(project,/setSanadProjectThreadPinned/);
 assert.match(project,/legacy_unclassified/);
 assert.match(project,/لا توجد محادثات عامة خارجها/);
 assert.match(quickHome,/آخر المحادثات/);
