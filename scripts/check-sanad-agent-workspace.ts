@@ -3,10 +3,9 @@ import { readFileSync } from 'node:fs';
 import { buildAgentInsights } from '../supabase/functions/_shared/sanad-agent-insights.ts';
 
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const sidebar = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const assistantSettings = readFileSync('src/features/settings/SanadAssistantManagementPanel.tsx', 'utf8');
 const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const settingsProvider = readFileSync('src/features/shell/SanadAssistantSettingsContext.tsx', 'utf8');
-const globalHistory = readFileSync('src/components/navigation/SanadSidebarConversations.tsx', 'utf8');
 const responseBlocks = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 const workspaceApi = readFileSync('src/features/assistant/assistantWorkspaceApi.ts', 'utf8');
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
@@ -53,16 +52,15 @@ for (const required of [
 
 for (const required of [
   'الذاكرة',
-  'ضبط المساعد',
+  'إدارة مساعد سند',
   'تنبيهات ذكية',
-  'بطاقات البيانات',
+  'المخرجات المنظمة',
 ]) {
-  assert.ok(sidebar.includes(required), `inline SANAD assistant options missing ${required}`);
+  assert.ok(assistantSettings.includes(required), `SANAD assistant management missing ${required}`);
 }
-assert.match(unifiedSidebar, /محادثة جديدة/);
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
-assert.match(globalHistory, /المحادثات/);
-assert.match(globalHistory, /listSanadAgentThreads/);
+assert.doesNotMatch(unifiedSidebar, /محادثة جديدة|SanadAssistantSidebarSections|SanadSidebarConversations/);
+assert.match(unifiedSidebar, /مساحة الذكاء والتشغيل/);
+assert.match(unifiedSidebar, /NotificationBell/);
 
 for (const required of [
   'customer_statement',
@@ -116,7 +114,7 @@ assert.doesNotMatch(route, /p_purpose:\s*'financial_workspace'/, 'legacy AI cont
 assert.match(api, /sanad-ai-agent-v1/);
 assert.match(api, /thread_id/);
 
-for (const source of [workspace, sidebar, settingsProvider, responseBlocks, workspaceApi]) {
+for (const source of [workspace, assistantSettings, settingsProvider, responseBlocks, workspaceApi]) {
   assert.doesNotMatch(source, /service_role/i);
   assert.doesNotMatch(source, /business_erp_snapshot_rows/);
 }
@@ -434,10 +432,10 @@ assert.match(api, /firstAnswerMs/);
 assert.match(api, /agent_client_turn/);
 assert.match(workspace, /thread_load/);
 assert.match(attachmentApi, /attachment_upload/);
-assert.match(sidebar, /أداء سند · آخر 7 أيام/);
-assert.match(sidebar, /P50/);
-assert.match(sidebar, /P95/);
-assert.match(sidebar, /الحقائق المالية تُقرأ دائمًا من مصادرها الحية/);
+assert.match(assistantSettings, /أداء سند · آخر 7 أيام/);
+assert.match(assistantSettings, /P50/);
+assert.match(assistantSettings, /P95/);
+assert.match(assistantSettings, /الحقائق المالية تُقرأ دائمًا من مصادرها الحية/);
 
 assert.match(runtime, /recordAgentServerMetric/);
 assert.match(runtime, /modelLatencyMs/);
@@ -490,7 +488,7 @@ assert.match(workspace, /id="sanad-agent-workspace"/);
 assert.match(workspace, /data-workspace-slot="composer"/);
 assert.doesNotMatch(workspace, /sticky bottom-0/, 'Viewport contract keeps the composer in normal layout flow');
 assert.match(workspace, /min-h-0 flex-1[^"]*overflow-y-auto/);
-for (const source of [workspace, sidebar, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
+for (const source of [workspace, assistantSettings, responseBlocks, attachmentComposer, actionCard, voiceButton]) {
   assert.doesNotMatch(source, /font-black/, 'Phase 2 must remove black font weight from Agent UI');
 }
 console.log('SANAD Phase 2 typography and conversation layout contract passed.');

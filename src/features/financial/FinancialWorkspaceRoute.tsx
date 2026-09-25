@@ -20,11 +20,13 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { navigateProduct } from '../../lib/productNavigation';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
 import { loadPersonalFinanceOverview, loadSanadAgentWorkspace } from './productRouteLoaders';
 
 const PersonalFinanceOverview = lazy(loadPersonalFinanceOverview);
 const SanadAgentWorkspace = lazy(loadSanadAgentWorkspace);
+const SanadAssistantManagementPanel = lazy(() => import('../settings/SanadAssistantManagementPanel'));
 
 type WorkspaceKind = 'financial' | 'commercial' | 'account' | 'ai';
 
@@ -239,6 +241,7 @@ export default function FinancialWorkspaceRoute() {
   const CurrentIcon = current.icon;
   const businesses = Array.isArray(account?.businesses) ? account.businesses : [];
   const viewportMode = kind === 'ai';
+  const accountSection = new URL(window.location.href).searchParams.get('section');
 
   return (
     <div
@@ -316,6 +319,7 @@ export default function FinancialWorkspaceRoute() {
               <LaunchCard title="الأمان" description="تسجيل الدخول ووسائل حماية الحساب." icon={Lock} onClick={() => go('profile/security')} />
               <LaunchCard title="الإشعارات" description="مركز التنبيهات وإعدادات الوصول." icon={Bell} onClick={() => go('notifications')} />
               <LaunchCard title="الخطة والاشتراك" description="سند Pro وحالة الاشتراك وطلبات التفعيل." icon={Sparkles} onClick={() => go('profile/subscription')} />
+              <LaunchCard title="إدارة مساعد سند" description="الذاكرة والحفظ وطريقة عرض إجابات سند." icon={Bot} onClick={() => navigateProduct('account-center?section=assistant')} />
             </div>
           </section>
         ) : null}
@@ -367,6 +371,13 @@ export default function FinancialWorkspaceRoute() {
 
         {!loading && !error && kind === 'account' && account ? (
           <>
+            {accountSection === 'assistant' ? (
+              <section className="rounded-[1.6rem] bg-white p-5 shadow-sm">
+                <Suspense fallback={<div className="min-h-40" aria-busy="true" />}>
+                  <SanadAssistantManagementPanel />
+                </Suspense>
+              </section>
+            ) : null}
             <section className="rounded-[1.8rem] bg-slate-950 p-5 text-white shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
               <div className="flex items-center gap-3"><UserRound className="h-6 w-6" /><div><p className="text-[10px] font-bold text-white/60">حسابي</p><h2 className="text-lg font-black">مركز الحساب الشخصي</h2></div></div>
               <p className="mt-4 text-xs leading-6 text-white/70">حسابي يختص بهويتك وإعداداتك واشتراكك وأجهزتك. تشغيل النشاط انتقل إلى سند للأعمال، وإدارة المال انتقلت إلى سند المالي.</p>

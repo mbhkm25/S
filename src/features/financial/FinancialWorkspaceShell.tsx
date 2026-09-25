@@ -18,6 +18,7 @@ const FinancialWorkspaceRoute = lazy(loadFinancialWorkspaceRoute);
 const PersonalFinanceSectionRoute = lazy(loadPersonalFinanceSectionRoute);
 const SanadUnifiedEntryRoute = lazy(() => import('../shell/SanadUnifiedEntryRoute'));
 const BusinessCapabilityRoute = lazy(() => import('../shell/BusinessCapabilityRoute'));
+const SanadProjectWorkspaceRoute = lazy(() => import('../projects/SanadProjectWorkspaceRoute'));
 
 function locationKey(): string {
   return `${window.location.pathname}${window.location.search}`;
@@ -39,6 +40,19 @@ export default function FinancialWorkspaceShell() {
 
   useEffect(() => subscribeProductNavigation(() => setRouteKey(locationKey())), []);
 
+  // Chunk preloading happens after the first paint; Vite keeps lazy route
+  // boundaries, but subsequent sidebar transitions no longer re-download code.
+  useEffect(() => {
+    const warm = () => { void import('../projects/SanadProjectWorkspaceRoute'); void import('../shell/SanadUnifiedEntryRoute'); };
+    const idleHost = window as Window & { requestIdleCallback?: (fn: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (idleHost.requestIdleCallback) {
+      const id = idleHost.requestIdleCallback(warm, { timeout: 2000 });
+      return () => idleHost.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warm, 1000);
+    return () => window.clearTimeout(id);
+  }, []);
+
   useEffect(() => {
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
@@ -58,18 +72,22 @@ export default function FinancialWorkspaceShell() {
   const personal = /\/financial(?:\/|$)/.test(pathname);
   const commercial = /\/commercial(?:\/|$)/.test(pathname);
   const assistant = /\/sanad-ai\/?$/.test(pathname);
-  const isUnifiedEntryRoute = /\/(today|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
+  const isUnifiedEntryRoute = /\/(today|more|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
   const isBusinessCapabilityRoute = /\/business\/manage(?:\/(?:operations|team|profile|whatsapp-catalog|customers))?\/?$/.test(pathname);
+
+  const isProjectRoot = /\/(financial|commercial)\/?$/.test(pathname);
 
   const content = isBusinessCapabilityRoute
     ? <BusinessCapabilityRoute key={routeKey} />
     : isUnifiedEntryRoute
-      ? <SanadUnifiedEntryRoute key={routeKey} />
-      : isActionRoute
-    ? <FinancialActionRoute key={routeKey} />
-    : isPersonalSectionRoute
-        ? <PersonalFinanceSectionRoute key={routeKey} />
-        : <FinancialWorkspaceRoute key={routeKey} />;
+      ? <SanadUnifiedEntryRoute key={pathname} />
+      : isProjectRoot
+        ? <SanadProjectWorkspaceRoute kind={commercial ? 'business' : 'personal'} location={routeKey} />
+        : isActionRoute
+          ? <FinancialActionRoute key={routeKey} />
+          : isPersonalSectionRoute
+            ? <PersonalFinanceSectionRoute key={routeKey} />
+            : <FinancialWorkspaceRoute key={routeKey} />;
 
   return (
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>
@@ -128,7 +146,7 @@ export default function FinancialWorkspaceShell() {
               </Suspense>
             </main>
           )}
-          {!isActionRoute && (personal || commercial) ? (
+          {!isActionRoute && !isProjectRoot && (personal || commercial) ? (
             <button
               type="button"
               onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}

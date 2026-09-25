@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
   CalendarCheck2,
@@ -11,8 +11,10 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { navigateProduct } from '../../lib/productNavigation';
 import { formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from './sanadWorkItemPresentation';
+const SanadQuickProjectHome = lazy(() => import('../projects/SanadQuickProjectHome'));
 
 type WorkItem = {
   id: string;
@@ -41,9 +43,10 @@ type Connection = {
   last_heartbeat_at?: string | null;
 };
 
-type EntryKind = 'today' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
+type EntryKind = 'today' | 'more' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
 
 function resolveKind(pathname: string): EntryKind {
+  if (/\/more\/?$/.test(pathname)) return 'more';
   if (/\/library\/?$/.test(pathname)) return 'library';
   if (/\/work\/tasks\/?$/.test(pathname)) return 'tasks';
   if (/\/work\/approvals\/?$/.test(pathname)) return 'approvals';
@@ -54,11 +57,13 @@ function resolveKind(pathname: string): EntryKind {
 
 const META: Record<EntryKind, { title: string; eyebrow: string; description: string; icon: typeof CalendarCheck2 }> = {
   today: {
-    title: 'اليوم',
-    eyebrow: 'ما يحتاج انتباهك الآن',
-    description: 'أولويات تشغيلية مبنية على Work Items الحقيقية، وليست لوحة مؤشرات منفصلة عن مصادرها.',
+    title: 'مساحاتك',
+    eyebrow: 'الوصول السريع',
+    description: 'مساحاتك ومحادثاتك القريبة، وما يستحق اهتمامك من المهام والموافقات والمتابعات.',
     icon: CalendarCheck2,
   },
+  // Legacy /more bookmarks redirect to the Business workspace; never shown as navigation.
+  more: { title: 'الأعمال', eyebrow: '', description: '', icon: Plug },
   library: {
     title: 'المكتبة',
     eyebrow: 'ملفات ومخرجات سند',
@@ -99,7 +104,7 @@ function formatDate(value?: string | null): string {
 function WorkItemRow({ item }: { item: WorkItem }) {
   const shown = describeSanadWorkItem(item);
   return (
-    <article className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <article className="grid gap-2 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">{item.title}</h2>
@@ -127,14 +132,14 @@ export default function SanadUnifiedEntryRoute() {
   const kind = useMemo(() => resolveKind(window.location.pathname), []);
   const meta = META[kind];
   const Icon = meta.icon;
-  const [loading, setLoading] = useState(kind !== 'library' && kind !== 'automations');
+  const [loading, setLoading] = useState(!['library','automations','more'].includes(kind));
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<WorkItem[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    if (kind === 'library' || kind === 'automations') {
+    if (kind === 'more' || kind === 'library' || kind === 'automations') {
       setLoading(false);
       return;
     }
@@ -182,37 +187,57 @@ export default function SanadUnifiedEntryRoute() {
 
   useEffect(() => { void load(); }, [load]);
 
-  return (
-    <div className="min-h-full bg-[var(--sanad-bg-canvas)] px-4 py-5 text-[var(--sanad-text)] lg:px-7 lg:py-7" dir="rtl">
-      <div className="mx-auto w-full max-w-[1120px]">
-        <header className="flex items-start justify-between gap-4 border-b border-[var(--sanad-border-subtle)] pb-5">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-strong)]">
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-[var(--sanad-text-subtle)]">{meta.eyebrow}</p>
-              <h1 className="mt-0.5 text-[20px] font-semibold tracking-[-0.02em] text-[var(--sanad-text-strong)]">{meta.title}</h1>
-              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[var(--sanad-text-muted)]">{meta.description}</p>
-            </div>
-          </div>
-          {kind !== 'library' && kind !== 'automations' ? (
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="sanad-focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)]"
-              aria-label="تحديث"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          ) : null}
-        </header>
+  // Preserve old /more bookmarks without retaining a redundant navigation destination.
+  // The business workspace owns connections, automation and payment inbox now.
+  useEffect(() => {
+    if (kind === 'more') navigateProduct('commercial?view=tools', { replace: true });
+  }, [kind]);
 
-        {kind === 'today' && !loading && !error ? (
-          <div className="grid grid-cols-3 gap-3 border-b border-[var(--sanad-border-subtle)] py-4 sm:max-w-lg">
-            <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">الموافقات</p><p className="mt-1 text-lg font-semibold">{counts.approvals ?? 0}</p></div>
-            <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">تحتاج انتباه</p><p className="mt-1 text-lg font-semibold">{counts.attention ?? 0}</p></div>
-            <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">المهام</p><p className="mt-1 text-lg font-semibold">{counts.tasks ?? 0}</p></div>
+  return (
+    <div className="min-h-full bg-[var(--sanad-bg-canvas)] px-4 py-5 text-[var(--sanad-text)] lg:px-8 lg:py-8" dir="rtl">
+      <div className="mx-auto w-full max-w-[1160px]">
+        {kind !== 'today' && kind !== 'more' ? (
+          <header data-sanad-section-header={kind} className={`sanad-section-compact-header flex flex-wrap items-start justify-between gap-4 ${kind === 'today' ? 'is-today' : ''}`}>
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="sanad-section-head-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)]">
+                <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-[var(--sanad-text-muted)]">{meta.eyebrow}</p>
+                <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.025em] text-[var(--sanad-text-strong)]">{meta.title}</h1>
+                <p className="mt-1 max-w-2xl text-[12px] leading-[1.85] text-[var(--sanad-text-muted)]">{meta.description}</p>
+              </div>
+            </div>
+            {kind !== 'more' && kind !== 'library' && kind !== 'automations' ? (
+              <button type="button" onClick={() => void load()}
+                className="sanad-focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)] transition-colors hover:bg-[var(--sanad-interactive-soft)]"
+                aria-label="تحديث">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            ) : null}
+          </header>
+        ) : null}
+
+        {kind === 'today' ? (
+          <Suspense fallback={<div className="mt-6 h-[220px] rounded-2xl bg-[var(--sanad-surface-2)]" aria-busy="true" />}>
+            <SanadQuickProjectHome />
+          </Suspense>
+        ) : null}
+
+        {kind === 'today' ? (
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--sanad-border-subtle)] pb-3">
+            <div><h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">ما يحتاج انتباهك</h2>
+            <p className="mt-1 text-[11px] text-[var(--sanad-text-muted)]">عناصر فعلية من مصادرها، مع المحافظة على صلاحيات كل مساحة.</p></div>
+            <button type="button" onClick={() => void load()}
+              className="sanad-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)]"
+              aria-label="تحديث ما يحتاج انتباهك"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
+            {!loading && !error ? (
+              <div className="flex gap-3 text-[11px] text-[var(--sanad-text-muted)]">
+                <span><b className="text-[var(--sanad-text-strong)]">{counts.approvals ?? 0}</b> موافقات</span>
+                <span><b className="text-[var(--sanad-text-strong)]">{counts.attention ?? 0}</b> تحتاج انتباهًا</span>
+                <span><b className="text-[var(--sanad-text-strong)]">{counts.tasks ?? 0}</b> مهام</span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -226,7 +251,7 @@ export default function SanadUnifiedEntryRoute() {
         ) : null}
 
         {!loading && !error && (kind === 'today' || kind === 'tasks' || kind === 'approvals') ? (
-          <div className="divide-y divide-[var(--sanad-border-subtle)]">
+          <div className="divide-y divide-[var(--sanad-border-subtle)] border-b border-[var(--sanad-border-subtle)]">
             {items.length === 0 ? (
               <div className="py-12 text-center">
                 <FileText className="mx-auto h-5 w-5 text-[var(--sanad-text-subtle)]" />

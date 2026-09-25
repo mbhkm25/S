@@ -18,7 +18,6 @@ import {
 } from './assistantAgentApi';
 import {
   archiveSanadAgentThread,
-  createSanadAgentThread,
   getSanadAgentContext,
   getSanadAgentThread,
   listSanadAgentThreads,
@@ -300,16 +299,11 @@ export default function SanadAgentWorkspace() {
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const { preferences, setMemorySnapshot } = useSanadAssistantSettings();
-  const initialNewConversationHandledRef = useRef(false);
-
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
-  const [businessLoading, setBusinessLoading] = useState(true);
-  const [businessSelectionOpen, setBusinessSelectionOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -382,23 +376,15 @@ export default function SanadAgentWorkspace() {
   }, [messages, sending]);
 
   const refreshThreads = async (preferred?: string | null) => {
-    const next = await listSanadAgentThreads();
+    const next = await listSanadAgentThreads(100);
     setThreads(next);
-    const active = next.filter((thread) => thread.status === 'active');
-    const target = preferred && active.some((thread) => thread.id === preferred)
-      ? preferred
-      : selectedThreadId && active.some((thread) => thread.id === selectedThreadId)
-        ? selectedThreadId
-        : active[0]?.id || null;
-    if (target !== selectedThreadId) setSelectedThreadId(target);
+    const target = preferred || selectedThreadId || null;
     return { threads: next, target };
   };
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      setBusinessLoading(true);
-      setThreadsLoading(true);
       setWorkspaceError(null);
       try {
         const [{ data, error }, loadedThreads] = await Promise.all([
@@ -419,32 +405,21 @@ export default function SanadAgentWorkspace() {
           setBusinesses(options);
         }
         setThreads(loadedThreads);
-        // A sidebar deep link is resolved exclusively against the participant-aware
-        // thread list already authorized by the backend.
+        // SANAD no longer exposes a general chat. A conversation route must carry
+        // an explicit thread id created/opened from Personal Manager or Business.
+        // getSanadAgentThread() below remains the server authorization boundary,
+        // so older/paginated threads do not need to be present in the recent list.
         const url = new URL(window.location.href);
-        const requested = url.searchParams.has('new') ? null : url.searchParams.get('thread');
-        const first = (requested && loadedThreads.find((thread) => thread.status === 'active' && thread.id === requested))
-          || loadedThreads.find((thread) => thread.status === 'active') || null;
-        if (url.searchParams.has('thread')) {
-          url.searchParams.delete('thread');
-          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-        }
-        if (first) {
-          setSelectedThreadId(first.id);
-        } else if (options.length === 1) {
-          setBusinessId(options[0].id);
-          setBusinessSelectionOpen(false);
-        } else if (options.length > 1) {
+        const requested = url.searchParams.get('thread');
+        if (requested) {
+          setSelectedThreadId(requested);
+        } else {
+          setSelectedThreadId(null);
           setBusinessId('');
-          setBusinessSelectionOpen(true);
         }
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
       } finally {
-        if (alive) {
-          setBusinessLoading(false);
-          setThreadsLoading(false);
-        }
       }
     })();
     return () => { alive = false; };
@@ -467,8 +442,10 @@ export default function SanadAgentWorkspace() {
           listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
-        setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
-        setBusinessSelectionOpen(false);
+        setBusinessId(detail.thread.business_id || '');
+        setThreads((current) => current.some((thread) => thread.id === detail.thread.id)
+          ? current.map((thread) => thread.id === detail.thread.id ? { ...thread, ...detail.thread } : thread)
+          : [detail.thread, ...current]);
         setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
@@ -559,108 +536,14 @@ export default function SanadAgentWorkspace() {
     };
   }, [selectedThreadId]);
 
-  const createThreadForBusiness = async (nextBusinessId: string | null) => {
-    const id = await createSanadAgentThread(nextBusinessId);
-    setMessages([]);
-    setDraft('');
-    setPendingAttachments([]);
-    setBusinessId(nextBusinessId || '');
-    setSelectedThreadId(id);
-    setBusinessSelectionOpen(false);
-    await refreshThreads(id);
-    window.setTimeout(() => textareaRef.current?.focus(), 50);
-    return id;
-  };
-
   const ensureThread = async () => {
     if (selectedThreadId) return selectedThreadId;
-    const defaultBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : null);
-    if (!defaultBusinessId && businesses.length > 1) {
-      setBusinessSelectionOpen(true);
-      throw new Error('اختر النشاط لهذه المحادثة أولًا.');
-    }
-    return createThreadForBusiness(defaultBusinessId);
+    throw new Error('افتح محادثة من المدير الشخصي أو الأعمال أولًا.');
   };
-
-  const newThread = async () => {
-    if (sending) return;
-    if (businesses.length > 1) {
-      setMessages([]);
-      setDraft('');
-      setPendingAttachments([]);
-      setSelectedThreadId(null);
-      setBusinessId('');
-      setBusinessSelectionOpen(true);
-      return;
-    }
-    try {
-      await createThreadForBusiness(businesses.length === 1 ? businesses[0].id : null);
-    } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
-    }
-  };
-
-  // The global sidebar owns the primary New Conversation action on every route.
-  // A route request is consumed once after the account/business context has loaded.
-  useEffect(() => {
-    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has('new')) return;
-    initialNewConversationHandledRef.current = true;
-    url.searchParams.delete('new');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-    void newThread();
-  }, [threadsLoading, businessLoading]);
-
-  useEffect(() => {
-    const handleGlobalNewConversation = () => {
-      if (threadsLoading || businessLoading) return;
-      void newThread();
-    };
-    window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
-    return () => window.removeEventListener('sanad:new-conversation', handleGlobalNewConversation);
-  }, [threadsLoading, businessLoading, sending, businesses]);
-
-  // Global history stays available in the persistent shell on every route.
-  // This is a notification to refresh its participant-aware read model; it is
-  // not an alternate persistence path or an additional financial data store.
-  useEffect(() => {
-    window.dispatchEvent(new Event('sanad:threads-updated'));
-  }, [threads]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('sanad:thread-selected', { detail: selectedThreadId }));
   }, [selectedThreadId]);
-
-  const selectThread = (threadId: string) => {
-    if (sending) return;
-    setPendingAttachments([]);
-    setSelectedThreadId(threadId);
-  };
-
-  useEffect(() => {
-    const onGlobalSelect = (event: Event) => {
-      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
-      if (!threadId || threadsLoading || sending) return;
-      // Never trust a synthetic UI event as authorization; only use an active
-      // thread returned by the participant-aware listing RPC.
-      if (!threads.some((thread) => thread.id === threadId && thread.status === 'active')) return;
-      selectThread(threadId);
-    };
-    const onGlobalArchive = (event: Event) => {
-      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
-      if (!threadId || threadsLoading || sending) return;
-      void refreshThreads().then(({ target }) => {
-        if (selectedThreadId === threadId && !target) setMessages([]);
-      }).catch(() => setWorkspaceError('تعذر تحديث سجل المحادثات بعد الأرشفة.'));
-    };
-    window.addEventListener('sanad:select-conversation', onGlobalSelect);
-    window.addEventListener('sanad:thread-archived', onGlobalArchive);
-    return () => {
-      window.removeEventListener('sanad:select-conversation', onGlobalSelect);
-      window.removeEventListener('sanad:thread-archived', onGlobalArchive);
-    };
-  }, [threads, threadsLoading, sending, selectedThreadId]);
 
   const archiveThread = async (threadId: string) => {
     if (sending) return;
@@ -733,11 +616,6 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
       return;
     }
-    if (!selectedThreadId && businesses.length > 1 && !businessId) {
-      setBusinessSelectionOpen(true);
-      return;
-    }
-
     let threadId: string;
     try {
       threadId = await ensureThread();
@@ -812,6 +690,9 @@ export default function SanadAgentWorkspace() {
       markAssistantSuccess();
 
       setPendingAttachments([]);
+      // A successful turn may rename/update its thread. Refresh the short-lived
+      // Today/project quick-access cache before returning to those routes.
+      void import('../projects/projectQuickAccess').then(({ invalidateProjectQuickAccess }) => invalidateProjectQuickAccess());
       await refreshThreads(threadId);
       try {
         const [persistedThread, persistedAttachments] = await Promise.all([
@@ -901,56 +782,37 @@ export default function SanadAgentWorkspace() {
             data-scroll-owner="timeline"
             className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
-            {!businessLoading && (businessId || businesses.length > 1) ? (
-              <div data-sanad-inline-business-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
+            {selectedThreadId && selectedThread ? (
+              <div data-sanad-inline-project-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
                 <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {businessId ? (
-                  <span className="truncate">{businesses.find((option) => option.id === businessId)?.name || 'سياق النشاط'}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSelectionOpen(true)}
-                    className="sanad-focus-ring rounded-md px-1.5 py-1 font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]"
-                  >
-                    اختر نشاط المحادثة
-                  </button>
-                )}
+                <span className="truncate">
+                  {selectedThread.business_id
+                    ? businesses.find((option) => option.id === selectedThread.business_id)?.name || 'مساحة أعمال'
+                    : selectedThread.project_kind === 'legacy_unclassified'
+                      ? 'محادثة سابقة غير مصنفة'
+                      : 'المدير الشخصي'}
+                </span>
               </div>
             ) : null}
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
               </div>
+            ) : !selectedThreadId ? (
+              <div className="mx-auto flex min-h-[430px] max-w-2xl flex-col items-center justify-center text-center">
+                <SanadIntelligenceMark state="idle" size={42} className="text-slate-900" />
+                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">لا توجد محادثة عامة في سند</h3>
+                <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
+                  افتح المدير الشخصي أو الأعمال من الشريط الجانبي، ثم اختر أو أنشئ محادثة داخل تلك المساحة.
+                </p>
+              </div>
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
                 <SanadIntelligenceMark state="idle" size={42} className="text-slate-900" />
-                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
+                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تنجز في هذه المساحة؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
-                  اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
+                  هذه المحادثة مرتبطة بمساحتها منذ إنشائها. ستُقرأ البيانات والكيانات وفق صلاحياتك ومصدرها المعتمد.
                 </p>
-
-                {(businessSelectionOpen || (!selectedThreadId && businesses.length > 1 && !businessId)) ? (
-                  <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
-                    <div className="flex items-center gap-2">
-                      <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {businesses.map((business) => (
-                        <button
-                          key={business.id}
-                          type="button"
-                          onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
-                        >
-                          {business.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button
@@ -1012,71 +874,73 @@ export default function SanadAgentWorkspace() {
             <div ref={endRef} />
           </div>
 
-          <form
-            data-workspace-slot="composer"
-            onSubmit={handleSubmit}
-            data-composer-density="compact"
-            className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
-          >
-            <div
-              className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
-              data-composer-layout="single-row-controls"
+          {selectedThreadId ? (
+            <form
+              data-workspace-slot="composer"
+              onSubmit={handleSubmit}
+              data-composer-density="compact"
+              className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
             >
-              <SanadAttachmentComposer
-                threadId={selectedThreadId}
-                businessId={businessId || null}
-                disabled={sending || threadReadOnly}
-                attachments={pendingAttachments}
-                onChange={setPendingAttachments}
-                onRequestThread={ensureThread}
-                onError={(message) => setWorkspaceError(message)}
-                layout="inline-grid"
-              />
-
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  syncComposerTextareaHeight(event.currentTarget);
-                }}
-                onKeyDown={handleKeyDown}
-                disabled={sending || threadReadOnly}
-                rows={1}
-                placeholder="اسأل سند…"
-                className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
-              />
-
-              <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
-              <SanadVoiceDictationButton
-                disabled={sending || threadReadOnly}
-                onStateChange={handleVoiceStateChange}
-                onTranscript={(text) => {
-                  setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-                  setWorkspaceError(null);
-                  window.setTimeout(() => {
-                    syncComposerTextareaHeight(textareaRef.current);
-                    textareaRef.current?.focus();
-                  }, 40);
-                }}
-                onError={(message) => setWorkspaceError(message)}
-              />
-              <button
-                type="submit"
-                disabled={
-                  sending
-                  || threadReadOnly
-                  || pendingAttachments.some((attachment) => attachment.status !== 'ready')
-                  || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
-                }
-                className="sanad-focus-ring flex h-9 min-w-9 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] disabled:cursor-not-allowed disabled:bg-slate-300"
-                aria-label="إرسال"
+              <div
+                className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
+                data-composer-layout="single-row-controls"
               >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
-                <span className="sr-only">إرسال</span>
-              </button>
-            </div>
-          </form>
+                <SanadAttachmentComposer
+                  threadId={selectedThreadId}
+                  businessId={businessId || null}
+                  disabled={sending || threadReadOnly}
+                  attachments={pendingAttachments}
+                  onChange={setPendingAttachments}
+                  onRequestThread={ensureThread}
+                  onError={(message) => setWorkspaceError(message)}
+                  layout="inline-grid"
+                />
+  
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    syncComposerTextareaHeight(event.currentTarget);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending || threadReadOnly}
+                  rows={1}
+                  placeholder="اسأل سند…"
+                  className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
+                />
+  
+                <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
+                <SanadVoiceDictationButton
+                  disabled={sending || threadReadOnly}
+                  onStateChange={handleVoiceStateChange}
+                  onTranscript={(text) => {
+                    setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+                    setWorkspaceError(null);
+                    window.setTimeout(() => {
+                      syncComposerTextareaHeight(textareaRef.current);
+                      textareaRef.current?.focus();
+                    }, 40);
+                  }}
+                  onError={(message) => setWorkspaceError(message)}
+                />
+                <button
+                  type="submit"
+                  disabled={
+                    sending
+                    || threadReadOnly
+                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                  }
+                  className="sanad-focus-ring flex h-9 min-w-9 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                  aria-label="إرسال"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                  <span className="sr-only">إرسال</span>
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
       </div>
     </section>

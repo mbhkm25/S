@@ -5,6 +5,9 @@ const main = readFileSync('src/main.tsx', 'utf8');
 const home = readFileSync('src/components/Home.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const workspace = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
+const projectWorkspace = readFileSync('src/features/projects/SanadProjectWorkspaceRoute.tsx', 'utf8');
+const projectData = readFileSync('src/features/projects/projectQuickAccess.ts', 'utf8');
+const unifiedEntry = readFileSync('src/features/shell/SanadUnifiedEntryRoute.tsx', 'utf8');
 const unifiedNav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx', 'utf8');
 const actionRoute = readFileSync('src/features/financial/FinancialActionRoute.tsx', 'utf8');
 const sectionRoute = readFileSync('src/features/financial/PersonalFinanceSectionRoute.tsx', 'utf8');
@@ -18,16 +21,21 @@ const app = readFileSync('src/App.tsx', 'utf8');
 const styles = readFileSync('src/index.css', 'utf8');
 
 
-assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open unified SANAD conversation');
-assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
+assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open the unified SANAD shell');
+assert.match(home, /today/, 'authenticated root must land on Today, not a general chat');
+assert.match(home, /single SANAD workspace shell/, 'authenticated root must remain inside the unified SANAD shell');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات']) {
+for (const label of ['الرئيسية', 'المدير الشخصي', 'الأعمال']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
+}
+for (const retired of ['محادثة جديدة', 'المحادثات', 'المال الشخصي']) {
+  assert.doesNotMatch(unifiedNav, new RegExp(retired), `global navigation must not include ${retired}`);
 }
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(unifiedSidebar, /الحساب والإعدادات/, 'Account/settings belongs to the global sidebar account menu.');
 assert.doesNotMatch(shell, /<ProductAppHeader/, 'The legacy product header is no longer mounted by SANAD unified shell.');
-assert.match(unifiedSidebar, /payment-inbox\.html/, 'Global sidebar must preserve payment inbox utility.');
+assert.doesNotMatch(unifiedSidebar, /payment-inbox\.html/, 'Payment inbox must not remain in the global sidebar footer.');
+assert.match(projectWorkspace, /payment-inbox\.html/, 'Payment inbox must remain reachable under Business.');
 assert.match(unifiedSidebar, /NotificationBell/, 'Global sidebar must preserve notifications utility.');
 assert.doesNotMatch(shell, /ProductBottomNav/, 'target workspace shell must not render the legacy four-product navigation');
 
@@ -39,7 +47,7 @@ assert.match(styles, /noto-sans-arabic-latin-wght-normal\.woff2/, 'Noto Sans Ara
 assert.match(styles, /font-display:\s*swap/, 'self-hosted Noto Sans Arabic must use font-display swap');
 assert.doesNotMatch(styles, /fonts\.googleapis\.com/, 'primary SANAD typography must not depend on Google Fonts at runtime');
 
-for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai', 'today', 'library', 'connections', 'tasks', 'approvals', 'automations']) {
+for (const route of ['financial', 'commercial', 'account-center', 'sanad-ai', 'today', 'more', 'library', 'connections', 'tasks', 'approvals', 'automations']) {
   assert.match(main, new RegExp(route.replace('-', '\\-')), `main.tsx must recognize /${route}`);
 }
 
@@ -53,6 +61,17 @@ for (const section of ['accounts', 'transactions', 'obligations', 'budgets', 'go
   assert.match(sectionRoute, new RegExp(section), `personal finance section route must expose ${section}`);
   assert.match(overview, new RegExp(`financial/${section}`), `personal finance overview must link to ${section}`);
 }
+
+assert.match(projectWorkspace, /محادثات/);
+assert.match(projectWorkspace, /المصادر/);
+assert.match(projectWorkspace, /الأدوات/);
+assert.match(projectWorkspace, /المكتبة/);
+assert.match(projectWorkspace, /إدارة النشاط/);
+assert.match(projectData, /listSanadProjectThreads/);
+assert.match(projectData, /createSanadProjectThread/);
+assert.match(projectWorkspace, /setSanadProjectThreadPinned/);
+assert.match(projectWorkspace, /لا توجد محادثات عامة خارجها/);
+assert.match(shell, /SanadProjectWorkspaceRoute/);
 
 assert.match(actionRoute, /PersonalMasterDataActions/, 'personal actions must expose master-data management');
 assert.match(actionRoute, /personalFocus/, 'personal action route must support contextual focus');

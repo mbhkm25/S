@@ -64,7 +64,7 @@ function redirectAuthenticatedHomeToSanad(): boolean {
   const rootPath = cleanBase === '/' ? '/' : cleanBase.slice(0, -1);
   const pathname = window.location.pathname;
   if (pathname !== cleanBase && pathname !== rootPath) return false;
-  window.location.replace(`${cleanBase}sanad-ai`);
+  window.location.replace(`${cleanBase}today`);
   return true;
 }
 

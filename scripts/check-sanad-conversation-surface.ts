@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const assistantSections = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const assistantSettings = readFileSync('src/features/settings/SanadAssistantManagementPanel.tsx', 'utf8');
 const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const markdown = readFileSync('src/features/assistant/SanadConversationMarkdown.tsx', 'utf8');
@@ -63,11 +63,12 @@ assert.match(
   'Assistant narrative must use Markdown while user messages may remain plain text.',
 );
 
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
-assert.match(assistantSections, /data-sanad-inline-memory="true"/);
-assert.match(assistantSections, /data-sanad-inline-settings="true"/);
-assert.match(assistantSections, /ضبط المساعد/);
+assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections|SanadSidebarConversations/, 'Project conversations/settings must not return to the global sidebar.');
+assert.match(assistantSettings, /إدارة مساعد سند/);
+assert.match(assistantSettings, /SettingSwitch/);
+assert.match(assistantSettings, /forgetMemory/);
+assert.match(workspace, /لا توجد محادثة عامة في سند/);
 assert.doesNotMatch(workspace, /AssistantWorkspaceSidebar/, 'Do not recreate a second assistant sidebar.');
-assert.doesNotMatch(assistantSections, /SanadUnifiedNavLinks/, 'The global shell alone owns navigation.');
+assert.doesNotMatch(assistantSettings, /SanadUnifiedNavLinks/, 'The global shell alone owns navigation.');
 
 console.log('SANAD conversation surface simplification contract passed.');
