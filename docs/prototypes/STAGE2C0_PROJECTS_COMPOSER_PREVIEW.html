@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سند · معاينة مفاهيم المساحات ومربع الإدخال — 2C.0</title>
+<style>
+:root{font-family:"Segoe UI",Tahoma,Arial,sans-serif;--ink:#182d2e;--muted:#627475;--line:#e5edeb;--bg:#f6f8f7;--mint:#d9f3e8;--teal:#16816f;--white:#fff;--hover:#edf6f1;font-size:14px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:2px}a{color:inherit}
+.app{height:100dvh;min-height:460px;display:grid;grid-template-columns:252px minmax(0,1fr);overflow:hidden}
+aside{border-left:1px solid var(--line);background:#fcfefd;display:flex;flex-direction:column;min-height:0}
+.brand{height:82px;display:flex;align-items:center;gap:10px;padding:18px 17px;border-bottom:1px solid var(--line)}
+.brandmark{width:39px;height:39px;border-radius:13px;background:linear-gradient(145deg,#daf25a,#79d8a0,#42cbb7);display:grid;place-items:center;font-size:21px;font-weight:800;color:#102a29}
+.brandstrong{font-size:21px;letter-spacing:-1px;font-weight:650}.small{font-size:11px;color:var(--muted)}.nav-scroll{flex:1;overflow:auto;padding:12px 11px}
+.item{border:0;display:flex;align-items:center;gap:11px;width:100%;min-height:42px;text-align:right;border-radius:10px;color:#455b5b;background:transparent;padding:4px 9px;margin:2px 0}
+.item:hover,.item.active{background:var(--hover);color:#135d55}.item.active{font-weight:600}
+.ic{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:10px;font-size:18px;font-weight:400}.active .ic{background:#def4eb}.item.new{border:1px solid #c6e6d8;background:#f2fbf5;margin-bottom:9px}
+.label{flex:1}.divider{height:1px;background:var(--line);margin:13px 4px}.hlabel{font-size:11px;color:#778789;padding:10px 8px 5px}
+.pin-list{padding:0 7px}.pinned{display:flex;align-items:center;gap:5px;padding:7px;border-radius:9px;color:#516363;font-size:12px;white-space:nowrap}.pinned button{min-width:28px;border:0;background:none;color:var(--muted)}.pinned:hover{background:#f0f6f3}
+.footer{padding:9px 11px calc(11px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:6px}
+.footbtn{height:42px;border:0;border-radius:12px;background:none;display:grid;place-items:center;color:#4b6663;font-size:18px}.footbtn:hover{background:var(--hover)}
+.scope-switch{border:1px solid var(--line);background:white;border-radius:10px;min-width:0;padding:7px 9px;text-align:right}.scope-switch strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:550;font-size:12px}.scope-switch small{font-size:10px;color:var(--muted)}
+main{min-width:0;min-height:0;display:flex;flex-direction:column;position:relative}
+header{height:66px;background:#fff;border-bottom:1px solid var(--line);padding:0 23px;display:flex;align-items:center;justify-content:space-between;gap:15px}
+.subtitle{color:var(--muted);font-size:12px}.title{font-size:17px;font-weight:600}.headbtn{border:1px solid var(--line);background:white;border-radius:10px;padding:8px 12px;color:var(--ink)}
+.canvas{flex:1;min-height:0;overflow:auto;padding:22px max(20px,calc((100% - 880px)/2));scrollbar-gutter:stable}
+.hero{background:white;border:1px solid var(--line);padding:20px 21px;border-radius:15px}.badge{font-size:11px;color:#137a67;background:#e7f7ef;padding:5px 9px;border-radius:20px;display:inline-flex}.hero h1{font-size:21px;margin:15px 0 7px;font-weight:560}.hero p{color:var(--muted);line-height:1.9;margin:0;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.chip{border:1px solid #d6e5de;background:#fbfffd;border-radius:9px;padding:8px 11px;font-size:12px}
+.chip:hover{background:#e8f5ed}.workarea{margin-top:19px}.sectiontitle{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:600;padding:8px 0 11px}.link{border:0;background:none;color:var(--teal);font-size:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:13px 0;border-bottom:1px solid var(--line);font-size:12px}.row small{color:var(--muted)}.tinybtn{border:1px solid var(--line);border-radius:8px;background:white;padding:5px 9px;color:var(--muted)}
+.composer-wrap{flex:none;padding:10px 20px calc(15px + env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,transparent,#f6f8f7 24%);width:100%}
+.composer{max-width:880px;margin:auto;background:white;border:1px solid #dbe5e1;border-radius:17px;padding:13px 14px;box-shadow:0 5px 25px rgba(32,64,51,.035)}
+.composer textarea{display:block;resize:none;width:100%;border:0;outline:0;min-height:35px;height:40px;background:none;color:var(--ink);font-size:14px}
+.tools{display:flex;gap:6px;align-items:center;justify-content:space-between}.toolgroup{display:flex;gap:7px}.tool{border:1px solid var(--line);background:white;padding:8px 11px;border-radius:10px;font-size:12px;color:#45615b}.tool.primary{border-color:#b9dfce;background:#f0f9f3}.send{width:35px;height:35px;border-radius:12px;background:#164c43;color:white;border:0;font-size:18px}
+.pop{display:none;position:absolute;bottom:116px;right:max(20px,calc((100% - 880px)/2));width:min(340px,calc(100vw - 30px));max-height:min(370px,65dvh);overflow:auto;background:white;border:1px solid #d9e7df;border-radius:15px;box-shadow:0 18px 46px #234b3b20;padding:11px;z-index:10}
+.pop.open{display:block}.pop h3{margin:7px 6px 11px;font-size:14px}.pop input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;outline-color:var(--teal)}
+.option{width:100%;border:0;background:none;text-align:right;display:flex;align-items:center;gap:11px;padding:11px 7px;border-radius:10px}.option:hover{background:var(--hover)}.option small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.option .ic{background:#f1f7f3}
+.modal-back{display:none;position:fixed;inset:0;background:#1b3d3780;z-index:20;justify-content:center;align-items:center;padding:20px}.modal-back.show{display:flex}
+.modal{width:min(790px,100%);max-height:calc(100dvh - 40px);display:flex;flex-direction:column;min-height:0;background:#fff;border-radius:18px;box-shadow:0 15px 70px #102c2945;overflow:hidden}
+.modalhead{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px 10px;border-bottom:1px solid var(--line)}
+.modalhead h2{font-size:19px;margin:0 0 7px;font-weight:600}.modalbody{overflow:auto;padding:18px 20px}
+.fields{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px}.field{position:relative;min-width:0}.field label{display:block;font-size:11px;font-weight:550;margin-bottom:7px;color:#566b66}
+.field input{width:100%;height:40px;border:1px solid #dbe6df;border-radius:9px;padding:8px;font-size:13px;min-width:0}.field input:focus{border-color:var(--teal)}
+.field .suggestions{display:none;position:absolute;z-index:15;top:65px;background:white;border:1px solid #d8e7df;border-radius:9px;width:100%;padding:4px;box-shadow:0 10px 27px #214a3222}.field .suggestions.show{display:block}.suggestions button{border:0;background:transparent;display:block;text-align:right;padding:8px;width:100%;font-size:12px;border-radius:5px}.suggestions button:hover,.suggestions button:focus{background:#eef7ef}
+.note{padding:12px;border:1px solid #e5edeb;border-radius:11px;background:#f8fbf8;line-height:1.8;margin:16px 0;font-size:12px;color:var(--muted)}
+.actions{padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.primarybtn{border:0;background:#165f54;color:white;padding:10px 17px;border-radius:10px}.secondary{border:1px solid var(--line);background:white;padding:9px 14px;border-radius:10px;color:var(--ink)}
+.toast{position:fixed;z-index:50;bottom:21px;left:21px;padding:12px 17px;background:#123e38;color:white;border-radius:12px;font-size:12px;max-width:310px;display:none}
+.hamburger{display:none}.mobile-nav{display:none}
+@media(max-width:900px){.app{grid-template-columns:215px minmax(0,1fr)}.fields{grid-template-columns:repeat(3,minmax(0,1fr))}.canvas{padding:17px}.pop{right:17px}}
+@media(max-width:650px){.app{display:flex}.app aside{position:fixed;z-index:12;width:min(280px,85vw);right:0;top:0;bottom:0;box-shadow:0 7px 22px #173f3833;transform:translateX(105%);transition:transform .2s}.app aside.open{transform:translateX(0)}.app main{width:100%}header{height:60px;padding:0 13px}.hamburger{display:inline-flex}.subtitle{font-size:10px}.title{font-size:15px}.hero{padding:17px}.hero h1{font-size:19px}.canvas{padding:12px}.composer-wrap{padding:8px 10px calc(11px + env(safe-area-inset-bottom,0px))}.pop{bottom:112px;right:11px}.modal-back{padding:7px;align-items:flex-end}.modal{max-height:94dvh;border-radius:17px 17px 5px 5px}.fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.modalbody{padding:14px}.modalhead{padding:14px}.actions{padding:12px}.tool{padding:8px 9px;font-size:11px}}
+@media(max-width:390px){.fields{grid-template-columns:1fr}.brand{height:69px}.canvas{padding:10px}.chips{gap:6px}.tool{padding:7px}.modal{max-height:92dvh}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important}}
+</style></head><body>
+<div class="app">
+<aside id="sidebar" aria-label="التنقل">
+<div class="brand"><div class="brandmark">س</div><div><div class="brandstrong">سند</div><div class="small">ذكاء يعمل معك</div></div></div>
+<div class="nav-scroll">
+<button class="item new" onclick="newThread()"><span class="ic" aria-hidden="true">＋</span><span class="label">محادثة جديدة</span></button>
+<button class="item active" data-route="chats" onclick="route('chats')"><span class="ic" aria-hidden="true">▤</span><span class="label">المحادثات</span></button>
+<button class="item" data-route="today" onclick="route('today')"><span class="ic" aria-hidden="true">◷</span><span class="label">اليوم</span></button>
+<button class="item" data-route="personal" onclick="chooseProject('personal')"><span class="ic" aria-hidden="true">◉</span><span class="label">المدير الشخصي</span></button>
+<button class="item" data-route="business" onclick="chooseProject('business')"><span class="ic" aria-hidden="true">▧</span><span class="label">الأعمال</span></button>
+<button class="item" data-route="more" onclick="route('more')"><span class="ic" aria-hidden="true">⋯</span><span class="label">المزيد</span></button>
+<div class="divider"></div><div class="hlabel">محادثات مثبتة في هذه المساحة</div><div class="pin-list" id="pins"></div>
+</div>
+<div class="footer">
+<button class="footbtn" aria-label="الإشعارات" title="الإشعارات" onclick="route('today')">♧</button>
+<button class="scope-switch" onclick="toggleScope()" aria-label="تبديل المساحة"><strong id="side-scope">باحكم للعسل</strong><small>تبديل المساحة ▾</small></button>
+<button class="footbtn" aria-label="الحساب والإعدادات" title="الحساب والإعدادات" onclick="toast('إدارة مساعد سند ضمن الإعدادات العامة في التصميم المعتمد')">◉</button>
+</div></aside>
+<main><header><div><button class="headbtn hamburger" onclick="toggleMobile()" aria-label="فتح الشريط الجانبي">☰</button><div class="title" id="headtitle">باحكم للعسل</div><div class="subtitle" id="headsub">مشروع أعمال · محادثات ومصادر وأدوات</div></div><button class="headbtn" onclick="toggleScope()">تبديل المساحة ▾</button></header>
+<div class="canvas" id="canvas">
+<div class="hero"><span class="badge" id="badge">مشروع أعمال</span><h1 id="heroTitle">مرحبًا بك في مشروع باحكم للعسل</h1><p id="heroText">مساحة واحدة تجمع المحادثات والمصادر والأدوات وإدارة النشاط. هذا النموذج التجريبي لا يتصل ببياناتك الحقيقية.</p></div>
+<div class="chips"><button class="chip" onclick="route('chats')">المحادثات</button><button class="chip" onclick="showTab('sources')">المصادر</button><button class="chip" onclick="showTab('tools')">الأدوات</button><button class="chip" onclick="showTab('admin')">إدارة المشروع</button></div>
+<div class="workarea" id="workarea"></div>
+</div>
+<div class="pop" id="scope" role="dialog" aria-label="اختيار المساحة"><h3>التبديل بين المشروعات</h3><button class="option" onclick="chooseProject('personal')"><span class="ic">◉</span><span>المدير الشخصي<small>الحسابات والمهام الشخصية</small></span></button><button class="option" onclick="chooseProject('business')"><span class="ic">▧</span><span>باحكم للعسل<small>مشروع أعمال (بيانات تخيلية)</small></span></button><button class="option" onclick="toast('إضافة مشروع آخر تعتمد على صلاحياتك الفعلية — هذه معاينة فقط')"><span class="ic">＋</span><span>مشروع آخر<small>خيار توضيحي</small></span></button></div>
+<div class="pop" id="palette" role="dialog" aria-label="الإجراءات" aria-modal="false"><h3>إجراء داخل <span id="paletteScope">باحكم للعسل</span></h3><input aria-label="البحث في الإجراءات" placeholder="ابحث عن إجراء..." id="actionSearch" oninput="renderActions()"><div id="actionRows"></div></div>
+<div class="composer-wrap"><div class="composer"><textarea id="message" aria-label="مربع إدخال سند" placeholder="اسأل سند أو اكتب ما تريد إنجازه..."></textarea><div class="tools"><div class="toolgroup"><button class="tool primary" onclick="togglePalette()">＋ إجراء</button><button class="tool" onclick="toast('إرفاق ملف — واجهة تصورية فقط')">⊕ مرفق</button><button class="tool" onclick="toast('إدخال صوتي — واجهة تصورية فقط')">♬ صوت</button></div><button class="send" onclick="sendMessage()" aria-label="إرسال">↑</button></div></div></div>
+</main></div>
+<div class="modal-back" id="modal" onclick="if(event.target===this)closeForm()"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle"><div class="modalhead"><div><h2 id="formTitle">تسجيل مصروف</h2><div class="small">حقول تفاعلية تجريبية · لا تُنشئ أي عملية مالية</div></div><button class="secondary" onclick="closeForm()" aria-label="إغلاق">✕</button></div><div class="modalbody"><div class="fields" id="fields"></div><div class="note">معاينة فقط: الإكمال التلقائي أدناه يستخدم قائمة تخيلية، وليس بيانات حساباتك. في التنفيذ الفعلي سيتحقق الخادم من المساحة والصلاحية والمعرف قبل إنشاء المسودة أو اعتمادها.</div></div><div class="actions"><small class="small">لا توجد اتصالات بالخادم أو عمليات حقيقية.</small><div><button class="secondary" onclick="closeForm()">العودة للمحادثة</button> <button class="primarybtn" onclick="previewDraft()">معاينة المسودة</button></div></div></section></div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+"use strict";
+const sample={
+ personal:{name:"المدير الشخصي",tag:"مشروع شخصي",desc:"محادثاتك وأعمالك وملفاتك الشخصية في مساحة واحدة. تبدّل الإجراءات في مربع الإدخال تلقائيًا.",threads:[{id:"p1",t:"مراجعة المصروفات الشهرية",pin:true},{id:"p2",t:"تنظيم الحسابات",pin:false},{id:"p3",t:"المهام والالتزامات",pin:false}],actions:[["تسجيل مصروف","نموذج مصروف تفاعلي — تجريبي","expense"],["كشف حساب","تحديد الحساب والفترة — تجريبي","statement"],["تحويل بين الحسابات","قدرة مستقبلية غير متاحة حاليًا","future"],["تنبيه","قدرة مخطط لها","future"]]},
+ business:{name:"باحكم للعسل",tag:"مشروع أعمال",desc:"المحادثات والمصادر والأدوات وإدارة النشاط متاحة من مشروع واحد. لا توجد بيانات متصلة بهذه المعاينة.",threads:[{id:"b1",t:"مبيعات سبتمبر",pin:true},{id:"b2",t:"مراجعة العملاء",pin:false},{id:"b3",t:"تقرير المخزون",pin:false}],actions:[["فاتورة مبيعات","نموذج فاتورة توضيحي لا يسجل في إبداع","invoice"],["كشف حساب","عرض توضيحي فقط","statement"],["فاتورة مشتريات","كتابة ERP مستقبلية — غير متاحة","future"],["سند قبض","تنفيذ ERP مستقبلي — غير متاح","future"]]}
+};
+let active="business",currentTab="chats",draft={};
+function esc(v){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function closePops(){document.getElementById("scope").classList.remove("open");document.getElementById("palette").classList.remove("open")}
+function toast(text){let t=document.getElementById("toast");t.textContent=text;t.style.display="block";clearTimeout(window.timer);window.timer=setTimeout(()=>t.style.display="none",3200)}
+function toggleMobile(){document.getElementById("sidebar").classList.toggle("open")}
+function toggleScope(){let p=document.getElementById("scope");document.getElementById("palette").classList.remove("open");p.classList.toggle("open")}
+function chooseProject(key){active=key;closePops();document.getElementById("sidebar").classList.remove("open");route("chats")}
+function route(v){closePops();currentTab=v;document.getElementById("sidebar").classList.remove("open");document.querySelectorAll("[data-route]").forEach(e=>e.classList.toggle("active",e.dataset.route===v));render()}
+function showTab(v){currentTab=v;render()}
+function render(){let p=sample[active];document.getElementById("side-scope").textContent=p.name;document.getElementById("headtitle").textContent=currentTab==="today"?"اليوم":p.name;document.getElementById("headsub").textContent=currentTab==="today"?"الاهتمام والمتابعة من جميع المساحات":p.tag+" · محادثات ومصادر وأدوات";document.getElementById("badge").textContent=p.tag;document.getElementById("heroTitle").textContent=currentTab==="today"?"ما يحتاج انتباهك":currentTab==="more"?"المزيد":p.name;document.getElementById("heroText").textContent=currentTab==="today"?"هنا تجتمع المهام والموافقات الشخصية والتجارية مع إظهار المساحة الأصلية لكل عنصر.":currentTab==="more"?"المكتبة والاتصالات وإعدادات سند — دون تفريعات طويلة.":p.desc;
+document.getElementById("paletteScope").textContent=p.name;
+document.getElementById("pins").innerHTML=p.threads.filter(t=>t.pin).map(t=>'<div class="pinned"><span>♢</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">'+esc(t.t)+'</span><button onclick="pin(\''+t.id+'\')" aria-label="إلغاء تثبيت">✕</button></div>').join("")||'<p class="small" style="padding:5px 10px">لا توجد محادثات مثبتة</p>';
+const w=document.getElementById("workarea");let rows=[];
+if(currentTab==="chats"){rows=p.threads.map(t=>'<div class="row"><span>'+esc(t.t)+'</span><span><small>محادثة ضمن '+esc(p.tag)+'</small> <button class="tinybtn" onclick="pin(\''+t.id+'\')">'+(t.pin?'إلغاء التثبيت':'تثبيت')+'</button></span></div>')}
+else if(currentTab==="sources"){rows=['مستندات المشروع — صلاحيات مستقلة','إرشادات المشروع وتعليماته','مصادر البيانات الحية: تُقرأ من النظام المعتمد'].map(s=>'<div class="row">'+s+'<small>مفهوم توضيحي</small></div>')}
+else if(currentTab==="tools"){rows=p.actions.map(t=>'<div class="row">'+esc(t[0])+'<button class="tinybtn" onclick="doAction(\''+t[2]+'\')">عرض</button></div>')}
+else if(currentTab==="admin"){rows=['إدارة المشروع والأعضاء','إدارة النشاط التجاري (واجهة مستقلة)','إدارة مساعد سند (الإعدادات العامة)'].map(s=>'<div class="row">'+s+'<small>مدخل تصوري</small></div>')}
+else if(currentTab==="today"){rows=['مسودة مصروف شخصية — مراجعة مطلوبة','مراجعة تجارية — مشروع باحكم للعسل','مزامنة نظام محاسبي — تنبيه'].map(s=>'<div class="row">'+s+'<small>أمثلة تخيلية</small></div>')}
+else{rows=['المكتبة','الاتصالات','مركز المساعدة','الإعدادات العامة ← إدارة مساعد سند'].map(s=>'<div class="row">'+s+'<small>مدخل تصوري</small></div>')}
+w.innerHTML='<div class="sectiontitle"><span>'+({chats:"محادثات المساحة",sources:"مصادر المشروع",tools:"الأدوات المتاحة",admin:"الإدارة والإعدادات",today:"العناصر التي تحتاج اهتمامًا",more:"الوظائف الثانوية"}[currentTab]||"محادثات المساحة")+'</span>'+(currentTab==="chats"?'<button class="link" onclick="newThread()">+ محادثة جديدة</button>':'')+'</div>'+rows.join("");
+renderActions()}
+function pin(id){let t=sample[active].threads.find(t=>t.id===id);if(t)t.pin=!t.pin;render();toast("تثبيت بصري تجريبي داخل هذه الصفحة فقط")}
+function newThread(){let name=prompt("اسم المحادثة الجديدة (تجربة مرئية دون حفظ):");if(!name)return;sample[active].threads.unshift({id:"sample"+Date.now(),t:name.trim().slice(0,65),pin:false});route("chats");toast("أُضيفت محادثة تجريبية؛ لن تُحفظ بعد الإغلاق")}
+function togglePalette(){let p=document.getElementById("palette");document.getElementById("scope").classList.remove("open");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("actionSearch").focus();renderActions()}}
+function renderActions(){const term=document.getElementById("actionSearch").value.trim(),actions=sample[active].actions.filter(x=>!term||x[0].includes(term));document.getElementById("actionRows").innerHTML=actions.map(x=>'<button class="option" onclick="doAction(\''+x[2]+'\')"><span class="ic">＋</span><span>'+esc(x[0])+'<small>'+esc(x[1])+'</small></span></button>').join("")||'<p class="small">لا توجد نتائج</p>'}
+function doAction(action){closePops();if(action==="future"){toast("هذه القدرة مستقبلية وليست متاحة للتنفيذ حاليًا");return}if(action==="statement"){toast("كشف الحساب في هذه المعاينة يُظهر عقد قراءة فقط، دون بيانات مالية حقيقية");return}openForm(action)}
+function openForm(kind){draft={};const business=kind==="invoice",names=business?["العميل","الصنف","الكمية","السعر","العملة","التاريخ","البيان","الحساب","المرجع","المرفقات"]:["الحساب","التصنيف","المبلغ","العملة","التاريخ","البيان","المستفيد","مرجع","وسم","مرفقات"];document.getElementById("formTitle").textContent=business?"فاتورة مبيعات (معاينة)":"تسجيل مصروف (معاينة)";document.getElementById("fields").innerHTML=names.map((n,i)=>'<div class="field"><label for="field'+i+'">'+esc(n)+'</label><input id="field'+i+'" placeholder="'+(i===0?'ابدأ بالكتابة...':'أدخل '+esc(n))+'" autocomplete="off" oninput="draft['+i+']=this.value;'+(i===0?'suggest(this)':'')+'" onkeydown="inputKey(event)">'+(i===0?'<div class="suggestions" id="suggestions"></div>':'')+'</div>').join("");document.getElementById("modal").classList.add("show");document.getElementById("field0").focus()}
+function suggest(input){const arr=active==="personal"?["الحساب الرئيسي (تخيلي)","الحساب الاحتياطي (تخيلي)","العهدة (تخيلية)"]:["العميل التجريبي الأول","العميل التجريبي الثاني"];const hits=arr.filter(x=>!input.value||x.includes(input.value));let el=document.getElementById("suggestions");if(!el)return;el.innerHTML=hits.map(x=>'<button type="button" onclick="selectSuggestion(\''+x+'\')">'+esc(x)+'</button>').join("");el.classList.toggle("show",hits.length>0)}
+function selectSuggestion(label){document.getElementById("field0").value=label;draft[0]=label;document.getElementById("suggestions").classList.remove("show");document.getElementById("field1").focus()}
+function inputKey(event){if(event.key==="Escape"){document.getElementById("suggestions")?.classList.remove("show")}if(event.key==="ArrowDown"&&document.getElementById("suggestions")?.classList.contains("show")){event.preventDefault();document.getElementById("suggestions").querySelector("button")?.focus()}}
+function closeForm(){document.getElementById("modal").classList.remove("show");document.getElementById("suggestions")?.classList.remove("show")}
+function previewDraft(){let filled=Object.values(draft).filter(Boolean).length;closeForm();toast("معاينة واجهة: "+filled+" حقول مدخلة. لم تُحفظ أو تُرسل أي عملية.")} 
+function sendMessage(){let text=document.getElementById("message").value.trim();if(!text){toast("اكتب طلبًا أولًا أو اختر إجراء");return}toast("طلب تجريبي فقط: "+text.slice(0,55));document.getElementById("message").value=""}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closePops();if(document.getElementById("modal").classList.contains("show"))closeForm()}});render();
+</script></body></html>
