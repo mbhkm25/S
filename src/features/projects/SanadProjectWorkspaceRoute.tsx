@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive, BookOpen, BriefcaseBusiness, ChevronLeft, CirclePlus, FileText, FolderOpen,
   Loader2, MessageSquareText, Pin, PinOff, RefreshCw, Search, Settings2, SlidersHorizontal,
-  UserRound, Users, WalletCards, Wrench, Database, ListChecks, TriangleAlert,
+  UserRound, Users, WalletCards, Wrench, Database, ListChecks, TriangleAlert, Plug, Clock3, Inbox, Image as ImageIcon, ReceiptText,
 } from 'lucide-react';
 import type { BusinessProfile } from '../../lib/businessApi';
 import { navigateProduct } from '../../lib/productNavigation';
@@ -14,14 +14,14 @@ import {
 } from '../assistant/assistantWorkspaceApi';
 
 type ProjectKind = 'personal' | 'business';
-type View = 'conversations' | 'sources' | 'tools' | 'library' | 'manage';
+type View = 'conversations' | 'sources' | 'tools' | 'library' | 'manage' | 'connections' | 'automations' | 'payments';
 
 type BusinessOption = Pick<BusinessProfile, 'id' | 'name' | 'workspace_role'>;
 
 function routeState(kind: ProjectKind): { view: View; businessId: string | null } {
   const url = new URL(window.location.href);
   const value = url.searchParams.get('view');
-  const view = (['conversations','sources','tools','library','manage'] as View[]).includes(value as View)
+  const view = (['conversations','sources','tools','library','manage','connections','automations','payments'] as View[]).includes(value as View)
     ? value as View
     : 'conversations';
   return {
@@ -56,6 +56,11 @@ function ViewTabs({ kind, businessId, active }: { kind: ProjectKind; businessId?
     { id: 'tools', label: 'الأدوات' },
     { id: 'library', label: 'المكتبة' },
     { id: 'manage', label: kind === 'business' ? 'إدارة النشاط' : 'إدارة المساحة' },
+    ...(kind === 'business' ? [
+      { id: 'connections' as const, label: 'الاتصالات' },
+      { id: 'automations' as const, label: 'الأتمتة' },
+      { id: 'payments' as const, label: 'وارد المدفوعات' },
+    ] : []),
   ];
   return (
     <nav aria-label="محتوى المساحة" className="flex gap-1 overflow-x-auto border-b border-[var(--sanad-border-subtle)] px-1 [scrollbar-width:none]">
@@ -395,6 +400,47 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
           </section>
         ) : null}
 
+        {kind === 'business' && selectedBusinessId && view === 'connections' ? (
+          <section className="pt-6">
+            <h2 className="text-[15px] font-semibold">اتصالات النشاط</h2>
+            <p className="mt-2 max-w-2xl text-[12px] leading-6 text-[var(--sanad-text-muted)]">
+              إدارة مصادر بيانات النشاط وحالة النسخة السحابية والربط، مع استمرار سند Bridge في وضع القراءة فقط تجاه النظام المحاسبي.
+              واجهة الاتصالات الحالية على مستوى الحساب؛ تقييد تفاصيل الاتصال بنشاط واحد يحتاج عقد صلاحيات مستقلًا.
+            </p>
+            <button type="button" onClick={() => navigateProduct('connections')}
+              className="sanad-focus-ring sanad-project-tool mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-4 text-[12px]">
+              <Plug className="h-4 w-4 text-[var(--sanad-interactive)]" /> فتح الاتصالات الحالية
+            </button>
+          </section>
+        ) : null}
+
+        {kind === 'business' && selectedBusinessId && view === 'automations' ? (
+          <section className="pt-6">
+            <h2 className="text-[15px] font-semibold">أتمتة النشاط</h2>
+            <p className="mt-2 max-w-2xl text-[12px] leading-6 text-[var(--sanad-text-muted)]">
+              القواعد والمتابعات المبرمجة الخاصة بالنشاط ستحتاج إلى سجل إجراءات وصلاحيات موافقة وتدقيق قبل تمكينها؛
+              لم ننشئ قواعد وهمية ولم نفعل تنفيذًا ماليًا تلقائيًا.
+            </p>
+            <button type="button" onClick={() => navigateProduct('work/automations')}
+              className="sanad-focus-ring sanad-project-tool mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-4 text-[12px]">
+              <Clock3 className="h-4 w-4 text-[var(--sanad-interactive)]" /> حالة الأتمتة الحالية
+            </button>
+          </section>
+        ) : null}
+
+        {kind === 'business' && selectedBusinessId && view === 'payments' ? (
+          <section className="pt-6">
+            <h2 className="text-[15px] font-semibold">وارد المدفوعات</h2>
+            <p className="mt-2 max-w-2xl text-[12px] leading-6 text-[var(--sanad-text-muted)]">
+              الوصول إلى الوارد التشغيلي ومراجعة الإشعارات غير المؤكدة. قد تعرض واجهة الوارد الحالية عناصر من
+              عدة أنشطة مصرّح بها؛ لا نفترض وجود تصفية آمنة لهذا النشاط إلى أن يعتمدها الخادم.
+            </p>
+            <a href="/payment-inbox.html" className="sanad-focus-ring sanad-project-tool mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-4 text-[12px]">
+              <Inbox className="h-4 w-4 text-[var(--sanad-interactive)]" /> فتح وارد المدفوعات الحالي
+            </a>
+          </section>
+        ) : null}
+
         {(kind === 'personal' || selectedBusinessId) && view === 'sources' ? (
           <section className="pt-6">
             <h2 className="text-[15px] font-semibold">المصادر</h2>
@@ -404,11 +450,14 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
                 : 'البيانات المالية الشخصية تُقرأ من مصادرها المعتمدة. لن نحول الذاكرة أو ملفات المحادثات إلى سجل مالي بديل.'}
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => navigateProduct('connections')} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right">
-                <Database className="h-5 w-5 text-[var(--sanad-interactive)]" /><strong className="mt-3 block text-[13px]">الاتصالات الحية</strong><span className="mt-1 block text-[11px] text-[var(--sanad-text-muted)]">حالة الربط والمزامنة والمصدر.</span>
-              </button>
+              {kind === 'business' ? (
+                <button type="button" onClick={() => navigateProduct(projectPath('business', 'connections', selectedBusinessId))} className="sanad-focus-ring sanad-project-tool flex min-h-24 items-center gap-3 rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right">
+                  <Database className="h-5 w-5 text-[var(--sanad-interactive)]" />
+                  <span><strong className="block text-[13px]">المصادر الحية والاتصالات</strong><span className="mt-1 block text-[11px] text-[var(--sanad-text-muted)]">الوصول إلى مصادر بيانات النشاط وتفاصيل الربط.</span></span>
+                </button>
+              ) : null}
               <div className="rounded-[var(--sanad-radius-lg)] border border-dashed border-[var(--sanad-border)] bg-[var(--sanad-surface-2)] p-4">
-                <FolderOpen className="h-5 w-5 text-[var(--sanad-text-subtle)]" /><strong className="mt-3 block text-[13px]">مصادر المشروع</strong><span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">ستُفعّل بعد عقد مشاركة/فهرسة مشروع محكوم؛ لا وصول ضمني لملفات الفريق.</span>
+                <FolderOpen className="h-5 w-5 text-[var(--sanad-text-subtle)]" /><strong className="mt-3 block text-[13px]">مصادر المساحة</strong><span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">ستُفعّل مشاركة الملفات وفهرستها بعد إقرار عقد الصلاحيات، دون إظهار ملفات مساحة أخرى.</span>
               </div>
             </div>
           </section>
@@ -444,13 +493,24 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
         ) : null}
 
         {(kind === 'personal' || selectedBusinessId) && view === 'library' ? (
-          <section className="pt-6">
-            <EmptyState
-              icon={BookOpen}
-              title="مكتبة هذه المساحة"
-              body="ستجمع التقارير والمستندات والمخرجات المرتبطة بالمساحة بعد اكتمال عقد الملفات والمصادر. المكتبة العامة الحالية تبقى متاحة دون الادعاء بأن كل ملف منها خاص بهذا المشروع."
-            />
-            <div className="text-center"><button type="button" onClick={() => navigateProduct('library')} className="sanad-focus-ring rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border)] bg-[var(--sanad-surface-1)] px-4 py-2 text-[12px]">فتح المكتبة العامة الحالية</button></div>
+          <section className="pt-6" data-sanad-project-library="true">
+            <h2 className="text-[15px] font-semibold">مكتبة {kind === 'personal' ? 'المدير الشخصي' : projectTitle}</h2>
+            <p className="mt-2 max-w-2xl text-[12px] leading-6 text-[var(--sanad-text-muted)]">
+              هذه المكتبة خاصة بالمساحة الحالية. سيُعرض فيها كل ملف أو فاتورة أو صورة أو تقرير بعد التحقق من انتمائه وصلاحيات عرضه.
+              الربط والفهرسة قيد التطوير؛ لن نعرض المكتبة العامة أو ملفات نشاط آخر باعتبارها ملفات هذا المشروع.
+            </p>
+            <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+              {([
+                ['الفواتير والمستندات', ReceiptText, 'وثائق المساحة المصرح بها'],
+                ['الصور والمرفقات', ImageIcon, 'مرفقات مرتبطة بمحادثات المساحة'],
+                ['التقارير والكشوف', BookOpen, 'مخرجات قابلة للمراجعة والتصدير'],
+              ] as const).map(([label, Icon, description]) => (
+                <div key={label} className="sanad-project-tool flex min-h-[82px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-dashed border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5">
+                  <span className="sanad-project-tool-icon"><Icon className="h-[18px] w-[18px]" /></span>
+                  <div><strong className="block text-[12px] text-[var(--sanad-text-strong)]">{label}</strong><span className="text-[11px] text-[var(--sanad-text-muted)]">{description} · قيد الربط</span></div>
+                </div>
+              ))}
+            </div>
           </section>
         ) : null}
 
@@ -469,9 +529,7 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
           ) : (
             <section className="pt-6">
               <div className="grid gap-3 sm:grid-cols-2">
-                <button type="button" onClick={() => navigateProduct('account-center')} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-5 text-right">
-                  <Settings2 className="h-5 w-5 text-[var(--sanad-interactive)]" /><strong className="mt-4 block text-[14px]">الحساب والإعدادات</strong><span className="mt-2 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">إدارة الحساب والخصوصية وإعدادات مساعد سند من مكان واحد.</span>
-                </button>
+                <p className="text-[12px] leading-6 text-[var(--sanad-text-muted)]">سيحتوي هذا القسم على تفضيلات وبيانات المساحة الشخصية وحدها. الحساب وإعدادات مساعد سند متاحان من قائمة الحساب الثابتة في أسفل الشريط الجانبي.</p>
               </div>
             </section>
           )
