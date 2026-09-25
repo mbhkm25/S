@@ -499,12 +499,12 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError(null);
       try {
         const [detail, context, attachments] = await Promise.all([
-          getSanadAgentThread(selectedThreadId),
+          projectScope ? getSanadProjectThread(projectScope, selectedThreadId) : getSanadAgentThread(selectedThreadId),
           getSanadAgentContext(selectedThreadId),
           listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
-        setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
+        setBusinessId(projectScope?.kind === 'business' ? projectScope.businessId : detail.thread.business_id || '');
         setBusinessSelectionOpen(false);
         setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
@@ -557,7 +557,7 @@ export default function SanadAgentWorkspace() {
           void (async () => {
             try {
               const [detail, attachments] = await Promise.all([
-                getSanadAgentThread(selectedThreadId),
+                projectScope ? getSanadProjectThread(projectScope, selectedThreadId) : getSanadAgentThread(selectedThreadId),
                 listSanadAgentAttachments(selectedThreadId),
               ]);
               if (!alive) return;
@@ -597,11 +597,15 @@ export default function SanadAgentWorkspace() {
   }, [selectedThreadId]);
 
   const createThreadForBusiness = async (nextBusinessId: string | null) => {
-    const id = await createSanadAgentThread(nextBusinessId);
+    if (!projectScope || (projectScope.kind === 'business' && projectScope.businessId !== nextBusinessId)
+      || (projectScope.kind === 'personal' && nextBusinessId !== null)) {
+      throw new Error('أنشئ المحادثة من داخل مشروعها الأصلي.');
+    }
+    const id = await createSanadProjectThread(projectScope);
     setMessages([]);
     setDraft('');
     setPendingAttachments([]);
-    setBusinessId(nextBusinessId || '');
+    setBusinessId(projectScope.kind === 'business' ? projectScope.businessId : '');
     setSelectedThreadId(id);
     setBusinessSelectionOpen(false);
     await refreshThreads(id);
@@ -610,30 +614,17 @@ export default function SanadAgentWorkspace() {
   };
 
   const ensureThread = async () => {
+    if (!projectScope) throw new Error('اختر مشروعًا قبل إنشاء أي محادثة أو عملية.');
     if (selectedThreadId) return selectedThreadId;
-    const defaultBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : null);
-    if (!defaultBusinessId && businesses.length > 1) {
-      setBusinessSelectionOpen(true);
-      throw new Error('اختر النشاط لهذه المحادثة أولًا.');
-    }
-    return createThreadForBusiness(defaultBusinessId);
+    return createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
   };
 
   const newThread = async () => {
-    if (sending) return;
-    if (businesses.length > 1) {
-      setMessages([]);
-      setDraft('');
-      setPendingAttachments([]);
-      setSelectedThreadId(null);
-      setBusinessId('');
-      setBusinessSelectionOpen(true);
-      return;
-    }
+    if (sending || !projectScope) return;
     try {
-      await createThreadForBusiness(businesses.length === 1 ? businesses[0].id : null);
+      await createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
     } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة المشروع.');
     }
   };
 
@@ -770,8 +761,8 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
       return;
     }
-    if (!selectedThreadId && businesses.length > 1 && !businessId) {
-      setBusinessSelectionOpen(true);
+    if (!projectScope) {
+      setWorkspaceError('لا يمكن تنفيذ طلبات داخل محادثة غير مصنفة. اختر مشروعًا أولًا.');
       return;
     }
 
@@ -807,7 +798,7 @@ export default function SanadAgentWorkspace() {
     try {
       const result = await streamSanadAiAgentTurn({
         message: prompt,
-        business_id: businessId || null,
+        business_id: projectScope.kind === 'business' ? projectScope.businessId : null,
         thread_id: threadId,
         attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
@@ -913,7 +904,7 @@ export default function SanadAgentWorkspace() {
 
   const empty = messages.length === 0;
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
-  const threadReadOnly = selectedThread?.my_role === 'viewer';
+  const threadReadOnly = !projectScope || selectedThread?.my_role === 'viewer';
 
   return (
     <section
@@ -938,22 +929,22 @@ export default function SanadAgentWorkspace() {
             data-scroll-owner="timeline"
             className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
-            {!businessLoading && (businessId || businesses.length > 1) ? (
-              <div data-sanad-inline-business-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
-                <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {businessId ? (
-                  <span className="truncate">{businesses.find((option) => option.id === businessId)?.name || 'سياق النشاط'}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSelectionOpen(true)}
-                    className="sanad-focus-ring rounded-md px-1.5 py-1 font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]"
-                  >
-                    اختر نشاط المحادثة
-                  </button>
-                )}
+            {projectScope ? (
+              <div data-sanad-inline-business-context="true"
+                className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-2 text-[11px] text-[var(--sanad-text-muted)]">
+                <button type="button" className="sanad-focus-ring rounded-lg px-2 py-1.5 hover:bg-[var(--sanad-nav-hover-bg)]"
+                  onClick={() => navigateProduct(projectScope.kind === 'personal'
+                    ? 'financial' : `commercial?business=${encodeURIComponent(projectScope.businessId)}`)}>
+                  ← العودة إلى {projectScope.kind === 'personal' ? 'المدير الشخصي'
+                    : businesses.find(b => b.id === projectScope.businessId)?.name || 'الأعمال'}
+                </button>
+                {projectScope.kind === 'business' ? <BriefcaseBusiness className="h-3.5 w-3.5" aria-hidden="true"/> : null}
               </div>
-            ) : null}
+            ) : (
+              <div role="note" className="mx-auto max-w-[72rem] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                محادثة قديمة غير مصنفة للعرض فقط. راجع تصنيفها داخل مشروعك قبل استخدامها.
+              </div>
+            )}
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
@@ -966,30 +957,8 @@ export default function SanadAgentWorkspace() {
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
                 </p>
 
-                {(businessSelectionOpen || (!selectedThreadId && businesses.length > 1 && !businessId)) ? (
-                  <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
-                    <div className="flex items-center gap-2">
-                      <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {businesses.map((business) => (
-                        <button
-                          key={business.id}
-                          type="button"
-                          onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
-                        >
-                          {business.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
-                  {QUICK_PROMPTS.map((prompt) => (
+                  {(projectScope?.kind === 'personal' ? PERSONAL_QUICK_PROMPTS : projectScope?.kind === 'business' ? BUSINESS_QUICK_PROMPTS : []).map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -1061,7 +1030,7 @@ export default function SanadAgentWorkspace() {
             >
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
-                businessId={businessId || null}
+                businessId={projectScope?.kind === 'business' ? projectScope.businessId : null}
                 disabled={sending || threadReadOnly}
                 attachments={pendingAttachments}
                 onChange={setPendingAttachments}
