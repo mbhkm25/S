@@ -321,7 +321,7 @@ export default function SanadAgentWorkspace() {
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
   const [businessLoading, setBusinessLoading] = useState(true);
-  const [businessSelectionOpen, setBusinessSelectionOpen] = useState(false);
+  const [projectBackendReady, setProjectBackendReady] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -477,7 +477,7 @@ export default function SanadAgentWorkspace() {
           || (!url.searchParams.has('new') ? loadedThreads.find(thread => thread.status === 'active') : null);
         if (first) setSelectedThreadId(first.id);
         else setSelectedThreadId(null);
-        setBusinessSelectionOpen(false);
+        
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز محادثة المشروع.');
       } finally {
@@ -505,7 +505,7 @@ export default function SanadAgentWorkspace() {
         ]);
         if (!alive) return;
         setBusinessId(projectScope?.kind === 'business' ? projectScope.businessId : detail.thread.business_id || '');
-        setBusinessSelectionOpen(false);
+        
         setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
@@ -607,20 +607,20 @@ export default function SanadAgentWorkspace() {
     setPendingAttachments([]);
     setBusinessId(projectScope.kind === 'business' ? projectScope.businessId : '');
     setSelectedThreadId(id);
-    setBusinessSelectionOpen(false);
+    
     await refreshThreads(id);
     window.setTimeout(() => textareaRef.current?.focus(), 50);
     return id;
   };
 
   const ensureThread = async () => {
-    if (!projectScope) throw new Error('اختر مشروعًا قبل إنشاء أي محادثة أو عملية.');
+    if (!projectScope || !projectBackendReady) throw new Error('انتظر نشر عقد المشروعات والتحقق من الصلاحيات قبل الإنشاء.');
     if (selectedThreadId) return selectedThreadId;
     return createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
   };
 
   const newThread = async () => {
-    if (sending || !projectScope) return;
+    if (sending || !projectScope || !projectBackendReady) return;
     try {
       await createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
     } catch (cause) {
@@ -628,10 +628,10 @@ export default function SanadAgentWorkspace() {
     }
   };
 
-  // The global sidebar owns the primary New Conversation action on every route.
-  // A route request is consumed once after the account/business context has loaded.
+  // Scoped project deep links may explicitly request a new conversation;
+  // the global sidebar never creates unscoped chats.
   useEffect(() => {
-    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
+    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current || !projectScope || !projectBackendReady) return;
     const url = new URL(window.location.href);
     if (!url.searchParams.has('new')) return;
     initialNewConversationHandledRef.current = true;
@@ -642,7 +642,7 @@ export default function SanadAgentWorkspace() {
 
   useEffect(() => {
     const handleGlobalNewConversation = () => {
-      if (threadsLoading || businessLoading) return;
+      if (threadsLoading || businessLoading || !projectScope || !projectBackendReady) return;
       void newThread();
     };
     window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
@@ -761,8 +761,8 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
       return;
     }
-    if (!projectScope) {
-      setWorkspaceError('لا يمكن تنفيذ طلبات داخل محادثة غير مصنفة. اختر مشروعًا أولًا.');
+    if (!projectScope || !projectBackendReady) {
+      setWorkspaceError('لا يمكن تنفيذ طلب داخل محادثة غير مصنفة أو قبل تفعيل عقد المشروعات المعتمد.');
       return;
     }
 
@@ -843,7 +843,7 @@ export default function SanadAgentWorkspace() {
       await refreshThreads(threadId);
       try {
         const [persistedThread, persistedAttachments] = await Promise.all([
-          getSanadAgentThread(threadId),
+          projectScope ? getSanadProjectThread(projectScope, threadId) : getSanadAgentThread(threadId),
           listSanadAgentAttachments(threadId),
         ]);
         setPendingAttachments(unsentAttachments(persistedThread.messages, persistedAttachments));
@@ -904,7 +904,7 @@ export default function SanadAgentWorkspace() {
 
   const empty = messages.length === 0;
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
-  const threadReadOnly = !projectScope || selectedThread?.my_role === 'viewer';
+  const threadReadOnly = !projectScope || !projectBackendReady || selectedThread?.my_role === 'viewer';
 
   return (
     <section
