@@ -36,8 +36,22 @@ if ($CopyLocalEnv) {
   $sourceEnv = Join-Path $Repo '.env.local'
   if (-not (Test-Path $sourceEnv)) { throw 'Missing original .env.local; no credentials copied.' }
   $destEnv = Join-Path $Worktree '.env.local'
-  if (-not (Test-Path $destEnv)) { Copy-Item -LiteralPath $sourceEnv -Destination $destEnv }
-  else { Write-Warning 'Existing preview .env.local preserved; it was not overwritten.' }
+  if (-not (Test-Path $destEnv)) {
+    # Never copy local service-role tokens, deployment secrets or other server
+    # env vars into a browser preview. Only expected Vite public keys are used.
+    $allowed = @(
+      'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'VITE_APP_BASE_PATH', 'VITE_APP_VERSION'
+    )
+    $safeLines = @(Get-Content -LiteralPath $sourceEnv | Where-Object {
+      $line = $_
+      $allowed | Where-Object { $line -match ('^\\s*' + [regex]::Escape($_) + '\\s*=') }
+    })
+    Set-Content -LiteralPath $destEnv -Value $safeLines -Encoding UTF8
+    Write-Warning 'Only VITE public client settings copied. If they target Production, preview reads REAL authorized data. Avoid creating financial test operations.'
+  } else {
+    Write-Warning 'Existing preview .env.local preserved; it was not overwritten.'
+  }
 }
 if (-not (Test-Path (Join-Path $Worktree '.env.local'))) {
   Write-Warning 'Preview .env.local is missing. Supply an authorized staging/test env, or rerun with -CopyLocalEnv explicitly.'
