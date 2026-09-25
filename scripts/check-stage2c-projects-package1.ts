@@ -6,7 +6,7 @@ const nav = readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx','u
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx','utf8');
 const project = readFileSync('src/features/projects/SanadProjectWorkspaceRoute.tsx','utf8');
 const projectData = readFileSync('src/features/projects/projectQuickAccess.ts','utf8');
-const home = readFileSync('src/features/projects/SanadQuickProjectHome.tsx','utf8');
+const quickHome = readFileSync('src/features/projects/SanadQuickProjectHome.tsx','utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx','utf8');
 const api = readFileSync('src/features/assistant/assistantWorkspaceApi.ts','utf8');
 const settings = readFileSync('src/features/settings/SanadAssistantManagementPanel.tsx','utf8');
@@ -40,9 +40,9 @@ assert.match(projectData,/createSanadProjectThread/);
 assert.match(projectData,/setSanadProjectThreadPinned/);
 assert.match(project,/legacy_unclassified/);
 assert.match(project,/لا توجد محادثات عامة خارجها/);
-assert.match(home,/آخر المحادثات/);
-assert.match(home,/محادثة جديدة/);
-assert.match(home,/loadProjectQuickData/);
+assert.match(quickHome,/آخر المحادثات/);
+assert.match(quickHome,/محادثة جديدة/);
+assert.match(quickHome,/loadProjectQuickData/);
 assert.match(projectData,/projectRpcMissing/);
 assert.match(project,/علاقة العميل بالنشاط لا تمنح صلاحيات إدارة المشروع/);
 
