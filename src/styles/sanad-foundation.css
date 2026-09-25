@@ -317,20 +317,8 @@
   border-bottom: 1px solid var(--sanad-border-subtle);
   padding: 0.75rem 0 1.25rem;
 }
-.sanad-section-compact-header::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0;
-  width: min(16rem, 36%);
-  height: 3px;
-  border-radius: 100px;
-  background: linear-gradient(90deg, var(--sanad-brand-lime), var(--sanad-brand-green), var(--sanad-brand-aqua));
-  opacity: .82;
-}
-.sanad-section-compact-header.is-today {
-  border-bottom-color: color-mix(in srgb, var(--sanad-brand-green) 20%, var(--sanad-border-subtle));
-}
+/* Keep the section header typographic. Brand accents remain in icons and
+   project cards rather than adding a decorative bar above every title. */
 .sanad-section-head-icon {
   color: var(--sanad-interactive);
   background: linear-gradient(130deg,
