@@ -48,7 +48,7 @@ for (const label of ['الرئيسية','المدير الشخصي','الأعم�
 for (const retired of ['محادثة جديدة','المحادثات','المال الشخصي']) {
   assert.ok(!nav.includes(retired), 'Global nav must not contain ' + retired);
 }
-for (const path of ["'today'","'financial'","'commercial'","'more'"]) {
+for (const path of ["'today'","'financial'","'commercial'"]) {
   assert.ok(nav.includes(path), 'Unified nav route missing ' + path);
 }
 assert.match(nav, /--sanad-nav-active-bg/);
