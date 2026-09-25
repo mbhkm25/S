@@ -11,6 +11,7 @@ const context = read('src/features/assistant/sanadProjectContext.ts');
 const api = read('src/features/assistant/assistantWorkspaceApi.ts');
 const migration = read('supabase/migrations/20260925213000_stage2c_project_threads_v1.sql');
 const entry = read('src/features/shell/SanadUnifiedEntryRoute.tsx');
+const agentEdge = read('supabase/functions/sanad-ai-agent-v1/index.ts');
 const app = read('src/App.tsx');
 const bell = read('src/components/notifications/NotificationBell.tsx');
 
@@ -55,5 +56,16 @@ for(const contract of [
   'can_access_sanad_agent_thread_v2',
   'revoke all on public.sanad_agent_thread_pins'
 ]) assert.ok(migration.includes(contract), contract);
+for(const invariant of [
+  'project_tool_scope_mismatch',
+  'project_tool_business_mismatch',
+  'personal_project_business_mismatch',
+  'business_project_scope_mismatch',
+  'allowedToolsForProject',
+  'projectKind === "business" ? [] : memories',
+  'select("business_id,metadata")',
+]) assert.ok(agentEdge.includes(invariant), 'missing server-side project AI guard: '+invariant);
+assert.equal((agentEdge.match(/tools: allowedToolsForProject\(cloud\.projectKind\)/g)||[]).length,4,
+  'all initial and continuation tool lists must use authenticated project filtering');
 assert.doesNotMatch(migration, /drop table|truncate table/i);
 console.info('2C.1: project-only navigation, independent permissions and single-shell layout static contracts PASS');
