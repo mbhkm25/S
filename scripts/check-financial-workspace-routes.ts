@@ -25,7 +25,7 @@ assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated r
 assert.match(home, /today/, 'authenticated root must land on Today, not a general chat');
 assert.match(home, /single SANAD workspace shell/, 'authenticated root must remain inside the unified SANAD shell');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['اليوم', 'المدير الشخصي', 'الأعمال', 'المزيد']) {
+for (const label of ['الرئيسية', 'المدير الشخصي', 'الأعمال']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
 }
 for (const retired of ['محادثة جديدة', 'المحادثات', 'المال الشخصي']) {
@@ -35,7 +35,7 @@ assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(unifiedSidebar, /الحساب والإعدادات/, 'Account/settings belongs to the global sidebar account menu.');
 assert.doesNotMatch(shell, /<ProductAppHeader/, 'The legacy product header is no longer mounted by SANAD unified shell.');
 assert.doesNotMatch(unifiedSidebar, /payment-inbox\.html/, 'Payment inbox must not remain in the global sidebar footer.');
-assert.match(unifiedEntry, /payment-inbox\.html/, 'Payment inbox remains reachable under More.');
+assert.match(projectWorkspace, /payment-inbox\.html/, 'Payment inbox must remain reachable under Business.');
 assert.match(unifiedSidebar, /NotificationBell/, 'Global sidebar must preserve notifications utility.');
 assert.doesNotMatch(shell, /ProductBottomNav/, 'target workspace shell must not render the legacy four-product navigation');
 
