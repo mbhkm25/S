@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { BriefcaseBusiness, CalendarCheck2, MoreHorizontal, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, House, UserRound } from 'lucide-react';
 import {
   navigateProduct,
   productHref,
@@ -7,10 +7,10 @@ import {
 } from '../../lib/productNavigation';
 
 type NavItem = {
-  id: 'today' | 'personal-manager' | 'business' | 'more';
+  id: 'today' | 'personal-manager' | 'business';
   label: string;
   path: string;
-  icon: typeof CalendarCheck2;
+  icon: typeof House;
 };
 
 type Props = {
@@ -19,26 +19,21 @@ type Props = {
 };
 
 const ITEMS: NavItem[] = [
-  { id: 'today', label: 'اليوم', path: 'today', icon: CalendarCheck2 },
+  { id: 'today', label: 'الرئيسية', path: 'today', icon: House },
   { id: 'personal-manager', label: 'المدير الشخصي', path: 'financial', icon: UserRound },
   { id: 'business', label: 'الأعمال', path: 'commercial', icon: BriefcaseBusiness },
-  { id: 'more', label: 'المزيد', path: 'more', icon: MoreHorizontal },
 ];
 
 function isActive(item: NavItem): boolean {
   const current = window.location.pathname.replace(/\/+$/, '') || '/';
   const target = productHref(item.path).replace(/\/+$/, '');
 
-  if (item.id === 'today') return current === target || /\/work\/(?:tasks|approvals|automations)\/?$/.test(current);
+  if (item.id === 'today') return current === target || /\/work\/(?:tasks|approvals)\/?$/.test(current);
   if (item.id === 'personal-manager') return current === target || current.startsWith(`${target}/`);
   if (item.id === 'business') {
     return current === target
       || current.startsWith(`${target}/`)
       || /\/business\/manage(?:\/|$)/.test(current);
-  }
-  if (item.id === 'more') {
-    return current === target
-      || /\/(?:library|connections|account-center)\/?$/.test(current);
   }
   return false;
 }
