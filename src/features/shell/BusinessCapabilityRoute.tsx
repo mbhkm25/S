@@ -30,7 +30,7 @@ function navigateLegacyBusiness(page: string, token?: string): void {
   }
 
   if (page === 'home') {
-    navigateProduct('sanad-ai');
+    navigateProduct('today');
     return;
   }
 
