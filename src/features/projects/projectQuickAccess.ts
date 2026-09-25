@@ -44,17 +44,6 @@ export function invalidateProjectQuickAccess(): void {
   projectPageCache.clear();
 }
 
-function timed<T>(read: () => Promise<T>, cached: { expires: number; promise: Promise<T> } | null, save: (entry: { expires: number; promise: Promise<T> }) => void): Promise<T> {
-  if (cached && cached.expires > Date.now()) return cached.promise;
-  const promise = read().catch((err) => {
-    save({ expires: 0, promise: Promise.reject(err) });
-    // No orphan rejection; the original promise already propagates the error.
-    throw err;
-  });
-  save({ expires: Date.now() + TTL_MS, promise });
-  return promise;
-}
-
 export async function getProjectBusinessContexts(): Promise<BusinessContexts> {
   await sessionScope();
   // Rejected promises are never re-used, and user scope is reset on change.
