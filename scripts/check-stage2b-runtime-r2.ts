@@ -42,7 +42,7 @@ assert.match(sidebar, /getUserAvatarUrl/);
 assert.match(sidebar, /الحساب والإعدادات/);
 assert.doesNotMatch(sidebar, /SanadSidebarConversations|SanadAssistantSidebarSections|data-sanad-primary-action="new-conversation"|payment-inbox\.html/);
 
-for (const label of ['اليوم','المدير الشخصي','الأعمال','المزيد']) {
+for (const label of ['الرئيسية','المدير الشخصي','الأعمال']) {
   assert.ok(nav.includes(label), 'Unified nav missing ' + label);
 }
 for (const retired of ['محادثة جديدة','المحادثات','المال الشخصي']) {
@@ -89,7 +89,7 @@ for (const token of ['today','more','library','connections','work\\/(?:tasks|app
 for (const rpc of ['get_my_sanad_today_v1','list_my_sanad_work_items_v1','list_my_sanad_connections_v1']) {
   assert.ok(entry.includes(rpc), 'Entry route missing ' + rpc);
 }
-assert.match(entry, /payment-inbox\.html/);
+assert.match(projects, /payment-inbox\.html/);
 for (const path of ['/operations','/team','/customers']) {
   assert.ok(businessCapability.includes('business/manage' + path),
     'Business capability route missing ' + path);
