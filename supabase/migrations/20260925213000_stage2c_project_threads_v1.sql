@@ -361,3 +361,30 @@ begin
   execute replace(v_original, v_marker, v_guard || v_marker);
 end;
 $guard$;
+
+
+-- Legacy discovery is private and deliberately NOT part of the personal
+-- project's conversation feed until the owner explicitly classifies a chat.
+create or replace function public.list_my_sanad_legacy_unclassified_threads_v1()
+returns jsonb language plpgsql stable security definer
+set search_path = ''
+as $fn$
+declare v_uid uuid := auth.uid();
+begin
+  if v_uid is null then raise exception 'authentication_required' using errcode='42501'; end if;
+  return coalesce((
+    select jsonb_agg(
+      jsonb_build_object('id',t.id,'title',t.title,'status',t.status,
+                         'message_count',t.message_count,'last_message_at',t.last_message_at)
+      order by t.last_message_at desc nulls last,t.created_at desc
+    )
+    from public.sanad_agent_threads t
+    where t.user_id=v_uid
+      and t.business_id is null
+      and not coalesce(t.metadata,'{}'::jsonb) ? 'sanad_project_kind'
+      and private.can_access_sanad_agent_thread_v2(t.id,v_uid)
+  ),'[]'::jsonb);
+end;
+$fn$;
+revoke all on function public.list_my_sanad_legacy_unclassified_threads_v1() from public, anon;
+grant execute on function public.list_my_sanad_legacy_unclassified_threads_v1() to authenticated;
