@@ -59,7 +59,7 @@ assert.match(foundation, /--sanad-sidebar-section-bg/);
 // Conversation history is now project-owned rather than a global sidebar list.
 assert.match(projectData, /listSanadProjectThreads/);
 assert.match(projectData, /createSanadProjectThread/);
-assert.match(projectData, /setSanadProjectThreadPinned/);
+assert.match(projects, /setSanadProjectThreadPinned/);
 assert.match(projects, /legacy_unclassified/);
 assert.match(projects, /المحادثات/);
 assert.match(projects, /ابحث في محادثات هذه المساحة/);
