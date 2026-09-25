@@ -4,14 +4,12 @@ import {
   Loader2, MessageSquareText, Pin, PinOff, RefreshCw, Search, Settings2, SlidersHorizontal,
   UserRound, Users, WalletCards, Wrench, Database, ListChecks, TriangleAlert,
 } from 'lucide-react';
-import { getUserBusinessContexts, type BusinessProfile } from '../../lib/businessApi';
+import type { BusinessProfile } from '../../lib/businessApi';
 import { navigateProduct } from '../../lib/productNavigation';
+import { authorizedProjectBusinesses, getProjectBusinessContexts, invalidateProjectQuickAccess, openNewProjectConversation, projectThreads } from './projectQuickAccess';
 import {
   archiveSanadAgentThread,
-  createSanadAgentThread,
-  createSanadProjectThread,
   listSanadAgentThreads,
-  listSanadProjectThreads,
   setSanadProjectThreadPinned,
   type SanadAgentThreadSummary,
 } from '../assistant/assistantWorkspaceApi';
@@ -19,7 +17,7 @@ import {
 type ProjectKind = 'personal' | 'business';
 type View = 'conversations' | 'sources' | 'tools' | 'library' | 'manage';
 
-type BusinessOption = Pick<BusinessProfile, 'id' | 'name' | 'slug' | 'workspace_role'>;
+type BusinessOption = Pick<BusinessProfile, 'id' | 'name' | 'workspace_role'>;
 
 function routeState(kind: ProjectKind): { view: View; businessId: string | null } {
   const url = new URL(window.location.href);
@@ -50,21 +48,6 @@ function titleForRole(value?: string | null): string {
   if (value === 'owner') return 'مالك';
   if (value === 'team_member') return 'عضو فريق';
   return value || 'مصرّح';
-}
-
-function dedupeBusinesses(owned: BusinessProfile[], team: BusinessProfile[]): BusinessOption[] {
-  const map = new Map<string, BusinessOption>();
-  for (const item of [...owned, ...team]) {
-    if (!item?.id) continue;
-    const current = map.get(item.id);
-    map.set(item.id, {
-      id: item.id,
-      name: item.name || current?.name || 'نشاط بدون اسم',
-      slug: item.slug || current?.slug || '',
-      workspace_role: current?.workspace_role === 'owner' ? 'owner' : item.workspace_role || current?.workspace_role || null,
-    });
-  }
-  return [...map.values()];
 }
 
 function ViewTabs({ kind, businessId, active }: { kind: ProjectKind; businessId?: string | null; active: View }) {
@@ -107,9 +90,9 @@ function EmptyState({ title, body, icon: Icon }: { title: string; body: string; 
   );
 }
 
-export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind }) {
+export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: ProjectKind; location?: string }) {
   const initial = useMemo(() => routeState(kind), [kind]);
-  const [view] = useState<View>(initial.view);
+  const view = useMemo(() => routeState(kind).view, [kind, location]);
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState(initial.businessId || '');
   const [businessLoading, setBusinessLoading] = useState(kind === 'business');
@@ -128,10 +111,10 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
     if (kind !== 'business') return;
     let active = true;
     setBusinessLoading(true);
-    void getUserBusinessContexts()
+    void getProjectBusinessContexts()
       .then((contexts) => {
         if (!active) return;
-        const options = dedupeBusinesses(contexts.owned_businesses, contexts.team_businesses);
+        const options = authorizedProjectBusinesses(contexts);
         setBusinesses(options);
         const remembered = (() => {
           try { return window.localStorage.getItem('sanad:last-business-project-v1') || ''; } catch { return ''; }
@@ -153,6 +136,16 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
+  // Browser back/forward between businesses should update the selected project
+  // without remounting the full route and refetching the same contexts.
+  useEffect(() => {
+    if (kind !== 'business' || businesses.length === 0) return;
+    const urlBusiness = new URL(window.location.href).searchParams.get('business');
+    if (urlBusiness && businesses.some((b) => b.id === urlBusiness) && urlBusiness !== selectedBusinessId) {
+      setSelectedBusinessId(urlBusiness);
+    }
+  }, [kind, location, businesses, selectedBusinessId]);
+
   const selectedBusiness = businesses.find((item) => item.id === selectedBusinessId) || null;
 
   const loadThreads = useCallback(async () => {
@@ -167,46 +160,30 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
     setThreadError(null);
     setContractPending(false);
     try {
-      const page = await listSanadProjectThreads({
+      const result = await projectThreads({
         projectKind: kind,
         businessId: kind === 'business' ? selectedBusinessId : null,
         status: showArchived ? 'archived' : 'active',
-        search: search || null,
+        search: search || undefined,
         limit: 100,
         offset: 0,
       });
-      setThreads(page.items);
+      setThreads(result.page.items);
+      setContractPending(result.contractPending);
       if (kind === 'personal' && !showArchived && !search) {
-        const legacy = await listSanadProjectThreads({
+        const legacy = await projectThreads({
           projectKind: 'legacy_unclassified',
           status: 'active',
           limit: 20,
           offset: 0,
         });
-        setLegacyThreads(legacy.items);
+        setLegacyThreads(legacy.page.items);
       } else {
         setLegacyThreads([]);
       }
-    } catch {
-      // Local preview before the 2C migration is deployed: use the existing
-      // participant-aware list for business read-only UX, but never guess that
-      // null-business legacy history is personal.
-      setContractPending(true);
-      try {
-        const current = await listSanadAgentThreads(100);
-        const scoped = kind === 'business'
-          ? current.filter((thread) => thread.business_id === selectedBusinessId && thread.status === (showArchived ? 'archived' : 'active'))
-          : [];
-        const filtered = search
-          ? scoped.filter((thread) => thread.title.toLocaleLowerCase('ar').includes(search.toLocaleLowerCase('ar')))
-          : scoped;
-        setThreads(filtered);
-        setLegacyThreads(kind === 'personal'
-          ? current.filter((thread) => thread.business_id === null && thread.status === 'active')
-          : []);
-      } catch (cause) {
-        setThreadError(cause instanceof Error ? cause.message : 'تعذر تحميل محادثات المساحة.');
-      }
+    } catch (cause) {
+      setThreadError(cause instanceof Error ? cause.message : 'تعذر تحميل محادثات المساحة.');
+    }
     } finally {
       setThreadsLoading(false);
     }
@@ -219,20 +196,7 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
     setCreating(true);
     setThreadError(null);
     try {
-      let id: string;
-      try {
-        id = await createSanadProjectThread({
-          projectKind: kind,
-          businessId: kind === 'business' ? selectedBusinessId : null,
-        });
-      } catch (cause) {
-        if (kind === 'personal') {
-          setContractPending(true);
-          throw new Error('إنشاء المحادثة الشخصية سيعمل بعد نشر عقد المساحات الجديد؛ لم ننشئ محادثة عامة كبديل.');
-        }
-        // Business scope was already safe before 2C, so preview may use v1.
-        id = await createSanadAgentThread(selectedBusinessId || null);
-      }
+      const id = await openNewProjectConversation(kind, kind === 'business' ? selectedBusinessId : null);
       openConversation(id, kind, kind === 'business' ? selectedBusinessId : null);
     } catch (cause) {
       setThreadError(cause instanceof Error ? cause.message : 'تعذر إنشاء المحادثة.');
@@ -246,6 +210,7 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
     setPinningId(thread.id);
     try {
       await setSanadProjectThreadPinned(thread.id, !thread.is_pinned);
+      invalidateProjectQuickAccess();
       await loadThreads();
     } catch (cause) {
       setThreadError(cause instanceof Error ? cause.message : 'تعذر تحديث تثبيت المحادثة.');
@@ -259,6 +224,7 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
     setArchivingId(thread.id);
     try {
       await archiveSanadAgentThread(thread.id);
+      invalidateProjectQuickAccess();
       await loadThreads();
     } catch (cause) {
       setThreadError(cause instanceof Error ? cause.message : 'تعذر أرشفة المحادثة.');
@@ -277,19 +243,19 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
   const ProjectIcon = kind === 'personal' ? UserRound : BriefcaseBusiness;
 
   return (
-    <div className="min-h-full bg-[var(--sanad-bg-canvas)] px-4 py-5 text-[var(--sanad-text)] lg:px-7 lg:py-7" dir="rtl">
-      <div className="mx-auto w-full max-w-[1180px]">
-        <header className="flex flex-wrap items-start justify-between gap-4 pb-4">
+    <div className="min-h-full bg-[var(--sanad-bg-canvas)] px-4 py-5 text-[var(--sanad-text)] lg:px-8 lg:py-8" dir="rtl">
+      <div className="mx-auto w-full max-w-[1160px]">
+        <header className="sanad-section-compact-header flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-2)] text-[var(--sanad-text-strong)]">
+            <span className="sanad-section-head-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)]">
               <ProjectIcon className="h-5 w-5" />
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-[var(--sanad-text-subtle)]">
                 {kind === 'personal' ? 'مساحتك الشخصية' : 'مساحة الأعمال'}
               </p>
-              <h1 className="mt-0.5 truncate text-[20px] font-semibold tracking-[-0.02em] text-[var(--sanad-text-strong)]">{projectTitle}</h1>
-              <p className="mt-1 max-w-2xl text-[12px] leading-5 text-[var(--sanad-text-muted)]">
+              <h1 className="mt-0.5 truncate text-[22px] font-semibold tracking-[-0.02em] text-[var(--sanad-text-strong)]">{projectTitle}</h1>
+              <p className="mt-1 max-w-2xl text-[12px] leading-[1.85] text-[var(--sanad-text-muted)]">
                 {kind === 'personal'
                   ? 'محادثاتك ومصادرك وأدوات الإدارة الشخصية في سياق واحد.'
                   : 'محادثات النشاط ومصادره وأدواته وإدارته، مع بقاء صلاحيات كل محادثة مستقلة.'}
@@ -453,7 +419,7 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
         {(kind === 'personal' || selectedBusinessId) && view === 'tools' ? (
           <section className="pt-6">
             <h2 className="text-[15px] font-semibold">الأدوات</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {(kind === 'personal' ? [
                 ['الحسابات','financial/accounts',WalletCards],
                 ['العمليات','financial/transactions',ListChecks],
@@ -469,9 +435,9 @@ export default function SanadProjectWorkspaceRoute({ kind }: { kind: ProjectKind
               ]).map(([label,path,Icon]) => {
                 const ToolIcon = Icon as typeof WalletCards;
                 return (
-                  <button key={String(path)} type="button" onClick={() => navigateProduct(String(path))} className="sanad-focus-ring min-h-28 rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
-                    <ToolIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
-                    <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{String(label)}</strong>
+                  <button key={String(path)} type="button" onClick={() => navigateProduct(String(path))} className="sanad-focus-ring sanad-project-tool flex min-h-[78px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                    <span className="sanad-project-tool-icon"><ToolIcon className="h-[18px] w-[18px] text-[var(--sanad-interactive)]" /></span>
+                    <strong className="block text-[13px] text-[var(--sanad-text-strong)]">{String(label)}</strong>
                   </button>
                 );
               })}
