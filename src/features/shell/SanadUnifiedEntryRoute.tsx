@@ -14,6 +14,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { navigateProduct } from '../../lib/productNavigation';
 import { formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from './sanadWorkItemPresentation';
 
@@ -282,7 +283,7 @@ export default function SanadUnifiedEntryRoute() {
                   <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
                 </a>
               ) : (
-                <button key={entry.label} type="button" onClick={() => window.history.pushState({}, '', entry.path ? `${import.meta.env.BASE_URL}${entry.path}` : window.location.pathname) || window.dispatchEvent(new PopStateEvent('popstate'))} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                <button key={entry.label} type="button" onClick={() => entry.path && navigateProduct(entry.path)} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
                   <EntryIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
                   <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
                   <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
