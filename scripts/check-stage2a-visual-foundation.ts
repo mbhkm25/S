@@ -86,7 +86,9 @@ assert.doesNotMatch(shell, /var\(--sanad-mobile-nav-stack-height\)/, 'unified sh
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(unifiedNav, /var\(--sanad-nav-active-bg\)/);
 assert.match(unifiedNav, /var\(--sanad-nav-hover-bg\)/);
-assert.match(unifiedSidebar, /var\(--sanad-nav-action-bg\)/);
+assert.match(unifiedSidebar, /NotificationBell/);
+assert.match(unifiedSidebar, /مساحة الذكاء والتشغيل/);
+assert.doesNotMatch(unifiedSidebar, /data-sanad-primary-action="new-conversation"/);
 assert.match(unifiedSidebar, /sanad-sidebar-surface/);
 assert.match(workspace, /sanad-workspace-canvas/);
 assert.doesNotMatch(workspace, /from-white via-white\/80 to-transparent/, 'conversation top fade layer must stay removed');
