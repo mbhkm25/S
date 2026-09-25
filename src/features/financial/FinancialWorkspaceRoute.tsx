@@ -20,6 +20,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { navigateProduct } from '../../lib/productNavigation';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
 import { loadPersonalFinanceOverview, loadSanadAgentWorkspace } from './productRouteLoaders';
 
