@@ -299,13 +299,11 @@ export default function SanadAgentWorkspace() {
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const { preferences, setMemorySnapshot } = useSanadAssistantSettings();
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
-  const [businessLoading, setBusinessLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -387,8 +385,6 @@ export default function SanadAgentWorkspace() {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      setBusinessLoading(true);
-      setThreadsLoading(true);
       setWorkspaceError(null);
       try {
         const [{ data, error }, loadedThreads] = await Promise.all([
@@ -424,10 +420,6 @@ export default function SanadAgentWorkspace() {
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
       } finally {
-        if (alive) {
-          setBusinessLoading(false);
-          setThreadsLoading(false);
-        }
       }
     })();
     return () => { alive = false; };
@@ -884,71 +876,73 @@ export default function SanadAgentWorkspace() {
             <div ref={endRef} />
           </div>
 
-          <form
-            data-workspace-slot="composer"
-            onSubmit={handleSubmit}
-            data-composer-density="compact"
-            className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
-          >
-            <div
-              className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
-              data-composer-layout="single-row-controls"
+          {selectedThreadId ? (
+            <form
+              data-workspace-slot="composer"
+              onSubmit={handleSubmit}
+              data-composer-density="compact"
+              className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
             >
-              <SanadAttachmentComposer
-                threadId={selectedThreadId}
-                businessId={businessId || null}
-                disabled={sending || threadReadOnly}
-                attachments={pendingAttachments}
-                onChange={setPendingAttachments}
-                onRequestThread={ensureThread}
-                onError={(message) => setWorkspaceError(message)}
-                layout="inline-grid"
-              />
-
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  syncComposerTextareaHeight(event.currentTarget);
-                }}
-                onKeyDown={handleKeyDown}
-                disabled={sending || threadReadOnly}
-                rows={1}
-                placeholder="اسأل سند…"
-                className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
-              />
-
-              <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
-              <SanadVoiceDictationButton
-                disabled={sending || threadReadOnly}
-                onStateChange={handleVoiceStateChange}
-                onTranscript={(text) => {
-                  setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-                  setWorkspaceError(null);
-                  window.setTimeout(() => {
-                    syncComposerTextareaHeight(textareaRef.current);
-                    textareaRef.current?.focus();
-                  }, 40);
-                }}
-                onError={(message) => setWorkspaceError(message)}
-              />
-              <button
-                type="submit"
-                disabled={
-                  sending
-                  || threadReadOnly
-                  || pendingAttachments.some((attachment) => attachment.status !== 'ready')
-                  || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
-                }
-                className="sanad-focus-ring flex h-9 min-w-9 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] disabled:cursor-not-allowed disabled:bg-slate-300"
-                aria-label="إرسال"
+              <div
+                className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
+                data-composer-layout="single-row-controls"
               >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
-                <span className="sr-only">إرسال</span>
-              </button>
-            </div>
-          </form>
+                <SanadAttachmentComposer
+                  threadId={selectedThreadId}
+                  businessId={businessId || null}
+                  disabled={sending || threadReadOnly}
+                  attachments={pendingAttachments}
+                  onChange={setPendingAttachments}
+                  onRequestThread={ensureThread}
+                  onError={(message) => setWorkspaceError(message)}
+                  layout="inline-grid"
+                />
+  
+                <textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    syncComposerTextareaHeight(event.currentTarget);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending || threadReadOnly}
+                  rows={1}
+                  placeholder="اسأل سند…"
+                  className="max-h-[60px] min-h-9 w-full resize-none overflow-y-hidden bg-transparent px-2 py-1.5 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:opacity-60 md:text-[15px]"
+                />
+  
+                <span className="sr-only">راجع النص الصوتي قبل الإرسال</span>
+                <SanadVoiceDictationButton
+                  disabled={sending || threadReadOnly}
+                  onStateChange={handleVoiceStateChange}
+                  onTranscript={(text) => {
+                    setDraft((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+                    setWorkspaceError(null);
+                    window.setTimeout(() => {
+                      syncComposerTextareaHeight(textareaRef.current);
+                      textareaRef.current?.focus();
+                    }, 40);
+                  }}
+                  onError={(message) => setWorkspaceError(message)}
+                />
+                <button
+                  type="submit"
+                  disabled={
+                    sending
+                    || threadReadOnly
+                    || pendingAttachments.some((attachment) => attachment.status !== 'ready')
+                    || (!draft.trim() && !pendingAttachments.some((attachment) => attachment.status === 'ready'))
+                  }
+                  className="sanad-focus-ring flex h-9 min-w-9 items-center justify-center rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                  aria-label="إرسال"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                  <span className="sr-only">إرسال</span>
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
       </div>
     </section>
