@@ -8,6 +8,9 @@ import {
   ListTodo,
   Plug,
   RefreshCw,
+  MoreHorizontal,
+  Settings2,
+  Inbox,
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -41,9 +44,10 @@ type Connection = {
   last_heartbeat_at?: string | null;
 };
 
-type EntryKind = 'today' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
+type EntryKind = 'today' | 'more' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
 
 function resolveKind(pathname: string): EntryKind {
+  if (/\/more\/?$/.test(pathname)) return 'more';
   if (/\/library\/?$/.test(pathname)) return 'library';
   if (/\/work\/tasks\/?$/.test(pathname)) return 'tasks';
   if (/\/work\/approvals\/?$/.test(pathname)) return 'approvals';
@@ -58,6 +62,12 @@ const META: Record<EntryKind, { title: string; eyebrow: string; description: str
     eyebrow: 'ما يحتاج انتباهك الآن',
     description: 'أولويات تشغيلية مبنية على Work Items الحقيقية، وليست لوحة مؤشرات منفصلة عن مصادرها.',
     icon: CalendarCheck2,
+  },
+  more: {
+    title: 'المزيد',
+    eyebrow: 'وظائف سند الثانوية',
+    description: 'المكتبة والاتصالات والأتمتة والإعدادات ومداخل التشغيل التي لا تحتاج إلى موقع مستقل في الشريط الجانبي.',
+    icon: MoreHorizontal,
   },
   library: {
     title: 'المكتبة',
@@ -134,7 +144,7 @@ export default function SanadUnifiedEntryRoute() {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    if (kind === 'library' || kind === 'automations') {
+    if (kind === 'more' || kind === 'library' || kind === 'automations') {
       setLoading(false);
       return;
     }
@@ -196,7 +206,7 @@ export default function SanadUnifiedEntryRoute() {
               <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[var(--sanad-text-muted)]">{meta.description}</p>
             </div>
           </div>
-          {kind !== 'library' && kind !== 'automations' ? (
+          {kind !== 'more' && kind !== 'library' && kind !== 'automations' ? (
             <button
               type="button"
               onClick={() => void load()}
@@ -252,6 +262,33 @@ export default function SanadUnifiedEntryRoute() {
                 </div>
               </article>
             ))}
+          </div>
+        ) : null}
+
+        {!loading && kind === 'more' ? (
+          <div className="grid gap-3 py-5 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: 'المكتبة', desc: 'التقارير والمستندات والمخرجات العامة الحالية.', icon: Library, path: 'library' },
+              { label: 'الاتصالات', desc: 'مصادر البيانات والأنظمة المرتبطة وحالة المزامنة.', icon: Plug, path: 'connections' },
+              { label: 'الأتمتة', desc: 'القواعد والمهام المجدولة فوق عقود التنفيذ المحكومة.', icon: Clock3, path: 'work/automations' },
+              { label: 'وارد المدفوعات', desc: 'فتح الوارد التشغيلي الحالي في مساره المخصص.', icon: Inbox, href: '/payment-inbox.html' },
+              { label: 'الحساب والإعدادات', desc: 'الحساب والخصوصية وإدارة مساعد سند.', icon: Settings2, path: 'account-center' },
+            ].map((entry) => {
+              const EntryIcon = entry.icon;
+              return entry.href ? (
+                <a key={entry.label} href={entry.href} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                  <EntryIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
+                  <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
+                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
+                </a>
+              ) : (
+                <button key={entry.label} type="button" onClick={() => window.history.pushState({}, '', entry.path ? `${import.meta.env.BASE_URL}${entry.path}` : window.location.pathname) || window.dispatchEvent(new PopStateEvent('popstate'))} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                  <EntryIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
+                  <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
+                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
+                </button>
+              );
+            })}
           </div>
         ) : null}
 
