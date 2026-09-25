@@ -59,8 +59,10 @@ for (const required of [
 ]) {
   assert.ok(sidebar.includes(required), `inline SANAD assistant options missing ${required}`);
 }
-assert.match(unifiedSidebar, /محادثة جديدة/);
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.doesNotMatch(unifiedSidebar, /محادثة جديدة/);
+assert.match(readFileSync('src/features/shell/SanadProjectWorkspaceRoute.tsx','utf8'), /محادثة جديدة/);
+assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.match(readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx','utf8'), /SanadAssistantSidebarSections/);
 assert.match(globalHistory, /المحادثات/);
 assert.match(globalHistory, /listSanadAgentThreads/);
 
