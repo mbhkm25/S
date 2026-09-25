@@ -55,14 +55,14 @@ export default function FinancialWorkspaceShell() {
     };
   }, []);
 
-  const isNotificationRoute = /\\/notifications\\/?$/.test(pathname);
-  const isProjectRoute = /\\/(financial|commercial)\\/?$/.test(pathname);
-  const isActionRoute = /\\/(financial|commercial)\\/actions\\/?$/.test(pathname);
+  const isNotificationRoute = /\/notifications\/?$/.test(pathname);
+  const isProjectRoute = /\/(financial|commercial)\/?$/.test(pathname);
+  const isActionRoute = /\/(financial|commercial)\/actions\/?$/.test(pathname);
   const isPersonalSectionRoute = /\/financial\/(accounts|transactions|obligations|budgets|goals|parties)\/?$/.test(pathname);
   const personal = /\/financial(?:\/|$)/.test(pathname);
   const commercial = /\/commercial(?:\/|$)/.test(pathname);
   const assistant = /\/sanad-ai\/?$/.test(pathname);
-  const isUnifiedEntryRoute = /\\/(today|more|library|connections|work\\/(?:tasks|approvals|automations))\\/?$/.test(pathname);
+  const isUnifiedEntryRoute = /\/(today|more|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
   const isBusinessCapabilityRoute = /\/business\/manage(?:\/(?:operations|team|profile|whatsapp-catalog|customers))?\/?$/.test(pathname);
 
   useEffect(() => {
