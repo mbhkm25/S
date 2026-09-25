@@ -45,7 +45,7 @@ if ($CopyLocalEnv) {
     )
     $safeLines = @(Get-Content -LiteralPath $sourceEnv | Where-Object {
       $line = $_
-      $allowed | Where-Object { $line -match ('^\\s*' + [regex]::Escape($_) + '\\s*=') }
+      $allowed | Where-Object { $line -match ('^\s*' + [regex]::Escape($_) + '\s*=') }
     })
     Set-Content -LiteralPath $destEnv -Value $safeLines -Encoding UTF8
     Write-Warning 'Only VITE public client settings copied. If they target Production, preview reads REAL authorized data. Avoid creating financial test operations.'
