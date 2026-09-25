@@ -18,7 +18,6 @@ import {
 } from './assistantAgentApi';
 import {
   archiveSanadAgentThread,
-  createSanadAgentThread,
   getSanadAgentContext,
   getSanadAgentThread,
   listSanadAgentThreads,
@@ -303,13 +302,10 @@ export default function SanadAgentWorkspace() {
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const { preferences, setMemorySnapshot } = useSanadAssistantSettings();
-  const initialNewConversationHandledRef = useRef(false);
-
   const [draft, setDraft] = useState('');
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
   const [businessLoading, setBusinessLoading] = useState(true);
-  const [businessSelectionOpen, setBusinessSelectionOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -382,15 +378,9 @@ export default function SanadAgentWorkspace() {
   }, [messages, sending]);
 
   const refreshThreads = async (preferred?: string | null) => {
-    const next = await listSanadAgentThreads();
+    const next = await listSanadAgentThreads(100);
     setThreads(next);
-    const active = next.filter((thread) => thread.status === 'active');
-    const target = preferred && active.some((thread) => thread.id === preferred)
-      ? preferred
-      : selectedThreadId && active.some((thread) => thread.id === selectedThreadId)
-        ? selectedThreadId
-        : active[0]?.id || null;
-    if (target !== selectedThreadId) setSelectedThreadId(target);
+    const target = preferred || selectedThreadId || null;
     return { threads: next, target };
   };
 
@@ -419,24 +409,17 @@ export default function SanadAgentWorkspace() {
           setBusinesses(options);
         }
         setThreads(loadedThreads);
-        // A sidebar deep link is resolved exclusively against the participant-aware
-        // thread list already authorized by the backend.
+        // SANAD no longer exposes a general chat. A conversation route must carry
+        // an explicit thread id created/opened from Personal Manager or Business.
+        // getSanadAgentThread() below remains the server authorization boundary,
+        // so older/paginated threads do not need to be present in the recent list.
         const url = new URL(window.location.href);
-        const requested = url.searchParams.has('new') ? null : url.searchParams.get('thread');
-        const first = (requested && loadedThreads.find((thread) => thread.status === 'active' && thread.id === requested))
-          || loadedThreads.find((thread) => thread.status === 'active') || null;
-        if (url.searchParams.has('thread')) {
-          url.searchParams.delete('thread');
-          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-        }
-        if (first) {
-          setSelectedThreadId(first.id);
-        } else if (options.length === 1) {
-          setBusinessId(options[0].id);
-          setBusinessSelectionOpen(false);
-        } else if (options.length > 1) {
+        const requested = url.searchParams.get('thread');
+        if (requested) {
+          setSelectedThreadId(requested);
+        } else {
+          setSelectedThreadId(null);
           setBusinessId('');
-          setBusinessSelectionOpen(true);
         }
       } catch (cause) {
         if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
@@ -467,8 +450,10 @@ export default function SanadAgentWorkspace() {
           listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
-        setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
-        setBusinessSelectionOpen(false);
+        setBusinessId(detail.thread.business_id || '');
+        setThreads((current) => current.some((thread) => thread.id === detail.thread.id)
+          ? current.map((thread) => thread.id === detail.thread.id ? { ...thread, ...detail.thread } : thread)
+          : [detail.thread, ...current]);
         setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
@@ -559,108 +544,14 @@ export default function SanadAgentWorkspace() {
     };
   }, [selectedThreadId]);
 
-  const createThreadForBusiness = async (nextBusinessId: string | null) => {
-    const id = await createSanadAgentThread(nextBusinessId);
-    setMessages([]);
-    setDraft('');
-    setPendingAttachments([]);
-    setBusinessId(nextBusinessId || '');
-    setSelectedThreadId(id);
-    setBusinessSelectionOpen(false);
-    await refreshThreads(id);
-    window.setTimeout(() => textareaRef.current?.focus(), 50);
-    return id;
-  };
-
   const ensureThread = async () => {
     if (selectedThreadId) return selectedThreadId;
-    const defaultBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : null);
-    if (!defaultBusinessId && businesses.length > 1) {
-      setBusinessSelectionOpen(true);
-      throw new Error('اختر النشاط لهذه المحادثة أولًا.');
-    }
-    return createThreadForBusiness(defaultBusinessId);
+    throw new Error('افتح محادثة من المدير الشخصي أو الأعمال أولًا.');
   };
-
-  const newThread = async () => {
-    if (sending) return;
-    if (businesses.length > 1) {
-      setMessages([]);
-      setDraft('');
-      setPendingAttachments([]);
-      setSelectedThreadId(null);
-      setBusinessId('');
-      setBusinessSelectionOpen(true);
-      return;
-    }
-    try {
-      await createThreadForBusiness(businesses.length === 1 ? businesses[0].id : null);
-    } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
-    }
-  };
-
-  // The global sidebar owns the primary New Conversation action on every route.
-  // A route request is consumed once after the account/business context has loaded.
-  useEffect(() => {
-    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has('new')) return;
-    initialNewConversationHandledRef.current = true;
-    url.searchParams.delete('new');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-    void newThread();
-  }, [threadsLoading, businessLoading]);
-
-  useEffect(() => {
-    const handleGlobalNewConversation = () => {
-      if (threadsLoading || businessLoading) return;
-      void newThread();
-    };
-    window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
-    return () => window.removeEventListener('sanad:new-conversation', handleGlobalNewConversation);
-  }, [threadsLoading, businessLoading, sending, businesses]);
-
-  // Global history stays available in the persistent shell on every route.
-  // This is a notification to refresh its participant-aware read model; it is
-  // not an alternate persistence path or an additional financial data store.
-  useEffect(() => {
-    window.dispatchEvent(new Event('sanad:threads-updated'));
-  }, [threads]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('sanad:thread-selected', { detail: selectedThreadId }));
   }, [selectedThreadId]);
-
-  const selectThread = (threadId: string) => {
-    if (sending) return;
-    setPendingAttachments([]);
-    setSelectedThreadId(threadId);
-  };
-
-  useEffect(() => {
-    const onGlobalSelect = (event: Event) => {
-      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
-      if (!threadId || threadsLoading || sending) return;
-      // Never trust a synthetic UI event as authorization; only use an active
-      // thread returned by the participant-aware listing RPC.
-      if (!threads.some((thread) => thread.id === threadId && thread.status === 'active')) return;
-      selectThread(threadId);
-    };
-    const onGlobalArchive = (event: Event) => {
-      const threadId = (event as CustomEvent<{ threadId: string }>).detail?.threadId;
-      if (!threadId || threadsLoading || sending) return;
-      void refreshThreads().then(({ target }) => {
-        if (selectedThreadId === threadId && !target) setMessages([]);
-      }).catch(() => setWorkspaceError('تعذر تحديث سجل المحادثات بعد الأرشفة.'));
-    };
-    window.addEventListener('sanad:select-conversation', onGlobalSelect);
-    window.addEventListener('sanad:thread-archived', onGlobalArchive);
-    return () => {
-      window.removeEventListener('sanad:select-conversation', onGlobalSelect);
-      window.removeEventListener('sanad:thread-archived', onGlobalArchive);
-    };
-  }, [threads, threadsLoading, sending, selectedThreadId]);
 
   const archiveThread = async (threadId: string) => {
     if (sending) return;
