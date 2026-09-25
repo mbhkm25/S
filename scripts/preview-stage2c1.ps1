@@ -3,7 +3,7 @@ param(
   [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{40}$')][string]$ExpectedSha,
   [string]$Repo = 'C:\sanad-v3',
   [string]$Worktree = 'C:\SANAD-2C1-PREVIEW',
-  [int]$Port = 4175,
+  [int]$Port = 3000,
   [switch]$CopyLocalEnv
 )
 
