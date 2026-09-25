@@ -65,7 +65,7 @@ assert.match(nav, /readSanadProject/);
 // participant-aware RPCs/roles, never an unrestricted cross-account query.
 assert.match(history, /listSanadAgentThreads/);
 assert.match(history, /thread\.my_role === 'viewer'/);
-assert.match(history, /thread\.my_role === 'owner'/);
+assert.match(history, /thread\.my_role !== 'owner'/);
 assert.match(history, /thread\.unread_count/);
 assert.match(history, /archiveSanadAgentThread/);
 assert.match(history, /sanad:select-conversation/);
