@@ -11,7 +11,7 @@ set project_kind = case when business_id is null then 'legacy_unclassified' else
 where project_kind is null;
 
 alter table public.sanad_agent_threads
-  alter column project_kind set default 'personal',
+  alter column project_kind set default 'legacy_unclassified',
   alter column project_kind set not null;
 
 alter table public.sanad_agent_threads
@@ -28,6 +28,27 @@ alter table public.sanad_agent_threads
     (project_kind='business' and business_id is not null)
     or (project_kind in ('personal','legacy_unclassified') and business_id is null)
   );
+
+-- Keep older service clients compatible: an explicit v2 creator selects personal
+-- or business; legacy direct inserts with a business ID must remain business,
+-- while an untyped null-business insert must NOT be guessed personal.
+create or replace function private.sanad_agent_thread_legacy_scope_default_v1()
+returns trigger
+language plpgsql
+set search_path to ''
+as $function$
+begin
+  if new.project_kind = 'legacy_unclassified' and new.business_id is not null then
+    new.project_kind := 'business';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists sanad_agent_thread_legacy_scope_default_v1 on public.sanad_agent_threads;
+create trigger sanad_agent_thread_legacy_scope_default_v1
+before insert on public.sanad_agent_threads
+for each row execute function private.sanad_agent_thread_legacy_scope_default_v1();
 
 create index if not exists sanad_agent_threads_project_recent_idx
   on public.sanad_agent_threads(project_kind,business_id,status,last_message_at desc,created_at desc);
