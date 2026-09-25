@@ -54,7 +54,7 @@ for (const required of [
   'الذاكرة',
   'إدارة مساعد سند',
   'تنبيهات ذكية',
-  'بطاقات البيانات',
+  'المخرجات المنظمة',
 ]) {
   assert.ok(assistantSettings.includes(required), `SANAD assistant management missing ${required}`);
 }
