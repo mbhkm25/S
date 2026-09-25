@@ -60,7 +60,8 @@ assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 
 // R3: the memory and settings sections live INSIDE the one global sidebar.
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.match(route, /SanadAssistantSidebarSections/);
 assert.match(assistantSections, /data-sanad-assistant-inline="true"/);
 assert.doesNotMatch(agent, /AssistantWorkspaceSidebar|data-mobile-sidebar-trigger/);
 
