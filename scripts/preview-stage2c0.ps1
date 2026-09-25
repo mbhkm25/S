@@ -10,14 +10,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $Branch = 'stage2c/c0-audit-interactive-prototype'
 $PreviewFile = 'docs/prototypes/STAGE2C0_PROJECTS_COMPOSER_PREVIEW.html'
-function Git([string[]]$GitArgs) {
-  & git @GitArgs
-  if ($LASTEXITCODE -ne 0) { throw "git command failed: $($GitArgs -join ' ')" }
+function Invoke-Git {
+  param([string[]]$ArgsList)
+  & git @ArgsList
+  if ($LASTEXITCODE -ne 0) { throw "git command failed: $($ArgsList -join ' ')" }
 }
 if (-not (Test-Path -LiteralPath $Repo -PathType Container)) { throw "Local repository not found: $Repo" }
-Git @('-C',$Repo,'rev-parse','--is-inside-work-tree') | Out-Null
+Invoke-Git -ArgsList @('-C',$Repo,'rev-parse','--is-inside-work-tree') | Out-Null
 Write-Host 'Fetching approved candidate branch only...' -ForegroundColor Cyan
-Git @('-C',$Repo,'fetch','origin',"refs/heads/$($Branch):refs/remotes/origin/$($Branch)") | Out-Null
+Invoke-Git -ArgsList @('-C',$Repo,'fetch','origin',"refs/heads/$($Branch):refs/remotes/origin/$($Branch)") | Out-Null
 $actual = (& git -C $Repo rev-parse "refs/remotes/origin/$Branch").Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $actual -ne $ExpectedSha.ToLowerInvariant()) {
   throw "Exact SHA mismatch. Expected $ExpectedSha; remote currently $actual. Stop and inspect updated PR."
@@ -28,9 +29,9 @@ if ($worktreeExists) {
   if (-not (Test-Path -LiteralPath $localFile)) { throw "Target path exists but is not a registered Git worktree: $Worktree. Use a new destination." }
   $dirty = @(& git -C $Worktree status --porcelain)
   if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) { throw 'Preview worktree has local changes. Save/inspect them first; no overwrite performed.' }
-  Git @('-C',$Worktree,'switch','--detach',$actual) | Out-Null
+  Invoke-Git -ArgsList @('-C',$Worktree,'switch','--detach',$actual) | Out-Null
 } else {
-  Git @('-C',$Repo,'worktree','add','--detach',$Worktree,$actual) | Out-Null
+  Invoke-Git -ArgsList @('-C',$Repo,'worktree','add','--detach',$Worktree,$actual) | Out-Null
 }
 $checked = (& git -C $Worktree rev-parse HEAD).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $checked -ne $ExpectedSha.ToLowerInvariant()) { throw 'Worktree SHA verification failed.' }
