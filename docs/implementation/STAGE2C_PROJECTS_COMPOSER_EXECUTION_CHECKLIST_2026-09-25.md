@@ -1,6 +1,6 @@
 # Stage 2C — Project Workspace, Context, Navigation and Composer Foundation: Execution Checklist
 
-**Prepared:** 2026-09-25. **Status:** proposed owner-review implementation breakdown; **documentation only**.  
+**Prepared:** 2026-09-25. **Status:** **Owner-approved execution plan, documentation only**; docs PR #387 merged as `de3c42dbdf5728ec18227b661a4f75e5039580fa`. 2C.0 runtime/permission audit and responsive prototype remain outstanding; no feature implementation is approved by this plan alone.  
 **Parent issue:** #386; blueprint: `docs/architecture/SANAD_PROJECTS_SMART_COMPOSER_V1_2026-09-25.md`; v4 roadmap: `docs/roadmaps/SANAD_EXECUTION_PROGRAM_V4_2026-09-25.md`.  
 **Start baseline:** R4 owner-reported Production smoke complete; Web/PWA #83 published `81c15fbda312d34bb3c1da937595efea15246b78`; Edge `sanad-ai-agent-v1` v7 ACTIVE/verified; D-ARCH #376 complete; docs-current main at first planning checkpoint `1fa3ee218e3955cece949f7875a3049456aaf299`. No 2C feature code or DB change authorized by writing this checklist.
 
@@ -9,7 +9,7 @@
 - [x] Verify main, latest R4 release #83 and Edge v7 independently; user has reported R4 production tests successful; R4 issue #380 closed with owner-attested caveat.
 - [x] Read Production-backed D-ARCH matrix; reject obsolete pre-D1/D2/D3/R1 migrations or stale sidebar designs.
 - [x] Draft blueprint for ChatGPT-Projects-like groups, multiple chats, project sources/tools/business management, conversation-first UI and Smart Composer.
-- [ ] Owner explicitly reviews/approves **detailed** Project/Conversation/Composer ADR and this execution breakdown; freeze 2C non-goals and acceptance cases; then mark new docs PR reviewable. Discuss any unresolved choice in the ADR before coding.
+- [x] Owner explicitly approved **the detailed Project/Conversation/Composer planning ADR and execution breakdown**; docs PR #387 passed exact-head checks and was merged. **This does not complete 2C.0**: still resolve open technical choices through a read-only schema/authorization audit and review representative responsive prototypes before coding.
 - [ ] Read-only verify the existing live frontend navigation/thread RPCs, shared participant roles/grants, existing project-independent file/knowledge model, active personal/business account access and prior unscoped conversations; publish a data-compatibility decision with negative test fixture matrix.
 - [ ] Prepare representative desktop (1280/1366/1440/1920, 125/150% zoom) and mobile (360/390/430 keyboard open/safe area) prototypes, including empty projects, loading/error, Arabic/English numeric input, long activity lists and no-double-scroll. Review before implementing layout.
 

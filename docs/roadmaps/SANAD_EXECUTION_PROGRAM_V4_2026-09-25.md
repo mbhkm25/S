@@ -1,7 +1,7 @@
 # SANAD — General Execution Program v4: Projects + Conversation-First Interactive Operation
 
 **Date:** 2026-09-25  
-**Status:** Proposed general roadmap update for owner approval in a **docs-only draft PR**. Replaces dated v3 execution priorities once accepted/merged; previous v3 and D-ARCH remain in repository history. **This document is a plan, not an implementation authorization or an assertion that future features ship today.**  
+**Status:** **OWNER-APPROVED CURRENT GENERAL EXECUTION ROADMAP**; docs-only PR #387 merged on 2026-09-25 at `de3c42dbdf5728ec18227b661a4f75e5039580fa`. Supersedes v3 execution priorities while preserving v3 and D-ARCH as historical evidence. **This document is a plan, not an implementation authorization or an assertion that future features ship today.**  
 **Central tracker:** #374; immediate Stage 2C issue #386. Architecture baseline: `docs/architecture/SANAD_PROJECTS_SMART_COMPOSER_V1_2026-09-25.md`; concrete 2C checklist: `docs/implementation/STAGE2C_PROJECTS_COMPOSER_EXECUTION_CHECKLIST_2026-09-25.md`; reconciliation source: `docs/architecture/DARCH_RECONCILIATION_2026-09-25.md`. Canonical knowledge in the owner's Library: `SANAD.md`, deliberately updated in **batches at accepted checkpoints**, not for every documentation commit.
 
 ## 0. Verified checkpoint and migration from v3
