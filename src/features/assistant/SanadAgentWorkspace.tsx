@@ -792,56 +792,37 @@ export default function SanadAgentWorkspace() {
             data-scroll-owner="timeline"
             className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
-            {!businessLoading && (businessId || businesses.length > 1) ? (
-              <div data-sanad-inline-business-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
+            {selectedThreadId && selectedThread ? (
+              <div data-sanad-inline-project-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
                 <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {businessId ? (
-                  <span className="truncate">{businesses.find((option) => option.id === businessId)?.name || 'سياق النشاط'}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSelectionOpen(true)}
-                    className="sanad-focus-ring rounded-md px-1.5 py-1 font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]"
-                  >
-                    اختر نشاط المحادثة
-                  </button>
-                )}
+                <span className="truncate">
+                  {selectedThread.business_id
+                    ? businesses.find((option) => option.id === selectedThread.business_id)?.name || 'مساحة أعمال'
+                    : selectedThread.project_kind === 'legacy_unclassified'
+                      ? 'محادثة سابقة غير مصنفة'
+                      : 'المدير الشخصي'}
+                </span>
               </div>
             ) : null}
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
               </div>
+            ) : !selectedThreadId ? (
+              <div className="mx-auto flex min-h-[430px] max-w-2xl flex-col items-center justify-center text-center">
+                <SanadIntelligenceMark state="idle" size={42} className="text-slate-900" />
+                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">لا توجد محادثة عامة في سند</h3>
+                <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
+                  افتح المدير الشخصي أو الأعمال من الشريط الجانبي، ثم اختر أو أنشئ محادثة داخل تلك المساحة.
+                </p>
+              </div>
             ) : empty ? (
               <div className="mx-auto flex min-h-[430px] max-w-3xl flex-col items-center justify-center text-center">
                 <SanadIntelligenceMark state="idle" size={42} className="text-slate-900" />
-                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تعرف؟</h3>
+                <h3 className="mt-5 text-xl font-semibold text-slate-950 md:text-2xl">ماذا تريد أن تنجز في هذه المساحة؟</h3>
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
-                  اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
+                  هذه المحادثة مرتبطة بمساحتها منذ إنشائها. ستُقرأ البيانات والكيانات وفق صلاحياتك ومصدرها المعتمد.
                 </p>
-
-                {(businessSelectionOpen || (!selectedThreadId && businesses.length > 1 && !businessId)) ? (
-                  <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
-                    <div className="flex items-center gap-2">
-                      <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {businesses.map((business) => (
-                        <button
-                          key={business.id}
-                          type="button"
-                          onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
-                        >
-                          {business.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button
