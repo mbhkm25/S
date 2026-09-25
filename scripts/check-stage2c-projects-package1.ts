@@ -38,7 +38,7 @@ assert.match(project,/createSanadProjectThread/);
 assert.match(project,/setSanadProjectThreadPinned/);
 assert.match(project,/legacy_unclassified/);
 assert.match(project,/لا توجد محادثات عامة خارجها/);
-assert.match(project,/customer.*لا تمنح صلاحيات إدارة المشروع/s);
+assert.match(project,/علاقة العميل بالنشاط لا تمنح صلاحيات إدارة المشروع/);
 
 assert.match(workspace,/لا توجد محادثة عامة في سند/);
 assert.match(workspace,/getSanadAgentThread\(selectedThreadId\)/);
