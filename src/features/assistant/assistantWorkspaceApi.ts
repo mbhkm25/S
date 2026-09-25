@@ -1,10 +1,12 @@
 import { supabase } from '../../lib/supabase';
 import type { SanadAiAgentTurnResult, SanadAiToolTrace } from './assistantAgentApi';
+import type { SanadProject, SanadProjectThreadPage } from './sanadProjectContext';
 
 export type SanadAgentThreadSummary = {
   id: string;
   owner_user_id?: string;
   business_id: string | null;
+  project_kind?: 'personal' | 'business' | null;
   title: string;
   status: 'active' | 'archived';
   summary?: string | null;
@@ -69,6 +71,64 @@ export async function listSanadAgentThreads(limit = 50): Promise<SanadAgentThrea
   const { data, error } = await supabase.rpc('list_my_sanad_agent_threads_v2', { p_limit: limit });
   if (error) rpcError(error, 'تعذر تحميل محادثات مساعد سند.');
   return Array.isArray(data) ? data as SanadAgentThreadSummary[] : [];
+}
+
+
+/** Project RPCs never infer personal scope from legacy business_id = NULL. */
+export async function listSanadProjectThreads(
+  project: SanadProject,
+  cursor?: { at: string; id: string } | null,
+  limit = 55,
+): Promise<SanadProjectThreadPage> {
+  const { data, error } = await supabase.rpc('list_my_sanad_project_threads_v1', {
+    p_project_kind: project.kind,
+    p_business_id: project.kind === 'business' ? project.businessId : null,
+    p_limit: limit,
+    p_cursor_at: cursor?.at ?? null,
+    p_cursor_id: cursor?.id ?? null,
+  });
+  if (error) rpcError(error, 'تعذر تحميل محادثات المشروع.');
+  const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  return {
+    items: Array.isArray(payload.items) ? payload.items as SanadProjectThreadPage['items'] : [],
+    pinned: Array.isArray(payload.pinned) ? payload.pinned as SanadProjectThreadPage['pinned'] : [],
+    next_cursor: payload.next_cursor && typeof payload.next_cursor === 'object'
+      ? payload.next_cursor as SanadProjectThreadPage['next_cursor'] : null,
+  };
+}
+
+export async function createSanadProjectThread(project: SanadProject, title?: string | null): Promise<string> {
+  const { data, error } = await supabase.rpc('create_my_sanad_project_thread_v1', {
+    p_project_kind: project.kind,
+    p_business_id: project.kind === 'business' ? project.businessId : null,
+    p_title: title || null,
+  });
+  if (error) rpcError(error, 'تعذر إنشاء محادثة المشروع.');
+  if (typeof data !== 'string' || !data) throw new Error('لم يرجع النظام معرّف المحادثة.');
+  return data;
+}
+
+export async function getSanadProjectThread(
+  project: SanadProject, threadId: string, limit = 160,
+): Promise<SanadAgentThreadDetail> {
+  const { data, error } = await supabase.rpc('get_my_sanad_project_thread_v1', {
+    p_thread_id: threadId,
+    p_project_kind: project.kind,
+    p_business_id: project.kind === 'business' ? project.businessId : null,
+    p_message_limit: limit,
+  });
+  if (error) rpcError(error, 'المحادثة غير متاحة ضمن هذه المساحة أو لم تعد لديك صلاحية الوصول إليها.');
+  const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  return {
+    thread: payload.thread as SanadAgentThreadSummary,
+    messages: Array.isArray(payload.messages) ? payload.messages as SanadAgentStoredMessage[] : [],
+  };
+}
+
+export async function classifySanadLegacyPersonalThread(threadId: string): Promise<void> {
+  const { data, error } = await supabase.rpc('classify_my_sanad_legacy_thread_v1', { p_thread_id: threadId });
+  if (error) rpcError(error, 'تعذر تصنيف المحادثة القديمة. راجع ارتباطاتها قبل نقلها.');
+  if (data !== true) throw new Error('تعذر اعتماد تصنيف المحادثة.');
 }
 
 export async function createSanadAgentThread(
