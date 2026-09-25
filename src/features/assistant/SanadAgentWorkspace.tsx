@@ -690,6 +690,9 @@ export default function SanadAgentWorkspace() {
       markAssistantSuccess();
 
       setPendingAttachments([]);
+      // A successful turn may rename/update its thread. Refresh the short-lived
+      // Today/project quick-access cache before returning to those routes.
+      void import('../projects/projectQuickAccess').then(({ invalidateProjectQuickAccess }) => invalidateProjectQuickAccess());
       await refreshThreads(threadId);
       try {
         const [persistedThread, persistedAttachments] = await Promise.all([
