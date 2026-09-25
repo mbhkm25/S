@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { navigateProduct, productHref } from '../../lib/productNavigation';
-import { archiveSanadAgentThread, listSanadAgentThreads } from '../assistant/assistantWorkspaceApi';
+import { archiveSanadAgentThread, classifySanadLegacyPersonalThread, listSanadAgentThreads } from '../assistant/assistantWorkspaceApi';
 import { projectConversationHref, type SanadProject, type SanadProjectConversation, type SanadProjectThreadPage } from '../assistant/sanadProjectContext';
 import { setActiveManagedBusinessId } from '../../lib/businessManagementApi';
 
@@ -127,6 +127,18 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
         throw error;
       }
       setBackendReady(true);
+      if (nextProject.kind === 'personal') {
+        const { data: old, error: legacyError } = await supabase.rpc('list_my_sanad_legacy_unclassified_threads_v1');
+        if (!legacyError && Array.isArray(old)) {
+          setUnclassified(old.flatMap(item => {
+            const record = asRecord(item);
+            return typeof record.id === 'string' && typeof record.title === 'string'
+              ? [{ id: record.id, title: record.title }] : [];
+          }));
+        }
+      } else {
+        setUnclassified([]);
+      }
       const payload = asRecord(data);
       const incoming = Array.isArray(payload.items) ? payload.items as SanadProjectConversation[] : [];
       const pinned = Array.isArray(payload.pinned) ? payload.pinned as SanadProjectConversation[] : [];
@@ -182,6 +194,19 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
       navigateProduct(projectConversationHref(project, { threadId: data }));
     } catch (error) {
       setThreadError(error instanceof Error ? error.message : 'تعذر إنشاء المحادثة.');
+    } finally { setPendingThread(null); }
+  }
+
+  async function classifyLegacy(thread: { id: string; title: string }) {
+    if (!backendReady || !project || project.kind !== 'personal') return;
+    if (!window.confirm(`هل راجعت هذه المحادثة وتؤكد أنها شخصية؟\\n\\n${thread.title}\\n\\nلن تتحول الفواتير أو العمليات السابقة إلى مشروع آخر.`)) return;
+    setPendingThread(thread.id);
+    try {
+      await classifySanadLegacyPersonalThread(thread.id);
+      setUnclassified(previous => previous.filter(item => item.id !== thread.id));
+      await loadThreads(project);
+    } catch (error) {
+      setThreadError(error instanceof Error ? error.message : 'تعذر تصنيف المحادثة.');
     } finally { setPendingThread(null); }
   }
 
@@ -308,7 +333,14 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
               {kind === 'personal' && unclassified.length ? <details className="mt-7 border-t border-[var(--sanad-border-subtle)] pt-3">
                 <summary className="cursor-pointer text-[12px] text-[var(--sanad-text-muted)]">محادثات قديمة غير مصنفة ({unclassified.length})</summary>
                 <p className="mt-2 text-[11px] leading-6 text-[var(--sanad-text-muted)]">لن تُنسب المحادثات القديمة تلقائيًا إلى المدير الشخصي. يحتاج نقلها إلى تصنيف صريح ومراجعة السياق.</p>
-                {unclassified.map(t => <div key={t.id} className="py-2 text-[12px]">{t.title}</div>)}
+                {unclassified.map(t => <div key={t.id} className="flex items-center justify-between gap-2 border-b border-[var(--sanad-border-subtle)] py-2 text-[12px]">
+                  <span className="min-w-0 truncate">{t.title}</span>
+                  {backendReady ? <button type="button" disabled={Boolean(pendingThread)}
+                    onClick={() => void classifyLegacy(t)}
+                    className="sanad-focus-ring min-h-9 shrink-0 rounded-md border border-[var(--sanad-border)] px-2 disabled:opacity-50">
+                    مراجعة وإسناد للشخصي
+                  </button> : null}
+                </div>)}
               </details> : null}
             </section> : null}
 
