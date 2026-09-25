@@ -69,7 +69,7 @@ assert.match(projectWorkspace, /المكتبة/);
 assert.match(projectWorkspace, /إدارة النشاط/);
 assert.match(projectData, /listSanadProjectThreads/);
 assert.match(projectData, /createSanadProjectThread/);
-assert.match(projectData, /setSanadProjectThreadPinned/);
+assert.match(projectWorkspace, /setSanadProjectThreadPinned/);
 assert.match(projectWorkspace, /لا توجد محادثات عامة خارجها/);
 assert.match(shell, /SanadProjectWorkspaceRoute/);
 
