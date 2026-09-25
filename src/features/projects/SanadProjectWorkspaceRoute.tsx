@@ -9,7 +9,6 @@ import { navigateProduct } from '../../lib/productNavigation';
 import { authorizedProjectBusinesses, getProjectBusinessContexts, invalidateProjectQuickAccess, openNewProjectConversation, projectThreads } from './projectQuickAccess';
 import {
   archiveSanadAgentThread,
-  listSanadAgentThreads,
   setSanadProjectThreadPinned,
   type SanadAgentThreadSummary,
 } from '../assistant/assistantWorkspaceApi';
