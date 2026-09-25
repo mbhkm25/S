@@ -6,7 +6,7 @@ const globalSidebar = readFileSync('src/components/navigation/SanadUnifiedSideba
 const inline = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
 const provider = readFileSync('src/features/shell/SanadAssistantSettingsContext.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const history = readFileSync('src/components/navigation/SanadSidebarConversations.tsx', 'utf8');
+const history = readFileSync('src/features/shell/SanadProjectWorkspaceRoute.tsx', 'utf8');
 const css = readFileSync('src/styles/sanad-foundation.css', 'utf8');
 
 assert.equal((shell.match(/<SanadUnifiedSidebar/g) || []).length, 1, 'The shell must mount exactly one navigation sidebar.');
@@ -20,13 +20,13 @@ assert.match(css, /--sanad-safe-top:\s*max\(env\(safe-area-inset-top, 0px\), 0px
 
 assert.match(globalSidebar, /data-sanad-global-sidebar="true"/);
 assert.match(globalSidebar, /data-sanad-global-nav-scroll="true"/);
-assert.match(globalSidebar, /SanadSidebarConversations/);
-assert.match(globalSidebar, /SanadAssistantSidebarSections compact=\{collapsed\}/);
+assert.doesNotMatch(globalSidebar, /SanadSidebarConversations/);
+assert.doesNotMatch(globalSidebar, /SanadAssistantSidebarSections/);
 assert.match(globalSidebar, /sanad:sidebar-collapsed-v1/);
 assert.match(globalSidebar, /NotificationBell/);
-assert.match(globalSidebar, /payment-inbox\.html/);
+assert.match(globalSidebar, /data-sanad-header-notifications="true"/);
 assert.match(globalSidebar, /getUserAvatarUrl/);
-assert.match(history, /listSanadAgentThreads/);
+assert.match(history, /list_my_sanad_project_threads_v1/);
 assert.match(history, /thread\.my_role === 'viewer'/);
 assert.match(history, /thread\.my_role === 'owner'/);
 
