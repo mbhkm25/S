@@ -182,7 +182,6 @@ export default function SanadProjectWorkspaceRoute({ kind, location }: { kind: P
       }
     } catch (cause) {
       setThreadError(cause instanceof Error ? cause.message : 'تعذر تحميل محادثات المساحة.');
-    }
     } finally {
       setThreadsLoading(false);
     }
