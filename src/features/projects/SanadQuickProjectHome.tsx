@@ -19,10 +19,9 @@ type CardProps = {
   creating: boolean;
   onNew: () => void;
   pendingContract?: boolean;
-  disableNew?: boolean;
 };
 
-function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract, disableNew = false }: CardProps) {
+function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract }: CardProps) {
   const business = kind === 'business';
   const Icon = business ? BriefcaseBusiness : UserRound;
   const path = business ? `commercial?view=conversations&business=${encodeURIComponent(id || '')}` : 'financial?view=conversations';
@@ -79,7 +78,7 @@ function ProjectCard({ name, kind, id, recent, creating, onNew, pendingContract,
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--sanad-border-subtle)] pt-3">
-        <button type="button" onClick={onNew} disabled={creating || disableNew} title={disableNew ? "بانتظار اعتماد ونشر عقد المحادثات الشخصية الجديدة" : undefined} className="sanad-focus-ring sanad-home-new-chat inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[11px] font-semibold disabled:opacity-50">
+        <button type="button" onClick={onNew} disabled={creating} title={pendingContract && !business ? "يلزم تفعيل عقد المساحات لإنشاء محادثات شخصية. اضغط لمعرفة الحالة." : undefined} className="sanad-focus-ring sanad-home-new-chat inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[11px] font-semibold disabled:opacity-50">
           {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           محادثة جديدة
         </button>
@@ -136,7 +135,6 @@ export default function SanadQuickProjectHome() {
           name="المدير الشخصي"
           recent={data?.personal || []}
           pendingContract={data?.awaitingProjectContract}
-          disableNew={Boolean(data?.awaitingProjectContract)}
           creating={creating === 'personal'}
           onNew={() => void create('personal')}
         />
