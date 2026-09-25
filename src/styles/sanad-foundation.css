@@ -309,6 +309,95 @@
   }
 }
 
+
+/* Stage 2C — lively but quiet conversation-first navigation.
+   Color provides hierarchy, not additional card layers or a second UI shell. */
+.sanad-section-compact-header {
+  position: relative;
+  border-bottom: 1px solid var(--sanad-border-subtle);
+  padding: 0.75rem 0 1.25rem;
+}
+.sanad-section-compact-header::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  width: min(16rem, 36%);
+  height: 3px;
+  border-radius: 100px;
+  background: linear-gradient(90deg, var(--sanad-brand-lime), var(--sanad-brand-green), var(--sanad-brand-aqua));
+  opacity: .82;
+}
+.sanad-section-compact-header.is-today {
+  border-bottom-color: color-mix(in srgb, var(--sanad-brand-green) 20%, var(--sanad-border-subtle));
+}
+.sanad-section-head-icon {
+  color: var(--sanad-interactive);
+  background: linear-gradient(130deg,
+    color-mix(in srgb, var(--sanad-brand-lime) 28%, var(--sanad-surface-1)),
+    color-mix(in srgb, var(--sanad-brand-mint) 15%, var(--sanad-surface-1)) 58%,
+    color-mix(in srgb, var(--sanad-brand-aqua) 19%, var(--sanad-surface-1))
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sanad-brand-green) 13%, transparent);
+}
+.sanad-home-project {
+  background: var(--sanad-surface-1);
+  border: 1px solid var(--sanad-border-subtle);
+  border-radius: 1.125rem;
+  padding: 1rem 1.125rem .875rem;
+  min-height: 225px;
+  box-shadow: var(--sanad-shadow-1);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.sanad-home-project:hover {
+  border-color: color-mix(in srgb, var(--sanad-brand-green) 33%, var(--sanad-border-subtle));
+  box-shadow: 0 6px 22px rgba(21, 95, 76, .055);
+}
+.sanad-home-project-accent {
+  height: 3px;
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+}
+.sanad-home-project-accent.is-personal {
+  background: linear-gradient(90deg, var(--sanad-brand-aqua), var(--sanad-brand-mint), transparent 90%);
+}
+.sanad-home-project-accent.is-business {
+  background: linear-gradient(90deg, var(--sanad-brand-lime), var(--sanad-brand-green), var(--sanad-brand-aqua) 82%, transparent);
+}
+.sanad-home-project-icon,.sanad-project-tool-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 35px;
+  width: 35px;
+  border-radius: 11px;
+  background: var(--sanad-interactive-soft);
+  color: var(--sanad-interactive);
+}
+.sanad-home-project-icon.is-business {
+  background: color-mix(in srgb, var(--sanad-brand-lime) 27%, var(--sanad-surface-1));
+  color: var(--sanad-text-strong);
+}
+.sanad-home-new-chat {
+  background: color-mix(in srgb, var(--sanad-brand-green) 12%, var(--sanad-surface-1));
+  color: var(--sanad-interactive-hover);
+  border: 1px solid color-mix(in srgb, var(--sanad-brand-green) 26%, transparent);
+}
+.sanad-home-new-chat:hover {
+  background: color-mix(in srgb, var(--sanad-brand-green) 20%, var(--sanad-surface-1));
+}
+.sanad-project-tool {
+  transition: border-color .16s ease, background .16s ease;
+}
+.sanad-project-tool:hover {
+  border-color: color-mix(in srgb, var(--sanad-brand-green) 34%, var(--sanad-border-subtle));
+}
+@media (prefers-reduced-motion: reduce) {
+  .sanad-home-project,.sanad-project-tool { transition: none; }
+}
+
 @media (min-width: 1024px) {
   .sanad-primary-nav {
     min-height: 0;
