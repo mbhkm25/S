@@ -15,8 +15,8 @@ const app = readFileSync('src/App.tsx','utf8');
 const home = readFileSync('src/components/Home.tsx','utf8');
 const migration = readFileSync('supabase/migrations/20260925211500_stage2c_project_scoped_conversations_v1.sql','utf8');
 
-for (const label of ['اليوم','المدير الشخصي','الأعمال','المزيد']) assert.match(nav,new RegExp(label));
-for (const forbidden of ['محادثة جديدة','المحادثات','المكتبة','الاتصالات']) {
+for (const label of ['الرئيسية','المدير الشخصي','الأعمال']) assert.match(nav,new RegExp(label));
+for (const forbidden of ['اليوم','المزيد','محادثة جديدة','المحادثات','المكتبة','الاتصالات']) {
   assert.doesNotMatch(nav,new RegExp(forbidden), 'global sidebar primary nav must stay short: '+forbidden);
 }
 assert.doesNotMatch(sidebar,/SanadSidebarConversations|SanadAssistantSidebarSections|data-sanad-primary-action="new-conversation"/);
@@ -43,6 +43,8 @@ assert.match(project,/لا توجد محادثات عامة خارجها/);
 assert.match(quickHome,/آخر المحادثات/);
 assert.match(quickHome,/محادثة جديدة/);
 assert.match(quickHome,/loadProjectQuickData/);
+assert.match(project,/data-sanad-project-library/);
+for (const label of ['الاتصالات','الأتمتة','وارد المدفوعات']) assert.match(project,new RegExp(label));
 assert.match(projectData,/projectRpcMissing/);
 assert.match(project,/علاقة العميل بالنشاط لا تمنح صلاحيات إدارة المشروع/);
 
