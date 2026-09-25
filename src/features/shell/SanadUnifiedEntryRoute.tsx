@@ -8,9 +8,6 @@ import {
   ListTodo,
   Plug,
   RefreshCw,
-  MoreHorizontal,
-  Settings2,
-  Inbox,
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -60,16 +57,10 @@ function resolveKind(pathname: string): EntryKind {
 
 const META: Record<EntryKind, { title: string; eyebrow: string; description: string; icon: typeof CalendarCheck2 }> = {
   today: {
-    title: 'اليوم',
-    eyebrow: 'ما يحتاج انتباهك الآن',
+    title: 'مساحاتك',
+    eyebrow: 'الوصول السريع',
     description: 'مساحاتك ومحادثاتك القريبة، وما يستحق اهتمامك من المهام والموافقات والمتابعات.',
     icon: CalendarCheck2,
-  },
-  more: {
-    title: 'المزيد',
-    eyebrow: 'وظائف سند الثانوية',
-    description: 'المكتبة والاتصالات والأتمتة وإعدادات سند في مكان واحد.',
-    icon: MoreHorizontal,
   },
   library: {
     title: 'المكتبة',
@@ -194,28 +185,36 @@ export default function SanadUnifiedEntryRoute() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Preserve old /more bookmarks without retaining a redundant navigation destination.
+  // The business workspace owns connections, automation and payment inbox now.
+  useEffect(() => {
+    if (kind === 'more') navigateProduct('commercial?view=tools', { replace: true });
+  }, [kind]);
+
   return (
     <div className="min-h-full bg-[var(--sanad-bg-canvas)] px-4 py-5 text-[var(--sanad-text)] lg:px-8 lg:py-8" dir="rtl">
       <div className="mx-auto w-full max-w-[1160px]">
-        <header data-sanad-section-header={kind} className={`sanad-section-compact-header flex flex-wrap items-start justify-between gap-4 ${kind === 'today' ? 'is-today' : ''}`}>
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="sanad-section-head-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)]">
-              <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-[var(--sanad-text-muted)]">{meta.eyebrow}</p>
-              <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.025em] text-[var(--sanad-text-strong)]">{meta.title}</h1>
-              <p className="mt-1 max-w-2xl text-[12px] leading-[1.85] text-[var(--sanad-text-muted)]">{meta.description}</p>
+        {kind !== 'today' && kind !== 'more' ? (
+          <header data-sanad-section-header={kind} className={`sanad-section-compact-header flex flex-wrap items-start justify-between gap-4 ${kind === 'today' ? 'is-today' : ''}`}>
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="sanad-section-head-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--sanad-radius-md)]">
+                <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-[var(--sanad-text-muted)]">{meta.eyebrow}</p>
+                <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.025em] text-[var(--sanad-text-strong)]">{meta.title}</h1>
+                <p className="mt-1 max-w-2xl text-[12px] leading-[1.85] text-[var(--sanad-text-muted)]">{meta.description}</p>
+              </div>
             </div>
-          </div>
-          {kind !== 'more' && kind !== 'library' && kind !== 'automations' ? (
-            <button type="button" onClick={() => void load()}
-              className="sanad-focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)] transition-colors hover:bg-[var(--sanad-interactive-soft)]"
-              aria-label="تحديث">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          ) : null}
-        </header>
+            {kind !== 'more' && kind !== 'library' && kind !== 'automations' ? (
+              <button type="button" onClick={() => void load()}
+                className="sanad-focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)] transition-colors hover:bg-[var(--sanad-interactive-soft)]"
+                aria-label="تحديث">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            ) : null}
+          </header>
+        ) : null}
 
         {kind === 'today' ? (
           <Suspense fallback={<div className="mt-6 h-[220px] rounded-2xl bg-[var(--sanad-surface-2)]" aria-busy="true" />}>
@@ -227,6 +226,9 @@ export default function SanadUnifiedEntryRoute() {
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--sanad-border-subtle)] pb-3">
             <div><h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">ما يحتاج انتباهك</h2>
             <p className="mt-1 text-[11px] text-[var(--sanad-text-muted)]">عناصر فعلية من مصادرها، مع المحافظة على صلاحيات كل مساحة.</p></div>
+            <button type="button" onClick={() => void load()}
+              className="sanad-focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] text-[var(--sanad-text-muted)]"
+              aria-label="تحديث ما يحتاج انتباهك"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
             {!loading && !error ? (
               <div className="flex gap-3 text-[11px] text-[var(--sanad-text-muted)]">
                 <span><b className="text-[var(--sanad-text-strong)]">{counts.approvals ?? 0}</b> موافقات</span>
@@ -273,33 +275,6 @@ export default function SanadUnifiedEntryRoute() {
                 </div>
               </article>
             ))}
-          </div>
-        ) : null}
-
-        {!loading && kind === 'more' ? (
-          <div className="grid gap-2.5 py-5 sm:grid-cols-2">
-            {([
-              { label: 'المكتبة', desc: 'التقارير والمستندات والمخرجات العامة الحالية.', icon: Library, path: 'library' },
-              { label: 'الاتصالات', desc: 'مصادر البيانات والأنظمة المرتبطة وحالة المزامنة.', icon: Plug, path: 'connections' },
-              { label: 'الأتمتة', desc: 'القواعد والمهام المجدولة فوق عقود التنفيذ المحكومة.', icon: Clock3, path: 'work/automations' },
-              { label: 'وارد المدفوعات', desc: 'فتح الوارد التشغيلي الحالي في مساره المخصص.', icon: Inbox, href: '/payment-inbox.html' },
-              { label: 'الحساب والإعدادات', desc: 'الحساب والخصوصية وإدارة مساعد سند.', icon: Settings2, path: 'account-center' },
-            ] as Array<{ label: string; desc: string; icon: typeof CalendarCheck2; path?: string; href?: string }>).map((entry) => {
-              const EntryIcon = entry.icon;
-              return entry.href ? (
-                <a key={entry.label} href={entry.href} className="sanad-focus-ring sanad-project-tool flex min-h-[82px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
-                  <span className="sanad-project-tool-icon"><EntryIcon className="h-[18px] w-[18px] text-[var(--sanad-interactive)]" /></span>
-                  <span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
-                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span></span>
-                </a>
-              ) : (
-                <button key={entry.label} type="button" onClick={() => entry.path && navigateProduct(entry.path)} className="sanad-focus-ring sanad-project-tool flex min-h-[82px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
-                  <span className="sanad-project-tool-icon"><EntryIcon className="h-[18px] w-[18px] text-[var(--sanad-interactive)]" /></span>
-                  <span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
-                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span></span>
-                </button>
-              );
-            })}
           </div>
         ) : null}
 
