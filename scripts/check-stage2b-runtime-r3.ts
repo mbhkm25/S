@@ -25,9 +25,9 @@ assert.match(globalSidebar, /showWorkspaces=\{false\}/);
 assert.match(globalSidebar, /مساحة الذكاء والتشغيل/);
 assert.match(globalSidebar, /getUserAvatarUrl/);
 assert.doesNotMatch(globalSidebar, /SanadSidebarConversations|SanadAssistantSidebarSections|محادثة جديدة/, 'Global sidebar must not expose project conversations or new-chat action.');
-assert.doesNotMatch(globalSidebar, /payment-inbox\.html/, 'Payment inbox moves under More, not the sidebar footer.');
+assert.doesNotMatch(globalSidebar, /payment-inbox\.html/, 'Payment inbox belongs to Business, not the sidebar footer.');
 
-for (const label of ['اليوم','المدير الشخصي','الأعمال','المزيد']) {
+for (const label of ['الرئيسية','المدير الشخصي','الأعمال']) {
   assert.match(readFileSync('src/components/navigation/SanadUnifiedNavLinks.tsx','utf8'), new RegExp(label));
 }
 
