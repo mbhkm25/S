@@ -26,7 +26,7 @@ function basePath(): string {
 function handleBrandClick(event: MouseEvent<HTMLAnchorElement>): void {
   if (!shouldHandleProductLinkClick(event)) return;
   event.preventDefault();
-  navigateProduct('sanad-ai');
+  navigateProduct('today');
 }
 
 export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly = false }: Props) {
@@ -69,7 +69,7 @@ export default function ProductAppHeader({ userId, onOpenNavigation, utilityOnly
         {utilityOnly && userId ? (
           <span className="min-w-0 flex-1" aria-hidden="true" />
         ) : (
-          <a href={productHref('sanad-ai')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
+          <a href={productHref('today')} onClick={handleBrandClick} className="flex min-w-0 items-center gap-2" aria-label="العودة إلى سند">
             <div className="flex flex-col items-start">
               <img
                 src={`${import.meta.env.BASE_URL}logo.png`}
