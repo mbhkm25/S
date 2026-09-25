@@ -22,7 +22,7 @@ const styles = readFileSync('src/index.css', 'utf8');
 
 assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open the unified SANAD shell');
 assert.match(home, /today/, 'authenticated root must land on Today, not a general chat');
-assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
+assert.match(home, /single SANAD workspace shell/, 'authenticated root must remain inside the unified SANAD shell');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
 for (const label of ['اليوم', 'المدير الشخصي', 'الأعمال', 'المزيد']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
