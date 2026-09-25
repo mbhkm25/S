@@ -40,6 +40,19 @@ export default function FinancialWorkspaceShell() {
 
   useEffect(() => subscribeProductNavigation(() => setRouteKey(locationKey())), []);
 
+  // Chunk preloading happens after the first paint; Vite keeps lazy route
+  // boundaries, but subsequent sidebar transitions no longer re-download code.
+  useEffect(() => {
+    const warm = () => { void import('../projects/SanadProjectWorkspaceRoute'); void import('../shell/SanadUnifiedEntryRoute'); };
+    const idleHost = window as Window & { requestIdleCallback?: (fn: () => void, options?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (idleHost.requestIdleCallback) {
+      const id = idleHost.requestIdleCallback(warm, { timeout: 2000 });
+      return () => idleHost.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warm, 1000);
+    return () => window.clearTimeout(id);
+  }, []);
+
   useEffect(() => {
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
@@ -67,9 +80,9 @@ export default function FinancialWorkspaceShell() {
   const content = isBusinessCapabilityRoute
     ? <BusinessCapabilityRoute key={routeKey} />
     : isUnifiedEntryRoute
-      ? <SanadUnifiedEntryRoute key={routeKey} />
+      ? <SanadUnifiedEntryRoute key={pathname} />
       : isProjectRoot
-        ? <SanadProjectWorkspaceRoute key={routeKey} kind={commercial ? 'business' : 'personal'} />
+        ? <SanadProjectWorkspaceRoute kind={commercial ? 'business' : 'personal'} location={routeKey} />
         : isActionRoute
           ? <FinancialActionRoute key={routeKey} />
           : isPersonalSectionRoute
@@ -133,7 +146,7 @@ export default function FinancialWorkspaceShell() {
               </Suspense>
             </main>
           )}
-          {!isActionRoute && (personal || commercial) ? (
+          {!isActionRoute && !isProjectRoot && (personal || commercial) ? (
             <button
               type="button"
               onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}
