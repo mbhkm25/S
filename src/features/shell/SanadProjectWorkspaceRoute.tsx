@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { navigateProduct, productHref } from '../../lib/productNavigation';
 import { archiveSanadAgentThread, classifySanadLegacyPersonalThread, listSanadAgentThreads } from '../assistant/assistantWorkspaceApi';
 import { projectConversationHref, type SanadProject, type SanadProjectConversation, type SanadProjectThreadPage } from '../assistant/sanadProjectContext';
-import { setActiveManagedBusinessId } from '../../lib/businessManagementApi';
+import { rememberActiveManagedBusiness } from '../../lib/businessManagementApi';
 
 type ManagedBusiness = { id: string; name: string; owner: boolean; role: string };
 type ProjectTab = 'conversations' | 'sources' | 'tools' | 'library' | 'management';
@@ -75,7 +75,7 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
     let active = true;
     setLoadingContext(true);
     setContextError(null);
-    void supabase.rpc('get_user_business_contexts').then(({ data, error }) => {
+    void Promise.resolve(supabase.rpc('get_user_business_contexts')).then(({ data, error }) => {
       if (!active) return;
       if (error) {
         setContextError('تعذر تحميل الأنشطة المخوّل لك الوصول إليها.');
@@ -230,11 +230,11 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
   }
   function openManagement() {
     if (!selected?.owner) return;
-    setActiveManagedBusinessId(selected.id);
+    rememberActiveManagedBusiness(selected.id);
     navigateProduct('business/manage');
   }
 
-  function ThreadRow({ thread }: { thread: SanadProjectConversation }) {
+  function ThreadRow({ thread }: { thread: SanadProjectConversation; key?: string }) {
     return (
       <div className="group flex min-h-14 min-w-0 items-center gap-2 border-b border-[var(--sanad-border-subtle)] py-1.5">
         <button type="button" onClick={() => project && navigateProduct(projectConversationHref(project, { threadId: thread.id }))}
@@ -366,7 +366,7 @@ export default function SanadProjectWorkspaceRoute({ kind, userId }: Props) {
                   { name: 'النظام المحاسبي', path: 'business/manage?section=accounting' },
                   { name: 'العملاء', path: 'business/manage?section=customers' },
                 ] : []).map(item => <button type="button" key={item.path} onClick={() => {
-                  if (kind === 'business' && selected) setActiveManagedBusinessId(selected.id);
+                  if (kind === 'business' && selected) rememberActiveManagedBusiness(selected.id);
                   navigateProduct(item.path);
                 }} className="sanad-focus-ring min-h-12 rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-4 text-right text-[12px] hover:bg-[var(--sanad-nav-hover-bg)]">{item.name}</button>)}
               </div>
