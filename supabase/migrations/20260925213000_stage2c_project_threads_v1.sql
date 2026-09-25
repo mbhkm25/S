@@ -339,12 +339,17 @@ declare
   v_original text;
   v_marker text := '  if v_action_type not in (''personal_transaction'',''commercial_document_draft'') then';
   v_guard text := $txt$
-  if coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'personal'
-     and v_action_type <> 'personal_transaction' then
-    raise exception 'action_project_scope_mismatch' using errcode = '42501';
-  end if;
-  if coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'business'
-     and (v_action_type <> 'commercial_document_draft' or v_thread.business_id is null) then
+  -- Apply the personal/business boundary to legacy and typed threads alike.
+  -- An old business-linked conversation must never prepare a personal entry,
+  -- and an unscoped NULL-business conversation must never create a business
+  -- draft, even during the old-client / new-client rollout window.
+  if (v_action_type = 'personal_transaction'
+      and (v_thread.business_id is not null
+        or coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'business'))
+     or (v_action_type = 'commercial_document_draft'
+      and (v_thread.business_id is null
+        or coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'personal'))
+  then
     raise exception 'action_project_scope_mismatch' using errcode = '42501';
   end if;
 
