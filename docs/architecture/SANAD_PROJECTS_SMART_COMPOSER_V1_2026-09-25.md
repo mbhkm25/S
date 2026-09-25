@@ -1,7 +1,7 @@
 # SANAD Projects + Contextual Smart Composer — Product/Architecture Baseline v1
 
 **Date:** 2026-09-25  
-**Status:** Proposed detailed baseline for owner review; **product direction confirmed in discussion**, technical interfaces and migration policy remain gated design decisions.  
+**Status:** **Owner-approved product/architecture planning baseline**, docs-only PR #387 merged as `de3c42dbdf5728ec18227b661a4f75e5039580fa`. Detailed technical interfaces, legacy classification, security audit, visual prototypes and every implementation/migration remain separate 2C.0 gates.  
 **Parent:** Stage 2C issue #386; execution roadmap v4 `docs/roadmaps/SANAD_EXECUTION_PROGRAM_V4_2026-09-25.md`.  
 **Evidence:** D-ARCH production-vs-proposal reconciliation, R4 source and owner-attested R4 live Web/PWA smoke; do not treat these docs as proof of a new feature.
 
