@@ -111,7 +111,7 @@ function formatDate(value?: string | null): string {
 function WorkItemRow({ item }: { item: WorkItem }) {
   const shown = describeSanadWorkItem(item);
   return (
-    <article className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <article className="grid gap-2 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">{item.title}</h2>
@@ -277,7 +277,7 @@ export default function SanadUnifiedEntryRoute() {
         ) : null}
 
         {!loading && kind === 'more' ? (
-          <div className="grid gap-3 py-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2.5 py-5 sm:grid-cols-2">
             {([
               { label: 'المكتبة', desc: 'التقارير والمستندات والمخرجات العامة الحالية.', icon: Library, path: 'library' },
               { label: 'الاتصالات', desc: 'مصادر البيانات والأنظمة المرتبطة وحالة المزامنة.', icon: Plug, path: 'connections' },
@@ -287,16 +287,16 @@ export default function SanadUnifiedEntryRoute() {
             ] as Array<{ label: string; desc: string; icon: typeof CalendarCheck2; path?: string; href?: string }>).map((entry) => {
               const EntryIcon = entry.icon;
               return entry.href ? (
-                <a key={entry.label} href={entry.href} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
-                  <EntryIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
-                  <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
-                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
+                <a key={entry.label} href={entry.href} className="sanad-focus-ring sanad-project-tool flex min-h-[82px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                  <span className="sanad-project-tool-icon"><EntryIcon className="h-[18px] w-[18px] text-[var(--sanad-interactive)]" /></span>
+                  <span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
+                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span></span>
                 </a>
               ) : (
-                <button key={entry.label} type="button" onClick={() => entry.path && navigateProduct(entry.path)} className="sanad-focus-ring rounded-[var(--sanad-radius-lg)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
-                  <EntryIcon className="h-5 w-5 text-[var(--sanad-interactive)]" />
-                  <strong className="mt-4 block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
-                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span>
+                <button key={entry.label} type="button" onClick={() => entry.path && navigateProduct(entry.path)} className="sanad-focus-ring sanad-project-tool flex min-h-[82px] items-center gap-3 rounded-[var(--sanad-radius-md)] border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-3.5 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                  <span className="sanad-project-tool-icon"><EntryIcon className="h-[18px] w-[18px] text-[var(--sanad-interactive)]" /></span>
+                  <span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--sanad-text-strong)]">{entry.label}</strong>
+                  <span className="mt-1 block text-[11px] leading-5 text-[var(--sanad-text-muted)]">{entry.desc}</span></span>
                 </button>
               );
             })}
