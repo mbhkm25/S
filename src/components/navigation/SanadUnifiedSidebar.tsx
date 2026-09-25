@@ -3,7 +3,7 @@ import { LogOut, PanelRightClose, PanelRightOpen, Settings2, UserRound, X } from
 import { supabase } from '../../lib/supabase';
 import { SANAD_APP_VERSION } from '../../lib/appVersion';
 import { getUserAvatarUrl } from '../../lib/userAvatar';
-import { navigateProduct, productHref } from '../../lib/productNavigation';
+import { navigateProduct, productHref, subscribeProductNavigation } from '../../lib/productNavigation';
 import NotificationBell from '../notifications/NotificationBell';
 import SanadUnifiedNavLinks from './SanadUnifiedNavLinks';
 
@@ -73,6 +73,10 @@ export default function SanadUnifiedSidebar({
     })();
     return () => { alive = false; };
   }, [userId]);
+
+  // Dismiss utility popovers after any in-shell route change; otherwise the
+  // menu remains expanded when a user switches from Today to a project.
+  useEffect(() => subscribeProductNavigation(() => setAccountMenuOpen(false)), []);
 
   useEffect(() => {
     if (!accountMenuOpen) return;
