@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const shell = readFileSync('src/features/financial/FinancialWorkspaceShell.tsx', 'utf8');
 const route = readFileSync('src/features/financial/FinancialWorkspaceRoute.tsx', 'utf8');
 const agent = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
-const assistantSections = readFileSync('src/components/navigation/SanadAssistantSidebarSections.tsx', 'utf8');
+const assistantSettings = readFileSync('src/features/settings/SanadAssistantManagementPanel.tsx', 'utf8');
 const unifiedSidebar = readFileSync('src/components/navigation/SanadUnifiedSidebar.tsx', 'utf8');
 const header = readFileSync('src/components/navigation/ProductAppHeader.tsx', 'utf8');
 const manifest = readFileSync('android/app/src/main/AndroidManifest.xml', 'utf8');
@@ -59,9 +59,9 @@ assert.match(route, /flex h-full min-h-0 flex-col overflow-hidden/);
 assert.match(route, /flex-1 flex-col overflow-hidden/);
 assert.match(route, /data-conversation-route-surface="open"[\s\S]*<Suspense/s);
 
-// R3: the memory and settings sections live INSIDE the one global sidebar.
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
-assert.match(assistantSections, /data-sanad-assistant-inline="true"/);
+// Stage 2C: one global sidebar remains, while assistant memory/settings move to account settings.
+assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections|SanadSidebarConversations/);
+assert.match(assistantSettings, /إدارة مساعد سند/);
 assert.doesNotMatch(agent, /AssistantWorkspaceSidebar|data-mobile-sidebar-trigger/);
 
 assert.match(
