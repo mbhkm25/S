@@ -291,3 +291,73 @@ comment on function public.create_my_sanad_project_thread_v1(text,uuid,text)
   is 'Creates a typed personal or authorized business conversation; null legacy threads stay unclassified.';
 comment on table public.sanad_agent_thread_pins
   is 'Private per-user thread pin preference, read/written only via participant-checked RPCs.';
+
+
+-- A direct, scoped detail endpoint supports deep links to old chats outside the
+-- first 35/60 rows. Participant access and the requested project MUST both pass.
+create or replace function public.get_my_sanad_project_thread_v1(
+  p_thread_id uuid,
+  p_project_kind text,
+  p_business_id uuid default null,
+  p_message_limit integer default 160
+)
+returns jsonb language plpgsql stable security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid := auth.uid();
+  v_thread public.sanad_agent_threads%rowtype;
+  v_data jsonb;
+begin
+  if v_uid is null then raise exception 'authentication_required' using errcode='42501'; end if;
+  select * into v_thread from public.sanad_agent_threads
+   where id=p_thread_id and private.can_access_sanad_agent_thread_v2(id,v_uid);
+  if not found
+    or not (
+      (p_project_kind = 'business' and p_business_id is not null
+        and v_thread.business_id = p_business_id)
+      or (p_project_kind = 'personal' and p_business_id is null
+        and v_thread.business_id is null
+        and v_thread.metadata->>'sanad_project_kind' = 'personal')
+    ) then
+    raise exception 'project_thread_not_found' using errcode='P0002';
+  end if;
+  v_data := public.get_my_sanad_agent_thread_v2(p_thread_id,p_message_limit);
+  return jsonb_set(v_data, '{thread,project_kind}', to_jsonb(p_project_kind), true);
+end;
+$fn$;
+revoke all on function public.get_my_sanad_project_thread_v1(uuid,text,uuid,integer) from public, anon;
+grant execute on function public.get_my_sanad_project_thread_v1(uuid,text,uuid,integer) to authenticated;
+
+-- Keep the deployed deterministic action engine intact; add an exact-scope
+-- refusal BEFORE any typed-project action draft can be created. Dynamic
+-- replacement is fail-closed and will stop migration if the current v1
+-- function's reviewed marker changes. Legacy untyped threads retain their
+-- existing behavior during the compatibility window.
+do $guard$
+declare
+  v_original text;
+  v_marker text := '  if v_action_type not in (''personal_transaction'',''commercial_document_draft'') then';
+  v_guard text := $txt$
+  if coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'personal'
+     and v_action_type <> 'personal_transaction' then
+    raise exception 'action_project_scope_mismatch' using errcode = '42501';
+  end if;
+  if coalesce(v_thread.metadata,'{}'::jsonb)->>'sanad_project_kind' = 'business'
+     and (v_action_type <> 'commercial_document_draft' or v_thread.business_id is null) then
+    raise exception 'action_project_scope_mismatch' using errcode = '42501';
+  end if;
+
+$txt$;
+begin
+  select pg_get_functiondef(
+    'public.create_my_sanad_agent_action_draft_v1(uuid,text,jsonb,uuid,text,uuid[])'::regprocedure
+  ) into v_original;
+  if v_original is null
+     or position(v_marker in v_original) = 0
+     or position('action_project_scope_mismatch' in v_original) > 0 then
+    raise exception 'action_guard_source_drift_requires_manual_review';
+  end if;
+  execute replace(v_original, v_marker, v_guard || v_marker);
+end;
+$guard$;
