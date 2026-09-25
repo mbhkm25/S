@@ -212,8 +212,8 @@ begin
       and t.status=v_status
       and (
         v_search is null
-        or t.title ilike '%'||replace(replace(v_search,'%','\\%'),'_','\\_')||'%' escape '\\'
-        or coalesce(t.summary,'') ilike '%'||replace(replace(v_search,'%','\\%'),'_','\\_')||'%' escape '\\'
+        or position(lower(v_search) in lower(coalesce(t.title,''))) > 0
+        or position(lower(v_search) in lower(coalesce(t.summary,''))) > 0
       )
   )
   select count(*) into v_total from eligible;
@@ -244,8 +244,8 @@ begin
       and t.status=v_status
       and (
         v_search is null
-        or t.title ilike '%'||replace(replace(v_search,'%','\\%'),'_','\\_')||'%' escape '\\'
-        or coalesce(t.summary,'') ilike '%'||replace(replace(v_search,'%','\\%'),'_','\\_')||'%' escape '\\'
+        or position(lower(v_search) in lower(coalesce(t.title,''))) > 0
+        or position(lower(v_search) in lower(coalesce(t.summary,''))) > 0
       )
     order by coalesce(pref.is_pinned,false) desc,
              pref.pinned_at desc nulls last,
