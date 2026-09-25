@@ -62,6 +62,8 @@ const META: Record<EntryKind, { title: string; eyebrow: string; description: str
     description: 'مساحاتك ومحادثاتك القريبة، وما يستحق اهتمامك من المهام والموافقات والمتابعات.',
     icon: CalendarCheck2,
   },
+  // Legacy /more bookmarks redirect to the Business workspace; never shown as navigation.
+  more: { title: 'الأعمال', eyebrow: '', description: '', icon: Plug },
   library: {
     title: 'المكتبة',
     eyebrow: 'ملفات ومخرجات سند',
