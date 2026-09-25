@@ -10,7 +10,7 @@ interface HomeProps {
 function sanadUrl(): string {
   const base = import.meta.env.VITE_APP_BASE_PATH || '/';
   const cleanBase = base.endsWith('/') ? base : `${base}/`;
-  return `${cleanBase}sanad-ai`;
+  return `${cleanBase}today`;
 }
 
 /**

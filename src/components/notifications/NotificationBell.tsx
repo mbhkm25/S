@@ -7,6 +7,7 @@ import type { BusinessWorkspaceContext } from '../business/BusinessWorkspacesAcc
 
 interface NotificationBellProps {
   onNavigate: () => void;
+  showWorkspaces?: boolean;
 }
 
 function workspaceUrl(contexts: BusinessWorkspaceContext[]): string {
@@ -21,11 +22,12 @@ function workspaceUrl(contexts: BusinessWorkspaceContext[]): string {
   return '/profile#business-workspaces';
 }
 
-export default function NotificationBell({ onNavigate }: NotificationBellProps) {
+export default function NotificationBell({ onNavigate, showWorkspaces = true }: NotificationBellProps) {
   const { unreadCount } = useNotifications();
   const [workspaces, setWorkspaces] = useState<BusinessWorkspaceContext[]>([]);
 
   useEffect(() => {
+    if (!showWorkspaces) return;
     let active = true;
     const load = async () => {
       const { data, error } = await supabase.rpc('get_my_business_workspaces');
@@ -34,7 +36,7 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
     };
     void load();
     return () => { active = false; };
-  }, []);
+  }, [showWorkspaces]);
 
   const newPayments = useMemo(
     () => workspaces.reduce((total, item) => total + Number(item.permissions?.view ? item.counts?.new || 0 : 0), 0),
@@ -43,7 +45,7 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
 
   return (
     <div className="flex items-center gap-1">
-      {workspaces.length > 0 && (
+      {showWorkspaces && workspaces.length > 0 && (
         <a
           href={workspaceUrl(workspaces)}
           className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-slate-600 transition-all hover:bg-emerald-50 hover:text-emerald-800"

@@ -18,6 +18,8 @@ const FinancialWorkspaceRoute = lazy(loadFinancialWorkspaceRoute);
 const PersonalFinanceSectionRoute = lazy(loadPersonalFinanceSectionRoute);
 const SanadUnifiedEntryRoute = lazy(() => import('../shell/SanadUnifiedEntryRoute'));
 const BusinessCapabilityRoute = lazy(() => import('../shell/BusinessCapabilityRoute'));
+const SanadProjectWorkspaceRoute = lazy(() => import('../shell/SanadProjectWorkspaceRoute'));
+const SanadNotificationRoute = lazy(() => import('../shell/SanadNotificationRoute'));
 
 function locationKey(): string {
   return `${window.location.pathname}${window.location.search}`;
@@ -53,15 +55,28 @@ export default function FinancialWorkspaceShell() {
     };
   }, []);
 
+  const isNotificationRoute = /\/notifications\/?$/.test(pathname);
+  const isProjectRoute = /\/(financial|commercial)\/?$/.test(pathname);
   const isActionRoute = /\/(financial|commercial)\/actions\/?$/.test(pathname);
   const isPersonalSectionRoute = /\/financial\/(accounts|transactions|obligations|budgets|goals|parties)\/?$/.test(pathname);
   const personal = /\/financial(?:\/|$)/.test(pathname);
   const commercial = /\/commercial(?:\/|$)/.test(pathname);
   const assistant = /\/sanad-ai\/?$/.test(pathname);
-  const isUnifiedEntryRoute = /\/(today|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
+  const isUnifiedEntryRoute = /\/(today|more|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(pathname);
   const isBusinessCapabilityRoute = /\/business\/manage(?:\/(?:operations|team|profile|whatsapp-catalog|customers))?\/?$/.test(pathname);
 
-  const content = isBusinessCapabilityRoute
+  useEffect(() => {
+    if (assistant && !new URLSearchParams(window.location.search).has('project')
+      && !new URLSearchParams(window.location.search).has('thread')) {
+      navigateProduct('today', { replace: true });
+    }
+  }, [assistant, routeKey]);
+
+  const content = isNotificationRoute
+    ? <SanadNotificationRoute key={routeKey} userId={userId}/>
+    : isProjectRoute
+    ? <SanadProjectWorkspaceRoute key={routeKey} kind={personal ? 'personal' : 'business'} userId={userId}/>
+    : isBusinessCapabilityRoute
     ? <BusinessCapabilityRoute key={routeKey} />
     : isUnifiedEntryRoute
       ? <SanadUnifiedEntryRoute key={routeKey} />
@@ -128,7 +143,7 @@ export default function FinancialWorkspaceShell() {
               </Suspense>
             </main>
           )}
-          {!isActionRoute && (personal || commercial) ? (
+          {!isProjectRoute && !isActionRoute && (personal || commercial) ? (
             <button
               type="button"
               onClick={() => navigateProduct(`${commercial ? 'commercial' : 'financial'}/actions`)}

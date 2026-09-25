@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { navigateProduct } from '../../lib/productNavigation';
 import { formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from './sanadWorkItemPresentation';
 
@@ -41,9 +42,10 @@ type Connection = {
   last_heartbeat_at?: string | null;
 };
 
-type EntryKind = 'today' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
+type EntryKind = 'today' | 'more' | 'library' | 'tasks' | 'approvals' | 'automations' | 'connections';
 
 function resolveKind(pathname: string): EntryKind {
+  if (/\/more\/?$/.test(pathname)) return 'more';
   if (/\/library\/?$/.test(pathname)) return 'library';
   if (/\/work\/tasks\/?$/.test(pathname)) return 'tasks';
   if (/\/work\/approvals\/?$/.test(pathname)) return 'approvals';
@@ -53,6 +55,11 @@ function resolveKind(pathname: string): EntryKind {
 }
 
 const META: Record<EntryKind, { title: string; eyebrow: string; description: string; icon: typeof CalendarCheck2 }> = {
+  more: {
+    title: 'المزيد', eyebrow: 'وظائف سند الأخرى',
+    description: 'الوصول إلى المكتبة والاتصالات والإعدادات والوظائف الثانوية، دون قوائم رئيسية متشعبة.',
+    icon: Library,
+  },
   today: {
     title: 'اليوم',
     eyebrow: 'ما يحتاج انتباهك الآن',
@@ -127,14 +134,14 @@ export default function SanadUnifiedEntryRoute() {
   const kind = useMemo(() => resolveKind(window.location.pathname), []);
   const meta = META[kind];
   const Icon = meta.icon;
-  const [loading, setLoading] = useState(kind !== 'library' && kind !== 'automations');
+  const [loading, setLoading] = useState(!['library', 'automations', 'more'].includes(kind));
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<WorkItem[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    if (kind === 'library' || kind === 'automations') {
+    if (kind === 'library' || kind === 'automations' || kind === 'more') {
       setLoading(false);
       return;
     }
@@ -213,6 +220,36 @@ export default function SanadUnifiedEntryRoute() {
             <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">الموافقات</p><p className="mt-1 text-lg font-semibold">{counts.approvals ?? 0}</p></div>
             <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">تحتاج انتباه</p><p className="mt-1 text-lg font-semibold">{counts.attention ?? 0}</p></div>
             <div><p className="text-[10px] text-[var(--sanad-text-subtle)]">المهام</p><p className="mt-1 text-lg font-semibold">{counts.tasks ?? 0}</p></div>
+          </div>
+        ) : null}
+
+        {kind === 'today' && !loading && !error ? (
+          <div className="flex flex-wrap gap-2 border-b border-[var(--sanad-border-subtle)] pb-4">
+            <button onClick={() => navigateProduct('work/approvals')}
+              className="sanad-focus-ring min-h-10 rounded-lg border border-[var(--sanad-border)] bg-[var(--sanad-surface-1)] px-3 text-[12px]">عرض الموافقات</button>
+            <button onClick={() => navigateProduct('work/tasks')}
+              className="sanad-focus-ring min-h-10 rounded-lg border border-[var(--sanad-border)] bg-[var(--sanad-surface-1)] px-3 text-[12px]">عرض المهام</button>
+          </div>
+        ) : null}
+
+        {kind === 'more' ? (
+          <div className="divide-y divide-[var(--sanad-border-subtle)]">
+            {[
+              { title: 'المكتبة', description: 'الملفات والمخرجات المتاحة حاليًا', path: 'library' },
+              { title: 'الاتصالات', description: 'حالة مصادر البيانات والأنظمة المرتبطة', path: 'connections' },
+              { title: 'الأتمتة', description: 'حالة قدرات التشغيل المجدول', path: 'work/automations' },
+              { title: 'وارد المدفوعات', description: 'الواجهة الحالية للوارد المالي', path: '/payment-inbox.html' },
+              { title: 'الحساب والإعدادات', description: 'إدارة مساعد سند والذاكرة والتفضيلات والأمان', path: 'account-center' },
+            ].map(link => (
+              <button key={link.path} type="button" onClick={() => {
+                if (link.path.startsWith('/')) window.location.assign(link.path);
+                else navigateProduct(link.path);
+              }} className="sanad-focus-ring flex min-h-16 w-full items-center justify-between gap-3 rounded-md px-2 text-right hover:bg-[var(--sanad-nav-hover-bg)]">
+                <span><strong className="block text-[13px] font-medium">{link.title}</strong>
+                  <span className="mt-1 block text-[11px] text-[var(--sanad-text-muted)]">{link.description}</span></span>
+                <span aria-hidden="true" className="text-[var(--sanad-text-subtle)]">‹</span>
+              </button>
+            ))}
           </div>
         ) : null}
 

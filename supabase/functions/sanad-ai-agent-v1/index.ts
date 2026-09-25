@@ -31,6 +31,7 @@ type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: num
 type ActionToolContext = {
   threadId: string | null;
   businessId: string | null;
+  projectKind: "personal" | "business" | null;
   requestId: string;
   toolCallId: string;
   attachmentIds: string[];
@@ -180,6 +181,7 @@ async function recordAgentServerMetric(
 type AgentCloudContext = {
   threadId: string | null;
   businessId: string | null;
+  projectKind: "personal" | "business" | null;
   history: HistoryTurn[];
   summary: string | null;
   memories: string[];
@@ -207,6 +209,7 @@ async function loadAgentCloudContext(
     return {
       threadId: null,
       businessId: requestedBusinessId,
+      projectKind: null,
       history: fallbackHistory,
       summary: null,
       memories: [],
@@ -230,6 +233,22 @@ async function loadAgentCloudContext(
   const preferences = payload.preferences && typeof payload.preferences === "object" ? payload.preferences as Json : {};
   const role = cleanText(thread.my_role, 20);
   const history = sanitizeHistory(payload.recent_messages);
+  const { data: scopeRow, error: scopeError } = await userClient
+    .from("sanad_agent_threads").select("business_id,metadata").eq("id",threadId).maybeSingle();
+  // Session participant RLS, not a frontend project selector, decides actual scope.
+  if (scopeError || !scopeRow) throw new Error("thread_scope_not_accessible");
+  const metadata = scopeRow.metadata && typeof scopeRow.metadata === "object"
+    ? scopeRow.metadata as Json : {};
+  const rawKind = cleanText(metadata.sanad_project_kind,20);
+  const projectKind = rawKind === "personal" || rawKind === "business" ? rawKind : null;
+  const trustedBusinessId = cleanText(scopeRow.business_id,80) || null;
+  if (projectKind === "personal" && (trustedBusinessId || requestedBusinessId))
+    throw new Error("personal_project_business_mismatch");
+  if (projectKind === "business" && (!trustedBusinessId
+    || (requestedBusinessId && requestedBusinessId !== trustedBusinessId)))
+    throw new Error("business_project_scope_mismatch");
+  if (trustedBusinessId && requestedBusinessId && trustedBusinessId !== requestedBusinessId)
+    throw new Error("thread_business_scope_mismatch");
   const memories = Array.isArray(payload.memories)
     ? payload.memories.flatMap((item) => {
         if (!item || typeof item !== "object") return [];
@@ -241,10 +260,12 @@ async function loadAgentCloudContext(
 
   return {
     threadId,
-    businessId: requestedBusinessId || cleanText(thread.business_id, 80) || null,
+    businessId: trustedBusinessId || requestedBusinessId,
+    projectKind,
     history,
     summary: cleanText(thread.summary, 4000) || null,
-    memories,
+    // Global personal memory must not be injected into business project turns.
+    memories: projectKind === "business" ? [] : memories,
     messageCount: Number(thread.message_count || history.length) || history.length,
     myRole: role === "owner" || role === "member" || role === "viewer" ? role : null,
     preferences: {
@@ -468,6 +489,16 @@ function assertActionPreparationResolved(
   }
 }
 
+function allowedToolsForProject(kind: "personal" | "business" | null) {
+  if (kind === "personal") return TOOLS.filter(tool =>
+    tool.name.startsWith("finance_") || tool.name === "action_prepare_personal_transaction"
+    || tool.name === "sanad_search_knowledge");
+  if (kind === "business") return TOOLS.filter(tool =>
+    (tool.name.startsWith("business_") && tool.name !== "business_list_accessible")
+    || tool.name.startsWith("erp_") || tool.name === "action_prepare_commercial_document"
+    || tool.name === "sanad_search_knowledge");
+  return TOOLS; // Existing untyped clients retain their prior read surface.
+}
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
     finance_get_overview: "get_ai_financial_context_v2",
@@ -500,6 +531,21 @@ async function executeTool(
   adminClient: SupabaseClient,
   actionContext: ActionToolContext,
 ): Promise<unknown> {
+  const { projectKind, businessId } = actionContext;
+  if (projectKind === "personal" &&
+      (name.startsWith("business_") || name.startsWith("erp_")
+       || name === "action_prepare_commercial_document")) {
+    throw new Error("project_tool_scope_mismatch");
+  }
+  if (projectKind === "business") {
+    if (name.startsWith("finance_") || name === "action_prepare_personal_transaction"
+        || name === "business_list_accessible") throw new Error("project_tool_scope_mismatch");
+    if ((name.startsWith("business_") || name.startsWith("erp_")
+       || name === "action_prepare_commercial_document")
+       && (!businessId || cleanText(args.business_id,80) !== businessId)) {
+      throw new Error("project_tool_business_mismatch");
+    }
+  }
   const today = todayIso();
   const from = isoDate(args.from, daysAgoIso(30));
   const to = isoDate(args.to, today);
@@ -803,9 +849,13 @@ function streamAgentResponse(
 
           interaction = await geminiInteraction({
             model: MODEL,
-            system_instruction: SYSTEM_INSTRUCTION,
+            system_instruction: cloud.projectKind
+              ? SYSTEM_INSTRUCTION + "\n" + (cloud.projectKind === "personal"
+                  ? "هذه محادثة المدير الشخصي فقط؛ لا تستخدم سجلات أو أدوات الأعمال، واطلب انتقالًا صريحًا عند اختلاف نطاق الطلب."
+                  : "هذه محادثة المشروع التجاري المحدد فقط؛ استخدم نشاطها المعتمد ولا تستخدم سجلات أو أدوات المالية الشخصية، واطلب انتقالًا صريحًا عند اختلاف النطاق.")
+              : SYSTEM_INSTRUCTION,
             input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
-            tools: TOOLS,
+            tools: allowedToolsForProject(cloud.projectKind),
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
           addInteractionUsage(aggregateUsage,interaction);
@@ -834,6 +884,7 @@ function streamAgentResponse(
                 () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
                   threadId: cloud.threadId,
                   businessId: cloud.businessId,
+                  projectKind: cloud.projectKind,
                   requestId,
                   toolCallId: tool.id,
                   attachmentIds: attachmentContext.ids,
@@ -863,7 +914,7 @@ function streamAgentResponse(
               model: MODEL,
               previous_interaction_id: previousId,
               input: results,
-              tools: TOOLS,
+              tools: allowedToolsForProject(cloud.projectKind),
               generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
             });
             addInteractionUsage(aggregateUsage,interaction);
@@ -1126,9 +1177,13 @@ Deno.serve(async (req) => {
   try {
     interaction = await geminiInteraction({
       model: MODEL,
-      system_instruction: SYSTEM_INSTRUCTION,
+      system_instruction: cloud.projectKind
+              ? SYSTEM_INSTRUCTION + "\n" + (cloud.projectKind === "personal"
+                  ? "هذه محادثة المدير الشخصي فقط؛ لا تستخدم سجلات أو أدوات الأعمال، واطلب انتقالًا صريحًا عند اختلاف نطاق الطلب."
+                  : "هذه محادثة المشروع التجاري المحدد فقط؛ استخدم نشاطها المعتمد ولا تستخدم سجلات أو أدوات المالية الشخصية، واطلب انتقالًا صريحًا عند اختلاف النطاق.")
+              : SYSTEM_INSTRUCTION,
       input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
-      tools: TOOLS,
+      tools: allowedToolsForProject(cloud.projectKind),
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
     addInteractionUsage(aggregateUsage,interaction);
@@ -1146,6 +1201,7 @@ Deno.serve(async (req) => {
         logTool(adminClient, tool, () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
           threadId: cloud.threadId,
           businessId: cloud.businessId,
+          projectKind: cloud.projectKind,
           requestId,
           toolCallId: tool.id,
           attachmentIds: attachmentContext.ids,
@@ -1171,7 +1227,7 @@ Deno.serve(async (req) => {
         model: MODEL,
         previous_interaction_id: previousId,
         input: results,
-        tools: TOOLS,
+        tools: allowedToolsForProject(cloud.projectKind),
         generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
       });
       addInteractionUsage(aggregateUsage,interaction);

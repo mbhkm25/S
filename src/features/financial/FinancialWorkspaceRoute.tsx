@@ -22,6 +22,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { openLocalRuntimeSettings } from '../local-first/localRuntimeSettingsEvents';
 import { loadPersonalFinanceOverview, loadSanadAgentWorkspace } from './productRouteLoaders';
+import SanadAssistantSidebarSections from '../../components/navigation/SanadAssistantSidebarSections';
 
 const PersonalFinanceOverview = lazy(loadPersonalFinanceOverview);
 const SanadAgentWorkspace = lazy(loadSanadAgentWorkspace);
@@ -104,7 +105,7 @@ const META: Record<WorkspaceKind, { label: string; eyebrow: string; description:
 };
 
 function resolveKind(pathname: string): WorkspaceKind {
-  if (/\/commercial\/?$/.test(pathname)) return 'commercial';
+  if (/\/commercial(?:\/overview)?\/?$/.test(pathname)) return 'commercial';
   if (/\/account-center\/?$/.test(pathname)) return 'account';
   if (/\/sanad-ai\/?$/.test(pathname)) return 'ai';
   return 'financial';
@@ -363,6 +364,14 @@ export default function FinancialWorkspaceRoute() {
               </>
             ) : null}
           </>
+        ) : null}
+
+        {kind === 'account' ? (
+          <section id="manage-sanad-assistant" data-sanad-assistant-settings="true" className="rounded-xl border border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] px-4 py-4">
+            <h2 className="text-[15px] font-semibold text-[var(--sanad-text-strong)]">إدارة مساعد سند</h2>
+            <p className="mt-1 text-[12px] text-[var(--sanad-text-muted)]">الذاكرة، حفظ المحادثات، التفضيلات ومؤشرات الأداء.</p>
+            <SanadAssistantSidebarSections/>
+          </section>
         ) : null}
 
         {!loading && !error && kind === 'account' && account ? (

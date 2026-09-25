@@ -63,7 +63,8 @@ assert.match(
   'Assistant narrative must use Markdown while user messages may remain plain text.',
 );
 
-assert.match(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections/);
+assert.match(route, /SanadAssistantSidebarSections/);
 assert.match(assistantSections, /data-sanad-inline-memory="true"/);
 assert.match(assistantSections, /data-sanad-inline-settings="true"/);
 assert.match(assistantSections, /ضبط المساعد/);

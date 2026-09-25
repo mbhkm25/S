@@ -18,10 +18,12 @@ import {
 } from './assistantAgentApi';
 import {
   archiveSanadAgentThread,
-  createSanadAgentThread,
+  createSanadProjectThread,
   getSanadAgentContext,
   getSanadAgentThread,
+  getSanadProjectThread,
   listSanadAgentThreads,
+  listSanadProjectThreads,
   markSanadAgentThreadRead,
   updateSanadAgentMessageFeedback,
   type SanadAgentThreadSummary,
@@ -42,6 +44,8 @@ import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDic
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
+import { readSanadProject, projectConversationHref } from './sanadProjectContext';
+import { navigateProduct } from '../../lib/productNavigation';
 
 type BusinessOption = { id: string; name: string };
 type WorkspaceMessage = {
@@ -57,9 +61,12 @@ type WorkspaceMessage = {
   attachments?: SanadAgentAttachment[];
 };
 
-const QUICK_PROMPTS = [
+const PERSONAL_QUICK_PROMPTS = [
   'أعطني نظرة على وضعي المالي الشخصي',
-  'اعرض الأنشطة التجارية التي أستطيع الوصول إليها',
+  'ما المصروفات التي تحتاج انتباهي؟',
+];
+const BUSINESS_QUICK_PROMPTS = [
+  'اعرض أنشطة الأعمال المخوّل لي الوصول إليها',
   'ما حالة النسخة السحابية من إبداع؟',
   'ابحث عن عميل وأعطني كشف حسابه',
 ];
@@ -297,6 +304,11 @@ function syncComposerTextareaHeight(textarea: HTMLTextAreaElement | null) {
 }
 
 export default function SanadAgentWorkspace() {
+  // Route context is a UI hint only. Typed RPCs and the deterministic
+  // backend verify every project/thread/action against the authenticated actor.
+  const projectScope = readSanadProject(window.location.search);
+  const routeParams = new URLSearchParams(window.location.search);
+  const legacyRequestedThread = !projectScope && !routeParams.has('project') ? routeParams.get('thread') : null;
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -309,7 +321,7 @@ export default function SanadAgentWorkspace() {
   const [businesses, setBusinesses] = useState<BusinessOption[]>([]);
   const [businessId, setBusinessId] = useState('');
   const [businessLoading, setBusinessLoading] = useState(true);
-  const [businessSelectionOpen, setBusinessSelectionOpen] = useState(false);
+  const [projectBackendReady, setProjectBackendReady] = useState(true);
   const [sending, setSending] = useState(false);
   const [lastUserPrompt, setLastUserPrompt] = useState('');
   const [liveStatus, setLiveStatus] = useState('');
@@ -381,13 +393,33 @@ export default function SanadAgentWorkspace() {
     timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
+  const loadCurrentProjectThreads = async () => {
+    if (!projectScope) return { items: legacyRequestedThread ? await listSanadAgentThreads(100) : [] };
+    try {
+      const response = await listSanadProjectThreads(projectScope, null, 60);
+      setProjectBackendReady(true);
+      return response;
+    } catch (cause) {
+      const text = cause instanceof Error ? cause.message : '';
+      if (!/list_my_sanad_project_threads_v1|PGRST202|schema cache/i.test(text)) throw cause;
+      // On Production before separately approved DB publication, the actual
+      // application UI allows business history inspection only, never writes.
+      setProjectBackendReady(false);
+      if (projectScope.kind === 'business') {
+        const old = await listSanadAgentThreads(100);
+        return { items: old.filter(x => x.business_id === projectScope.businessId) };
+      }
+      return { items: [] };
+    }
+  };
+
   const refreshThreads = async (preferred?: string | null) => {
-    const next = await listSanadAgentThreads();
+    const next = (await loadCurrentProjectThreads()).items;
     setThreads(next);
-    const active = next.filter((thread) => thread.status === 'active');
-    const target = preferred && active.some((thread) => thread.id === preferred)
+    const active = next.filter(thread => thread.status === 'active');
+    const target = preferred && active.some(thread => thread.id === preferred)
       ? preferred
-      : selectedThreadId && active.some((thread) => thread.id === selectedThreadId)
+      : selectedThreadId && active.some(thread => thread.id === selectedThreadId)
         ? selectedThreadId
         : active[0]?.id || null;
     if (target !== selectedThreadId) setSelectedThreadId(target);
@@ -401,50 +433,73 @@ export default function SanadAgentWorkspace() {
       setThreadsLoading(true);
       setWorkspaceError(null);
       try {
-        const [{ data, error }, loadedThreads] = await Promise.all([
-          supabase.rpc('get_my_account_center_v1'),
-          listSanadAgentThreads(),
+        if (!projectScope && !legacyRequestedThread) {
+          navigateProduct('today', { replace: true });
+          return;
+        }
+        const [{ data, error }, page] = await Promise.all([
+          supabase.rpc('get_user_business_contexts'),
+          loadCurrentProjectThreads(),
         ]);
         if (!alive) return;
-        let options: BusinessOption[] = [];
-        if (!error && data && typeof data === 'object') {
-          const record = data as Record<string, unknown>;
-          const raw = Array.isArray(record.businesses) ? record.businesses : [];
-          options = raw.flatMap((item) => {
-            if (!item || typeof item !== 'object') return [];
-            const row = item as Record<string, unknown>;
-            if (typeof row.id !== 'string' || !row.id) return [];
-            return [{ id: row.id, name: typeof row.name === 'string' && row.name ? row.name : 'نشاط بدون اسم' }];
-          });
-          setBusinesses(options);
+        if (error) throw error;
+        const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+        const byId = new Map<string, BusinessOption>();
+        for (const item of Array.isArray(payload.owned_businesses) ? payload.owned_businesses : []) {
+          const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+          if (typeof row.id === 'string' && row.id) byId.set(row.id, { id: row.id, name: String(row.name || 'نشاط تجاري') });
         }
-        setThreads(loadedThreads);
-        // A sidebar deep link is resolved exclusively against the participant-aware
-        // thread list already authorized by the backend.
+        for (const item of Array.isArray(payload.team_businesses) ? payload.team_businesses : []) {
+          const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+          const business = row.business && typeof row.business === 'object' ? row.business as Record<string, unknown> : {};
+          if (row.status === 'active' && typeof business.id === 'string' && business.id && !byId.has(business.id)) {
+            byId.set(business.id, { id: business.id, name: String(business.name || 'نشاط تجاري') });
+          }
+        }
+        const options = [...byId.values()];
+        setBusinesses(options);
+        if (projectScope?.kind === 'business' && !byId.has(projectScope.businessId)) {
+          throw new Error('لم تعد لديك صلاحية الوصول إلى هذا المشروع التجاري.');
+        }
+        const loadedThreads: SanadAgentThreadSummary[] = page.items.map(thread => ({ ...thread, updated_at: thread.created_at }));
         const url = new URL(window.location.href);
         const requested = url.searchParams.has('new') ? null : url.searchParams.get('thread');
-        const first = (requested && loadedThreads.find((thread) => thread.status === 'active' && thread.id === requested))
-          || loadedThreads.find((thread) => thread.status === 'active') || null;
-        if (url.searchParams.has('thread')) {
-          url.searchParams.delete('thread');
-          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+
+        if (!projectScope && legacyRequestedThread) {
+          const legacy = await getSanadAgentThread(legacyRequestedThread, 1);
+          if (!alive) return;
+          if (legacy.thread.business_id) {
+            navigateProduct(projectConversationHref(
+              { kind: 'business', businessId: legacy.thread.business_id },
+              { threadId: legacyRequestedThread },
+            ), { replace: true });
+            return;
+          }
+          // Legacy unclassified NULL-business threads may be inspected, but
+          // must not silently become personal or receive new financial actions.
+          const row = loadedThreads.find(thread => thread.id === legacyRequestedThread) || legacy.thread;
+          setThreads([row]);
+          setSelectedThreadId(row.id);
+          setWorkspaceError('هذه محادثة قديمة غير مصنفة للعرض فقط. راجع تصنيفها داخل المدير الشخصي أولًا.');
+          return;
         }
-        if (first) {
-          setSelectedThreadId(first.id);
-        } else if (options.length === 1) {
-          setBusinessId(options[0].id);
-          setBusinessSelectionOpen(false);
-        } else if (options.length > 1) {
-          setBusinessId('');
-          setBusinessSelectionOpen(true);
+
+        if (projectScope && requested && !loadedThreads.some(thread => thread.id === requested)) {
+          const direct = await getSanadProjectThread(projectScope, requested, 1);
+          if (!alive) return;
+          loadedThreads.unshift(direct.thread);
         }
+        setThreads(loadedThreads);
+        setBusinessId(projectScope?.kind === 'business' ? projectScope.businessId : '');
+        const first = requested && loadedThreads.find(thread => thread.status === 'active' && thread.id === requested)
+          || (!url.searchParams.has('new') ? loadedThreads.find(thread => thread.status === 'active') : null);
+        if (first) setSelectedThreadId(first.id);
+        else setSelectedThreadId(null);
+        
       } catch (cause) {
-        if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز مساحة المساعد.');
+        if (alive) setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر تجهيز محادثة المشروع.');
       } finally {
-        if (alive) {
-          setBusinessLoading(false);
-          setThreadsLoading(false);
-        }
+        if (alive) { setBusinessLoading(false); setThreadsLoading(false); }
       }
     })();
     return () => { alive = false; };
@@ -462,13 +517,19 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError(null);
       try {
         const [detail, context, attachments] = await Promise.all([
-          getSanadAgentThread(selectedThreadId),
+          projectScope && projectBackendReady ? getSanadProjectThread(projectScope, selectedThreadId) : getSanadAgentThread(selectedThreadId),
           getSanadAgentContext(selectedThreadId),
           listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
-        setBusinessId(detail.thread.business_id || (businesses.length === 1 ? businesses[0].id : ''));
-        setBusinessSelectionOpen(false);
+        if (projectScope?.kind === 'business' && detail.thread.business_id !== projectScope.businessId) {
+          throw new Error('المحادثة لا تتبع هذا النشاط التجاري.');
+        }
+        if (projectScope?.kind === 'personal' && detail.thread.project_kind !== 'personal') {
+          throw new Error('المحادثة ليست مصنفة ضمن المدير الشخصي.');
+        }
+        setBusinessId(projectScope?.kind === 'business' ? projectScope.businessId : detail.thread.business_id || '');
+        
         setMemorySnapshot(selectedThreadId, context.memories);
         setPendingAttachments(unsentAttachments(detail.messages, attachments));
         setMessages(storedMessagesToWorkspace(detail.messages, attachments));
@@ -520,7 +581,7 @@ export default function SanadAgentWorkspace() {
           void (async () => {
             try {
               const [detail, attachments] = await Promise.all([
-                getSanadAgentThread(selectedThreadId),
+                projectScope && projectBackendReady ? getSanadProjectThread(projectScope, selectedThreadId) : getSanadAgentThread(selectedThreadId),
                 listSanadAgentAttachments(selectedThreadId),
               ]);
               if (!alive) return;
@@ -557,53 +618,44 @@ export default function SanadAgentWorkspace() {
       }
       void supabase.removeChannel(channel);
     };
-  }, [selectedThreadId]);
+  }, [selectedThreadId, projectBackendReady]);
 
   const createThreadForBusiness = async (nextBusinessId: string | null) => {
-    const id = await createSanadAgentThread(nextBusinessId);
+    if (!projectScope || (projectScope.kind === 'business' && projectScope.businessId !== nextBusinessId)
+      || (projectScope.kind === 'personal' && nextBusinessId !== null)) {
+      throw new Error('أنشئ المحادثة من داخل مشروعها الأصلي.');
+    }
+    const id = await createSanadProjectThread(projectScope);
     setMessages([]);
     setDraft('');
     setPendingAttachments([]);
-    setBusinessId(nextBusinessId || '');
+    setBusinessId(projectScope.kind === 'business' ? projectScope.businessId : '');
     setSelectedThreadId(id);
-    setBusinessSelectionOpen(false);
+    
     await refreshThreads(id);
     window.setTimeout(() => textareaRef.current?.focus(), 50);
     return id;
   };
 
   const ensureThread = async () => {
+    if (!projectScope || !projectBackendReady) throw new Error('انتظر نشر عقد المشروعات والتحقق من الصلاحيات قبل الإنشاء.');
     if (selectedThreadId) return selectedThreadId;
-    const defaultBusinessId = businessId || (businesses.length === 1 ? businesses[0].id : null);
-    if (!defaultBusinessId && businesses.length > 1) {
-      setBusinessSelectionOpen(true);
-      throw new Error('اختر النشاط لهذه المحادثة أولًا.');
-    }
-    return createThreadForBusiness(defaultBusinessId);
+    return createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
   };
 
   const newThread = async () => {
-    if (sending) return;
-    if (businesses.length > 1) {
-      setMessages([]);
-      setDraft('');
-      setPendingAttachments([]);
-      setSelectedThreadId(null);
-      setBusinessId('');
-      setBusinessSelectionOpen(true);
-      return;
-    }
+    if (sending || !projectScope || !projectBackendReady) return;
     try {
-      await createThreadForBusiness(businesses.length === 1 ? businesses[0].id : null);
+      await createThreadForBusiness(projectScope.kind === 'business' ? projectScope.businessId : null);
     } catch (cause) {
-      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة.');
+      setWorkspaceError(cause instanceof Error ? cause.message : 'تعذر إنشاء محادثة المشروع.');
     }
   };
 
-  // The global sidebar owns the primary New Conversation action on every route.
-  // A route request is consumed once after the account/business context has loaded.
+  // Scoped project deep links may explicitly request a new conversation;
+  // the global sidebar never creates unscoped chats.
   useEffect(() => {
-    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current) return;
+    if (threadsLoading || businessLoading || initialNewConversationHandledRef.current || !projectScope || !projectBackendReady) return;
     const url = new URL(window.location.href);
     if (!url.searchParams.has('new')) return;
     initialNewConversationHandledRef.current = true;
@@ -614,7 +666,7 @@ export default function SanadAgentWorkspace() {
 
   useEffect(() => {
     const handleGlobalNewConversation = () => {
-      if (threadsLoading || businessLoading) return;
+      if (threadsLoading || businessLoading || !projectScope || !projectBackendReady) return;
       void newThread();
     };
     window.addEventListener('sanad:new-conversation', handleGlobalNewConversation);
@@ -733,8 +785,8 @@ export default function SanadAgentWorkspace() {
       setWorkspaceError('انتظر اكتمال تحليل المرفقات أو احذف المرفق المتعثر قبل الإرسال.');
       return;
     }
-    if (!selectedThreadId && businesses.length > 1 && !businessId) {
-      setBusinessSelectionOpen(true);
+    if (!projectScope || !projectBackendReady) {
+      setWorkspaceError('لا يمكن تنفيذ طلب داخل محادثة غير مصنفة أو قبل تفعيل عقد المشروعات المعتمد.');
       return;
     }
 
@@ -770,7 +822,7 @@ export default function SanadAgentWorkspace() {
     try {
       const result = await streamSanadAiAgentTurn({
         message: prompt,
-        business_id: businessId || null,
+        business_id: projectScope.kind === 'business' ? projectScope.businessId : null,
         thread_id: threadId,
         attachment_ids: readyAttachments.map((attachment) => attachment.id),
         history: historyFrom(priorMessages),
@@ -815,7 +867,7 @@ export default function SanadAgentWorkspace() {
       await refreshThreads(threadId);
       try {
         const [persistedThread, persistedAttachments] = await Promise.all([
-          getSanadAgentThread(threadId),
+          projectScope ? getSanadProjectThread(projectScope, threadId) : getSanadAgentThread(threadId),
           listSanadAgentAttachments(threadId),
         ]);
         setPendingAttachments(unsentAttachments(persistedThread.messages, persistedAttachments));
@@ -876,7 +928,7 @@ export default function SanadAgentWorkspace() {
 
   const empty = messages.length === 0;
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
-  const threadReadOnly = selectedThread?.my_role === 'viewer';
+  const threadReadOnly = !projectScope || !projectBackendReady || selectedThread?.my_role === 'viewer';
 
   return (
     <section
@@ -901,22 +953,22 @@ export default function SanadAgentWorkspace() {
             data-scroll-owner="timeline"
             className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-3 pb-4 pt-12 [scrollbar-gutter:stable] md:px-7 md:pb-6 xl:pt-6"
           >
-            {!businessLoading && (businessId || businesses.length > 1) ? (
-              <div data-sanad-inline-business-context="true" className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-1.5 text-[11px] text-[var(--sanad-text-muted)]">
-                <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {businessId ? (
-                  <span className="truncate">{businesses.find((option) => option.id === businessId)?.name || 'سياق النشاط'}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSelectionOpen(true)}
-                    className="sanad-focus-ring rounded-md px-1.5 py-1 font-medium text-[var(--sanad-interactive)] hover:bg-[var(--sanad-interactive-soft)]"
-                  >
-                    اختر نشاط المحادثة
-                  </button>
-                )}
+            {projectScope ? (
+              <div data-sanad-inline-business-context="true"
+                className="mx-auto flex w-full max-w-[72rem] items-center justify-start gap-2 text-[11px] text-[var(--sanad-text-muted)]">
+                <button type="button" className="sanad-focus-ring rounded-lg px-2 py-1.5 hover:bg-[var(--sanad-nav-hover-bg)]"
+                  onClick={() => navigateProduct(projectScope.kind === 'personal'
+                    ? 'financial' : `commercial?business=${encodeURIComponent(projectScope.businessId)}`)}>
+                  ← العودة إلى {projectScope.kind === 'personal' ? 'المدير الشخصي'
+                    : businesses.find(b => b.id === projectScope.businessId)?.name || 'الأعمال'}
+                </button>
+                {projectScope.kind === 'business' ? <BriefcaseBusiness className="h-3.5 w-3.5" aria-hidden="true"/> : null}
               </div>
-            ) : null}
+            ) : (
+              <div role="note" className="mx-auto max-w-[72rem] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                محادثة قديمة غير مصنفة للعرض فقط. راجع تصنيفها داخل مشروعك قبل استخدامها.
+              </div>
+            )}
             {threadLoading ? (
               <div className="flex min-h-[360px] items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل المحادثة…
@@ -929,30 +981,8 @@ export default function SanadAgentWorkspace() {
                   اسأل بطريقتك الطبيعية. عندما تكون النتيجة كشفًا أو مستندًا، سيعرضها سند كبطاقة منظمة قابلة للنسخ والفتح.
                 </p>
 
-                {(businessSelectionOpen || (!selectedThreadId && businesses.length > 1 && !businessId)) ? (
-                  <div className="mt-6 w-full max-w-2xl rounded-[1.4rem] border border-amber-200 bg-amber-50/70 p-4 text-right">
-                    <div className="flex items-center gap-2">
-                      <BriefcaseBusiness className="h-4 w-4 text-amber-700" />
-                      <p className="text-[15px] font-semibold text-amber-900">اختر النشاط لهذه المحادثة</p>
-                    </div>
-                    <p className="mt-1 text-xs leading-5 text-amber-800/70">سيرتبط هذا السياق بالمحادثة الجديدة فقط، ولن نطلبه مرة أخرى داخلها.</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {businesses.map((business) => (
-                        <button
-                          key={business.id}
-                          type="button"
-                          onClick={() => void createThreadForBusiness(business.id)}
-                          className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-right text-[13px] font-medium text-slate-800 shadow-sm transition hover:border-amber-300"
-                        >
-                          {business.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
-                  {QUICK_PROMPTS.map((prompt) => (
+                  {(projectScope?.kind === 'personal' ? PERSONAL_QUICK_PROMPTS : projectScope?.kind === 'business' ? BUSINESS_QUICK_PROMPTS : []).map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -1024,7 +1054,7 @@ export default function SanadAgentWorkspace() {
             >
               <SanadAttachmentComposer
                 threadId={selectedThreadId}
-                businessId={businessId || null}
+                businessId={projectScope?.kind === 'business' ? projectScope.businessId : null}
                 disabled={sending || threadReadOnly}
                 attachments={pendingAttachments}
                 onChange={setPendingAttachments}
