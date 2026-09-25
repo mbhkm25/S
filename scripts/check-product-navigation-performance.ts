@@ -30,6 +30,7 @@ assert.match(shell, /navigateProduct/);
 assert.match(shell, /<Suspense fallback=\{<RouteFallback/);
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(shell, /SanadUnifiedEntryRoute/);
+assert.match(shell, /SanadProjectWorkspaceRoute/);
 assert.doesNotMatch(shell, /<ProductBottomNav/, 'legacy product rail/bottom nav must not be rendered by the target product shell');
 assert.match(unifiedNav, /navigateProduct/);
 assert.match(unifiedNav, /shouldHandleProductLinkClick/);
@@ -41,9 +42,9 @@ assert.match(productNav, /prefetchProductArea/);
 assert.match(productNav, /shouldHandleProductLinkClick/);
 assert.match(productNav, /aria-current=\{selected \? 'page'/);
 
-assert.match(productHeader, /productHref\('sanad-ai'\)/);
+assert.match(productHeader, /productHref\('today'\)/);
 assert.match(productHeader, /handleBrandClick/);
-assert.match(productHeader, /navigateProduct\('sanad-ai'\)/);
+assert.match(productHeader, /navigateProduct\('today'\)/);
 
 assert.doesNotMatch(sectionRoute, /ProductBottomNav/, 'financial section routes must not render a second primary product nav');
 assert.match(sectionRoute, /navigateProduct\(path\)/);
