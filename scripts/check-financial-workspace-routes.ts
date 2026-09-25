@@ -21,14 +21,14 @@ const styles = readFileSync('src/index.css', 'utf8');
 assert.match(home, /window\.location\.replace\(sanadUrl\(\)\)/, 'authenticated root must open unified SANAD conversation');
 assert.match(home, /not a fifth SANAD workspace/, 'authenticated root must remain explicitly non-product');
 assert.doesNotMatch(workspace, /onClick=\{\(\) => go\(\)\}/, 'top-level workspaces must not navigate back to the retired root');
-for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات', 'المال الشخصي', 'الأعمال', 'الاتصالات']) {
+for (const label of ['اليوم', 'المدير الشخصي', 'الأعمال', 'المزيد']) {
   assert.match(unifiedNav, new RegExp(label), `unified navigation must include ${label}`);
 }
 assert.match(shell, /SanadUnifiedSidebar/);
 assert.match(unifiedSidebar, /الحساب والإعدادات/, 'Account/settings belongs to the global sidebar account menu.');
 assert.doesNotMatch(shell, /<ProductAppHeader/, 'The legacy product header is no longer mounted by SANAD unified shell.');
-assert.match(unifiedSidebar, /payment-inbox\.html/, 'Global sidebar must preserve payment inbox utility.');
-assert.match(unifiedSidebar, /NotificationBell/, 'Global sidebar must preserve notifications utility.');
+assert.match(readFileSync('src/features/shell/SanadUnifiedEntryRoute.tsx','utf8'), /payment-inbox\.html/, 'Flat More must preserve the payment inbox.');
+assert.match(unifiedSidebar, /data-sanad-header-notifications="true"/, 'Notifications live beside the brand subtitle in the global sidebar.');
 assert.doesNotMatch(shell, /ProductBottomNav/, 'target workspace shell must not render the legacy four-product navigation');
 
 assert.match(productHeader, /payment-inbox\.html/, 'shared product header must expose Payment Inbox');
