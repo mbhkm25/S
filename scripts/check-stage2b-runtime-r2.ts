@@ -29,8 +29,8 @@ assert.match(sidebar, /lg:sticky lg:top-0/);
 assert.match(sidebar, /lg:static lg:self-stretch/);
 assert.match(sidebar, /fixed inset-y-0 right-0/);
 assert.match(sidebar, /SanadUnifiedNavLinks/);
-assert.match(sidebar, /SanadSidebarConversations/);
-assert.match(sidebar, /SanadAssistantSidebarSections/);
+assert.doesNotMatch(sidebar, /SanadSidebarConversations/, 'Generic global chats removed.');
+assert.doesNotMatch(sidebar, /SanadAssistantSidebarSections/, 'Preferences moved to account-center.');
 assert.match(sidebar, /data-sanad-global-nav-scroll="true"/);
 
 // Visual/IA refinements approved for R2.V2.
@@ -38,31 +38,28 @@ assert.match(sidebar, /data-sanad-brand-lockup="vertical"/);
 assert.match(sidebar, /logo\.png/);
 assert.doesNotMatch(sidebar, /<strong[^>]*>سند<\/strong>/);
 assert.match(sidebar, /مساحة الذكاء والتشغيل/);
-assert.match(sidebar, /data-sanad-primary-action="new-conversation"/);
+assert.doesNotMatch(sidebar, /data-sanad-primary-action="new-conversation"/);
 assert.doesNotMatch(sidebar, />فتح سند</);
 assert.match(sidebar, /sanad:sidebar-collapsed-v1/);
 assert.match(sidebar, /data-sanad-account-menu="true"/);
 assert.match(sidebar, /NotificationBell/);
 assert.match(sidebar, /getUserAvatarUrl/);
 assert.match(sidebar, /الحساب والإعدادات/);
-assert.match(sidebar, /payment-inbox\.html/);
+assert.match(entry, /payment-inbox/, 'Payment inbox retained in flat More.');
 
-for (const label of ['اليوم', 'المكتبة', 'المهام', 'الموافقات',
-  'الأتمتة', 'المال الشخصي', 'الأعمال', 'الاتصالات']) {
+for (const label of ['اليوم','المدير الشخصي','الأعمال','المزيد']) {
   assert.ok(nav.includes(label), 'Unified nav missing ' + label);
 }
-for (const path of ["'today'", "'library'", "'work/tasks'", "'work/approvals'",
-  "'work/automations'", "'financial'", "'commercial'", "'connections'"]) {
-  assert.ok(nav.includes(path), 'Unified nav route missing ' + path);
+for (const path of ["'today'","'financial'","'commercial'","'more'"]) {
+  assert.ok(nav.includes(path), 'Unified nav route missing '+path);
 }
-assert.match(nav, /data-sanad-sidebar-group/);
-assert.match(nav, /font-semibold/);
+assert.doesNotMatch(nav, /data-sanad-sidebar-group/, 'No nested global nav sections.');
 assert.match(foundation, /--sanad-sidebar-section-bg/);
 assert.match(foundation, /\.sanad-sidebar-section-heading/);
 assert.match(nav, /--sanad-nav-active-bg/);
 assert.doesNotMatch(nav, /border-r-2/);
 assert.match(nav, /shouldHandleProductLinkClick/);
-assert.match(nav, /\/business\\\/manage/);
+assert.match(nav, /readSanadProject/);
 
 // Shared conversation list now belongs to the global sidebar and uses R1
 // participant-aware RPCs/roles, never an unrestricted cross-account query.
