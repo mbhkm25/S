@@ -66,7 +66,7 @@ namespace Sanad.Bridge
                     // steal/claim an owner command without the mutex-protected cycle.
                     var pollCommands = args != null && Array.Exists(args, item =>
                         string.Equals(item, "--agent-cycle", StringComparison.OrdinalIgnoreCase));
-                    var heartbeatBody = "{\\\"remote_refresh_v1\\\":true,\\\"poll_remote_refresh_v1\\\":"
+                    var heartbeatBody = "{\"remote_refresh_v1\":true,\"poll_remote_refresh_v1\":"
                         + (pollCommands ? "true" : "false") + "}";
                     request.Content = new StringContent(heartbeatBody, Encoding.UTF8, "application/json");
 
