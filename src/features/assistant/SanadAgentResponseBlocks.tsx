@@ -495,6 +495,39 @@ export default function SanadAgentResponseBlocks({
               كشف من النسخة السحابية: راجع تاريخ اكتمال النسخة والفترة قبل الاعتماد المالي؛ لا يعني ذلك وجود اختلاف حالي.
             </p>
             {openCard(card, index)}
+            {onModifyAction && context && resolveTarget({
+              accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date,
+            }) ? (
+              <details data-sanad-contextual-followups="customer-statement"
+                className="mt-2 rounded-xl border border-cyan-100 bg-cyan-50/40 px-3 py-2 text-[12px] text-slate-800">
+                <summary className="sanad-focus-ring min-h-9 cursor-pointer py-2 font-medium">
+                  استكشف ما وراء كشف الحساب
+                </summary>
+                <p className="mb-2 text-[11px] leading-5 text-slate-600">
+                  أسئلة متابعة اختيارية: لا تُعرض نتائج عن بقية النشاط إلا بعد قراءة مستقلة من مصادر مصرح بها.
+                </p>
+                <div className="flex flex-wrap gap-2 pb-2">
+                  <button type="button"
+                    onClick={() => onModifyAction(
+                      `راجع حركة الحساب رقم ${card.account_id} في النشاط التجاري الحالي` +
+                      `${card.from_date ? ` من ${card.from_date}` : ''}${card.to_date ? ` إلى ${card.to_date}` : ''}.` +
+                      ' ما الملاحظات المهمة التي يثبتها هذا الكشف وحده؟ اذكر مصدرها وحداثة النسخة ولا تفترض معلومات أخرى.'
+                    )}
+                    className="sanad-focus-ring min-h-11 rounded-xl border border-cyan-200 bg-white px-3 text-[12px] font-medium text-slate-900 hover:bg-cyan-50">
+                    تحليل حركة هذا الحساب
+                  </button>
+                  <button type="button"
+                    onClick={() => onModifyAction(
+                      `حلل الحساب رقم ${card.account_id} ضمن النشاط التجاري الحالي.` +
+                      ' افحص حالة النسخة والسياق المالي الإجمالي فقط عبر أدوات مصرح بها،' +
+                      ' وقارن بحذر دون كشف معلومات حسابات عملاء آخرين، واعرض ملاحظات موثقة أو قل إن البيانات غير كافية.'
+                    )}
+                    className="sanad-focus-ring min-h-11 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[12px] font-medium text-slate-900 hover:bg-emerald-100">
+                    ربط الحساب بحالة النشاط
+                  </button>
+                </div>
+              </details>
+            ) : null}
             {related.length > 1 ? (
               <details className="mt-2 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700">
                 <summary className="cursor-pointer py-2 font-medium">
