@@ -160,10 +160,10 @@ function MessageBubble({
             </div>
           ) : null}
 
-          {assistant && result?.response?.cards?.some((card) => card.type === 'customer_statement') ? (
+          {assistant && result?.response?.cards?.some((card) => card.type === 'customer_statement' || card.type === 'document_list') ? (
             <details data-sanad-statement-narrative="collapsed" className="rounded-xl border border-slate-100 px-3 py-2">
               <summary className="min-h-9 cursor-pointer py-2 text-[13px] font-medium text-slate-700">
-                قراءة سند النصية التفصيلية — غير مدققة ماليًا
+                عرض التحليل النصي التفصيلي — بيانات النسخة السحابية
               </summary>
               <div className="mt-2 border-t border-slate-100 pt-3">
                 <SanadConversationMarkdown content={message.content} />
