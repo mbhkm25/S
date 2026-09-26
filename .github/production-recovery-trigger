@@ -1,8 +1,8 @@
-reason=deploy-stage2c-p1-project-scoped-starter-prompts
-source_prs=391,392,395
-owner_approved_scoped_prompt_fix_sha=eabc1fee95ac1c02e778bb0c82c98ca1eba8256a
-production_migration=20260925211500_stage2c_project_scoped_conversations_v1
-release_gate=owner-approved-final-package1-defect-fix
-scope=production-web-pwa-only
-edge_function_release=not-required-no-edge-source-change
-android_signed_publish=not-in-this-web-release
+reason=stage2c5-scoped-smart-composer-release
+source_pr=404
+owner_visual_acceptance=2026-09-26-plus-attachment-mic-alignment-confirmed
+merged_main_sha=00fe3fe1a2368dcd292bfed283f989623dc45ed4
+edge_function=sanad-ai-agent-v1-v8-active-jwt-enabled
+scope=guarded-web-pwa-release-no-new-db-or-bridge-workstation-deploy
+android_signed_publish=not-in-this-release
+live_owner_smoke=required-before-formal-2cv-closure
