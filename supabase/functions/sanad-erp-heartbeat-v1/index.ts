@@ -93,9 +93,11 @@ serve(async (req) => {
     // A legacy Bridge sends {}. Only a token-authenticated upgraded device
     // can advertise support for the fixed on-demand operation.
     let remoteRefreshCapable = false;
+    let pollingFromAgentCycle = false;
     try {
       const body = await req.json();
       remoteRefreshCapable = body?.remote_refresh_v1 === true;
+      pollingFromAgentCycle = body?.poll_remote_refresh_v1 === true;
     } catch { /* legacy heartbeat body: no capability */ }
     const now = new Date().toISOString();
 
@@ -133,7 +135,7 @@ serve(async (req) => {
 
     // Only this device-token-authenticated service endpoint claims commands.
     let refreshRequestId: string | null = null;
-    if (remoteRefreshCapable) {
+    if (remoteRefreshCapable && pollingFromAgentCycle) {
       const { data: command, error: commandError } = await supabase.rpc(
         "bridge_claim_sanad_erp_refresh_v1", { p_device_id: device.id },
       );

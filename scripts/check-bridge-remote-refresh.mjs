@@ -1,13 +1,24 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const src = (path) => readFileSync(path, 'utf8');
-const migrations = [
-  '20260926160235_sanad_erp_on_demand_refresh_v1.sql',
-  '20260926160246_sanad_erp_owner_refresh_request_v1.sql',
-  '20260926160251_sanad_erp_refresh_read_status_v1.sql',
-  '20260926160257_sanad_erp_device_claim_refresh_v1.sql',
-].map((name) => src('supabase/migrations/' + name)).join('\n');
+// Old PR branch may still contain the originally staged aliases, but the
+// live production ledger and merged main use the four verified applied versions.
+const migrationNames = [
+  ['20260926160235', '20260926190000', 'sanad_erp_on_demand_refresh_v1.sql'],
+  ['20260926160246', '20260926190100', 'sanad_erp_owner_refresh_request_v1.sql'],
+  ['20260926160251', '20260926190200', 'sanad_erp_refresh_read_status_v1.sql'],
+  ['20260926160257', '20260926190300', 'sanad_erp_device_claim_refresh_v1.sql'],
+];
+const migrations = migrationNames.map(([applied, legacy, suffix]) => {
+  const appliedPath = `supabase/migrations/${applied}_${suffix}`;
+  const legacyPath = `supabase/migrations/${legacy}_${suffix}`;
+  assert.ok(existsSync(appliedPath) || existsSync(legacyPath),
+    'Required reviewed Bridge migration is missing: ' + suffix);
+  assert.ok(!(existsSync(appliedPath) && existsSync(legacyPath)),
+    'Never stage duplicate migration aliases for the same reviewed SQL');
+  return src(existsSync(appliedPath) ? appliedPath : legacyPath);
+}).join('\n');
 const heartbeat = src('supabase/functions/sanad-erp-heartbeat-v1/index.ts');
 const device = src('bridge/windows/Sanad.Bridge/BridgeHeartbeatCommand.cs');
 const cycle = src('bridge/windows/Sanad.Bridge/BridgeAgentCycleCommand.cs');
@@ -29,6 +40,14 @@ assert.match(migrations, /grant execute on function public\.bridge_claim_sanad_e
 assert.match(migrations, /revoke all on function public\.bridge_claim_sanad_erp_refresh_v1\(uuid\)\s+from public,anon,authenticated/i);
 assert.match(heartbeat, /invalid_device_credential/);
 assert.match(heartbeat, /remoteRefreshCapable = body\?\.remote_refresh_v1 === true/);
+assert.match(heartbeat, /pollingFromAgentCycle = body\?\.poll_remote_refresh_v1 === true/);
+assert.match(heartbeat, /if \(remoteRefreshCapable && pollingFromAgentCycle\)/,
+  'Standalone heartbeat diagnostics must not claim refresh commands');
+assert.match(device, /string\.Equals\(item, "--agent-cycle"/,
+  'Only the mutex-owned agent-cycle may request pending commands');
+assert.match(device, /poll_remote_refresh_v1/,
+  'On-prem heartbeat must declare whether it is actually polling');
+
 assert.match(heartbeat, /bridge_claim_sanad_erp_refresh_v1/);
 assert.match(heartbeat, /refresh_request_id: refreshRequestId/);
 assert.doesNotMatch(heartbeat, /\bexec\(|Deno\.Command\(/, 'Cloud never executes Edaa/Windows code');
