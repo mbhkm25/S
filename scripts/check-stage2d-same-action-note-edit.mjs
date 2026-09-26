@@ -9,6 +9,7 @@ const origin = readFileSync(
 );
 const actionApi = readFileSync('src/features/assistant/assistantActionApi.ts','utf8');
 const card = readFileSync('src/features/assistant/SanadAgentActionCard.tsx','utf8');
+const responses = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx','utf8');
 const canonical = readFileSync(
   'supabase/migrations/20260920121815_sanad_agent_actions_v1.sql','utf8'
 );
@@ -42,6 +43,8 @@ assert.match(card,/data-sanad-canonical-note-editor/);
 assert.match(card,/updateSanadAgentActionNote\(card\.action_id, version, noteDraft\)/);
 assert.match(card,/status === 'review' && verified && action/);
 assert.match(card,/ملاحظات المسودة/);
+assert.match(responses,/lazy\(\(\) => import\('\.\/SanadAgentActionCard'\)\)/,
+  'Action review must remain code-split to preserve base assistant chunk budget.');
 assert.match(card,/وصف المسودة/);
 assert.doesNotMatch(migration,/\bcreate_personal_finance_transaction_v1\s*\(|\bcreate_business_commercial_draft_v1\s*\(|\bpost_business_commercial_document_v1\s*\(/);
 assert.doesNotMatch(migration,/set\s+(?:thread_id|business_id|user_id|action_type)\s*=/);
