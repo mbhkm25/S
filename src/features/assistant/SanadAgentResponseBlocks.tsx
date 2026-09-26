@@ -414,6 +414,7 @@ export default function SanadAgentResponseBlocks({
 }) {
   const [inspectedTarget, setInspectedTarget] = useState<SanadCustomerStatementTarget | null>(null);
   const [inspectedDocument, setInspectedDocument] = useState<SanadErpDocumentTarget | null>(null);
+  const [inspectedDocumentThreadId, setInspectedDocumentThreadId] = useState<string | null>(null);
   const context = verifiedBusinessId && verifiedThreadId ? {
     projectKind: 'business' as const, businessId: verifiedBusinessId, threadId: verifiedThreadId,
   } : null;
@@ -425,7 +426,7 @@ export default function SanadAgentResponseBlocks({
   const resolveDocument = (source: SanadErpDocumentReference) => resolveSanadErpDocumentTarget(context, source);
   const inspectDocument = (source: SanadErpDocumentReference) => {
     const target = resolveDocument(source);
-    if (target) { setInspectedTarget(null); setInspectedDocument(target); }
+    if (target && verifiedThreadId) { setInspectedTarget(null); setInspectedDocument(target); setInspectedDocumentThreadId(verifiedThreadId); }
   };
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
@@ -455,7 +456,7 @@ export default function SanadAgentResponseBlocks({
     <div className="mt-3 space-y-2.5">
       {cards.map((card, index) => {
         if (card.type !== 'customer_statement' || !card.account_id) {
-          if (card.type === 'document_list' && inspectedDocument) {
+          if (card.type === 'document_list' && inspectedDocument && inspectedDocument.businessId === verifiedBusinessId && inspectedDocumentThreadId === verifiedThreadId) {
             return (
               <section key={`documents-workspace-${index}`} data-sanad-document-view="detail"
                 className="min-w-0" aria-label="مساحة عرض المستند">
@@ -534,6 +535,7 @@ export default function SanadAgentResponseBlocks({
         </Suspense>
       ) : null}
       {inspectedDocument && inspectedDocument.businessId === verifiedBusinessId &&
+        inspectedDocumentThreadId === verifiedThreadId &&
         !cards.some((card) => card.type === 'document_list') ? (
         <section data-sanad-document-view="detail" className="min-w-0">
           <button type="button" onClick={() => setInspectedDocument(null)}
