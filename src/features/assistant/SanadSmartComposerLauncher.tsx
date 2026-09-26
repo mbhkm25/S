@@ -9,10 +9,12 @@ import {
 
 export default function SanadSmartComposerLauncher({
   scope,
+  threadId,
   disabled,
   onPreparePrompt,
 }: {
   scope: VerifiedAssistantProjectScope | null;
+  threadId: string;
   disabled: boolean;
   onPreparePrompt: (prompt: string) => void;
 }) {
@@ -26,6 +28,17 @@ export default function SanadSmartComposerLauncher({
   const actions = composerActionsForScope(scope);
   const filtered = actions.filter((action) =>
     `${action.title} ${action.description}`.toLocaleLowerCase('ar').includes(query.trim().toLocaleLowerCase('ar')));
+
+  // Changing projects must discard stale in-memory suggestions, not turn them
+  // into a request for another business. The textarea itself is separately
+  // owned by the existing conversation composer.
+  useEffect(() => {
+    setOpen(false);
+    setSelected(null);
+    setValues({});
+    setError(null);
+    setQuery('');
+  }, [threadId, scope]);
 
   useEffect(() => {
     if (open && !selected) searchRef.current?.focus();
