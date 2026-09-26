@@ -35,7 +35,11 @@ Statement card remains embedded in conversation and old legacy route remains rea
 
 The inspector handles no snapshot, permission/read failure, ambiguous customer/account identity warning and no values. No model-provided HTML or href can replace the trusted statement RPC in this path. Display-only Context Pack does not persist or grant access. No source posting, new draft or approval from the inspector.
 
-## 4. Permission/quality regression and release gates
+## 4. Typed result compatibility adapter
+
+The 2C.4 first slice includes `sanadInteractiveResultKinds.ts` as a **presentation-only** mapping across all seven approved families, without changing the deployed model/Edge response schema. `metric/replica_status → Snapshot`; `customer_statement/document_list/payment_inbox_list → Report`; existing entity references → Record; `action_review` in review/approved/executing → Approval, completed commercial document **draft** → Draft, completed personal transaction → Execution Result, failed/cancelled action and explicit warning → Warning. The authoritative `SanadAgentActionCard` status interpretation remains unchanged, so these classifications are not proof of posting or a new general Action Registry. Each rendered block receives a `data-sanad-result-kind` attribute for QA and later visual consolidation; the legacy card contract remains compatible.
+
+## 5. Permission/quality regression and release gates
 
 Automated `scripts/check-stage2c-context-entity.ts`: valid authorized target, missing/changed business scope, mismatched entity business, invalid/noninteger IDs, invalid/reversed date ranges; exact received decimal formatting/null and static canonical RPC path assertions. It is wired into existing `check:routes`. CI pass is **not** live role test.
 
@@ -49,7 +53,7 @@ Before owner preview or release, validate with authorized disposable sessions on
 
 Separate owner preview in worktree at `C:\\SANAD-DEV` and sibling preview; **explicit owner acceptance before merge**; production publish requires independent gated Web run and authenticated owner postflight. No Android claim follows Web release. No Production migration/Edge change authorized for this slice.
 
-## 5. Open constraints to take into next 2C.4 PR(s)
+## 6. Open constraints to take into next 2C.4 PR(s)
 
 - Extend Entity Inspector to ERP documents, native operations and own-authorized Work Item after each real source/RPC permission mapping; do not make generic frontend reads.
 - Seven unified typed visual families can adapt existing cards incrementally; a full shared Action Registry and canonical two-way draft lifecycle are 2D.
