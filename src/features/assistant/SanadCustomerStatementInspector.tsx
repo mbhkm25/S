@@ -5,6 +5,7 @@ import {
   type BusinessErpCustomerStatement,
 } from '../../lib/businessAccountingApi';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
+import { formatSanadErpLedgerDate } from '../../utils/sanadErpLedgerDate';
 import type { SanadCustomerStatementTarget } from './sanadEntityContext';
 
 /**
@@ -19,9 +20,14 @@ function amount(value: number | string | null | undefined, code?: string | null)
   return formatSanadSourceAmount(value, code).text;
 }
 
-function date(value?: string | null): string {
+function readDate(value?: string | null): string {
   const result = formatSanadSourceDate(value);
   return result.valid || result.text === '—' ? result.text : `المصدر: ${result.text}`;
+}
+
+function ledgerDate(value?: string | null): string {
+  const result = formatSanadErpLedgerDate(value);
+  return result.valid || result.text === '—' ? result.text : `تاريخ المصدر: ${result.text}`;
 }
 
 function currencyCode(row: {
@@ -99,12 +105,16 @@ export default function SanadCustomerStatementInspector({
       ) : null}
       {statement ? (
         <>
+          <p role="note" data-sanad-parity-warning="unverified" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
+            هذه بيانات آخر نسخة سحابية متاحة لسند، ولم نتحقق بعد من مطابقتها لكشف إبداع الحالي.
+            يوجد اختلاف موثق في أحد الحسابات، فلا تعتمد هذا الرصيد للتحصيل أو التسوية قبل المقارنة بالمصدر.
+          </p>
           <div className="mt-3 border-t border-slate-100 pt-3">
             <p className="text-sm font-medium text-slate-900">{statement.identity?.customer_name || statement.account?.account_name || 'حساب عميل'}</p>
             <p className="mt-1 text-xs text-slate-500">رقم الحساب: <bdi dir="ltr">{statement.account?.account_number || statement.account?.account_id || '—'}</bdi></p>
             <p className="mt-1 break-all text-[11px] text-slate-500">معرّف النسخة: <bdi dir="ltr">{statement.snapshot_public_id || 'غير متاح'}</bdi></p>
             <p className="mt-1 text-[11px] text-slate-500">
-              وقت القراءة: {date(readAt)} · لا يثبت هذا الوقت حداثة مزامنة النظام المحاسبي.
+              وقت القراءة: {readDate(readAt)} · لا يثبت هذا الوقت حداثة مزامنة النظام المحاسبي.
             </p>
             {statement.identity?.identity_status === 'warning_multiple_names_on_account' ? (
               <p role="note" className="mt-2 text-xs text-amber-800">قد يرتبط هذا الحساب بأكثر من اسم عميل في المصدر؛ لا نفترض تطابق الهويات.</p>
@@ -140,7 +150,7 @@ export default function SanadCustomerStatementInspector({
                     const code = currencyCode(item);
                     return (
                       <tr key={`${item.detail_id}-${item.entry_id}-${index}`}>
-                        <td className="whitespace-nowrap p-2">{date(item.date)}</td>
+                        <td className="whitespace-nowrap p-2">{ledgerDate(item.date)}</td>
                         <td className="max-w-[16rem] p-2">{item.description || item.doc_number || '—'}</td>
                         <td className="p-2"><bdi dir="auto">{code || '—'}</bdi></td>
                         <td className="p-2" dir="ltr">{amount(item.debit, code)}</td>
