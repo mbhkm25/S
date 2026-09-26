@@ -472,7 +472,7 @@ export default function SanadAgentResponseBlocks({
                   العودة إلى قائمة المستندات
                 </button>
                 <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض المستند…</p>}>
-                  <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} />
+                  <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} showClose={false} />
                 </Suspense>
               </section>
             );
