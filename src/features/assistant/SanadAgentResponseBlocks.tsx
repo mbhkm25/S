@@ -147,7 +147,7 @@ function StatementCard({ card, onInspect, legacyBusinessId }: { card: Extract<Sa
           >
             فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
           </a>
-        )}
+        ) : null}
       </div>
     </section>
   );
