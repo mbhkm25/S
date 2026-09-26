@@ -1,4 +1,7 @@
-param([string]$BridgeExe = "C:\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\net48\Sanad.Bridge.exe")
+param(
+  [string]$BridgeExe = "C:\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\net48\Sanad.Bridge.exe",
+  [switch]$ForceLogicalSnapshot
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -30,7 +33,7 @@ function Add-Utf8LogLine([string]$Text) {
   [System.IO.File]::AppendAllText($Log, $Text + [Environment]::NewLine, $Utf8NoBom)
 }
 
-Add-Utf8LogLine ("[" + (Get-Date).ToString("o") + "] START agent-cycle")
+Add-Utf8LogLine ("[" + (Get-Date).ToString("o") + "] START agent-cycle" + $(if ($ForceLogicalSnapshot) { " mode=manual-forced-logical-snapshot" } else { " mode=scheduled-due-check" }))
 
 if (-not (Test-Path $BridgeExe)) {
   Add-Utf8LogLine ("[" + (Get-Date).ToString("o") + "] ERROR bridge executable not found: " + $BridgeExe)
@@ -39,7 +42,7 @@ if (-not (Test-Path $BridgeExe)) {
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $BridgeExe
-$psi.Arguments = "--agent-cycle"
+$psi.Arguments = if ($ForceLogicalSnapshot) { "--agent-cycle --force-logical-snapshot" } else { "--agent-cycle" }
 $psi.UseShellExecute = $false
 $psi.CreateNoWindow = $true
 $psi.RedirectStandardOutput = $true
