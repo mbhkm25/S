@@ -50,7 +50,7 @@ assert.match(launcher, /event\.key === 'Escape'/);
 assert.match(launcher, /onPreparePrompt\(prompt\)/);
 assert.doesNotMatch(launcher, /supabase\.|\.rpc\(|create_my_sanad_agent_action_draft_v1/,
   'The launcher cannot become an independent server/action execution path.');
-assert.match(workspace, /key=\{selectedThreadId\}/);
+assert.match(workspace, /threadId=\\{selectedThreadId\\}/);
 assert.match(workspace, /scope=\{verifiedThreadScope\}/);
 assert.match(workspace, /disabled=\{sending \|\| threadReadOnly \|\| threadLoading\}/);
 assert.match(workspace, /setDraft\(prompt\)/, 'The user must review suggested text before sending.');
