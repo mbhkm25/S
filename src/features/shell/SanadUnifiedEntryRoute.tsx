@@ -271,6 +271,12 @@ export default function SanadUnifiedEntryRoute() {
                 <div>
                   <h2 className="text-[14px] font-semibold text-[var(--sanad-text-strong)]">{connection.display_name}</h2>
                   <p className="mt-1 text-[11px] text-[var(--sanad-text-muted)]">{connection.provider_code} · {connection.connection_kind}</p>
+                  {connection.provider_code === 'edaa_v5' &&
+                    'business_id' in connection && typeof connection.business_id === 'string' ? (
+                    <Suspense fallback={<p className="mt-2 text-xs text-slate-500">جارٍ تحميل حالة Bridge…</p>}>
+                      <SanadBridgeRefreshControl businessId={connection.business_id} />
+                    </Suspense>
+                  ) : null}
                 </div>
                 <div className="text-left">
                   <p className="text-[11px] font-medium text-[var(--sanad-text-strong)]">{connection.health_status}</p>
