@@ -1,6 +1,6 @@
 # Stage 2D.2-A — Canonical same-draft revision: optional text only
 
-**Status:** isolated release candidate for technical gates and owner preview. This is the FIRST controlled same-ID edit slice, not the whole 2D.2 amount/account/party editor.
+**Status:** backend note-edit migration applied to production under verified ledger version `20260926222117`; read-only verification confirmed the exact RPC and its owner-locked/version-aware/work-projection source, anonymous EXECUTE denied and authenticated EXECUTE allowed. **Web UI remains PR #410 DRAFT**, not merged or deployed; owner preview and true role/concurrency runtime fixtures remain open. This is the FIRST controlled same-ID edit slice, not the whole 2D.2 amount/account/party editor.
 
 ## Actual baseline
 
