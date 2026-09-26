@@ -113,6 +113,18 @@ export function composerActionsForScope(
  * Server resolves identity, dates and permission before any financial read.
  * Draft-only actions never create an in-browser shadow draft.
  */
+function validIsoCivilDate(value: string): boolean {
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 100 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const instant = new Date(Date.UTC(year, month - 1, day));
+  return instant.getUTCFullYear() === year &&
+    instant.getUTCMonth() + 1 === month && instant.getUTCDate() === day;
+}
+
 export function buildGuidedComposerPrompt(
   action: SanadComposerActionDescriptor,
   values: Readonly<Record<string, string>>,
@@ -122,7 +134,7 @@ export function buildGuidedComposerPrompt(
   if (fields.some((field) => field.maxLength && (values[field.id]?.length || 0) > field.maxLength!)) return null;
   for (const field of fields) {
     const raw = values[field.id]?.trim();
-    if (field.type === 'date' && raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    if (field.type === 'date' && raw && !validIsoCivilDate(raw)) return null;
   }
   if (values.from && values.to && values.from > values.to) return null;
   const dates = [
