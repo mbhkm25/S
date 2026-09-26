@@ -114,7 +114,7 @@ export function composerActionsForScope(
  * Draft-only actions never create an in-browser shadow draft.
  */
 function validIsoCivilDate(value: string): boolean {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
   const year = Number(match[1]);
   const month = Number(match[2]);
