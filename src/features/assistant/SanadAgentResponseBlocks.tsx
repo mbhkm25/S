@@ -14,10 +14,14 @@ import {
 import SanadAgentActionCard from './SanadAgentActionCard';
 import {
   resolveSanadCustomerStatementTarget,
+  resolveSanadErpDocumentTarget,
+  type SanadErpDocumentReference,
+  type SanadErpDocumentTarget,
   type SanadCustomerStatementReference,
   type SanadCustomerStatementTarget,
 } from './sanadEntityContext';
 const SanadCustomerStatementInspector = lazy(() => import('./SanadCustomerStatementInspector'));
+const SanadErpDocumentInspector = lazy(() => import('./SanadErpDocumentInspector'));
 import { classifySanadAnswerCard, classifySanadEntity } from './sanadInteractiveResultKinds';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import type {
@@ -74,7 +78,7 @@ function EntityLink({ entity, onInspect }: { entity: SanadAssistantEntity; onIns
     );
   }
   // An ERP customer link without a verified same-project resolver is display-only.
-  if (!entity.href || entity.type === 'erp_customer') {
+  if (!entity.href || entity.type === 'erp_customer' || entity.type === 'erp_document') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[13px] font-medium text-slate-700">
         <Icon className="h-3.5 w-3.5" /> {entity.label}
@@ -166,7 +170,7 @@ function StatementCard({ card, onInspect, legacyBusinessId }: { card: Extract<Sa
   );
 }
 
-function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'document_list' }> }) {
+function DocumentsCard({ card, onInspectDocument }: { card: Extract<SanadAssistantAnswerCard, { type: 'document_list' }>; onInspectDocument?: (source: SanadErpDocumentReference) => void }) {
   return (
     <section className="overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
@@ -181,28 +185,47 @@ function DocumentsCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
         </div>
       </div>
       <div className="divide-y divide-slate-100">
-        {(card.items || []).slice(0, 8).map((item, index) => (
-          <a
-            key={`${item.document_id || index}-${item.label}`}
-            href={item.href || '#'}
-            className="flex items-center justify-between gap-3 p-3 transition hover:bg-slate-50"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-medium text-slate-800">{item.label}</p>
-              <p className="mt-0.5 truncate text-xs text-slate-400">
-                {[item.party_name, item.date ? sourceDate(item.date) : null, item.currency].filter(Boolean).map((part, partIndex) => (
-                  <span key={partIndex}><bdi dir="auto">{part}</bdi>{partIndex < [item.party_name, item.date, item.currency].filter(Boolean).length - 1 ? ' · ' : ''}</span>
-                ))}
-              </p>
+        {(card.items || []).slice(0, 8).map((item, index) => {
+          const documentKind = item.document_kind || card.kind;
+          const isResolved = item.type === 'erp_document' &&
+            item.document_id && Number.isSafeInteger(item.document_id) && item.document_id > 0 &&
+            (documentKind === 'sale' || documentKind === 'purchase');
+          const inspect = isResolved && onInspectDocument ? () => onInspectDocument({
+            businessId: item.business_id,
+            documentId: item.document_id,
+            documentKind,
+          }) : undefined;
+          const rowContent = (
+            <>
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-medium text-slate-800">{item.label}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {[item.party_name, item.date ? sourceDate(item.date) : null, item.currency].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div className="shrink-0 text-left">
+                {typeof item.source_line_total === 'number' ? (
+                  <p className="text-[13px] font-medium text-slate-700" dir="ltr">
+                    {number(item.source_line_total, item.currency)} {item.currency ? <bdi>{item.currency}</bdi> : null}
+                  </p>
+                ) : null}
+                {inspect ? <ArrowUpLeft aria-hidden="true" className="mt-1 mr-auto h-3.5 w-3.5 text-slate-500" /> : null}
+              </div>
+            </>
+          );
+          return inspect ? (
+            <button key={`${item.document_id || index}-${item.label}`} type="button" onClick={inspect}
+              data-sanad-document-action="authorized-inspect"
+              className="sanad-focus-ring flex min-h-12 w-full items-center justify-between gap-3 p-3 text-right transition hover:bg-cyan-50">
+              {rowContent}
+            </button>
+          ) : (
+            <div key={`${item.document_id || index}-${item.label}`}
+              data-sanad-document-action="unresolved" className="flex items-center justify-between gap-3 p-3">
+              {rowContent}
             </div>
-            <div className="shrink-0 text-left">
-              {typeof item.source_line_total === 'number' && (
-                <p className="text-[13px] font-medium text-slate-700" dir="ltr">{number(item.source_line_total, item.currency)} {item.currency ? <bdi>{item.currency}</bdi> : null}</p>
-              )}
-              <ArrowUpLeft className="mt-1 mr-auto h-3.5 w-3.5 text-slate-400" />
-            </div>
-          </a>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -327,9 +350,10 @@ function renderCard(
   onActionStatusChange?: (status: string) => void,
   onInspectCustomer?: (source: SanadCustomerStatementReference) => void,
   verifiedBusinessId?: string | null,
+  onInspectDocument?: (source: SanadErpDocumentReference) => void,
 ) {
   if (card.type === 'customer_statement') return <div key={`statement-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><StatementCard card={card} legacyBusinessId={verifiedBusinessId} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
-  if (card.type === 'document_list') return <div key={`documents-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><DocumentsCard card={card} /></div>;
+  if (card.type === 'document_list') return <div key={`documents-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><DocumentsCard card={card} onInspectDocument={onInspectDocument} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><ReplicaCard card={card} /></div>;
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><PaymentInboxCard card={card} /></div>;
   if (card.type === 'action_review') return (
@@ -368,13 +392,19 @@ export default function SanadAgentResponseBlocks({
   verifiedThreadId?: string | null;
 }) {
   const [inspectedTarget, setInspectedTarget] = useState<SanadCustomerStatementTarget | null>(null);
+  const [inspectedDocument, setInspectedDocument] = useState<SanadErpDocumentTarget | null>(null);
   const context = verifiedBusinessId && verifiedThreadId ? {
     projectKind: 'business' as const, businessId: verifiedBusinessId, threadId: verifiedThreadId,
   } : null;
   const resolveTarget = (source: SanadCustomerStatementReference) => resolveSanadCustomerStatementTarget(context, source);
   const inspectCustomer = (source: SanadCustomerStatementReference) => {
     const target = resolveTarget(source);
-    if (target) setInspectedTarget(target);
+    if (target) { setInspectedDocument(null); setInspectedTarget(target); }
+  };
+  const resolveDocument = (source: SanadErpDocumentReference) => resolveSanadErpDocumentTarget(context, source);
+  const inspectDocument = (source: SanadErpDocumentReference) => {
+    const target = resolveDocument(source);
+    if (target) { setInspectedTarget(null); setInspectedDocument(target); }
   };
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
@@ -404,7 +434,10 @@ export default function SanadAgentResponseBlocks({
     <div className="mt-3 space-y-2.5">
       {cards.map((card, index) => {
         if (card.type !== 'customer_statement' || !card.account_id) {
-          return renderCard(card, index, onModifyAction, onActionStatusChange, undefined, verifiedBusinessId);
+          return renderCard(card, index, onModifyAction, onActionStatusChange, undefined, verifiedBusinessId,
+            card.type === 'document_list' && context ? (source) => {
+              if (resolveDocument(source)) inspectDocument(source);
+            } : undefined);
         }
         if (primaryIndex.get(card.account_id) !== index) return null;
         const related = statementGroups.get(card.account_id) || [];
@@ -455,13 +488,18 @@ export default function SanadAgentResponseBlocks({
             !entity.account_id ||
             !statementGroups.has(entity.account_id),
           ).map((entity, index) => (
-            <span key={`${entity.type}-${entity.label}-${index}`} data-sanad-result-kind={classifySanadEntity(entity)}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : undefined} /></span>
+            <span key={`${entity.type}-${entity.label}-${index}`} data-sanad-result-kind={classifySanadEntity(entity)}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : entity.type === 'erp_document' && resolveDocument({ documentId: entity.document_id, documentKind: entity.document_kind, businessId: entity.business_id }) ? () => inspectDocument({ documentId: entity.document_id, documentKind: entity.document_kind, businessId: entity.business_id }) : undefined} /></span>
           ))}
         </div>
       )}
       {inspectedTarget && inspectedTarget.businessId === verifiedBusinessId ? (
         <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض كشف الحساب…</p>}>
           <SanadCustomerStatementInspector target={inspectedTarget} onClose={() => setInspectedTarget(null)} />
+        </Suspense>
+      ) : null}
+      {inspectedDocument && inspectedDocument.businessId === verifiedBusinessId ? (
+        <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض المستند…</p>}>
+          <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} />
         </Suspense>
       ) : null}
       {response.copy_text && !cards.some((card) => card.type === 'customer_statement') && (
