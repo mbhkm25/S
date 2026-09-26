@@ -48,3 +48,17 @@ A visible **"تحديث النسخة الآن"** action in SANAD's business conn
 5. Separate developer unit/negative-role tests, actual Windows runtime tests, owner preview, backend migration and production release authorization. A browser action without the device polling and acknowledgment would be a misleading fake.
 
 This remote workflow remains a separate design/implementation gate. The Windows script in this PR **does not claim** to deliver a remotely clickable action in the running SANAD web UI.
+
+
+## Remote owner-initiated refresh — implementation candidate
+
+PR #400 now also includes source changes for the secured remote workflow:
+- browser owner-only `request_sanad_erp_refresh_v1` and `get_sanad_erp_refresh_status_v1`;
+- protected durable request rows and service-only atomic `bridge_claim_sanad_erp_refresh_v1`;
+- the existing authenticated heartbeat advertises a supported Bridge capability and polls fixed commands;
+- the Windows mutex-protected agent receives a UUID-only request and forces only its existing read-only full logical snapshot;
+- `/connections` displays a true request lifecycle, not a fake button; completed status is derived exclusively from a post-request completed cloud logical snapshot.
+
+**Deployment dependencies:** The new database objects, updated existing Edge heartbeat, published web source, and upgraded Bridge **binary actually installed on the shop workstation** are all required. Pushing Web alone will never execute code on the workstation. An old Bridge advertises no capability, and the request RPC rejects it as offline/unsupported. Maintain the six-hour periodic snapshot plus minute heartbeat regardless of on-demand feature health.
+
+**Critical release gate:** the repository's offline Supabase migration-history deploy gate is known to fail closed on historical drift. Do not use blind `supabase db push`; explicitly verify the new SQL on the actual database and reconcile deployment history before final publishing. The authorized owner must independently test the button from the released Web and confirm completed snapshot ID / actual ledger parity. No remote general shell execution or Edaa writes.
