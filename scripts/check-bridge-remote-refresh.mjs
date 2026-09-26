@@ -18,7 +18,7 @@ const migrations = migrationNames.map(([applied, legacy, suffix]) => {
   assert.ok(!(existsSync(appliedPath) && existsSync(legacyPath)),
     'Never stage duplicate migration aliases for the same reviewed SQL');
   return src(existsSync(appliedPath) ? appliedPath : legacyPath);
-}).join('\\n');
+}).join('\n');
 const heartbeat = src('supabase/functions/sanad-erp-heartbeat-v1/index.ts');
 const device = src('bridge/windows/Sanad.Bridge/BridgeHeartbeatCommand.cs');
 const cycle = src('bridge/windows/Sanad.Bridge/BridgeAgentCycleCommand.cs');
