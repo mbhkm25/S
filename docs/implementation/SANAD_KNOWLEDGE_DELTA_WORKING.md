@@ -16,6 +16,12 @@ Canonical Library references at planning checkpoint: `SANAD.md` v1.4.7 (Library 
 | `SKILL.md` | Owner-requested **three-file batching workflow**: read/reconcile each relevant file without rewriting it at every chat; keep one consolidated dated delta log with source/conflict/status; apply to relevant originals only in a deliberate batch at completed/approved execution checkpoints; preserve version history and old semantics. | User explicit decision on 2026-09-25; no original file rewrite yet. | Same batch only if still absent in current SKILL version after refresh. |
 | `ABU_SANAD.md` | **No change proposed**: the new product and release decisions are not personal biography. | Out of scope. | None. |
 
+## 2026-09-26 addition — owner-approved old→new capability repositioning
+
+| Target file | Candidate delta | Verification/status | Apply trigger |
+| --- | --- | --- | --- |
+| `SANAD.md` | Record the explicitly approved **reuse-first SANAD v4 principle**: SANAD is now a conversation-first intelligent financial/commercial operating environment, **not merely** a payment-notification/verification app. Inventory previously built notification verification, payment inbox, financial/business operations, ERP/Bridge reads, reports, knowledge, relationship and approved draft contracts **before** building alternatives; reposition the verified capability into project chat, composer, Today and appropriate project tools. One authorized canonical domain operation + source + draft/version + approval/audit across every entry point. Preserve read-only Edaa Bridge and existing routes until audited replacement parity. Require REUSE/ADAPT/REFACTOR/BUILD/DEFER classification and project-role negative tests at start of 2C Package 2; don't describe proposed migrations, project-library file indexing or hypothetical integration as shipped. Point to `docs/architecture/SANAD_V4_CAPABILITY_REPOSITIONING_2026-09-26.md` after its docs PR is merged. | **OWNER_APPROVED_DIRECTION** from explicit 2026-09-26 request. Initial inventory leads are verified file paths and prior D-ARCH evidence only; current production contract parity is **NOT YET AUDITED**. GitHub docs-only PR remains a documentation artifact until separately merged. | At next accepted knowledge batch after refreshing current `SANAD.md`; do **not** modify the three Library originals during this GitHub documentation task. |
+
 ## Review protocol / conflict control
 
 1. Check that the live R4/Edge release and merged D-ARCH state have not changed unexpectedly.
