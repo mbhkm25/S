@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
  // Keep it out of the shell's critical entry chunk; Suspense reserves its geometry.
 const SanadUnifiedSidebar = lazy(() => import('../../components/navigation/SanadUnifiedSidebar'));
 import { navigateProduct, subscribeProductNavigation } from '../../lib/productNavigation';
+import { unscopedAssistantHomeRedirect } from '../../lib/sanadLaunchRoute';
 import { NotificationProvider } from '../notifications/NotificationProvider';
 import { SanadAssistantSettingsProvider } from '../shell/SanadAssistantSettingsContext';
 import {
@@ -77,6 +78,18 @@ export default function FinancialWorkspaceShell() {
 
   const isProjectRoot = /\/(financial|commercial)\/?$/.test(pathname);
 
+  // Guard in-shell navigation as well as cold start. An old tab/bookmark
+  // without a thread belongs at Home; explicit thread deep links are retained.
+  const obsoleteAssistantEntry = unscopedAssistantHomeRedirect(
+    pathname,
+    routeKey.slice(pathname.length),
+    import.meta.env.VITE_APP_BASE_PATH || '/',
+  );
+  useEffect(() => {
+    if (obsoleteAssistantEntry) navigateProduct('today', { replace: true });
+  }, [obsoleteAssistantEntry]);
+
+
   const content = isBusinessCapabilityRoute
     ? <BusinessCapabilityRoute key={routeKey} />
     : isUnifiedEntryRoute
@@ -88,6 +101,9 @@ export default function FinancialWorkspaceShell() {
           : isPersonalSectionRoute
             ? <PersonalFinanceSectionRoute key={routeKey} />
             : <FinancialWorkspaceRoute key={routeKey} />;
+
+  // Never flash the retired empty general-chat surface during redirect.
+  if (obsoleteAssistantEntry) return <RouteFallback />;
 
   return (
     <NotificationProvider userId={userId} isAuthenticated={Boolean(userId)}>

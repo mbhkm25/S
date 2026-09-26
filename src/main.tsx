@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import './styles/local-first-connectivity.css';
 import { Capacitor } from '@capacitor/core';
+import { unscopedAssistantHomeRedirect } from './lib/sanadLaunchRoute';
 
 const OperationEntryGate = lazy(() => import('./features/operations/OperationEntryGate'));
 const OperationDetailsRuntimeV2 = lazy(() => import('./features/operations/OperationDetailsRuntimeV2'));
@@ -25,6 +26,18 @@ const isCapacitorNative = Capacitor.isNativePlatform() ||
 const isAndroidNative = Capacitor.getPlatform() === 'android' && isCapacitorNative;
 const enablePwaUpdates = 'serviceWorker' in navigator && !isCapacitorNative && !import.meta.env.DEV;
 const enableAndroidUpdates = isAndroidNative && !import.meta.env.DEV;
+// An older Android/PWA shortcut or reload may still enter /sanad-ai without
+// a project thread. Normalize BEFORE choosing the runtime or rendering,
+// so the user lands on the approved Home instead of an empty assistant canvas.
+const initialHomeRedirect = unscopedAssistantHomeRedirect(
+  window.location.pathname,
+  window.location.search,
+  import.meta.env.VITE_APP_BASE_PATH || '/',
+);
+if (initialHomeRedirect) {
+  window.history.replaceState(window.history.state, '', initialHomeRedirect);
+}
+
 const isPublicInteractiveReport = /\/reports\/view\/[^/?#]+/.test(window.location.pathname);
 const isFinancialWorkspaceRoute = /\/(financial(?:\/(?:actions|accounts|transactions|obligations|budgets|goals|parties))?|commercial(?:\/actions)?|business\/manage(?:\/(?:operations|team|profile|whatsapp-catalog|customers))?|account-center|sanad-ai|today|more|library|connections|work\/(?:tasks|approvals|automations))\/?$/.test(window.location.pathname);
 const isLegacyApplicationRoute = !isPublicInteractiveReport && !isFinancialWorkspaceRoute;
