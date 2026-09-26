@@ -106,8 +106,8 @@ export default function SanadCustomerStatementInspector({
       {statement ? (
         <>
           <p role="note" data-sanad-parity-warning="unverified" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
-            هذه بيانات آخر نسخة سحابية متاحة لسند، ولم نتحقق بعد من مطابقتها لكشف إبداع الحالي.
-            يوجد اختلاف موثق في أحد الحسابات، فلا تعتمد هذا الرصيد للتحصيل أو التسوية قبل المقارنة بالمصدر.
+            هذا الكشف من نسخة سحابية مكتملة، ومعرّفها موضح أدناه. وقت قراءته لا يثبت حداثة مزامنة إبداع؛
+            تأكد من تاريخ النسخة والفترة قبل الاعتماد المالي. لا يعني هذا التنبيه وجود اختلاف حالي في الحساب.
           </p>
           <div className="mt-3 border-t border-slate-100 pt-3">
             <p className="text-sm font-medium text-slate-900">{statement.identity?.customer_name || statement.account?.account_name || 'حساب عميل'}</p>
