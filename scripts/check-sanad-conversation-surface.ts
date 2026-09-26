@@ -57,11 +57,13 @@ for (const required of [
 }
 assert.match(markdown, /safeHref/);
 assert.doesNotMatch(markdown, /dangerouslySetInnerHTML/);
-assert.match(
-  workspace,
-  /\{assistant\s*\? <SanadConversationMarkdown content=\{message\.content\} \/>\s*:\s*<p[^>]*>\{message\.content\}<\/p>\}/s,
-  'Assistant narrative must use Markdown while user messages may remain plain text.',
-);
+assert.match(workspace, /data-sanad-statement-narrative="collapsed"/,
+  'Only repeated structured statement narrative may be initially collapsed.');
+assert.match(workspace, /: assistant\s*\? <SanadConversationMarkdown content=\{message\.content\} \/>/,
+  'Other assistant answers must still render full Markdown by default.');
+assert.match(workspace, /: <p className="whitespace-pre-wrap[^"]*"[^>]*>\{message\.content\}<\/p>/,
+  'User content must remain plain text.');
+
 
 assert.doesNotMatch(unifiedSidebar, /SanadAssistantSidebarSections|SanadSidebarConversations/, 'Project conversations/settings must not return to the global sidebar.');
 assert.match(assistantSettings, /إدارة مساعد سند/);

@@ -113,6 +113,8 @@ function MessageBubble({
   onRate,
   onModifyAction,
   onActionStatusChange,
+  verifiedBusinessId,
+  verifiedThreadId,
 }: {
   message: WorkspaceMessage;
   onRetry?: () => void;
@@ -120,6 +122,8 @@ function MessageBubble({
   onRate?: (value: -1 | 1 | null) => void;
   onModifyAction?: (prompt: string) => void;
   onActionStatusChange?: (status: string) => void;
+  verifiedBusinessId?: string | null;
+  verifiedThreadId?: string | null;
 }) {
   const assistant = message.role === 'assistant';
   const result = message.result;
@@ -156,7 +160,16 @@ function MessageBubble({
             </div>
           ) : null}
 
-          {assistant
+          {assistant && result?.response?.cards?.some((card) => card.type === 'customer_statement' || card.type === 'document_list') ? (
+            <details data-sanad-statement-narrative="collapsed" className="rounded-xl border border-slate-100 px-3 py-2">
+              <summary className="min-h-9 cursor-pointer py-2 text-[13px] font-medium text-slate-700">
+                عرض التحليل النصي التفصيلي — بيانات النسخة السحابية
+              </summary>
+              <div className="mt-2 border-t border-slate-100 pt-3">
+                <SanadConversationMarkdown content={message.content} />
+              </div>
+            </details>
+          ) : assistant
             ? <SanadConversationMarkdown content={message.content} />
             : <p className="whitespace-pre-wrap text-sm leading-7 text-slate-900 md:text-[15px]">{message.content}</p>}
 
@@ -175,6 +188,8 @@ function MessageBubble({
           <div className="mt-3 w-full min-w-0 max-w-[72rem]" data-structured-response-surface="wide">
             <SanadAgentResponseBlocks
               response={result.response}
+              verifiedBusinessId={verifiedBusinessId}
+              verifiedThreadId={verifiedThreadId}
               onModifyAction={onModifyAction}
               onActionStatusChange={onActionStatusChange}
             />
@@ -202,7 +217,7 @@ function MessageBubble({
               ) : null}
               {trace.length ? <><span>•</span><span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" /> {toolSummary(trace)}</span></> : null}
               {result.thinking_level ? <><span>•</span><span>تفكير {result.thinking_level}</span></> : null}
-              {result.verification?.passed ? <><span>•</span><span className="text-emerald-600">تم التحقق</span></> : null}
+              {result.verification?.passed ? <><span>•</span><span className="text-slate-500" title="فحص آلي لتنسيق الإجابة؛ لا يثبت تطابق الأرصدة مع النظام المحاسبي">فحص تنسيق الرد</span></> : null}
             </div>
 
             {trace.length ? (
@@ -840,6 +855,8 @@ export default function SanadAgentWorkspace() {
                 <div key={message.id}>
                   <MessageBubble
                     message={message}
+                    verifiedBusinessId={verifiedThreadScope === 'business' ? businessId : null}
+                    verifiedThreadId={verifiedThreadScope === 'business' ? selectedThreadId : null}
                     onRetry={message.failed && lastUserPrompt && index === messages.length - 1
                       ? () => void sendPrompt(lastUserPrompt)
                       : undefined}

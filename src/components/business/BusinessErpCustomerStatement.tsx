@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { formatSanadSourceAmount } from '../../utils/sanadSourceDisplay';
+import { formatSanadErpLedgerDate } from '../../utils/sanadErpLedgerDate';
 import {
   AlertTriangle,
   CalendarRange,
@@ -22,17 +24,16 @@ import {
 
 type Props = { businessId: string };
 
-function money(value: number | null | undefined) {
-  return new Intl.NumberFormat('ar-YE-u-nu-latn', { maximumFractionDigits: 2 }).format(Number(value || 0));
+function money(value: number | string | null | undefined) {
+  // Match the assistant source formatter: unavailable is NOT zero and never
+  // round fractional digits already supplied by the live ERP read contract.
+  return formatSanadSourceAmount(value).text;
 }
 
 function dateLabel(value?: string | null) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return new Intl.DateTimeFormat('ar-YE-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+  const result = formatSanadErpLedgerDate(value);
+  return result.valid || result.text === '—' ? result.text : `تاريخ المصدر: ${result.text}`;
 }
-
 function currencyLabel(row: { arabic_code?: string | null; english_code?: string | null; currency_name?: string | null }) {
   return row.arabic_code || row.english_code || row.currency_name || 'عملة';
 }
@@ -317,10 +318,10 @@ export default function BusinessErpCustomerStatement({ businessId }: Props) {
             <FileText className="h-5 w-5" />
           </span>
           <div>
-            <span className="text-[10px] font-bold text-emerald-700">قراءة محاسبية موثقة</span>
+            <span className="text-[10px] font-bold text-emerald-700">قراءة من النسخة السحابية · المطابقة مع إبداع غير مؤكدة</span>
             <h3 className="mt-0.5 text-sm font-black text-slate-950">كشف حساب العميل</h3>
             <p className="mt-1 text-[10px] leading-5 text-slate-500">
-              يبحث سند في النسخة السحابية لإبداع ويعرض الحركة من القيود الأصلية، مع فصل العملات وعدم تخمين الهوية عند وجود أكثر من حساب.
+              يعرض سند القيود المستلمة في آخر نسخة سحابية، مع فصل العملات؛ قد يختلف التقرير عن شاشة إبداع حتى تكتمل المطابقة وتتأكد حداثة النسخة.
             </p>
           </div>
         </div>
