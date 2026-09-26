@@ -110,8 +110,17 @@ export default function SanadSmartComposerLauncher({
         <div role="dialog" aria-label="إجراء أو إضافة" dir="rtl"
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
+              event.preventDefault();
               event.stopPropagation();
               close();
+            } else if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+              // Search and field inputs live inside the EXISTING conversation
+              // form. Never allow Enter here to accidentally send a message.
+              event.preventDefault();
+              event.stopPropagation();
+              if (!selected) {
+                hostRef.current?.querySelector<HTMLButtonElement>('[data-smart-action-id]')?.click();
+              }
             }
           }}
           data-sanad-smart-composer-panel
