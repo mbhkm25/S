@@ -42,6 +42,7 @@ assert.ok(SANAD_COMPOSER_ACTIONS.every((item) => item.sourceTools.length > 0));
 
 const launcher = readFileSync('src/features/assistant/SanadSmartComposerLauncher.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
+const response = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 assert.match(launcher, /composerActionsForScope\(scope\)/);
 assert.match(launcher, /data-sanad-smart-composer-panel/);
 assert.match(launcher, /role="dialog"/);
@@ -49,6 +50,15 @@ assert.match(launcher, /aria-expanded=\{open\}/);
 assert.match(launcher, /event\.key === 'ArrowDown'/);
 assert.match(launcher, /event\.key === 'Escape'/);
 assert.match(launcher, /onPreparePrompt\(prompt\)/);
+assert.ok(launcher.includes("event.key === 'Enter' && event.target instanceof HTMLInputElement"),
+  'Popup input must not accidentally submit the outer conversation form.');
+assert.ok(response.includes('data-sanad-contextual-followups="customer-statement"'),
+  'A verified customer statement must allow optional specialist follow-ups.');
+assert.ok(response.includes('onModifyAction && context && resolveTarget({'),
+  'Contextual follow-ups may only appear for a resolvable business-scoped account.');
+assert.ok(response.includes('onModifyAction('),
+  'Follow-ups only stage a reviewable text request, never submit a financial operation.');
+
 assert.doesNotMatch(launcher, /supabase\.|\.rpc\(|create_my_sanad_agent_action_draft_v1/,
   'The launcher cannot become an independent server/action execution path.');
 assert.match(workspace, /threadId=\{selectedThreadId\}/);
