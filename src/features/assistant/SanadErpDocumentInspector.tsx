@@ -57,72 +57,86 @@ export default function SanadErpDocumentInspector({
   const displayDate = formatSanadErpLedgerDate(header?.document_date);
   return (
     <section dir="rtl" aria-label="تفاصيل المستند المحاسبي" data-sanad-entity-inspector="erp-document"
-      className="mt-3 min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-slate-700">
-            <FileText aria-hidden="true" className="h-4 w-4" />
+      className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-100 text-teal-800">
+            <FileText aria-hidden="true" className="h-5 w-5" />
           </span>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">
-              {target.documentKind === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء'} · من المصدر
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-slate-500">
+              {target.documentKind === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء'} · نسخة المصدر
             </p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">عرض للقراءة فقط وفق صلاحيات مشروع الأعمال الحالي.</p>
+            <h3 className="mt-1 break-words text-base font-semibold leading-7 text-slate-900 sm:text-lg">
+              {header?.party_name || (loading ? 'جارٍ قراءة المستند…' : 'تفاصيل المستند')}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-600">
+              رقم المستند <bdi dir="ltr" className="font-semibold text-slate-900">#{header?.document_number || target.documentId}</bdi>
+              {header?.document_date ? <> <span aria-hidden="true">·</span> {displayDate.valid ? displayDate.text : `تاريخ المصدر: ${displayDate.text}`}</> : null}
+            </p>
           </div>
         </div>
         <button type="button" aria-label="إغلاق تفاصيل المستند" onClick={onClose}
-          className="sanad-focus-ring flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100">
+          className="sanad-focus-ring flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
           <X aria-hidden="true" className="h-4 w-4" />
         </button>
-      </div>
-      {loading ? <p role="status" className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+      </header>
+      {loading ? <p role="status" className="flex items-center gap-2 px-4 py-5 text-xs text-slate-600">
         <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
-        جاري التحقق من المستند وصلاحيات القراءة…
+        جارٍ التحقق من المستند وصلاحية قراءته…
       </p> : null}
-      {error ? <p role="alert" className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-xs leading-6 text-amber-900">
+      {error ? <p role="alert" className="m-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
         <AlertTriangle aria-hidden="true" className="mt-1 h-4 w-4 shrink-0" />{error}
       </p> : null}
       {detail && header ? (
-        <>
-          <dl className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-2">
-            <div><dt className="text-slate-500">رقم المستند</dt><dd className="mt-1 font-semibold text-slate-900"><bdi dir="ltr">{header.document_number || header.document_id}</bdi></dd></div>
-            <div><dt className="text-slate-500">الطرف</dt><dd className="mt-1 font-medium text-slate-900">{header.party_name || 'غير متاح في المصدر'}</dd></div>
-            <div><dt className="text-slate-500">التاريخ</dt><dd className="mt-1 text-slate-900">{displayDate.valid ? displayDate.text : 'تاريخ المصدر: ' + displayDate.text}</dd></div>
-            <div><dt className="text-slate-500">العملة وطريقة الدفع</dt><dd className="mt-1 text-slate-900">{currency || 'عملة غير محددة'} · {header.payment_method || 'غير متاح'}</dd></div>
+        <div className="min-w-0 px-3 pb-4 sm:px-4">
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 border-b border-slate-100 py-4 sm:grid-cols-3">
+            <div><dt className="text-[11px] text-slate-500">العملة</dt><dd className="mt-1 text-sm font-semibold text-slate-900">{currency || 'غير محددة'}</dd></div>
+            <div><dt className="text-[11px] text-slate-500">طريقة الدفع</dt><dd className="mt-1 text-sm font-medium text-slate-900">{header.payment_method || 'غير متاحة'}</dd></div>
+            <div className="col-span-2 min-w-0 sm:col-span-1">
+              <dt className="text-[11px] text-slate-500">مرجع نسخة المصدر</dt>
+              <dd className="mt-1 break-all text-xs text-slate-600" dir="ltr">{detail.snapshot_public_id || 'غير متاح'}</dd>
+            </div>
           </dl>
-          <p className="mt-3 break-all text-[11px] text-slate-500">
-            نسخة المصدر: <bdi dir="ltr">{detail.snapshot_public_id || 'غير متاح'}</bdi>
-          </p>
-          <p role="note" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-6 text-amber-900">
-            بيانات النسخة السحابية غير معتمدة بوصفها مطابقة نهائية لتقرير إبداع الحي.
-            قيم البنود الأصلية لا تعني بالضرورة صافي الفاتورة.
-          </p>
-          <p className="mt-4 text-xs font-semibold text-slate-700">البنود: {detail.lines.length}</p>
-          <div role="region" aria-label="جدول بنود المستند" tabIndex={0} className="mt-2 min-w-0 overflow-x-auto">
-            <table className="w-full min-w-[580px] text-right text-xs">
-              <thead className="border-y border-slate-100 bg-slate-50 text-slate-600">
+          <details data-sanad-source-caveat="compact" className="my-3 rounded-lg border border-amber-200/75 bg-amber-50/70 text-xs text-amber-950">
+            <summary className="sanad-focus-ring min-h-10 cursor-pointer px-3 py-2.5 font-medium leading-5">
+              من النسخة السحابية · لم تُعتمد المطابقة المالية مع إبداع الحي
+            </summary>
+            <p className="border-t border-amber-200/60 px-3 pb-3 pt-2 leading-6">
+              بيانات هذا العرض للقراءة فقط. قيم البنود مأخوذة من المصدر ولا تعني بالضرورة صافي الفاتورة؛
+              قارن المستند بتقرير إبداع الحالي قبل أي تحصيل أو تسوية.
+            </p>
+          </details>
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <h4 className="text-sm font-semibold text-slate-900">الأصناف والبنود</h4>
+            <span className="text-xs text-slate-500">{detail.lines.length} بند</span>
+          </div>
+          <div role="region" aria-label="جدول بنود المستند" tabIndex={0}
+            className="min-w-0 overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[580px] text-right text-[13px]">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
                 <tr>
-                  <th className="p-2 font-medium">الصنف</th>
-                  <th className="p-2 font-medium">الوحدة</th>
-                  <th className="p-2 font-medium">الكمية</th>
-                  <th className="p-2 font-medium">سعر الوحدة</th>
-                  <th className="p-2 font-medium">قيمة البند من المصدر</th>
+                  <th scope="col" className="px-3 py-3 font-medium">الصنف</th>
+                  <th scope="col" className="px-3 py-3 font-medium">الوحدة</th>
+                  <th scope="col" className="px-3 py-3 font-medium">الكمية</th>
+                  <th scope="col" className="px-3 py-3 font-medium">سعر الوحدة</th>
+                  <th scope="col" className="px-3 py-3 font-medium">قيمة البند من المصدر</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {detail.lines.map((line) => (
-                  <tr key={line.line_id}>
-                    <td className="p-2">{line.class_name || line.class_number || '—'}</td>
-                    <td className="p-2">{line.unit_name || '—'}</td>
-                    <td className="p-2" dir="ltr">{formatSanadSourceAmount(line.quantity).text}</td>
-                    <td className="p-2" dir="ltr">{formatSanadSourceAmount(line.unit_price, currency).text}</td>
-                    <td className="p-2" dir="ltr">{formatSanadSourceAmount(line.source_total_amount, currency).text}</td>
+                  <tr key={line.line_id} className="align-top">
+                    <td className="min-w-[160px] px-3 py-3 font-medium leading-6 text-slate-900">{line.class_name || line.class_number || '—'}</td>
+                    <td className="px-3 py-3 text-slate-600">{line.unit_name || '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-800" dir="ltr">{formatSanadSourceAmount(line.quantity).text}</td>
+                    <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-800" dir="ltr">{formatSanadSourceAmount(line.unit_price, currency).text}</td>
+                    <td className="whitespace-nowrap px-3 py-3 font-semibold tabular-nums text-slate-900" dir="ltr">{formatSanadSourceAmount(line.source_total_amount, currency).text}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       ) : null}
     </section>
   );
