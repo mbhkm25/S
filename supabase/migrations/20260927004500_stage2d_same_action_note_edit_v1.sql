@@ -61,7 +61,7 @@ begin
      or v_thread.business_id is not null or v_row.business_id is not null then
      raise exception 'agent_action_personal_project_required' using errcode='42501';
    end if;
-   v_payload := jsonb_set(v_payload,'{description}',to_jsonb(v_note),true);
+   v_payload := jsonb_set(v_payload,'{description}',coalesce(to_jsonb(v_note),'null'::jsonb),true);
    v_review := jsonb_set(
       v_review,'{summary}',
       to_jsonb(coalesce(v_note,
@@ -78,7 +78,7 @@ begin
      or not private.user_is_business_owner(v_row.business_id,v_uid) then
      raise exception 'agent_action_business_project_mismatch' using errcode='42501';
    end if;
-   v_payload := jsonb_set(v_payload,'{notes}',to_jsonb(v_note),true);
+   v_payload := jsonb_set(v_payload,'{notes}',coalesce(to_jsonb(v_note),'null'::jsonb),true);
    -- Note edits are visibly included in the server-generated review summary
    -- without changing type/party/currency/amount/source/approval_effect.
    select coalesce(jsonb_agg(field order by ordinal), '[]'::jsonb)
