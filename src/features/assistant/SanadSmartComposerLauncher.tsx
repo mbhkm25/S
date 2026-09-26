@@ -103,8 +103,10 @@ export default function SanadSmartComposerLauncher({
           if (open) close();
           else setOpen(true);
         }}
-        className="sanad-focus-ring flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-100 bg-cyan-50/70 text-teal-900 transition-colors hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
-        <Plus aria-hidden="true" className="h-4 w-4" />
+        className="sanad-focus-ring flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-teal-900 transition-colors disabled:cursor-not-allowed disabled:opacity-50">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-100 bg-cyan-50/70 transition-colors hover:bg-cyan-100">
+          <Plus aria-hidden="true" className="h-4 w-4" />
+        </span>
       </button>
       {open ? (
         <div role="dialog" aria-label="إجراء أو إضافة" dir="rtl"
