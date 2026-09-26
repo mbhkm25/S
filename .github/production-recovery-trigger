@@ -1,8 +1,9 @@
-reason=deploy-stage2b-r4-web
-source_pr=381
-owner_approved_candidate_sha=5cb85ecf88bb43574413b6ed8af8d8068b5258ce
-integrated_main_sha=344934f9246d3514ebef973bed59bf4bbab445cf
-release_gate=owner-accepted-preview-and-four-same-sha-ci-passed
+reason=deploy-stage2c-p1-approved-home-and-scoped-conversations
+source_prs=391,392
+owner_accepted_source_main_sha=55c19e868dd9f71dc3a008c18bd1af8f69ed53fa
+production_migration=20260925211500_stage2c_project_scoped_conversations_v1
+migration_postflight=12_threads_11_business_1_legacy_zero_invalid_scopes
+release_gate=owner_requested-full-package-closure-after-local-preview-and-same-sha-ci
 scope=production-web-pwa-only
-edge_function_release=separate-reviewed-stage
-android_signed_publish=unchanged
+edge_function_release=not-required-source-unchanged
+android_signed_publish=separate-reviewed-version-110-release
