@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpLeft,
@@ -12,6 +12,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import SanadAgentActionCard from './SanadAgentActionCard';
+import type { CustomerStatementTarget } from './SanadCustomerStatementInspector';
+const SanadCustomerStatementInspector = lazy(() => import('./SanadCustomerStatementInspector'));
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import type {
   SanadAssistantAnswerCard,
@@ -57,8 +59,15 @@ function CopyButton({ text, label = 'نسخ' }: { text?: string; label?: string 
   );
 }
 
-function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
+function EntityLink({ entity, onInspect }: { entity: SanadAssistantEntity; onInspect?: () => void }) {
   const Icon = entity.type === 'erp_customer' ? UserRound : entity.type === 'erp_document' ? FileText : Database;
+  if (onInspect) {
+    return (
+      <button type="button" onClick={onInspect} className="sanad-focus-ring inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--sanad-border-subtle)] px-2.5 text-[13px] text-slate-700">
+        <Icon className="h-3.5 w-3.5" />{entity.label}<ArrowUpLeft className="h-3 w-3" />
+      </button>
+    );
+  }
   if (!entity.href) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[13px] font-medium text-slate-700">
@@ -78,7 +87,7 @@ function EntityLink({ entity }: { entity: SanadAssistantEntity }) {
   );
 }
 
-function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }> }) {
+function StatementCard({ card, onInspect }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }>; onInspect?: () => void }) {
   return (
     <section className="sanad-surface overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
@@ -120,6 +129,11 @@ function StatementCard({ card }: { card: Extract<SanadAssistantAnswerCard, { typ
           </p>
         )}
 
+        {onInspect ? (
+          <button type="button" onClick={onInspect} className="sanad-focus-ring mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-900 px-3.5 text-[13px] font-medium text-white">
+            عرض كشف الحساب التفاعلي <ArrowUpLeft className="h-4 w-4" />
+          </button>
+        ) : null}
         {card.href && (
           <a
             href={card.href}
@@ -292,8 +306,9 @@ function renderCard(
   index: number,
   onModifyAction?: (prompt: string) => void,
   onActionStatusChange?: (status: string) => void,
+  onInspectCustomer?: (accountId: number, fromDate?: string | null, toDate?: string | null) => void,
 ) {
-  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} /></div>;
+  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} onInspect={card.account_id && Number.isSafeInteger(card.account_id) && card.account_id > 0 && onInspectCustomer ? () => onInspectCustomer(card.account_id as number, card.from_date, card.to_date) : undefined} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`}><PaymentInboxCard card={card} /></div>;
@@ -323,11 +338,18 @@ export default function SanadAgentResponseBlocks({
   response,
   onModifyAction,
   onActionStatusChange,
+  verifiedBusinessId,
 }: {
   response?: SanadAssistantResponseContract;
   onModifyAction?: (prompt: string) => void;
   onActionStatusChange?: (status: string) => void;
+  verifiedBusinessId?: string | null;
 }) {
+  const [inspectedTarget, setInspectedTarget] = useState<CustomerStatementTarget | null>(null);
+  const inspectCustomer = (accountId: number, fromDate?: string | null, toDate?: string | null) => {
+    if (!verifiedBusinessId || !Number.isSafeInteger(accountId) || accountId <= 0) return;
+    setInspectedTarget({ businessId: verifiedBusinessId, accountId, fromDate, toDate });
+  };
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
   const entities = Array.isArray(response.entities) ? response.entities : [];
@@ -336,7 +358,7 @@ export default function SanadAgentResponseBlocks({
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange))}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, verifiedBusinessId ? inspectCustomer : undefined))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
@@ -353,10 +375,15 @@ export default function SanadAgentResponseBlocks({
       {entities.length > 0 && !cards.some((card) => card.type === 'document_list') && (
         <div className="flex flex-wrap gap-1.5">
           {entities.slice(0, 12).map((entity, index) => (
-            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} /></span>
+            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && entity.business_id === verifiedBusinessId && typeof entity.account_id === 'number' && Number.isSafeInteger(entity.account_id) && entity.account_id > 0 ? () => inspectCustomer(entity.account_id as number) : undefined} /></span>
           ))}
         </div>
       )}
+      {inspectedTarget && inspectedTarget.businessId === verifiedBusinessId ? (
+        <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض كشف الحساب…</p>}>
+          <SanadCustomerStatementInspector target={inspectedTarget} onClose={() => setInspectedTarget(null)} />
+        </Suspense>
+      ) : null}
       {response.copy_text && !cards.some((card) => card.type === 'customer_statement') && (
         <CopyButton text={response.copy_text} label="نسخ البيانات" />
       )}
