@@ -22,7 +22,8 @@ assert.match(scheduler, /-Minutes 1/, 'Scheduled minute-level Bridge agent must 
 assert.match(scheduler, /-MultipleInstances IgnoreNew/);
 assert.match(cycle, /Global\\SANAD\.Bridge\.AgentCycle\.v1/,
   'Periodic and manual paths must share the existing global mutex.');
-assert.match(cycle, /EdaaLogicalSnapshotCommand\.RunAsync\(args\)/);
+assert.match(cycle, /EdaaLogicalSnapshotCommand\.RunAsync\((args|snapshotArgs)\)/,
+  'Agent cycle must pass scheduled or explicitly forced arguments to the canonical snapshot command.');
 assert.match(snapshot, /HasArg\(args, "--force-logical-snapshot"\)/);
 assert.match(snapshot, /DefaultIntervalMinutes = 360/);
 assert.match(snapshot, /MinimumIntervalMinutes = 60/);
