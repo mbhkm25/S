@@ -217,7 +217,7 @@ function MessageBubble({
               ) : null}
               {trace.length ? <><span>•</span><span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" /> {toolSummary(trace)}</span></> : null}
               {result.thinking_level ? <><span>•</span><span>تفكير {result.thinking_level}</span></> : null}
-              {result.verification?.passed ? <><span>•</span><span className="text-emerald-600">تم التحقق</span></> : null}
+              {result.verification?.passed ? <><span>•</span><span className="text-slate-500" title="فحص آلي لتنسيق الإجابة؛ لا يثبت تطابق الأرصدة مع النظام المحاسبي">فحص تنسيق الرد</span></> : null}
             </div>
 
             {trace.length ? (
