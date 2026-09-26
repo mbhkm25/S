@@ -40,6 +40,7 @@ import {
 } from './sanadAssistantPresentation';
 import SanadVoiceDictationButton, { type SanadVoiceState } from './SanadVoiceDictationButton';
 import SanadAttachmentComposer, { SanadAttachmentPreview } from './SanadAttachmentComposer';
+import SanadSmartComposerLauncher from './SanadSmartComposerLauncher';
 import { listSanadAgentAttachments, type SanadAgentAttachment } from './assistantAttachmentApi';
 import { recordSanadAgentClientMetric } from './assistantObservabilityApi';
 
@@ -908,9 +909,22 @@ export default function SanadAgentWorkspace() {
               className="sanad-composer-surface shrink-0 border-t p-2 backdrop-blur-xl md:px-4 md:py-3"
             >
               <div
-                className="mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
+                className="mx-auto grid max-w-4xl grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-end gap-1 rounded-xl border border-slate-200 bg-white p-1 transition focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-950/[0.035]"
                 data-composer-layout="single-row-controls"
               >
+                <SanadSmartComposerLauncher
+                  key={selectedThreadId}
+                  scope={verifiedThreadScope}
+                  disabled={sending || threadReadOnly || threadLoading}
+                  onPreparePrompt={(prompt) => {
+                    setDraft(prompt);
+                    setWorkspaceError(null);
+                    window.setTimeout(() => {
+                      syncComposerTextareaHeight(textareaRef.current);
+                      textareaRef.current?.focus();
+                    }, 40);
+                  }}
+                />
                 <SanadAttachmentComposer
                   threadId={selectedThreadId}
                   businessId={businessId || null}
