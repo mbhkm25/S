@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 
 const src = (path) => readFileSync(path, 'utf8');
 const migrations = [
-  '20260926190000_sanad_erp_on_demand_refresh_v1.sql',
-  '20260926190100_sanad_erp_owner_refresh_request_v1.sql',
-  '20260926190200_sanad_erp_refresh_read_status_v1.sql',
-  '20260926190300_sanad_erp_device_claim_refresh_v1.sql',
+  '20260926160235_sanad_erp_on_demand_refresh_v1.sql',
+  '20260926160246_sanad_erp_owner_refresh_request_v1.sql',
+  '20260926160251_sanad_erp_refresh_read_status_v1.sql',
+  '20260926160257_sanad_erp_device_claim_refresh_v1.sql',
 ].map((name) => src('supabase/migrations/' + name)).join('\n');
 const heartbeat = src('supabase/functions/sanad-erp-heartbeat-v1/index.ts');
 const device = src('bridge/windows/Sanad.Bridge/BridgeHeartbeatCommand.cs');
