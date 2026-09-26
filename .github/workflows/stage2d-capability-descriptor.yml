@@ -1,0 +1,27 @@
+name: Stage 2D Capability Descriptor Contract
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*stage2d_server_capability_descriptor_v1.sql"
+      - "scripts/check-stage2d-capability-descriptor.mjs"
+      - ".github/workflows/stage2d-capability-descriptor.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*stage2d_server_capability_descriptor_v1.sql"
+      - "scripts/check-stage2d-capability-descriptor.mjs"
+      - ".github/workflows/stage2d-capability-descriptor.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-stage2d-capability-descriptor.mjs
