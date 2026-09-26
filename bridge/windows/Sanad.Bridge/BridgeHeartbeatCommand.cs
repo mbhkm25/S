@@ -62,7 +62,13 @@ namespace Sanad.Bridge
 
                     request.Headers.TryAddWithoutValidation("x-sanad-device-id", identity.device_public_id);
                     request.Headers.TryAddWithoutValidation("x-sanad-device-token", identity.device_token);
-                    request.Content = new StringContent("{\"remote_refresh_v1\":true}", Encoding.UTF8, "application/json");
+                    // Heartbeat-only diagnostics may advertise capability but must not
+                    // steal/claim an owner command without the mutex-protected cycle.
+                    var pollCommands = args != null && Array.Exists(args, item =>
+                        string.Equals(item, "--agent-cycle", StringComparison.OrdinalIgnoreCase));
+                    var heartbeatBody = "{\\\"remote_refresh_v1\\\":true,\\\"poll_remote_refresh_v1\\\":"
+                        + (pollCommands ? "true" : "false") + "}";
+                    request.Content = new StringContent(heartbeatBody, Encoding.UTF8, "application/json");
 
                     using (var response = await http.SendAsync(request, timeout.Token).ConfigureAwait(false))
                     {
