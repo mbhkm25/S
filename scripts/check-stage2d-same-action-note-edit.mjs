@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const migration = readFileSync(
-  'supabase/migrations/20260927004500_stage2d_same_action_note_edit_v1.sql','utf8'
+  'supabase/migrations/20260926222117_stage2d_same_action_note_edit_v1.sql','utf8'
 );
 const origin = readFileSync(
   'supabase/migrations/20260926214052_stage2d_action_origin_scope_guard_v1.sql','utf8'
