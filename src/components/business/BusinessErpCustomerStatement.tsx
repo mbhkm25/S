@@ -318,10 +318,10 @@ export default function BusinessErpCustomerStatement({ businessId }: Props) {
             <FileText className="h-5 w-5" />
           </span>
           <div>
-            <span className="text-[10px] font-bold text-emerald-700">قراءة محاسبية موثقة</span>
+            <span className="text-[10px] font-bold text-emerald-700">قراءة من النسخة السحابية · المطابقة مع إبداع غير مؤكدة</span>
             <h3 className="mt-0.5 text-sm font-black text-slate-950">كشف حساب العميل</h3>
             <p className="mt-1 text-[10px] leading-5 text-slate-500">
-              يبحث سند في النسخة السحابية لإبداع ويعرض الحركة من القيود الأصلية، مع فصل العملات وعدم تخمين الهوية عند وجود أكثر من حساب.
+              يعرض سند القيود المستلمة في آخر نسخة سحابية، مع فصل العملات؛ قد يختلف التقرير عن شاشة إبداع حتى تكتمل المطابقة وتتأكد حداثة النسخة.
             </p>
           </div>
         </div>
