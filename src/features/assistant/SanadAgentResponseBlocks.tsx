@@ -187,7 +187,7 @@ function DocumentsCard({ card, onInspectDocument }: { card: Extract<SanadAssista
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-slate-900">{card.kind === 'sale' ? 'فواتير المبيعات' : 'فواتير المشتريات'}</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">{card.count} مستند من النسخة السحابية</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{(card.items || []).length} معروض من أصل {card.count} مستند في النسخة السحابية</p>
           </div>
         </div>
         <span className="shrink-0 rounded-full border border-cyan-100 bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-teal-900">من المصدر</span>
