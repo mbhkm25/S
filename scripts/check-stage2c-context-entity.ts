@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolveSanadCustomerStatementTarget } from '../src/features/assistant/sanadEntityContext';
 import { formatSanadSourceAmount } from '../src/utils/sanadSourceDisplay';
+import { formatSanadErpLedgerDate } from '../src/utils/sanadErpLedgerDate';
 import { classifySanadAnswerCard, classifySanadEntity } from '../src/features/assistant/sanadInteractiveResultKinds';
 import type { SanadAssistantAnswerCard, SanadAssistantEntity } from '../src/features/assistant/agentFoundation';
 
@@ -29,6 +30,12 @@ for (const [fromDate,toDate] of [['2026-02-30','2026-03-01'],['2026-09-02','2026
 assert.equal(formatSanadSourceAmount(null).text, '—');
 assert.equal(formatSanadSourceAmount('1000000000000.12345678').text, '1,000,000,000,000.12345678');
 assert.equal(formatSanadSourceAmount('-0.001', 'SAR').text, '-0.001');
+assert.equal(formatSanadErpLedgerDate('2026-06-06T00:00:00.000').valid, true);
+assert.match(formatSanadErpLedgerDate('2026-06-06T00:00:00.000').text, /2026/);
+assert.equal(formatSanadErpLedgerDate('2026-02-30T00:00:00.000').valid, false);
+assert.equal(formatSanadErpLedgerDate('2026-06-06T24:00:00.000').valid, false);
+assert.equal(formatSanadErpLedgerDate('2026-06-06T00:00:00Z').valid, false, 'Timezone-aware timestamps require separate contract');
+
 
 // v4 semantics are a presentation adapter; the existing wire card and action API remain unchanged.
 const metric = { type: 'metric', title: 'التزام', value: '1' } as SanadAssistantAnswerCard;
@@ -55,6 +62,10 @@ assert.match(workspace, /verifiedThreadScope === 'business' \? selectedThreadId 
 assert.match(response, /resolveSanadCustomerStatementTarget/);
 assert.match(response, /SanadCustomerStatementInspector/);
 assert.match(response, /data-sanad-result-kind/);
+assert.match(response, /const statementGroups = new Map<number, number\[\]>\(\)/);
+assert.match(workspace, /data-sanad-statement-narrative="collapsed"/);
+assert.match(inspector, /formatSanadErpLedgerDate/);
+assert.match(inspector, /data-sanad-parity-warning="unverified"/);
 assert.match(inspector, /getBusinessErpCustomerStatement\(/, 'Inspector MUST use existing canonical RPC adapter');
 assert.doesNotMatch(inspector, /supabase\.(from|rpc)\(/, 'Do not invent an independent data path');
 assert.match(inspector, /snapshot_public_id/);
