@@ -71,7 +71,18 @@ The inspector checks that the returned document ID/kind match its requested iden
 
 **Gate:** this addition does NOT resolve #399 (SAR 250 statement discrepancy), exact precision in older number-bearing RPC results #384, session-based denied-role tests, or owner UI preview. PR #398 stays DRAFT and UNMERGED pending all gates.
 
-## 8. Open constraints to take into next 2C.4 PR(s)
+## 8. Visual refinement and updated #399 causal evidence
+
+Owner preview **accepted the mint/aqua customer-statement CTAs and the actual document-detail read-path**, but documented three visual defects in the document flow: (1) full model-generated invoice table duplicates the structured list, (2) ISO ERP civil timestamps were rendered incorrectly in list rows, (3) selecting a document appended a second large card below the list, with small table type and excessive warning emphasis. The following changes address the UI defects **without new data queries or finance calculations**:
+
+- For `document_list` (like the existing customer-statement response), preserve the model narrative under optional disclosure and default to the structured output.
+- Format date fields via `formatSanadErpLedgerDate` (timezone-less ERP calendar date), and show a compact list with number, party, human-readable date, currency, source line value and truthful shown/total count.
+- Opening a document swaps **only the originating list** with an in-conversation detail work surface; provide an explicit return. Preserve canonical business/thread permissions; no second page scroll, no duplicated inspector per list.
+- Detail header surfaces party, document number, date, currency, payment method and snapshot ID in a clear hierarchy; improve line-table legibility and keep horizontal scrolling confined to the table itself; collapse long source-risk language under a visible provenance summary. No posted-invoice net or numeric guesses.
+
+**#399 new evidence, 2026-09-26:** owner recalls personally deleting a SAR 250 invoice for the same customer at approximately 10:00 Yemen time. Read-only production query still reports the latest completed backup `ae123a49-c089-4664-9f09-d812e6a5442f` completed **08:33 Yemen**, with invoice **1221** in that older copy marked `Deleted=false`. This time ordering makes a stale completed cloud snapshot after deletion a strong **hypothesis** for cloud SAR 3,020 vs the owner's later live Edaa report SAR 2,770. The exact deleted invoice number, refreshed snapshot semantics and same-filter/account/currency parity remain unverified. Never alter historic snapshot, subtract 250 heuristically or close #399 before a later completed snapshot + matching Edaa report check. The Bridge continues READ-ONLY toward Edaa.
+
+## 9. Open constraints to take into next 2C.4 PR(s)
 
 - Extend Entity Inspector to ERP documents, native operations and own-authorized Work Item after each real source/RPC permission mapping; do not make generic frontend reads.
 - Seven unified typed visual families can adapt existing cards incrementally; a full shared Action Registry and canonical two-way draft lifecycle are 2D.
