@@ -21,6 +21,8 @@ assert.match(migration, /v_thread\.project_kind<>'business'/);
 assert.match(migration, /v_thread\.business_id is null/);
 assert.match(migration, /new\.business_id is distinct from v_thread\.business_id/);
 assert.match(migration, /agent_action_origin_immutable/);
+assert.match(migration, /existing_agent_action_origin_requires_review/,
+  'Do not silently rewrite historical draft origins when installing a new guard.');
 assert.match(migration, /raise exception 'agent_action_personal_project_required'/);
 assert.match(migration, /raise exception 'agent_action_business_project_mismatch'/);
 assert.doesNotMatch(migration, /create_personal_finance_transaction_v1|post_business_commercial_document_v1|alter table.+disable row level security/is,
