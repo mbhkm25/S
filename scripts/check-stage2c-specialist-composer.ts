@@ -25,6 +25,7 @@ assert.equal(buildGuidedComposerPrompt(customer, { query: ' ' }), null);
 assert.equal(buildGuidedComposerPrompt(customer, { query: 'x'.repeat(121) }), null);
 assert.equal(buildGuidedComposerPrompt(customer, { query: 'عميل', from: '2026-09-25', to: '2026-01-01' }), null);
 assert.equal(buildGuidedComposerPrompt(customer, { query: 'عميل', from: '25/09/2026' }), null);
+assert.equal(buildGuidedComposerPrompt(customer, { query: 'عميل', from: '2026-02-30' }), null);
 const prepared = buildGuidedComposerPrompt(customer, { query: 'بلحيث', from: '2026-01-01' });
 assert.ok(prepared?.includes('بلحيث'));
 assert.ok(prepared?.includes('المرشحين'));
