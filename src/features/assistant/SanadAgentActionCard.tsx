@@ -96,7 +96,12 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
       setAction(updated);
       setNoteEditing(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'تعذر تعديل الملاحظة.');
+      const detail = cause instanceof Error ? cause.message : '';
+      setError(detail.includes('agent_action_version_conflict')
+        ? 'تغير إصدار المسودة في مكان آخر. حُمّلت الحالة الأحدث؛ راجعها ثم أعد حفظ تعديلك.'
+        : detail.includes('identical_active_action_already_exists')
+          ? 'توجد مسودة أخرى مطابقة نشطة. راجعها قبل حفظ هذا التعديل.'
+          : detail || 'تعذر تعديل الملاحظة.');
       try { setAction(await getSanadAgentAction(card.action_id)); } catch { /* preserve visible error */ }
     } finally {
       setBusy(null);
@@ -205,7 +210,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
         ) : null}
 
         {(error || status === 'failed') ? (
-          <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-rose-800">
+          <div role="alert" className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="text-sm leading-5">{error || action?.error_code || 'تعذر تنفيذ الإجراء.'}</p>
           </div>
