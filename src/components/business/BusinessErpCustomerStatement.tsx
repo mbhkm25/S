@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { formatSanadSourceAmount } from '../../utils/sanadSourceDisplay';
 import {
   AlertTriangle,
   CalendarRange,
@@ -22,8 +23,10 @@ import {
 
 type Props = { businessId: string };
 
-function money(value: number | null | undefined) {
-  return new Intl.NumberFormat('ar-YE-u-nu-latn', { maximumFractionDigits: 2 }).format(Number(value || 0));
+function money(value: number | string | null | undefined) {
+  // Match the assistant source formatter: unavailable is NOT zero and never
+  // round fractional digits already supplied by the live ERP read contract.
+  return formatSanadSourceAmount(value).text;
 }
 
 function dateLabel(value?: string | null) {
