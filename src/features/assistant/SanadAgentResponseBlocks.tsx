@@ -492,7 +492,7 @@ export default function SanadAgentResponseBlocks({
         return (
           <div key={`statement-group-${card.account_id}-${index}`}>
             <p role="note" className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
-              هذه نتيجة من النسخة السحابية وليست مطابقة مالية معتمدة مع تقرير إبداع الحي. لا تعتمد الرصيد قبل المطابقة.
+              كشف من النسخة السحابية: راجع تاريخ اكتمال النسخة والفترة قبل الاعتماد المالي؛ لا يعني ذلك وجود اختلاف حالي.
             </p>
             {openCard(card, index)}
             {related.length > 1 ? (
