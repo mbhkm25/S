@@ -15,6 +15,7 @@ import { navigateProduct } from '../../lib/productNavigation';
 import { formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from './sanadWorkItemPresentation';
 const SanadQuickProjectHome = lazy(() => import('../projects/SanadQuickProjectHome'));
+const SanadBridgeRefreshControl = lazy(() => import('./SanadBridgeRefreshControl'));
 
 type WorkItem = {
   id: string;
