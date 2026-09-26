@@ -25,7 +25,7 @@ This package adds a **DB-level, additive BEFORE INSERT/UPDATE guard**, not just 
 - Any new action requires a currently active user-owned source thread. Future updates cannot silently reassign `user_id`, `thread_id`, `business_id` or `action_type`.
 - The existing canonical draft payload, revision, ownership, review card, explicit approval/deterministic executor and event projection are unchanged. No ERP write capability or new execution RPC is introduced.
 
-Migration: `20260927002000_stage2d_action_origin_scope_guard_v1.sql`. Regression: `scripts/check-stage2d-action-origin.mjs`.
+Migration: `20260926214052_stage2d_action_origin_scope_guard_v1.sql`. Regression: `scripts/check-stage2d-action-origin.mjs`.
 
 **Rollback:** For a migration-specific incident, investigate and preserve audit rows; after explicit authorized rollback approval, drop only trigger `sanad_agent_action_origin_guard_v1` and its private helper function. Do not delete/alter canonical drafts, weaken existing ownership RPCs, or roll back unrelated 2C migrations. Keep all approved data intact.
 
