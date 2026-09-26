@@ -12,7 +12,11 @@ import {
   UserRound,
 } from 'lucide-react';
 import SanadAgentActionCard from './SanadAgentActionCard';
-import type { CustomerStatementTarget } from './SanadCustomerStatementInspector';
+import {
+  resolveSanadCustomerStatementTarget,
+  type SanadCustomerStatementReference,
+  type SanadCustomerStatementTarget,
+} from './sanadEntityContext';
 const SanadCustomerStatementInspector = lazy(() => import('./SanadCustomerStatementInspector'));
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import type {
@@ -306,9 +310,9 @@ function renderCard(
   index: number,
   onModifyAction?: (prompt: string) => void,
   onActionStatusChange?: (status: string) => void,
-  onInspectCustomer?: (accountId: number, fromDate?: string | null, toDate?: string | null) => void,
+  onInspectCustomer?: (source: SanadCustomerStatementReference) => void,
 ) {
-  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} onInspect={card.account_id && Number.isSafeInteger(card.account_id) && card.account_id > 0 && onInspectCustomer ? () => onInspectCustomer(card.account_id as number, card.from_date, card.to_date) : undefined} /></div>;
+  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`}><PaymentInboxCard card={card} /></div>;
@@ -339,16 +343,22 @@ export default function SanadAgentResponseBlocks({
   onModifyAction,
   onActionStatusChange,
   verifiedBusinessId,
+  verifiedThreadId,
 }: {
   response?: SanadAssistantResponseContract;
   onModifyAction?: (prompt: string) => void;
   onActionStatusChange?: (status: string) => void;
   verifiedBusinessId?: string | null;
+  verifiedThreadId?: string | null;
 }) {
-  const [inspectedTarget, setInspectedTarget] = useState<CustomerStatementTarget | null>(null);
-  const inspectCustomer = (accountId: number, fromDate?: string | null, toDate?: string | null) => {
-    if (!verifiedBusinessId || !Number.isSafeInteger(accountId) || accountId <= 0) return;
-    setInspectedTarget({ businessId: verifiedBusinessId, accountId, fromDate, toDate });
+  const [inspectedTarget, setInspectedTarget] = useState<SanadCustomerStatementTarget | null>(null);
+  const context = verifiedBusinessId && verifiedThreadId ? {
+    projectKind: 'business' as const, businessId: verifiedBusinessId, threadId: verifiedThreadId,
+  } : null;
+  const resolveTarget = (source: SanadCustomerStatementReference) => resolveSanadCustomerStatementTarget(context, source);
+  const inspectCustomer = (source: SanadCustomerStatementReference) => {
+    const target = resolveTarget(source);
+    if (target) setInspectedTarget(target);
   };
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
@@ -358,7 +368,7 @@ export default function SanadAgentResponseBlocks({
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, verifiedBusinessId ? inspectCustomer : undefined))}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, context && card.type === 'customer_statement' && resolveTarget({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) ? inspectCustomer : undefined))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
@@ -375,7 +385,7 @@ export default function SanadAgentResponseBlocks({
       {entities.length > 0 && !cards.some((card) => card.type === 'document_list') && (
         <div className="flex flex-wrap gap-1.5">
           {entities.slice(0, 12).map((entity, index) => (
-            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && entity.business_id === verifiedBusinessId && typeof entity.account_id === 'number' && Number.isSafeInteger(entity.account_id) && entity.account_id > 0 ? () => inspectCustomer(entity.account_id as number) : undefined} /></span>
+            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : undefined} /></span>
           ))}
         </div>
       )}
