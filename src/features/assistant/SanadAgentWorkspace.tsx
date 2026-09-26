@@ -913,7 +913,7 @@ export default function SanadAgentWorkspace() {
                 data-composer-layout="single-row-controls"
               >
                 <SanadSmartComposerLauncher
-                  key={selectedThreadId}
+                  threadId={selectedThreadId}
                   scope={verifiedThreadScope}
                   disabled={sending || threadReadOnly || threadLoading}
                   onPreparePrompt={(prompt) => {
