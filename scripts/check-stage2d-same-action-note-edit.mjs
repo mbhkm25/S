@@ -35,6 +35,9 @@ assert.match(migration,/revoke all on function public\.update_my_sanad_agent_act
 assert.match(migration,/grant execute on function public\.update_my_sanad_agent_action_note_v1\(uuid,integer,text\)\s+to authenticated/);
 assert.match(migration,/p_note is null or length\(p_note\)>500/);
 assert.match(migration,/coalesce\(to_jsonb\(v_note\),'null'::jsonb\)/);
+assert.match(migration,/update public\.sanad_work_items/);
+assert.match(migration,/dedupe_key='agent_action_review:'\|\|v_row\.id::text/);
+
 assert.match(origin,/agent_action_origin_immutable/);
 assert.match(canonical,/if v_row\.version<>p_expected_version/);
 assert.match(actionApi,/updateSanadAgentActionNote/);
