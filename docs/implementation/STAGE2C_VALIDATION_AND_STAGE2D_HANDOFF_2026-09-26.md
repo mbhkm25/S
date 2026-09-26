@@ -1,7 +1,7 @@
 # Stage 2C.V — Integration evidence, outstanding owner smoke and 2D handoff
 
 **Checkpoint:** 2026-09-26; evidence status updated after PRs #404 and #405.  
-**Classification:** Implementation 2C.5 MERGED; backend v8 ACTIVE; production Web deploy triggered, final live-site verification and formal 2C.V closure remain **OPEN**. Do not silently reinterpret a prior local screenshot as a production smoke.
+**Classification:** 2C.5 MERGED and **owner reports all core production functions working**, with appearance-only notes intentionally deferred. Backend v8 ACTIVE; Web publish triggered by merged PR #405. This is **scope-limited user acceptance** of 2C.5 rather than independent GitHub deploy-log attestation or complete S1–S12 negative/cross-device evidence; formal 2C.V security verification remains OPEN and is first in 2D.0.
 
 ## Verified implementation and change boundaries
 
