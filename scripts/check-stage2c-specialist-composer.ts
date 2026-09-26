@@ -47,6 +47,12 @@ assert.match(launcher, /composerActionsForScope\(scope\)/);
 assert.match(launcher, /data-sanad-smart-composer-panel/);
 assert.match(launcher, /role="dialog"/);
 assert.match(launcher, /aria-expanded=\{open\}/);
+assert.match(launcher, /data-sanad-smart-composer="launcher" className="relative self-end"/,
+  'Plus launcher must share the bottom baseline of the 36px attachment/mic buttons.');
+assert.match(launcher, /className="sanad-focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-100/,
+  'The actual plus button, not a nested visible 36px span, must match sibling control dimensions.');
+assert.doesNotMatch(launcher, /min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-teal-900/,
+  'A 44px outer shell visually shifts the plus icon above the other composer tools.');
 assert.match(launcher, /event\.key === 'ArrowDown'/);
 assert.match(launcher, /event\.key === 'Escape'/);
 assert.match(launcher, /onPreparePrompt\(prompt\)/);
