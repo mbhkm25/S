@@ -5,6 +5,7 @@ import {
   type BusinessErpCustomerStatement,
 } from '../../lib/businessAccountingApi';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
+import type { SanadCustomerStatementTarget } from './sanadEntityContext';
 
 /**
  * Stage 2C.4: a read-only view of the EXISTING, business-authorized ERP RPC.
@@ -12,13 +13,6 @@ import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sana
  * independently rechecks active owner/member access on every open.
  * No source balance, financial action or grant is cached in conversation state.
  */
-export type CustomerStatementTarget = {
-  businessId: string;
-  accountId: number;
-  fromDate?: string | null;
-  toDate?: string | null;
-};
-
 const PAGE_SIZE = 25;
 
 function amount(value: number | string | null | undefined, code?: string | null): string {
@@ -42,7 +36,7 @@ export default function SanadCustomerStatementInspector({
   target,
   onClose,
 }: {
-  target: CustomerStatementTarget;
+  target: SanadCustomerStatementTarget;
   onClose: () => void;
 }) {
   const [statement, setStatement] = useState<BusinessErpCustomerStatement | null>(null);
@@ -73,7 +67,7 @@ export default function SanadCustomerStatementInspector({
       setStatement(data);
       setReadAt(new Date().toISOString());
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof Error ? cause.message : 'تعذر التحقق من صلاحية قراءة كشف الحساب.');
+      if (active) setError('تعذرت قراءة كشف الحساب من المصدر، أو لم تعد لديك صلاحية الوصول إليه.');
     }).finally(() => {
       if (active) setLoading(false);
     });
