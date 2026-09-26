@@ -369,9 +369,59 @@ export default function SanadAgentResponseBlocks({
   const attention = Array.isArray(response.attention) ? response.attention : [];
   if (!cards.length && !entities.length && !attention.length && !response.copy_text) return null;
 
+  // Do not display multiple full statement cards for the SAME ERP account in
+  // one reply. Preserve every distinct period under disclosure for comparison.
+  // Never deduplicate ledger movements, documents or accounts here.
+  const statementGroups = new Map<number, number[]>();
+  cards.forEach((card, index) => {
+    if (card.type !== 'customer_statement' || !card.account_id) return;
+    statementGroups.set(card.account_id, [...(statementGroups.get(card.account_id) || []), index]);
+  });
+  const primaryIndex = new Map<number, number>();
+  for (const [accountId, indices] of statementGroups) {
+    // A broader returned statement is the default; other period views stay accessible.
+    primaryIndex.set(accountId, indices.reduce((best, index) => {
+      const b = cards[best], c = cards[index];
+      return b.type === 'customer_statement' && c.type === 'customer_statement' &&
+        c.movement_count > b.movement_count ? index : best;
+    }));
+  }
+
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, context && card.type === 'customer_statement' && resolveTarget({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) ? inspectCustomer : undefined, verifiedBusinessId))}
+      {cards.map((card, index) => {
+        if (card.type !== 'customer_statement' || !card.account_id) {
+          return renderCard(card, index, onModifyAction, onActionStatusChange, undefined, verifiedBusinessId);
+        }
+        if (primaryIndex.get(card.account_id) !== index) return null;
+        const related = statementGroups.get(card.account_id) || [];
+        const openCard = (item: typeof card, itemIndex: number) => renderCard(
+          item, itemIndex, onModifyAction, onActionStatusChange,
+          context && resolveTarget({ accountId: item.account_id, fromDate: item.from_date, toDate: item.to_date }) ? inspectCustomer : undefined,
+          verifiedBusinessId,
+        );
+        return (
+          <div key={`statement-group-${card.account_id}-${index}`}>
+            <p role="note" className="mb-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
+              هذه نتيجة من النسخة السحابية وليست مطابقة مالية معتمدة مع تقرير إبداع الحي. لا تعتمد الرصيد قبل المطابقة.
+            </p>
+            {openCard(card, index)}
+            {related.length > 1 ? (
+              <details className="mt-2 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700">
+                <summary className="cursor-pointer py-2 font-medium">
+                  عرض {related.length - 1} كشف لفترة أخرى للحساب نفسه
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {related.filter((other) => other !== index).map((other) => {
+                    const alternative = cards[other];
+                    return alternative.type === 'customer_statement' ? openCard(alternative, other) : null;
+                  })}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        );
+      })}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
@@ -387,7 +437,11 @@ export default function SanadAgentResponseBlocks({
       )}
       {entities.length > 0 && !cards.some((card) => card.type === 'document_list') && (
         <div className="flex flex-wrap gap-1.5">
-          {entities.slice(0, 12).map((entity, index) => (
+          {entities.slice(0, 12).filter((entity) =>
+            entity.type !== 'erp_customer' ||
+            !entity.account_id ||
+            !statementGroups.has(entity.account_id),
+          ).map((entity, index) => (
             <span key={`${entity.type}-${entity.label}-${index}`} data-sanad-result-kind={classifySanadEntity(entity)}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : undefined} /></span>
           ))}
         </div>
