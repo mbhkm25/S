@@ -31,6 +31,7 @@ import SanadConversationMarkdown from './SanadConversationMarkdown';
 import SanadMessageActions from './SanadMessageActions';
 import SanadIntelligenceMark from './SanadIntelligenceMark';
 import SanadAssistantStatus from './SanadAssistantStatus';
+import { projectQuickPrompts, type VerifiedAssistantProjectScope } from './sanadProjectQuickPrompts';
 import {
   mapSanadAssistantPresentationState,
   readSanadAssistantPreviewState,
@@ -55,13 +56,6 @@ type WorkspaceMessage = {
   rating?: -1 | 1 | null;
   attachments?: SanadAgentAttachment[];
 };
-
-const QUICK_PROMPTS = [
-  'أعطني نظرة على وضعي المالي الشخصي',
-  'اعرض الأنشطة التجارية التي أستطيع الوصول إليها',
-  'ما حالة النسخة السحابية من إبداع؟',
-  'ابحث عن عميل وأعطني كشف حسابه',
-];
 
 function createId() {
   return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -299,6 +293,7 @@ export default function SanadAgentWorkspace() {
   const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
   const [threads, setThreads] = useState<SanadAgentThreadSummary[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [verifiedThreadScope, setVerifiedThreadScope] = useState<VerifiedAssistantProjectScope | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const { preferences, setMemorySnapshot } = useSanadAssistantSettings();
   const [draft, setDraft] = useState('');
@@ -426,6 +421,7 @@ export default function SanadAgentWorkspace() {
   }, []);
 
   useEffect(() => {
+    setVerifiedThreadScope(null);
     if (!selectedThreadId) {
       setMessages([]);
       return;
@@ -442,6 +438,14 @@ export default function SanadAgentWorkspace() {
           listSanadAgentAttachments(selectedThreadId),
         ]);
         if (!alive) return;
+        // Treat only the authorized server-resolved thread as the source for
+        // the empty-state UI; URL params and historical titles are not scope.
+        setVerifiedThreadScope(
+          detail.thread.project_kind === 'legacy_unclassified' ? 'legacy_unclassified'
+            : detail.thread.project_kind === 'business' && detail.thread.business_id ? 'business'
+            : detail.thread.project_kind === 'personal' && !detail.thread.business_id ? 'personal'
+            : null,
+        );
         setBusinessId(detail.thread.business_id || '');
         setThreads((current) => current.some((thread) => thread.id === detail.thread.id)
           ? current.map((thread) => thread.id === detail.thread.id ? { ...thread, ...detail.thread } : thread)
@@ -813,8 +817,13 @@ export default function SanadAgentWorkspace() {
                 <p className="mt-3 max-w-xl text-xs leading-7 text-slate-500">
                   هذه المحادثة مرتبطة بمساحتها منذ إنشائها. ستُقرأ البيانات والكيانات وفق صلاحياتك ومصدرها المعتمد.
                 </p>
+                {verifiedThreadScope === 'legacy_unclassified' ? (
+                  <p className="mt-6 max-w-xl text-xs leading-6 text-[var(--sanad-text-muted)]">
+                    هذه محادثة سابقة لم تُصنَّف بعد. لن نعرض اقتراحات مالية أو تجارية حتى تختار مساحتها المصرح بها.
+                  </p>
+                ) : null}
                 <div className="mt-7 grid w-full gap-2 sm:grid-cols-2">
-                  {QUICK_PROMPTS.map((prompt) => (
+                  {projectQuickPrompts(verifiedThreadScope).map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
