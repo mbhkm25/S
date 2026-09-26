@@ -104,7 +104,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   };
 
   const approve = async () => {
-    if (locked) return;
+    if (locked || noteEditing) return;
     const effect = review.approval_effect || 'سيتم تنفيذ الإجراء داخل سند.';
     if (!window.confirm(`هل تعتمد هذا الإجراء؟\n\n${effect}`)) return;
     setBusy('approve');
@@ -122,7 +122,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   };
 
   const cancel = async (forModify = false) => {
-    if (locked) return;
+    if (locked || noteEditing) return;
     setBusy(forModify ? 'modify' : 'cancel');
     setError('');
     try {
@@ -247,7 +247,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              disabled={locked}
+              disabled={locked || noteEditing}
               onClick={() => void approve()}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[13px] font-medium text-white disabled:opacity-40"
             >
@@ -256,7 +256,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
             </button>
             <button
               type="button"
-              disabled={locked}
+              disabled={locked || noteEditing}
               onClick={() => void cancel(true)}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
@@ -265,7 +265,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
             </button>
             <button
               type="button"
-              disabled={locked}
+              disabled={locked || noteEditing}
               onClick={() => void cancel(false)}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[13px] font-medium text-rose-700 disabled:opacity-40"
             >
