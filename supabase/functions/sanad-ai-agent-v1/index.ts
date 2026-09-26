@@ -866,7 +866,7 @@ function streamAgentResponse(
               // After the last authorized tool round, force a source-grounded
               // narrative answer instead of offering another tool cycle.
               // No automatic retries or larger budgets for financial actions.
-              ...(round === MAX_TOOL_ROUNDS - 1 ? {} : { tools: TOOLS }),
+              ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }),
               generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
             });
             addInteractionUsage(aggregateUsage,interaction);
@@ -1176,7 +1176,7 @@ Deno.serve(async (req) => {
         input: results,
         // Match the streaming path: last round cannot schedule an extra tool
         // sequence and thereby discard previously verified read-only results.
-        ...(round === MAX_TOOL_ROUNDS - 1 ? {} : { tools: TOOLS }),
+        ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }),
         generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
       });
       addInteractionUsage(aggregateUsage,interaction);
