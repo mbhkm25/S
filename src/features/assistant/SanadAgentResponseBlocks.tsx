@@ -136,17 +136,30 @@ function StatementCard({ card, onInspect, legacyBusinessId }: { card: Extract<Sa
         )}
 
         {onInspect ? (
-          <button type="button" onClick={onInspect} className="sanad-focus-ring mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-900 px-3.5 text-[13px] font-medium text-white">
-            عرض كشف الحساب التفاعلي <ArrowUpLeft className="h-4 w-4" />
-          </button>
-        ) : null}
-        {onInspect && legacyBusinessId && card.account_id ? (
-          <a
-            href={`/business/manage?section=accounting&erp=statement&business_id=${encodeURIComponent(legacyBusinessId)}&account_id=${encodeURIComponent(String(card.account_id))}`}
-            className="sanad-focus-ring mt-3 inline-flex items-center gap-1.5 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3.5 py-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] transition hover:-translate-y-px hover:shadow-[var(--sanad-shadow-2)]"
+          <div
+            data-sanad-statement-actions="responsive-pair"
+            className="mt-4 grid min-w-0 grid-cols-1 gap-2.5 border-t border-slate-100 pt-4 sm:grid-cols-2 sm:items-stretch"
           >
-            فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
-          </a>
+            <button
+              type="button"
+              data-sanad-statement-action="primary"
+              onClick={onInspect}
+              className="sanad-focus-ring group inline-flex min-h-12 min-w-0 w-full items-center justify-between gap-3 rounded-xl border border-cyan-300/65 bg-gradient-to-l from-cyan-200 via-emerald-100 to-lime-100 px-4 py-3 text-right text-[13px] font-semibold leading-6 text-slate-900 shadow-[0_2px_8px_rgba(8,145,178,0.08)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-cyan-400 hover:shadow-[0_4px_12px_rgba(8,145,178,0.12)] active:translate-y-px motion-reduce:transform-none motion-reduce:transition-none"
+            >
+              <span className="min-w-0">عرض كشف الحساب التفاعلي</span>
+              <ArrowUpLeft aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-700 transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transform-none" />
+            </button>
+            {legacyBusinessId && card.account_id ? (
+              <a
+                data-sanad-statement-action="secondary"
+                href={`/business/manage?section=accounting&erp=statement&business_id=${encodeURIComponent(legacyBusinessId)}&account_id=${encodeURIComponent(String(card.account_id))}`}
+                className="sanad-focus-ring group inline-flex min-h-12 min-w-0 w-full items-center justify-between gap-3 rounded-xl border border-emerald-200/90 bg-gradient-to-l from-white to-emerald-50 px-4 py-3 text-right text-[13px] font-medium leading-6 text-slate-900 shadow-[0_1px_5px_rgba(15,23,42,0.04)] transition-[background-color,border-color,box-shadow,transform] duration-150 hover:border-emerald-300 hover:from-cyan-50 hover:to-lime-50 hover:shadow-[0_3px_10px_rgba(15,23,42,0.07)] active:translate-y-px motion-reduce:transform-none motion-reduce:transition-none"
+              >
+                <span className="min-w-0">فتح ملف العميل وحركة الحساب</span>
+                <ArrowUpLeft aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600 transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transform-none" />
+              </a>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </section>
