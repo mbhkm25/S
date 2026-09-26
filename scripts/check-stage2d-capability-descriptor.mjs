@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const sql = readFileSync(
-  'supabase/migrations/20260927003500_stage2d_server_capability_descriptor_v1.sql','utf8'
+  'supabase/migrations/20260926214745_stage2d_server_capability_descriptor_v1.sql','utf8'
 );
 const actions = readFileSync(
   'supabase/migrations/20260920121815_sanad_agent_actions_v1.sql','utf8'
