@@ -125,6 +125,19 @@ begin
      'version',v_row.version,'source','ui_explicit'
    )
  );
+
+ -- Stage 2B's action-event projector intentionally has no 'edited' work-item
+ -- branch: refresh the EXISTING pending review projection in place, without
+ -- creating a duplicate review task or changing approval state.
+ update public.sanad_work_items
+ set summary=coalesce(nullif(v_review->>'summary',''),'راجع تفاصيل الإجراء قبل اعتماده.'),
+     updated_at=now()
+ where recipient_user_id=v_uid
+   and source_type='sanad_agent_action'
+   and source_id=v_row.id::text
+   and dedupe_key='agent_action_review:'||v_row.id::text
+   and status in ('open','in_progress');
+
  return to_jsonb(v_row);
 end;
 $function$;
