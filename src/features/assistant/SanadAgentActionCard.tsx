@@ -14,6 +14,7 @@ import {
   approveSanadAgentAction,
   cancelSanadAgentAction,
   getSanadAgentAction,
+  updateSanadAgentActionNote,
   type SanadAgentAction,
 } from './assistantActionApi';
 
@@ -50,7 +51,9 @@ function resultLabel(action: SanadAgentAction | null) {
 
 export default function SanadAgentActionCard({ card, onModify, onStatusChange }: Props) {
   const [action, setAction] = useState<SanadAgentAction | null>(null);
-  const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | 'save_note' | null>(null);
+  const [noteEditing, setNoteEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
 
@@ -81,6 +84,24 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   const meta = statusMeta(status, action?.action_type || card.action_type, action?.result || null);
   const locked = status !== 'review' || busy !== null || review.writes_to_erp === true || !verified;
   const target = resultLabel(action);
+  const noteField = action?.action_type === 'personal_transaction' ? 'description' : 'notes';
+  const currentNote = typeof action?.payload?.[noteField] === 'string' ? String(action.payload[noteField]) : '';
+
+  const saveNote = async () => {
+    if (locked || !noteEditing || noteDraft.length > 500) return;
+    setBusy('save_note');
+    setError('');
+    try {
+      const updated = await updateSanadAgentActionNote(card.action_id, version, noteDraft);
+      setAction(updated);
+      setNoteEditing(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'تعذر تعديل الملاحظة.');
+      try { setAction(await getSanadAgentAction(card.action_id)); } catch { /* preserve visible error */ }
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const approve = async () => {
     if (locked) return;
@@ -190,6 +211,38 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
           </div>
         ) : null}
 
+        {status === 'review' && verified && action ? (
+          <div data-sanad-canonical-note-editor className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            {!noteEditing ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-700">{action.action_type === 'personal_transaction' ? 'وصف المسودة' : 'ملاحظات المسودة'}: {currentNote || 'غير محدد'}</p>
+                <button type="button" disabled={locked} onClick={() => { setNoteDraft(currentNote); setNoteEditing(true); setError(''); }}
+                  className="sanad-focus-ring min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 disabled:opacity-40">
+                  تعديل النص في المسودة نفسها
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label htmlFor={`sanad-action-note-${card.action_id}`} className="block text-xs font-medium text-slate-800">
+                  {action.action_type === 'personal_transaction' ? 'الوصف' : 'الملاحظات'} (500 حرف كحد أقصى)
+                </label>
+                <textarea id={`sanad-action-note-${card.action_id}`} value={noteDraft} maxLength={500}
+                  onChange={(event) => setNoteDraft(event.target.value)} rows={2} disabled={busy !== null}
+                  className="sanad-focus-ring w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm text-slate-900" />
+                <p className="text-[11px] leading-5 text-slate-600">يحفظ سند التعديل على المسودة نفسها ويحدّث إصدارها ومعلومات المراجعة. لن يتغير المبلغ أو الحساب أو الطرف.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void saveNote()} disabled={locked || noteDraft.length > 500}
+                    className="sanad-focus-ring min-h-11 rounded-xl bg-slate-950 px-4 text-xs font-medium text-white disabled:opacity-40">
+                    {busy === 'save_note' ? 'جارٍ الحفظ…' : 'حفظ التعديل'}
+                  </button>
+                  <button type="button" disabled={busy !== null} onClick={() => { setNoteEditing(false); setNoteDraft(''); }}
+                    className="sanad-focus-ring min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-700">تراجع</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {status === 'review' ? (
           <div className="grid grid-cols-3 gap-2">
             <button
@@ -208,7 +261,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
-              تعديل
+              تعديل بقية البيانات
             </button>
             <button
               type="button"
