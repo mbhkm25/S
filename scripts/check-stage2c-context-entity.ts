@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolveSanadCustomerStatementTarget } from '../src/features/assistant/sanadEntityContext';
 import { formatSanadSourceAmount } from '../src/utils/sanadSourceDisplay';
+import { classifySanadAnswerCard, classifySanadEntity } from '../src/features/assistant/sanadInteractiveResultKinds';
+import type { SanadAssistantAnswerCard, SanadAssistantEntity } from '../src/features/assistant/agentFoundation';
 
 const businessA = '11111111-1111-4111-8111-111111111111';
 const businessB = '22222222-2222-4222-8222-222222222222';
@@ -28,6 +30,21 @@ assert.equal(formatSanadSourceAmount(null).text, '—');
 assert.equal(formatSanadSourceAmount('1000000000000.12345678').text, '1,000,000,000,000.12345678');
 assert.equal(formatSanadSourceAmount('-0.001', 'SAR').text, '-0.001');
 
+// v4 semantics are a presentation adapter; the existing wire card and action API remain unchanged.
+const metric = { type: 'metric', title: 'التزام', value: '1' } as SanadAssistantAnswerCard;
+const statement = { type: 'customer_statement', title: 'كشف' } as SanadAssistantAnswerCard;
+const action = (status: string, action_type: string) => ({
+  type: 'action_review', action_id: 'test', status, action_type,
+}) as SanadAssistantAnswerCard;
+assert.equal(classifySanadAnswerCard(metric), 'snapshot');
+assert.equal(classifySanadAnswerCard(statement), 'report');
+assert.equal(classifySanadAnswerCard(action('review', 'personal_transaction')), 'approval');
+assert.equal(classifySanadAnswerCard(action('completed', 'commercial_document_draft')), 'draft');
+assert.equal(classifySanadAnswerCard(action('completed', 'personal_transaction')), 'execution_result');
+assert.equal(classifySanadAnswerCard(action('failed', 'personal_transaction')), 'warning');
+assert.equal(classifySanadEntity({ type: 'erp_customer', label: 'Customer' } as SanadAssistantEntity), 'record');
+
+
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const response = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
 const inspector = readFileSync('src/features/assistant/SanadCustomerStatementInspector.tsx', 'utf8');
@@ -37,6 +54,7 @@ assert.match(workspace, /verifiedThreadScope === 'business' \? businessId : null
 assert.match(workspace, /verifiedThreadScope === 'business' \? selectedThreadId : null/);
 assert.match(response, /resolveSanadCustomerStatementTarget/);
 assert.match(response, /SanadCustomerStatementInspector/);
+assert.match(response, /data-sanad-result-kind/);
 assert.match(inspector, /getBusinessErpCustomerStatement\(/, 'Inspector MUST use existing canonical RPC adapter');
 assert.doesNotMatch(inspector, /supabase\.(from|rpc)\(/, 'Do not invent an independent data path');
 assert.match(inspector, /snapshot_public_id/);
