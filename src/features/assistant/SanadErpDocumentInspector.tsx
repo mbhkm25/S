@@ -15,9 +15,11 @@ import type { SanadErpDocumentTarget } from './sanadEntityContext';
 export default function SanadErpDocumentInspector({
   target,
   onClose,
+  showClose = true,
 }: {
   target: SanadErpDocumentTarget;
   onClose: () => void;
+  showClose?: boolean;
 }) {
   const [detail, setDetail] = useState<BusinessErpDocumentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,10 +78,12 @@ export default function SanadErpDocumentInspector({
             </p>
           </div>
         </div>
-        <button type="button" aria-label="إغلاق تفاصيل المستند" onClick={onClose}
-          className="sanad-focus-ring flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
-          <X aria-hidden="true" className="h-4 w-4" />
-        </button>
+        {showClose ? (
+          <button type="button" aria-label="إغلاق تفاصيل المستند" onClick={onClose}
+            className="sanad-focus-ring flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+        ) : null}
       </header>
       {loading ? <p role="status" className="flex items-center gap-2 px-4 py-5 text-xs text-slate-600">
         <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
