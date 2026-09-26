@@ -114,6 +114,7 @@ function MessageBubble({
   onModifyAction,
   onActionStatusChange,
   verifiedBusinessId,
+  verifiedThreadId,
 }: {
   message: WorkspaceMessage;
   onRetry?: () => void;
@@ -122,6 +123,7 @@ function MessageBubble({
   onModifyAction?: (prompt: string) => void;
   onActionStatusChange?: (status: string) => void;
   verifiedBusinessId?: string | null;
+  verifiedThreadId?: string | null;
 }) {
   const assistant = message.role === 'assistant';
   const result = message.result;
@@ -178,6 +180,7 @@ function MessageBubble({
             <SanadAgentResponseBlocks
               response={result.response}
               verifiedBusinessId={verifiedBusinessId}
+              verifiedThreadId={verifiedThreadId}
               onModifyAction={onModifyAction}
               onActionStatusChange={onActionStatusChange}
             />
@@ -844,6 +847,7 @@ export default function SanadAgentWorkspace() {
                   <MessageBubble
                     message={message}
                     verifiedBusinessId={verifiedThreadScope === 'business' ? businessId : null}
+                    verifiedThreadId={verifiedThreadScope === 'business' ? selectedThreadId : null}
                     onRetry={message.failed && lastUserPrompt && index === messages.length - 1
                       ? () => void sendPrompt(lastUserPrompt)
                       : undefined}
