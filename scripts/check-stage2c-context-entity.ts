@@ -62,6 +62,16 @@ assert.match(workspace, /verifiedThreadScope === 'business' \? selectedThreadId 
 assert.match(response, /resolveSanadCustomerStatementTarget/);
 assert.match(response, /SanadCustomerStatementInspector/);
 assert.match(response, /data-sanad-result-kind/);
+assert.match(response, /data-sanad-statement-actions="responsive-pair"/, 'Statement actions should form one balanced action row');
+assert.match(response, /sm:grid-cols-2 sm:items-stretch/, 'Desktop actions should align in equal columns');
+assert.match(response, /grid-cols-1 gap-2\.5/, 'Narrow mobile actions must stack without horizontal overflow');
+assert.match(response, /data-sanad-statement-action="primary"/, 'Interactive statement is the primary CTA');
+assert.match(response, /data-sanad-statement-action="secondary"/, 'Legacy customer account entry is the secondary CTA');
+assert.match(response, /from-cyan-200 via-emerald-100 to-lime-100/, 'Primary color remains light SANAD mint/aqua/lime');
+assert.match(response, /from-white to-emerald-50/, 'Secondary color must stay lighter than primary');
+assert.match(response, /text-slate-900/, 'CTA labels use dark ink on light backgrounds');
+assert.match(response, /motion-reduce:transition-none/, 'Respect reduced-motion preferences');
+
 assert.match(response, /const statementGroups = new Map<number, number\[\]>\(\)/);
 assert.match(workspace, /data-sanad-statement-narrative="collapsed"/);
 assert.match(inspector, /formatSanadErpLedgerDate/);
