@@ -50,3 +50,36 @@ export function resolveSanadCustomerStatementTarget(
     toDate: source.toDate || null,
   };
 }
+
+/**
+ * Verified document hint for the EXISTING business document-detail RPC.
+ * Identity must be a stable source document ID, never a model-provided URL.
+ * A verified thread context only scopes frontend navigation; the RPC rechecks
+ * current business membership for each request.
+ */
+export type SanadErpDocumentReference = {
+  businessId?: string | null;
+  documentId?: number | null;
+  documentKind?: 'sale' | 'purchase' | null;
+};
+
+export type SanadErpDocumentTarget = {
+  businessId: string;
+  documentId: number;
+  documentKind: 'sale' | 'purchase';
+};
+
+export function resolveSanadErpDocumentTarget(
+  verifiedContext: SanadVerifiedBusinessContext | null | undefined,
+  source: SanadErpDocumentReference,
+): SanadErpDocumentTarget | null {
+  if (!verifiedContext?.threadId || verifiedContext.projectKind !== 'business' || !verifiedContext.businessId) return null;
+  if (source.businessId && source.businessId !== verifiedContext.businessId) return null;
+  if (source.documentKind !== 'sale' && source.documentKind !== 'purchase') return null;
+  if (!Number.isSafeInteger(source.documentId) || !source.documentId || source.documentId <= 0) return null;
+  return {
+    businessId: verifiedContext.businessId,
+    documentId: source.documentId,
+    documentKind: source.documentKind,
+  };
+}
