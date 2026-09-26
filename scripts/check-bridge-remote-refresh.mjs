@@ -29,6 +29,14 @@ assert.match(migrations, /grant execute on function public\.bridge_claim_sanad_e
 assert.match(migrations, /revoke all on function public\.bridge_claim_sanad_erp_refresh_v1\(uuid\)\s+from public,anon,authenticated/i);
 assert.match(heartbeat, /invalid_device_credential/);
 assert.match(heartbeat, /remoteRefreshCapable = body\?\.remote_refresh_v1 === true/);
+assert.match(heartbeat, /pollingFromAgentCycle = body\?\.poll_remote_refresh_v1 === true/);
+assert.match(heartbeat, /if \(remoteRefreshCapable && pollingFromAgentCycle\)/,
+  'Standalone heartbeat diagnostics must not claim refresh commands');
+assert.match(device, /string\.Equals\(item, "--agent-cycle"/,
+  'Only the mutex-owned agent-cycle may request pending commands');
+assert.match(device, /poll_remote_refresh_v1/,
+  'On-prem heartbeat must declare whether it is actually polling');
+
 assert.match(heartbeat, /bridge_claim_sanad_erp_refresh_v1/);
 assert.match(heartbeat, /refresh_request_id: refreshRequestId/);
 assert.doesNotMatch(heartbeat, /\bexec\(|Deno\.Command\(/, 'Cloud never executes Edaa/Windows code');
