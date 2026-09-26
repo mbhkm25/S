@@ -24,6 +24,7 @@ const SanadCustomerStatementInspector = lazy(() => import('./SanadCustomerStatem
 const SanadErpDocumentInspector = lazy(() => import('./SanadErpDocumentInspector'));
 import { classifySanadAnswerCard, classifySanadEntity } from './sanadInteractiveResultKinds';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
+import { formatSanadErpLedgerDate } from '../../utils/sanadErpLedgerDate';
 import type {
   SanadAssistantAnswerCard,
   SanadAssistantAttention,
@@ -38,6 +39,11 @@ function number(value: number | null | undefined, currency?: string | null) {
 function sourceDate(value?: string | null) {
   const source = formatSanadSourceDate(value);
   return source.valid ? source.text : source.text === '—' ? '—' : `صيغة التاريخ في المصدر: ${source.text}`;
+}
+
+function documentDate(value?: string | null) {
+  const parsed = formatSanadErpLedgerDate(value);
+  return parsed.valid || parsed.text === '—' ? parsed.text : `تاريخ المصدر: ${parsed.text}`;
 }
 
 function dateTime(value?: string | null) {
@@ -172,18 +178,20 @@ function StatementCard({ card, onInspect, legacyBusinessId }: { card: Extract<Sa
 
 function DocumentsCard({ card, onInspectDocument }: { card: Extract<SanadAssistantAnswerCard, { type: 'document_list' }>; onInspectDocument?: (source: SanadErpDocumentReference) => void }) {
   return (
-    <section className="overflow-hidden rounded-[1.55rem] border border-slate-200/80 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-            <FileText className="h-4 w-4" />
+    <section data-sanad-document-list="refined" aria-label={card.kind === 'sale' ? 'فواتير المبيعات' : 'فواتير المشتريات'}
+      className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-teal-800">
+            <FileText aria-hidden="true" className="h-4 w-4" />
           </span>
-          <div>
-            <p className="text-[15px] font-semibold text-slate-900">{card.title}</p>
-            <p className="text-xs text-slate-400">{card.count} مستند</p>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-slate-900">{card.kind === 'sale' ? 'فواتير المبيعات' : 'فواتير المشتريات'}</h3>
+            <p className="mt-0.5 text-[11px] text-slate-500">{card.count} مستند من النسخة السحابية</p>
           </div>
         </div>
-      </div>
+        <span className="shrink-0 rounded-full border border-cyan-100 bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-teal-900">من المصدر</span>
+      </header>
       <div className="divide-y divide-slate-100">
         {(card.items || []).slice(0, 8).map((item, index) => {
           const documentKind = item.document_kind || card.kind;
@@ -197,36 +205,49 @@ function DocumentsCard({ card, onInspectDocument }: { card: Extract<SanadAssista
           }) : undefined;
           const rowContent = (
             <>
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-slate-800">{item.label}</p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {[item.party_name, item.date ? sourceDate(item.date) : null, item.currency].filter(Boolean).join(' · ')}
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[13px] font-semibold leading-6 text-slate-900">
+                  <bdi dir="ltr">#{item.document_number || item.document_id || '—'}</bdi>
+                  <span className="min-w-0 truncate text-[13px] font-medium text-slate-700">{item.party_name || item.label}</span>
+                </p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  {documentDate(item.date)}
                 </p>
               </div>
-              <div className="shrink-0 text-left">
+              <div className="flex shrink-0 items-center gap-2">
                 {typeof item.source_line_total === 'number' ? (
-                  <p className="text-[13px] font-medium text-slate-700" dir="ltr">
-                    {number(item.source_line_total, item.currency)} {item.currency ? <bdi>{item.currency}</bdi> : null}
-                  </p>
-                ) : null}
-                {inspect ? <ArrowUpLeft aria-hidden="true" className="mt-1 mr-auto h-3.5 w-3.5 text-slate-500" /> : null}
+                  <div className="text-left">
+                    <span className="block whitespace-nowrap text-[13px] font-semibold text-slate-900" dir="ltr">
+                      {number(item.source_line_total)}
+                    </span>
+                    <span className="block text-[11px] text-slate-500">{item.currency || 'عملة المصدر'}</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-500">{item.currency || '—'}</span>
+                )}
+                {inspect ? <ArrowUpLeft aria-hidden="true" className="h-4 w-4 shrink-0 text-teal-700" /> : null}
               </div>
             </>
           );
           return inspect ? (
             <button key={`${item.document_id || index}-${item.label}`} type="button" onClick={inspect}
               data-sanad-document-action="authorized-inspect"
-              className="sanad-focus-ring flex min-h-12 w-full items-center justify-between gap-3 p-3 text-right transition hover:bg-cyan-50">
+              className="sanad-focus-ring flex min-h-[64px] w-full items-center justify-between gap-3 px-3 py-2.5 text-right transition-colors hover:bg-cyan-50/70 focus-visible:bg-cyan-50 sm:px-4">
               {rowContent}
             </button>
           ) : (
             <div key={`${item.document_id || index}-${item.label}`}
-              data-sanad-document-action="unresolved" className="flex items-center justify-between gap-3 p-3">
+              data-sanad-document-action="unresolved" className="flex min-h-[64px] items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
               {rowContent}
             </div>
           );
         })}
       </div>
+      {card.count > (card.items || []).length ? (
+        <p className="border-t border-slate-100 px-3 py-2 text-[11px] leading-5 text-slate-500 sm:px-4">
+          يعرض سند هنا المستندات المستلمة ضمن هذه النتيجة، وليس بالضرورة جميع مستندات النشاط.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -434,6 +455,21 @@ export default function SanadAgentResponseBlocks({
     <div className="mt-3 space-y-2.5">
       {cards.map((card, index) => {
         if (card.type !== 'customer_statement' || !card.account_id) {
+          if (card.type === 'document_list' && inspectedDocument) {
+            return (
+              <section key={`documents-workspace-${index}`} data-sanad-document-view="detail"
+                className="min-w-0" aria-label="مساحة عرض المستند">
+                <button type="button" onClick={() => setInspectedDocument(null)}
+                  className="sanad-focus-ring mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-[13px] font-medium text-slate-900 transition-colors hover:bg-cyan-100">
+                  <ArrowUpLeft aria-hidden="true" className="h-4 w-4 rotate-180" />
+                  العودة إلى قائمة المستندات
+                </button>
+                <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض المستند…</p>}>
+                  <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} />
+                </Suspense>
+              </section>
+            );
+          }
           return renderCard(card, index, onModifyAction, onActionStatusChange, undefined, verifiedBusinessId,
             card.type === 'document_list' && context ? (source) => {
               if (resolveDocument(source)) inspectDocument(source);
@@ -497,10 +533,17 @@ export default function SanadAgentResponseBlocks({
           <SanadCustomerStatementInspector target={inspectedTarget} onClose={() => setInspectedTarget(null)} />
         </Suspense>
       ) : null}
-      {inspectedDocument && inspectedDocument.businessId === verifiedBusinessId ? (
-        <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض المستند…</p>}>
-          <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} />
-        </Suspense>
+      {inspectedDocument && inspectedDocument.businessId === verifiedBusinessId &&
+        !cards.some((card) => card.type === 'document_list') ? (
+        <section data-sanad-document-view="detail" className="min-w-0">
+          <button type="button" onClick={() => setInspectedDocument(null)}
+            className="sanad-focus-ring mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-[13px] font-medium text-slate-900">
+            <ArrowUpLeft aria-hidden="true" className="h-4 w-4 rotate-180" /> إغلاق تفاصيل المستند
+          </button>
+          <Suspense fallback={<p role="status" className="p-3 text-xs text-slate-500">جارٍ تجهيز عرض المستند…</p>}>
+            <SanadErpDocumentInspector target={inspectedDocument} onClose={() => setInspectedDocument(null)} />
+          </Suspense>
+        </section>
       ) : null}
       {response.copy_text && !cards.some((card) => card.type === 'customer_statement') && (
         <CopyButton text={response.copy_text} label="نسخ البيانات" />
