@@ -93,6 +93,19 @@ assert.match(response, /data-sanad-document-action="authorized-inspect"/);
 assert.match(response, /resolveSanadErpDocumentTarget/, 'ERP document opening must check verified conversation context');
 assert.doesNotMatch(response, /href=\{item\.href \|\| '#'/, 'Model-provided document links are not permission grants');
 assert.match(documentInspector, /getBusinessErpDocumentDetail\(/, 'Document inspector reuses existing server-authorized RPC');
+assert.match(workspace, /card\.type === 'customer_statement' \|\| card\.type === 'document_list'/,
+  'Structured document lists should collapse redundant model narrative without losing access');
+assert.match(response, /data-sanad-document-list="refined"/, 'Use one compact source document list');
+assert.match(response, /documentDate\(item\.date\)/, 'Document list dates must use ERP civil-date formatter');
+assert.match(response, /data-sanad-document-view="detail"/, 'Document detail replaces its source list within conversation');
+assert.match(response, /inspectedDocumentListIndex === index/, 'Only the originating list must swap to the active document');
+assert.match(response, /inspectedDocumentThreadId === verifiedThreadId/, 'Stale thread details must not display in other threads');
+assert.match(response, /العودة إلى قائمة المستندات/, 'Detail view must provide an explicit way back');
+assert.match(documentInspector, /data-sanad-source-caveat="compact"/,
+  'Visible provenance note should disclose, not dominate, source document detail');
+assert.match(documentInspector, /text-\[13px\]/, 'Source line items must be legible at default desktop size');
+assert.match(documentInspector, /role="region"/, 'Long tables need labeled horizontal overflow');
+
 assert.doesNotMatch(documentInspector, /supabase\.(from|rpc)\(/, 'Document inspector must not invent a second read contract');
 assert.match(documentInspector, /formatSanadSourceAmount\(line\.source_total_amount/, 'Preserve source line decimal strings');
 assert.doesNotMatch(documentInspector, /reduce\(/, 'No unverified line aggregation or net calculations');
