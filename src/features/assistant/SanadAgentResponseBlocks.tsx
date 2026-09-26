@@ -415,6 +415,7 @@ export default function SanadAgentResponseBlocks({
   const [inspectedTarget, setInspectedTarget] = useState<SanadCustomerStatementTarget | null>(null);
   const [inspectedDocument, setInspectedDocument] = useState<SanadErpDocumentTarget | null>(null);
   const [inspectedDocumentThreadId, setInspectedDocumentThreadId] = useState<string | null>(null);
+  const [inspectedDocumentListIndex, setInspectedDocumentListIndex] = useState<number | null>(null);
   const context = verifiedBusinessId && verifiedThreadId ? {
     projectKind: 'business' as const, businessId: verifiedBusinessId, threadId: verifiedThreadId,
   } : null;
@@ -424,9 +425,14 @@ export default function SanadAgentResponseBlocks({
     if (target) { setInspectedDocument(null); setInspectedTarget(target); }
   };
   const resolveDocument = (source: SanadErpDocumentReference) => resolveSanadErpDocumentTarget(context, source);
-  const inspectDocument = (source: SanadErpDocumentReference) => {
+  const inspectDocument = (source: SanadErpDocumentReference, listIndex: number | null = null) => {
     const target = resolveDocument(source);
-    if (target && verifiedThreadId) { setInspectedTarget(null); setInspectedDocument(target); setInspectedDocumentThreadId(verifiedThreadId); }
+    if (target && verifiedThreadId) {
+      setInspectedTarget(null);
+      setInspectedDocument(target);
+      setInspectedDocumentThreadId(verifiedThreadId);
+      setInspectedDocumentListIndex(listIndex);
+    }
   };
   if (!response) return null;
   const cards = Array.isArray(response.cards) ? response.cards : [];
@@ -456,7 +462,7 @@ export default function SanadAgentResponseBlocks({
     <div className="mt-3 space-y-2.5">
       {cards.map((card, index) => {
         if (card.type !== 'customer_statement' || !card.account_id) {
-          if (card.type === 'document_list' && inspectedDocument && inspectedDocument.businessId === verifiedBusinessId && inspectedDocumentThreadId === verifiedThreadId) {
+          if (card.type === 'document_list' && inspectedDocument && inspectedDocumentListIndex === index && inspectedDocument.businessId === verifiedBusinessId && inspectedDocumentThreadId === verifiedThreadId) {
             return (
               <section key={`documents-workspace-${index}`} data-sanad-document-view="detail"
                 className="min-w-0" aria-label="مساحة عرض المستند">
@@ -473,7 +479,7 @@ export default function SanadAgentResponseBlocks({
           }
           return renderCard(card, index, onModifyAction, onActionStatusChange, undefined, verifiedBusinessId,
             card.type === 'document_list' && context ? (source) => {
-              if (resolveDocument(source)) inspectDocument(source);
+              if (resolveDocument(source)) inspectDocument(source, index);
             } : undefined);
         }
         if (primaryIndex.get(card.account_id) !== index) return null;
@@ -536,7 +542,7 @@ export default function SanadAgentResponseBlocks({
       ) : null}
       {inspectedDocument && inspectedDocument.businessId === verifiedBusinessId &&
         inspectedDocumentThreadId === verifiedThreadId &&
-        !cards.some((card) => card.type === 'document_list') ? (
+        inspectedDocumentListIndex === null ? (
         <section data-sanad-document-view="detail" className="min-w-0">
           <button type="button" onClick={() => setInspectedDocument(null)}
             className="sanad-focus-ring mb-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-[13px] font-medium text-slate-900">
