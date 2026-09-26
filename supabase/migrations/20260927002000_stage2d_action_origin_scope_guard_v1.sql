@@ -51,6 +51,30 @@ $guard$;
 revoke all on function private.sanad_agent_action_origin_guard_v1()
   from public,anon,authenticated;
 
+-- Fail closed instead of silently rewriting legacy draft origins. Historical
+-- actions remain immutable and require separate explicitly reviewed repair if
+-- any mismatch appears during deployment.
+do $preflight$
+begin
+  if exists(
+    select 1 from public.sanad_agent_actions a
+    left join public.sanad_agent_threads t
+      on t.id=a.thread_id and t.user_id=a.user_id
+    where t.id is null
+      or (a.action_type='personal_transaction' and (
+        t.project_kind is distinct from 'personal'
+        or t.business_id is not null or a.business_id is not null))
+      or (a.action_type='commercial_document_draft' and (
+        t.project_kind is distinct from 'business'
+        or t.business_id is null
+        or a.business_id is distinct from t.business_id))
+  ) then
+    raise exception 'existing_agent_action_origin_requires_review'
+      using errcode='42501';
+  end if;
+end;
+$preflight$;
+
 drop trigger if exists sanad_agent_action_origin_guard_v1 on public.sanad_agent_actions;
 create trigger sanad_agent_action_origin_guard_v1
   before insert or update on public.sanad_agent_actions
