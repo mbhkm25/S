@@ -10,6 +10,9 @@ namespace Sanad.Bridge
 {
     internal static class BridgeHeartbeatCommand
     {
+        // In-process signal to the mutex-protected agent cycle, never a
+        // shell command or arbitrary server-supplied argument.
+        internal static Guid? PendingForcedRefreshRequestId { get; private set; }
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer
         {
             MaxJsonLength = int.MaxValue,
@@ -18,6 +21,7 @@ namespace Sanad.Bridge
 
         public static async Task<int> RunAsync(string[] args)
         {
+            PendingForcedRefreshRequestId = null;
             try
             {
                 Console.WriteLine("SANAD Bridge heartbeat");
@@ -58,7 +62,7 @@ namespace Sanad.Bridge
 
                     request.Headers.TryAddWithoutValidation("x-sanad-device-id", identity.device_public_id);
                     request.Headers.TryAddWithoutValidation("x-sanad-device-token", identity.device_token);
-                    request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                    request.Content = new StringContent("{\"remote_refresh_v1\":true}", Encoding.UTF8, "application/json");
 
                     using (var response = await http.SendAsync(request, timeout.Token).ConfigureAwait(false))
                     {
@@ -80,6 +84,22 @@ namespace Sanad.Bridge
                         object serverTime;
                         var heartbeatStatus = parsed != null && parsed.TryGetValue("status", out status) ? Convert.ToString(status) : "unknown";
                         var heartbeatTime = parsed != null && parsed.TryGetValue("server_time", out serverTime) ? Convert.ToString(serverTime) : null;
+
+                        if (string.Equals(heartbeatStatus, "alive", StringComparison.OrdinalIgnoreCase))
+                        {
+                            object requested;
+                            var requestedValue = parsed != null && parsed.TryGetValue("refresh_request_id", out requested)
+                                ? Convert.ToString(requested)
+                                : null;
+                            Guid validatedRequest;
+                            if (!string.IsNullOrWhiteSpace(requestedValue)
+                                && Guid.TryParse(requestedValue, out validatedRequest)
+                                && validatedRequest != Guid.Empty)
+                            {
+                                PendingForcedRefreshRequestId = validatedRequest;
+                                Console.WriteLine("A signed-in owner requested an immediate Edaa cloud refresh.");
+                            }
+                        }
 
                         Console.WriteLine("Edaa database : " + discovery.DatabaseName);
                         Console.WriteLine("Source key    : " + discovery.SourceKey);

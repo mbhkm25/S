@@ -52,7 +52,7 @@ serve(async (req) => {
   try {
     const { data: device, error: deviceError } = await supabase
       .from("business_bridge_devices")
-      .select("id, device_public_id, business_id, connection_id, source_instance_id, status")
+      .select("id, device_public_id, business_id, connection_id, source_instance_id, status, metadata")
       .eq("device_public_id", devicePublicId)
       .eq("status", "active")
       .maybeSingle();
@@ -90,12 +90,25 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: "invalid_device_credential" }, 401);
     }
 
+    // A legacy Bridge sends {}. Only a token-authenticated upgraded device
+    // can advertise support for the fixed on-demand operation.
+    let remoteRefreshCapable = false;
+    try {
+      const body = await req.json();
+      remoteRefreshCapable = body?.remote_refresh_v1 === true;
+    } catch { /* legacy heartbeat body: no capability */ }
     const now = new Date().toISOString();
 
     const [deviceUpdate, connectionUpdate, sourceUpdate, credentialUpdate] = await Promise.all([
       supabase
         .from("business_bridge_devices")
-        .update({ last_heartbeat_at: now, updated_at: now })
+        .update({
+          last_heartbeat_at: now, updated_at: now,
+          metadata: {
+            ...((device.metadata && typeof device.metadata === "object") ? device.metadata : {}),
+            remote_refresh_v1: remoteRefreshCapable,
+          },
+        })
         .eq("id", device.id),
       supabase
         .from("business_accounting_connections")
@@ -118,6 +131,20 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: "heartbeat_update_failed" }, 500);
     }
 
+    // Only this device-token-authenticated service endpoint claims commands.
+    let refreshRequestId: string | null = null;
+    if (remoteRefreshCapable) {
+      const { data: command, error: commandError } = await supabase.rpc(
+        "bridge_claim_sanad_erp_refresh_v1", { p_device_id: device.id },
+      );
+      if (commandError) {
+        console.error("erp_refresh_claim_failed", { code: commandError.code });
+      } else if (command?.command_kind === "erp_logical_snapshot_refresh"
+        && typeof command?.refresh_request_id === "string") {
+        refreshRequestId = command.refresh_request_id;
+      }
+    }
+
     return jsonResponse({
       ok: true,
       status: "alive",
@@ -126,6 +153,7 @@ serve(async (req) => {
       connection_id: device.connection_id,
       source_instance_id: device.source_instance_id,
       server_time: now,
+      refresh_request_id: refreshRequestId,
     });
   } catch (error) {
     console.error("erp_heartbeat_unhandled", {

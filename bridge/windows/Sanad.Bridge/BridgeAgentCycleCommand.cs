@@ -53,7 +53,17 @@ namespace Sanad.Bridge
                     {
                         Console.WriteLine();
                         Console.WriteLine("=== LOGICAL ERP SNAPSHOT ===");
-                        snapshotCode = await EdaaLogicalSnapshotCommand.RunAsync(args).ConfigureAwait(false);
+                        var requested = BridgeHeartbeatCommand.PendingForcedRefreshRequestId;
+                        var snapshotArgs = args;
+                        if (requested.HasValue)
+                        {
+                            var originals = args ?? Array.Empty<string>();
+                            snapshotArgs = new string[originals.Length + 1];
+                            Array.Copy(originals, snapshotArgs, originals.Length);
+                            snapshotArgs[originals.Length] = "--force-logical-snapshot";
+                            Console.WriteLine("Executing fixed, device-authorized on-demand logical refresh request.");
+                        }
+                        snapshotCode = await EdaaLogicalSnapshotCommand.RunAsync(snapshotArgs).ConfigureAwait(false);
                     }
                 }
                 else
