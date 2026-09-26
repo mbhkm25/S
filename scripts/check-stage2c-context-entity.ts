@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolveSanadCustomerStatementTarget } from '../src/features/assistant/sanadEntityContext';
+import { resolveSanadCustomerStatementTarget, resolveSanadErpDocumentTarget } from '../src/features/assistant/sanadEntityContext';
 import { formatSanadSourceAmount } from '../src/utils/sanadSourceDisplay';
 import { formatSanadErpLedgerDate } from '../src/utils/sanadErpLedgerDate';
 import { classifySanadAnswerCard, classifySanadEntity } from '../src/features/assistant/sanadInteractiveResultKinds';
@@ -26,6 +26,18 @@ for (const id of [null, 0, -1, NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1])
 for (const [fromDate,toDate] of [['2026-02-30','2026-03-01'],['2026-09-02','2026-09-01'],['2026-01-01','tomorrow']]) {
   assert.equal(resolveSanadCustomerStatementTarget(context, { accountId: 17, fromDate, toDate }), null);
 }
+
+// Document links must have the same business isolation as customer statements.
+assert.deepEqual(resolveSanadErpDocumentTarget(context, {
+  documentId: 1239, documentKind: 'sale', businessId: businessA,
+}), { documentId: 1239, documentKind: 'sale', businessId: businessA });
+assert.equal(resolveSanadErpDocumentTarget(null, { documentId: 1239, documentKind: 'sale' }), null);
+assert.equal(resolveSanadErpDocumentTarget(context, { documentId: 1239, documentKind: 'sale', businessId: businessB }), null);
+assert.equal(resolveSanadErpDocumentTarget(context, { documentId: 1239, documentKind: null }), null);
+for (const documentId of [-1, 0, 1.4, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, null]) {
+  assert.equal(resolveSanadErpDocumentTarget(context, { documentId, documentKind: 'purchase' }), null);
+}
+assert.equal(formatSanadSourceAmount('1000000000000000.123456789').text, '1,000,000,000,000,000.123456789');
 
 assert.equal(formatSanadSourceAmount(null).text, '—');
 assert.equal(formatSanadSourceAmount('1000000000000.12345678').text, '1,000,000,000,000.12345678');
@@ -76,6 +88,14 @@ assert.match(response, /const statementGroups = new Map<number, number\[\]>\(\)/
 assert.match(workspace, /data-sanad-statement-narrative="collapsed"/);
 assert.match(inspector, /formatSanadErpLedgerDate/);
 assert.match(inspector, /data-sanad-parity-warning="unverified"/);
+const documentInspector = readFileSync('src/features/assistant/SanadErpDocumentInspector.tsx', 'utf8');
+assert.match(response, /data-sanad-document-action="authorized-inspect"/);
+assert.match(response, /resolveSanadErpDocumentTarget/, 'ERP document opening must check verified conversation context');
+assert.doesNotMatch(response, /href=\{item\.href \|\| '#'/, 'Model-provided document links are not permission grants');
+assert.match(documentInspector, /getBusinessErpDocumentDetail\(/, 'Document inspector reuses existing server-authorized RPC');
+assert.doesNotMatch(documentInspector, /supabase\.(from|rpc)\(/, 'Document inspector must not invent a second read contract');
+assert.match(documentInspector, /formatSanadSourceAmount\(line\.source_total_amount/, 'Preserve source line decimal strings');
+assert.doesNotMatch(documentInspector, /reduce\(/, 'No unverified line aggregation or net calculations');
 assert.match(inspector, /getBusinessErpCustomerStatement\(/, 'Inspector MUST use existing canonical RPC adapter');
 assert.doesNotMatch(inspector, /supabase\.(from|rpc)\(/, 'Do not invent an independent data path');
 assert.match(inspector, /snapshot_public_id/);
