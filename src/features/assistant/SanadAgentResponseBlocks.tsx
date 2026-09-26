@@ -73,7 +73,8 @@ function EntityLink({ entity, onInspect }: { entity: SanadAssistantEntity; onIns
       </button>
     );
   }
-  if (!entity.href) {
+  // An ERP customer link without a verified same-project resolver is display-only.
+  if (!entity.href || entity.type === 'erp_customer') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[13px] font-medium text-slate-700">
         <Icon className="h-3.5 w-3.5" /> {entity.label}
@@ -92,7 +93,7 @@ function EntityLink({ entity, onInspect }: { entity: SanadAssistantEntity; onIns
   );
 }
 
-function StatementCard({ card, onInspect }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }>; onInspect?: () => void }) {
+function StatementCard({ card, onInspect, legacyBusinessId }: { card: Extract<SanadAssistantAnswerCard, { type: 'customer_statement' }>; onInspect?: () => void; legacyBusinessId?: string | null }) {
   return (
     <section className="sanad-surface overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-4">
@@ -139,9 +140,9 @@ function StatementCard({ card, onInspect }: { card: Extract<SanadAssistantAnswer
             عرض كشف الحساب التفاعلي <ArrowUpLeft className="h-4 w-4" />
           </button>
         ) : null}
-        {card.href && (
+        {onInspect && legacyBusinessId && card.account_id ? (
           <a
-            href={card.href}
+            href={`/business/manage?section=accounting&erp=statement&business_id=${encodeURIComponent(legacyBusinessId)}&account_id=${encodeURIComponent(String(card.account_id))}`}
             className="sanad-focus-ring mt-3 inline-flex items-center gap-1.5 rounded-[var(--sanad-radius-md)] bg-[var(--sanad-surface-inverse)] px-3.5 py-2.5 text-[13px] font-medium text-white shadow-[var(--sanad-shadow-1)] transition hover:-translate-y-px hover:shadow-[var(--sanad-shadow-2)]"
           >
             فتح ملف العميل وحركة الحساب <ArrowUpLeft className="h-3.5 w-3.5" />
@@ -312,8 +313,9 @@ function renderCard(
   onModifyAction?: (prompt: string) => void,
   onActionStatusChange?: (status: string) => void,
   onInspectCustomer?: (source: SanadCustomerStatementReference) => void,
+  verifiedBusinessId?: string | null,
 ) {
-  if (card.type === 'customer_statement') return <div key={`statement-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><StatementCard card={card} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
+  if (card.type === 'customer_statement') return <div key={`statement-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><StatementCard card={card} legacyBusinessId={verifiedBusinessId} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
   if (card.type === 'document_list') return <div key={`documents-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><DocumentsCard card={card} /></div>;
   if (card.type === 'replica_status') return <div key={`replica-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><ReplicaCard card={card} /></div>;
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><PaymentInboxCard card={card} /></div>;
@@ -369,7 +371,7 @@ export default function SanadAgentResponseBlocks({
 
   return (
     <div className="mt-3 space-y-2.5">
-      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, context && card.type === 'customer_statement' && resolveTarget({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) ? inspectCustomer : undefined))}
+      {cards.map((card, index) => renderCard(card, index, onModifyAction, onActionStatusChange, context && card.type === 'customer_statement' && resolveTarget({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) ? inspectCustomer : undefined, verifiedBusinessId))}
       {attention.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-1">
