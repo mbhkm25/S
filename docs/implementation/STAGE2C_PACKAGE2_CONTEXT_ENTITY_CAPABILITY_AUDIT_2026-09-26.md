@@ -53,7 +53,17 @@ Before owner preview or release, validate with authorized disposable sessions on
 
 Separate owner preview in worktree at `C:\\SANAD-DEV` and sibling preview; **explicit owner acceptance before merge**; production publish requires independent gated Web run and authenticated owner postflight. No Android claim follows Web release. No Production migration/Edge change authorized for this slice.
 
-## 6. Open constraints to take into next 2C.4 PR(s)
+## 6. Owner preview: accounting parity gate — BLOCKED
+
+**Owner-provided screenshot and 2026-09-26 read-only production forensics; issue #399.** For account number `122017` (ERP ledger account ID `169`), the owner's Edaa report at ~11:17 Yemen time displays **SAR 2,770**; SANAD's latest completed cloud logical snapshot produces **SAR 3,020**. Delta **SAR 250**. Historical SANAD conversation shows multiple overlapping reports and raw timezone-less ERP timestamps (`2026-06-06T00:00:00.000`) as malformed source dates.
+
+Read-only catalog and rows from current logical backup `ae123a49-c089-4664-9f09-d812e6a5442f` (completed `2026-09-26 05:33:12Z`, ~08:33 Yemen) localize the unmatched SAR 250 to invoice **1221**, ledger entry ID **2238**, customer detail ID **10829**. Edaa screenshot lists invoice **1219**, but no **1221**. Snapshot also contains invoice 1219 on a **different** ledger entry ID **2236**, customer detail ID **10819**; both have customer debit 250 and distinct source invoice headers. `tblSellInvoice` entries for both have `Deleted=false`. Matching dates and amounts **do not** license deduplication, cancellation or exclusion. Report filters, effective source changes since the cloud snapshot, Edaa's own report selection semantics, or a genuine business adjustment remain unverified hypotheses.
+
+**Containment in this branch:** visually collapse redundant narrative when structured statements exist; display one primary report per account while preserving alternate date windows behind disclosure; remove redundant same-account customer chip; display explicit cloud-vs-live unverified warning in card and inspector; format timezone-less Edaa civil dates without assigning a timezone; leave both source entries and all amounts intact. The old statement route receives the same date display fix.
+
+**Release block:** until Edaa's exact report filter/status for 1221 and refreshed same-time snapshot are verified, this is a financial truth mismatch. Do not merge #398, deploy it to Web/Android, or mark result as source-parity verified merely from passing CI. Obtain the Edaa statement export and the original invoice 1221 status, then add an authenticated source-parity fixture or versioned read projection if required. Bridge remains read-only to Edaa. No production DB or ERP modifications authorized here.
+
+## 7. Open constraints to take into next 2C.4 PR(s)
 
 - Extend Entity Inspector to ERP documents, native operations and own-authorized Work Item after each real source/RPC permission mapping; do not make generic frontend reads.
 - Seven unified typed visual families can adapt existing cards incrementally; a full shared Action Registry and canonical two-way draft lifecycle are 2D.
