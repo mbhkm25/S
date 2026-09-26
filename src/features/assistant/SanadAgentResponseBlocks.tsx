@@ -18,6 +18,7 @@ import {
   type SanadCustomerStatementTarget,
 } from './sanadEntityContext';
 const SanadCustomerStatementInspector = lazy(() => import('./SanadCustomerStatementInspector'));
+import { classifySanadAnswerCard, classifySanadEntity } from './sanadInteractiveResultKinds';
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../../utils/sanadSourceDisplay';
 import type {
   SanadAssistantAnswerCard,
@@ -312,12 +313,12 @@ function renderCard(
   onActionStatusChange?: (status: string) => void,
   onInspectCustomer?: (source: SanadCustomerStatementReference) => void,
 ) {
-  if (card.type === 'customer_statement') return <div key={`statement-${index}`}><StatementCard card={card} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
-  if (card.type === 'document_list') return <div key={`documents-${index}`}><DocumentsCard card={card} /></div>;
-  if (card.type === 'replica_status') return <div key={`replica-${index}`}><ReplicaCard card={card} /></div>;
-  if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`}><PaymentInboxCard card={card} /></div>;
+  if (card.type === 'customer_statement') return <div key={`statement-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><StatementCard card={card} onInspect={onInspectCustomer ? () => onInspectCustomer({ accountId: card.account_id, fromDate: card.from_date, toDate: card.to_date }) : undefined} /></div>;
+  if (card.type === 'document_list') return <div key={`documents-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><DocumentsCard card={card} /></div>;
+  if (card.type === 'replica_status') return <div key={`replica-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><ReplicaCard card={card} /></div>;
+  if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><PaymentInboxCard card={card} /></div>;
   if (card.type === 'action_review') return (
-    <div key={`action-${card.action_id}`}>
+    <div key={`action-${card.action_id}`} data-sanad-result-kind={classifySanadAnswerCard(card)}>
       <SanadAgentActionCard
         card={card}
         onModify={onModifyAction}
@@ -325,10 +326,10 @@ function renderCard(
       />
     </div>
   );
-  if (card.type === 'warning') return <div key={`warning-${index}`}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
+  if (card.type === 'warning') return <div key={`warning-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
   if (card.type === 'metric') {
     return (
-      <div key={`metric-${index}`} className="border-y border-slate-100 bg-slate-50/60 px-1 py-3.5">
+      <div key={`metric-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)} className="border-y border-slate-100 bg-slate-50/60 px-1 py-3.5">
         <p className="text-xs text-slate-400">{card.title}</p>
         <p className="mt-1 text-lg font-semibold text-slate-950">{card.value}</p>
         {card.subtitle ? <p className="mt-1 text-xs text-slate-400">{card.subtitle}</p> : null}
@@ -385,7 +386,7 @@ export default function SanadAgentResponseBlocks({
       {entities.length > 0 && !cards.some((card) => card.type === 'document_list') && (
         <div className="flex flex-wrap gap-1.5">
           {entities.slice(0, 12).map((entity, index) => (
-            <span key={`${entity.type}-${entity.label}-${index}`}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : undefined} /></span>
+            <span key={`${entity.type}-${entity.label}-${index}`} data-sanad-result-kind={classifySanadEntity(entity)}><EntityLink entity={entity} onInspect={entity.type === 'erp_customer' && resolveTarget({ accountId: entity.account_id, businessId: entity.business_id }) ? () => inspectCustomer({ accountId: entity.account_id, businessId: entity.business_id }) : undefined} /></span>
           ))}
         </div>
       )}
