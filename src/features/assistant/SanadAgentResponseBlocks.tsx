@@ -11,7 +11,7 @@ import {
   Inbox,
   UserRound,
 } from 'lucide-react';
-import SanadAgentActionCard from './SanadAgentActionCard';
+const SanadAgentActionCard = lazy(() => import('./SanadAgentActionCard'));
 import {
   resolveSanadCustomerStatementTarget,
   resolveSanadErpDocumentTarget,
@@ -379,11 +379,13 @@ function renderCard(
   if (card.type === 'payment_inbox_list') return <div key={`payment-inbox-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><PaymentInboxCard card={card} /></div>;
   if (card.type === 'action_review') return (
     <div key={`action-${card.action_id}`} data-sanad-result-kind={classifySanadAnswerCard(card)}>
-      <SanadAgentActionCard
-        card={card}
-        onModify={onModifyAction}
-        onStatusChange={onActionStatusChange}
-      />
+      <Suspense fallback={<div role="status" className="rounded-xl border border-slate-200 p-3 text-xs text-slate-500">جارٍ تحميل بطاقة مراجعة الإجراء…</div>}>
+        <SanadAgentActionCard
+          card={card}
+          onModify={onModifyAction}
+          onStatusChange={onActionStatusChange}
+        />
+      </Suspense>
     </div>
   );
   if (card.type === 'warning') return <div key={`warning-${index}`} data-sanad-result-kind={classifySanadAnswerCard(card)}><AttentionItem item={{ severity: 'warning', title: card.title, body: card.body }} /></div>;
