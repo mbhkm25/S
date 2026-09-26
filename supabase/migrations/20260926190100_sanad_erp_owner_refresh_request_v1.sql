@@ -20,6 +20,7 @@ begin
    and c.status='connected' and c.provider_code='edaa_v5'
    and s.status='active'
    and d.last_heartbeat_at>now()-interval '5 minutes'
+   and coalesce(d.metadata->>'remote_refresh_v1','false')='true'
  order by d.last_heartbeat_at desc limit 1;
  if v_device.id is null then
    return jsonb_build_object('status','offline','error_code','active_bridge_required');
