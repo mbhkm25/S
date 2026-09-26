@@ -1,0 +1,57 @@
+# Stage 2C Package 2 — Read-only capability audit and 2C.4 implementation evidence
+**Date:** 2026-09-26
+**Status:** Implementation candidate; **NOT merged, NOT released, NOT owner-accepted**.
+**Parent:** #386. Owner-approved direction: legacy capability repositioning, documentation candidate PR #397 (still separate/draft at start).
+**Base:** `main 8b9ec1f118332865e141f9110aed4e6e5ce80ddd`. Scope: first 2C.4 read-only ERP statement vertical slice, Context Pack + vetted EntityLink route. No DB, Edge, public report-sharing or ERP writes.
+
+## 1. Evidence labels
+
+- **SOURCE_VERIFIED:** named React/TS implementation and existing tests read at the base SHA.
+- **PRODUCTION_CATALOG_VERIFIED:** PostgreSQL catalog and current function definitions read from active `sanad_verify_v3`; **not a session-based penetration test**.
+- **NOT_VERIFIED:** live user-role negative fixture, post-preview runtime fidelity, full production Web SHA and signed Android freshness.
+
+Never promote a source file to deployed capability, a catalog permission to safe end-to-end authorization, or a new UI candidate to owner-approved release.
+
+## 2. Mandatory capability register — 2C.4 affected domains
+
+| Capability | Existing owner/evidence | Existing live grant and source | Disposition in Package 2 | Remaining gate |
+| --- | --- | --- | --- | --- |
+| ERP customer candidate search | `BusinessErpCustomerStatement.tsx` → `businessAccountingApi.ts`; `get_business_erp_customer_candidates_v1` | Production `SECURITY DEFINER`, `auth.uid()`, business owner/active member check; `authenticated EXECUTE` true, `anon` false | **REUSE** current read and stable `business_id + account_id`; no new search backend | Session-based owner/member/revoked/nonmember negative fixtures before Production |
+| ERP customer statement | Same component/API; `get_business_erp_customer_statement_v1` | Production function checks `auth.uid()`, owner/active member, `business_id`, `account_id`, dates, most recent completed logical snapshot | **ADAPT** existing read into assistant inspector; no duplicate ledger/query | Cross-business authorized fixture, baseline parity, large statement performance |
+| Assistant structured results | `agentFoundation.ts`, `SanadAgentResponseBlocks.tsx`, `SanadAgentWorkspace.tsx` | Current server result already contains customer statement cards and typed ERP customer entity hints; server-verified thread detail obtained via `get_my_sanad_agent_thread_v2` | **ADAPT** compact card/EntityLink with typed local Context Pack target; lazy inspector | Validate persisted/historic card shape, stale thread switch and mobile keyboard |
+| ERP document detail/list | `businessAccountingApi.ts`, `get_business_erp_documents_v1`, `get_business_erp_document_detail_v1` | Production functions owner/active member recheck; document-kind and numeric ID parameters | **DEFER rendering** in this first vertical slice, retain current interface | Extend same inspector protocol after statement acceptance and individual permission/precision tests |
+| Assistant action review | `SanadAgentActionCard.tsx`, `assistantActionApi.ts`; `get_my_sanad_agent_action_v1`, `approve_my_sanad_agent_action_v1` | Production personal action read checks user ownership; approval has expected-version parameter | **REUSE UNCHANGED**; no action mutation in 2C.4 | Full common typed registry + two-way form sync belongs to 2D |
+| Payment inbox | `PaymentInbox.tsx`, `paymentInboxApi.ts`; `get_business_payment_inbox_v3` → v2 | v2 authorizes with `private.has_business_payment_permission('view')`; supervisor-only list modes; **v2 read can expire stale claims as a side effect** | **DEFER** new inspector, preserve existing view; do not describe current call as side-effect-free | Role/session fixtures and bounded read projection before chat inspector |
+| Work Items / notification attention | `sanadWorkItemPresentation.ts`, `notificationApi.ts`, `get_my_sanad_today_v1` | Today filters by recipient and optional authorized business; Work Item details may lack party/amount | **REUSE** existing Today/source deep links; **DEFER** details enrichment to #385 / 2E | Source revalidation, recipient and revocation tests |
+| Old ERP statement UI source precision | `BusinessErpCustomerStatement.tsx` originally `Number(value \|\| 0)` + maximum 2dp | Same canonical statement RPC; present numbers may already have been rounded by JSON→JS upstream | **ADAPT** old display to existing `formatSanadSourceAmount` so null≠0 and received digits aren't further rounded | Full exact numeric-text transport remains #384, NOT claimed solved |
+| Global/public reports | `Reports.tsx`, `BusinessReports.tsx`, `PublicInteractiveReport.tsx` | Distinct report creation/delivery and token-based public link | **DEFER** generic token and interactive report unification | Separate token scope/expiry/share review; no reuse of public report security for private inspector |
+| Project knowledge / library | Existing knowledge/admin components and source tables | General knowledge infrastructure does not establish project-private file access | **DEFER** to 2G | Explicit indexing, tenancy and revocation design |
+
+## 3. Actual implementation contract (first thin slice)
+
+`get_my_sanad_agent_thread_v2` resolves an authorized conversation scope. The UI passes a verified business/thread pair to `sanadEntityContext.ts`; it rejects absent context, mismatched entity business, unsafe/ambiguous ERP account ID and malformed/date-inverted filters. This **is not server authorization**: on open the lazy inspector calls existing `businessAccountingApi.getBusinessErpCustomerStatement`, which invokes `get_business_erp_customer_statement_v1`. The RPC independently checks current owner/member access. No service-role query and no new database view.
+
+Statement card remains embedded in conversation and old legacy route remains reachable. Expanded inline work region reads the current authorized snapshot, presents per-currency totals, source snapshot ID and *separately labeled* client read time. The latter **is not sync freshness**. A responsive horizontal table renders at most 25 rows initially with progressive reveal; underlying existing RPC still returns the full statement — server-side pagination/precision is not asserted or simulated.
+
+The inspector handles no snapshot, permission/read failure, ambiguous customer/account identity warning and no values. No model-provided HTML or href can replace the trusted statement RPC in this path. Display-only Context Pack does not persist or grant access. No source posting, new draft or approval from the inspector.
+
+## 4. Permission/quality regression and release gates
+
+Automated `scripts/check-stage2c-context-entity.ts`: valid authorized target, missing/changed business scope, mismatched entity business, invalid/noninteger IDs, invalid/reversed date ranges; exact received decimal formatting/null and static canonical RPC path assertions. It is wired into existing `check:routes`. CI pass is **not** live role test.
+
+Before owner preview or release, validate with authorized disposable sessions on isolated/synthetic data where possible:
+1. Business A owner and currently active member load the SAME ERP account from legacy route and inspector; compare snapshot ID, per-currency totals and all movements. No cross-currency sum.
+2. Business B user/removed A member opens an old A link: no read; no cached A name/amount on denial. Business A member lacking payment inbox privileges must not gain inbox access through this feature.
+3. Personal and legacy-unclassified conversations show no statement inspector; malformed and cross-business entity IDs never open one.
+4. Refresh historical response; switch between business A and B while inspector loads; stale async response must not attach under B. Test network errors/no snapshot.
+5. Desktop 1280/1366/1440/1920 and zoom 125/150, RTL with mixed currency/date/English strings, mobile 360/390/430 and keyboard, long report >25 rows. Preserve one conversation timeline scroll owner and sticky workspace composer.
+6. Verify old statement route and old action review/card semantics remain unchanged beyond formatting fix.
+
+Separate owner preview in worktree at `C:\\SANAD-DEV` and sibling preview; **explicit owner acceptance before merge**; production publish requires independent gated Web run and authenticated owner postflight. No Android claim follows Web release. No Production migration/Edge change authorized for this slice.
+
+## 5. Open constraints to take into next 2C.4 PR(s)
+
+- Extend Entity Inspector to ERP documents, native operations and own-authorized Work Item after each real source/RPC permission mapping; do not make generic frontend reads.
+- Seven unified typed visual families can adapt existing cards incrementally; a full shared Action Registry and canonical two-way draft lifecycle are 2D.
+- Upstream 64-bit/ERP raw textual precision #384 and old public report sharing/WhatsApp token boundaries are independent security and data-quality gates.
+- Current local inspector is an inline conversation work region. An independent desktop side panel/mobile sheet should be considered **only after owner runtime layout acceptance**, to avoid adding another scroll owner and overlay regressions.
