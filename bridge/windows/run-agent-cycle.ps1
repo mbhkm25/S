@@ -1,5 +1,5 @@
 param(
-  [string]$BridgeExe = "C:\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\net48\Sanad.Bridge.exe",
+  [string]$BridgeExe = (Join-Path $PSScriptRoot 'app\Sanad.Bridge.exe'),
   [switch]$ForceLogicalSnapshot
 )
 

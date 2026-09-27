@@ -34,6 +34,7 @@ const delay = () => new Promise(resolve => setTimeout(resolve, 180));
 export async function getSanadAgentAction(_id: string) { await delay(); return current(); }
 export async function getSanadActionCapabilities(threadId: string): Promise<ActionCapabilities> {
   await delay();
+  if (scenario === 'late-capability') await new Promise(resolve => setTimeout(resolve, 1500));
   return { schema_version: 1, source: 'server_authorized', thread_id: scenario === 'wrong-thread' ? 'other-thread' : threadId, project_kind: 'personal', business_id: null,
     approval_requires_expected_version: true, erp_write_supported: false,
     actions: [{ id: 'personal_expense', action_type: 'personal_transaction', variant: 'expense', form_edit_supported: scenario !== 'old-server', edit_rpc: 'update_my_sanad_agent_action_draft_v2' }] };

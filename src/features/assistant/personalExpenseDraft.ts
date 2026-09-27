@@ -44,9 +44,12 @@ export function normalizeExpenseAmount(value: string): string {
 export function expensePayload(fields: ExpenseFields, original: SanadAgentAction, options: ExpenseOptions): ExpensePayload {
   const amount = normalizeExpenseAmount(fields.amount);
   // Keep decimal input as text. Do not silently round, accept exponent notation, or guess comma separators.
-  if (!/^\d{1,14}(\.\d{1,6})?$/.test(amount) || Number(amount) <= 0 || Number(amount) > 99999999999999) {
+  if (!/^\d{1,14}(\.\d{1,6})?$/.test(amount)) {
     throw new Error('أدخل مبلغًا موجبًا، حتى 6 منازل عشرية، دون فواصل آلاف.');
   }
+  const [whole, fraction = ''] = amount.split('.');
+  const scaled = BigInt(whole) * 1000000n + BigInt(fraction.padEnd(6, '0'));
+  if (scaled <= 0n || scaled > 99999999999999n * 1000000n) throw new Error('المبلغ خارج النطاق المسموح.');
   if (!options.accounts.some(item => item.id === fields.accountId && item.currency === fields.currency)) {
     throw new Error('اختر حسابًا متاحًا بنفس عملة المصروف.');
   }

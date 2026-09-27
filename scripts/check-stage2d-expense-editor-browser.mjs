@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 const output = process.env.EXPENSE_QA_OUTPUT || '/tmp/sanad-expense-qa';
@@ -8,7 +8,7 @@ const server = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', '
 let serverLog = '';
 server.stdout.on('data', data => { serverLog += data; });
 server.stderr.on('data', data => { serverLog += data; });
-let browser;
+let browser, page;
 let passed = 0;
 const errors = [], outbound = [];
 try {
@@ -26,7 +26,7 @@ try {
     if (url.hostname !== '127.0.0.1') { outbound.push(url.origin); return route.abort(); }
     return route.continue();
   });
-  const page = await context.newPage();
+  page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   page.on('dialog', dialog => dialog.accept());
@@ -92,6 +92,14 @@ try {
     assert.equal(await page.getByRole('button', { name: 'تعديل النص في المسودة نفسها' }).isVisible(), true);
     pass(name+' disables full edit without cancel/recreate fallback');
   }
+  await page.getByLabel('حالة الاختبار').selectOption('late-capability');
+  await page.getByRole('button', { name: 'تعديل النص في المسودة نفسها' }).click();
+  await page.getByLabel('الوصف (500 حرف كحد أقصى)').fill('تعديل أثناء التحميل');
+  await page.waitForTimeout(1800);
+  assert.equal(await page.getByLabel('الوصف (500 حرف كحد أقصى)').isVisible(), true);
+  await page.getByRole('button', { name: 'حفظ التعديل', exact: true }).click();
+  await until(() => edit().isEnabled());
+  pass('late capability never hides an open note editor or leaves controls locked');
   await scenario('commercial');
   assert.equal(await edit().count(), 0); assert.equal(await page.getByRole('button', { name: 'تعديل بقية البيانات' }).isVisible(), true);
   pass('commercial card retains its separate existing behavior');
@@ -116,6 +124,12 @@ try {
   assert.deepEqual(errors, []); assert.deepEqual(outbound, []);
   pass('no runtime/console errors, no outbound API requests');
   console.log(`Browser expense editor: ${passed} scenarios PASS; fixture adapter only, zero live financial operations.`);
+} catch (error) {
+  if (page) {
+    await page.screenshot({ path: `${output}/failure.png`, fullPage: true }).catch(() => {});
+    await writeFile(`${output}/failure.txt`, `${String(error)}\n${errors.join('\n')}\n${await page.locator('body').innerText().catch(() => '')}`);
+  }
+  throw error;
 } finally {
   await browser?.close(); server.kill();
 }

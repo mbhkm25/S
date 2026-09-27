@@ -11,8 +11,8 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$BridgeExe = 'C:\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\net48\Sanad.Bridge.exe',
-  [string]$RunnerPath = (Join-Path $PSScriptRoot 'run-agent-cycle.ps1'),
+  [string]$BridgeExe = (Join-Path $env:ProgramData 'SANAD\Bridge\runtime\active\app\Sanad.Bridge.exe'),
+  [string]$RunnerPath = (Join-Path $env:ProgramData 'SANAD\Bridge\runtime\active\run-agent-cycle.ps1'),
   [string]$ScheduledTaskName = 'SANAD Bridge Agent',
   [int]$BusyRetries = 2,
   [int]$BusyRetryDelaySeconds = 45

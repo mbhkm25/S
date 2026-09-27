@@ -248,7 +248,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           </Suspense>
         ) : null}
 
-        {status === 'review' && verified && action && !canEditExpense && !expenseEditing ? (
+        {status === 'review' && verified && action && (!canEditExpense || noteEditing) && !expenseEditing ? (
           <div data-sanad-canonical-note-editor className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             {!noteEditing ? (
               <div className="flex flex-wrap items-center justify-between gap-2">

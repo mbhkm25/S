@@ -21,7 +21,7 @@ check('preserve exact date when unchanged', () => assert.equal(expensePayload(fi
 check('explicit seven fields only and null optionals', () => assert.deepEqual(Object.keys(expensePayload(fields, action, options)).sort(), ['transaction_type','amount','currency','account_id','category_id','description','transaction_at'].sort()));
 check('Arabic decimal digits', () => assert.equal(normalizeExpenseAmount('١٢٣٫٤٥'), '123.45'));
 check('Persian decimal digits', () => assert.equal(normalizeExpenseAmount('۱۲۳٫۴۵'), '123.45'));
-for (const amount of ['0','-1','1e3','1,200','NaN','Infinity','1.1234567','100000000000000']) {
+for (const amount of ['0','-1','1e3','1,200','NaN','Infinity','1.1234567','100000000000000','99999999999999.000001']) {
   check('reject amount '+amount, () => assert.throws(() => expensePayload({ ...fields, amount }, action, options)));
 }
 check('preserve decimal as text', () => assert.equal(expensePayload({ ...fields, amount: '١٢٣٫٤٥' }, action, options).amount, '123.45'));

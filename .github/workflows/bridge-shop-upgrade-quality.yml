@@ -1,0 +1,55 @@
+name: SANAD Bridge Shop Upgrade Quality
+on:
+  pull_request:
+    paths:
+      - "bridge/windows/*.ps1"
+      - "scripts/check-bridge-shop-upgrade.mjs"
+      - ".github/workflows/bridge-shop-upgrade-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "bridge/windows/*.ps1"
+      - "scripts/check-bridge-shop-upgrade.mjs"
+      - ".github/workflows/bridge-shop-upgrade-quality.yml"
+permissions:
+  contents: read
+jobs:
+  shop-upgrade:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate pinned upgrade and rollback contracts
+        run: node scripts/check-bridge-shop-upgrade.mjs
+      - name: Windows PowerShell 5.1 parser (not Core)
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $files = @(
+            'bridge/windows/install-shop-upgrade.ps1',
+            'bridge/windows/run-agent-cycle.ps1',
+            'bridge/windows/request-logical-snapshot-now.ps1',
+            'bridge/windows/install-scheduled-agent.ps1'
+          )
+          foreach ($file in $files) {
+            $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file).Path,[ref]$null,[ref]$errors
+            ) | Out-Null
+            if ($errors.Count) {
+              $errors | Format-List | Out-String | Write-Output
+              throw "Windows PowerShell parser failed for $file"
+            }
+            Write-Output "PASS $file"
+          }
+      - name: Verify actual Bridge NET48 Release builds on Windows
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet restore .\bridge\windows\Sanad.Bridge\Sanad.Bridge.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'restore failed' }
+          dotnet build .\bridge\windows\Sanad.Bridge\Sanad.Bridge.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }

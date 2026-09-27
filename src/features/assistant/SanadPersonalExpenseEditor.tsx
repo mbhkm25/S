@@ -86,29 +86,29 @@ export default function SanadPersonalExpenseEditor({ action, onSaved, onClose }:
       {!options && !busy ? <button type="button" className={control} onClick={() => setAttempt(value => value + 1)}>إعادة تحميل الخيارات</button> : null}
       <fieldset disabled={busy !== null || !options || needsReload} className="grid min-w-0 gap-3 sm:grid-cols-2">
         <label htmlFor={`${id}-amount`} className="min-w-0 space-y-1 text-xs text-slate-700"><span>المبلغ</span>
-          <input autoFocus id={`${id}-amount`} inputMode="decimal" dir="ltr" required value={fields.amount} onChange={event => setField('amount', event.target.value)} className={control} /></label>
+          <input autoFocus id={`${id}-amount`} aria-label="المبلغ" inputMode="decimal" dir="ltr" required value={fields.amount} onChange={event => setField('amount', event.target.value)} className={control} /></label>
         <label htmlFor={`${id}-currency`} className="min-w-0 space-y-1 text-xs text-slate-700"><span>العملة</span>
-          <select id={`${id}-currency`} value={fields.currency} onChange={event => setFields(previous => ({ ...previous, currency: event.target.value, accountId: '' }))} className={control}>
+          <select id={`${id}-currency`} aria-label="العملة" value={fields.currency} onChange={event => setFields(previous => ({ ...previous, currency: event.target.value, accountId: '' }))} className={control}>
             {!currencies.includes(fields.currency) ? <option value={fields.currency}>{fields.currency || 'اختر العملة'} — غير متاحة</option> : null}
             {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
           </select></label>
         <label htmlFor={`${id}-account`} className="min-w-0 space-y-1 text-xs text-slate-700"><span>الحساب</span>
-          <select id={`${id}-account`} required value={fields.accountId} onChange={event => setField('accountId', event.target.value)} className={control}>
+          <select id={`${id}-account`} aria-label="الحساب" required value={fields.accountId} onChange={event => setField('accountId', event.target.value)} className={control}>
             <option value="">اختر الحساب</option>
             {fields.accountId && !availableAccounts.some(item => item.id === fields.accountId) ? <option value={fields.accountId}>الحساب السابق غير متاح بهذه العملة</option> : null}
             {availableAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
           </select></label>
         <label htmlFor={`${id}-category`} className="min-w-0 space-y-1 text-xs text-slate-700"><span>التصنيف</span>
-          <select id={`${id}-category`} value={fields.categoryId} onChange={event => setField('categoryId', event.target.value)} className={control}>
+          <select id={`${id}-category`} aria-label="التصنيف" value={fields.categoryId} onChange={event => setField('categoryId', event.target.value)} className={control}>
             <option value="">بدون تصنيف</option>
             {fields.categoryId && !options?.categories.some(item => item.id === fields.categoryId) ? <option value={fields.categoryId}>التصنيف السابق غير متاح</option> : null}
             {options?.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select></label>
         <label htmlFor={`${id}-date`} className="min-w-0 space-y-1 text-xs text-slate-700 sm:col-span-2"><span>التاريخ والوقت</span>
-          <input id={`${id}-date`} type="datetime-local" dir="ltr" required value={fields.localDate} onChange={event => setField('localDate', event.target.value)} className={control} />
+          <input id={`${id}-date`} aria-label="التاريخ والوقت" type="datetime-local" dir="ltr" required value={fields.localDate} onChange={event => setField('localDate', event.target.value)} className={control} />
           <span className="block leading-5 text-slate-500">حسب توقيت جهازك: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span></label>
         <label htmlFor={`${id}-description`} className="min-w-0 space-y-1 text-xs text-slate-700 sm:col-span-2"><span>الوصف (اختياري)</span>
-          <textarea id={`${id}-description`} rows={2} maxLength={500} value={fields.description} onChange={event => setField('description', event.target.value)} className={control} /></label>
+          <textarea id={`${id}-description`} aria-label="الوصف (اختياري)" rows={2} maxLength={500} value={fields.description} onChange={event => setField('description', event.target.value)} className={control} /></label>
       </fieldset>
       {options && options.accounts.length === 0 ? <p className="text-xs leading-6 text-amber-800">لا توجد حسابات شخصية متاحة. أضف حسابًا من إدارة المالي أولًا.</p> : null}
       <div className="flex flex-wrap gap-2">

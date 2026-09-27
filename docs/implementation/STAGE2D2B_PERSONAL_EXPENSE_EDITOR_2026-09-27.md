@@ -26,7 +26,7 @@ Scenario selector includes successful edit, stale version, lost response after s
 
 ## Verification
 
-- 38 executable client/isolated PostgreSQL descriptor cases PASS locally. Includes absent/revoked RPC, owner/foreign/legacy/business scopes, anonymous EXECUTE denial, precise payload/date and invalid entities/amounts.
+- 39 executable client/isolated PostgreSQL descriptor cases PASS locally. Includes absent/revoked RPC, owner/foreign/legacy/business scopes, anonymous EXECUTE denial, precise payload/date and invalid entities/amounts.
 - TypeScript, full route regression suite, production build and bundle budgets PASS locally. Workspace 110.06 / 120 KB. No production fixture entry.
 - Local browser launch blocked by execution environment: Chromium `socket() failed: Operation not permitted`. Browser plugin absent; regular Playwright attempted. Browser checks therefore run in the disposable GitHub Actions runner via `stage2d-expense-editor-ui.yml`; record final exact-head outcome before review readiness.
 - Browser suite covers save/review identity, disabled approvals, account currency reset, stale conflict recovery, uncertain response without duplicate save, unsupported/foreign descriptor, empty/failed lookups, unavailable original account, collision, keyboard Tab, 360/390/768/1280 viewports and CSS zoom 125/150. CSS zoom is not a claim of physical browser zoom or Android keyboard testing. Screenshots are CI artifacts, not product assets.
@@ -46,3 +46,5 @@ Scenario selector includes successful edit, stale version, lost response after s
 Owner preview acceptance is required before UI merge. No merge, database install, Web/Edge/Android publication or real financial testing authorized by this document. Resolve #413 dependency and package.json/check:routes integration deliberately when merging; do not overwrite either test suite. Recheck main and #414 release scope before any rollout, since #414 must not accidentally release an unreviewed new package.
 
 Safe UI rollback: revert this package's UI code and restore previous descriptor definition; retain #413 canonical rows, versions and audit events. Do not undo a user's saved data or revoke unrelated permissions. Revoke v2 edit access only as a separately reviewed backend rollback. Full 2D.2-B remains open for conversational/voice editing and later commercial contracts; this package closes only the personal expense form adapter after owner acceptance.
+
+Concurrent main update observed during implementation: Bridge-only commit `3f00e59f1c460acd3f8f622bafdac8d1ae1b1779` arrived from the separate Bridge work. It has no overlapping UI files. Preserve it when updating this branch; do not modify #413/#414.
