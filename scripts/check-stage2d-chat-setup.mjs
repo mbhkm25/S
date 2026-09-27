@@ -108,8 +108,8 @@ try {
     await db.exec(fn+domain.split(fn)[1].split('$$;')[0]+'$$;');
   }
   await db.exec(read(migration));
-  await db.exec(read('20260927075434_stage2d_personal_expense_editor_capability_v1.sql'));
-  await db.exec(read('20260927130000_stage2d_chat_personal_setup_v1.sql'));
+  await db.exec(read('20260927091045_stage2d_personal_expense_editor_capability_v1.sql'));
+  await db.exec(read('20260927091046_stage2d_chat_personal_setup_v1.sql'));
   await db.exec('set role authenticated');
   const approve = (a,version=a.version) => scalar('select public.approve_my_sanad_agent_action_v1($1,$2) value',[a.id,version]);
   const setup = (p,t='personal_account_setup',th=thread) => create(p,th,t,[]);

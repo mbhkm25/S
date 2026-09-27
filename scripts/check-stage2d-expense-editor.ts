@@ -43,7 +43,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth; 
  ('00000000-0000-4000-8000-000000000012','00000000-0000-4000-8000-000000000001','active','business','00000000-0000-4000-8000-000000000099'),
  ('00000000-0000-4000-8000-000000000013','00000000-0000-4000-8000-000000000001','active','legacy',null),
  ('00000000-0000-4000-8000-000000000014','00000000-0000-4000-8000-000000000002','active','business','00000000-0000-4000-8000-000000000099');`);
-await db.exec(readFileSync('supabase/migrations/20260927075434_stage2d_personal_expense_editor_capability_v1.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20260927091045_stage2d_personal_expense_editor_capability_v1.sql','utf8'));
 async function get(id = '11'): Promise<any> { return (await db.query<{ value: unknown }>(`select public.get_my_sanad_action_capabilities_v1('00000000-0000-4000-8000-0000000000${id}') value`)).rows[0].value; }
 let value = await get();
 check('DB absent edit RPC fails closed', () => assert.equal(value.actions[1].form_edit_supported, false));
