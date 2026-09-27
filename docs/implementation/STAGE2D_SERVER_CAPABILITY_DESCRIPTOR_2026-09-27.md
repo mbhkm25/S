@@ -1,6 +1,6 @@
 # Stage 2D.1 — server-owned capability descriptors (read-only contract)
 
-**Scope:** contract slice only, separate from Stage 2D.0 project-origin migration and before 2D.2 editable canonical drafts. **Deployment:** additive `get_my_sanad_action_capabilities_v1(p_thread_id)` migration needs separate reviewed DB gate; no front-end is switched to this RPC in this slice.
+**Stage 2D.1 final state:** PR #409 MERGED (`49feb2b668d5cc9cab9d90c4b9111a78c7b4a01d`), all seven exact-head CI checks PASS. Reviewed descriptor RPC was applied to production with ledger version `20260926214745`, and verified available to authenticated but not anonymous callers. This remains a read-only backend descriptor; no front-end switch to an editable general-purpose form is implied.
 
 ## Rationale and audited reuse
 
