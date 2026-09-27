@@ -19,6 +19,7 @@ param(
   [Parameter(Mandatory=$true)][string]$Stage,
   [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-f]{40}$')][string]$ExpectedSha,
   [string]$TaskName='SANAD Bridge Agent',
+  [ValidatePattern('^[0-9a-fA-F]{64}$')][string]$ExpectedOldHash,
   [string]$RuntimeRoot=(Join-Path $env:ProgramData 'SANAD\Bridge\runtime')
 )
 $ErrorActionPreference='Stop'
@@ -81,6 +82,37 @@ $nowUser=[Security.Principal.WindowsIdentity]::GetCurrent()
 try { $taskSid=(New-Object Security.Principal.NTAccount($oldUser)).Translate([Security.Principal.SecurityIdentifier]).Value }
 catch { throw 'Cannot verify old task account; do not change task principal' }
 if ($taskSid -ne $nowUser.User.Value) { throw 'Current account is not the existing scheduled-task principal' }
+# Reconcile the executable actually reached by the EXISTING scheduler action,
+# instead of assuming that an old Debug file in a repository is deployed.
+$taskQuotedPaths=@([regex]::Matches($oldTask.Actions[0].Arguments,'"([^"]+)"') |
+  ForEach-Object { $_.Groups[1].Value })
+$oldRunners=@($taskQuotedPaths | Where-Object { $_ -match '(?i)run-agent-cycle\.ps1$' })
+if ($oldRunners.Count -ne 1 -or -not (Test-Path -LiteralPath $oldRunners[0] -PathType Leaf)) {
+  throw 'Cannot uniquely resolve existing task runner; refuse to guess or overwrite it.'
+}
+$oldRunnerPath=$oldRunners[0]
+$oldRunnerSource=Get-Content -LiteralPath $oldRunnerPath -Raw
+$oldRunnerExeMatch=[regex]::Match($oldRunnerSource,
+  '(?m)^\s*\[string\]\$BridgeExe\s*=\s*"([^"]+)"')
+if ($oldRunnerExeMatch.Success) {
+  $oldScheduledExe=$oldRunnerExeMatch.Groups[1].Value
+} elseif ($oldRunnerSource.Contains('Join-Path $PSScriptRoot ''app\Sanad.Bridge.exe''')) {
+  $oldScheduledExe=Join-Path (Split-Path -Parent $oldRunnerPath) 'app\Sanad.Bridge.exe'
+} else {
+  throw 'Existing runner executable path is not a known reviewed contract; stop for targeted correction.'
+}
+if (-not (Test-Path -LiteralPath $oldScheduledExe -PathType Leaf)) {
+  throw "Current scheduled Bridge executable missing: $oldScheduledExe"
+}
+$oldActualHash=(Get-FileHash -LiteralPath $oldScheduledExe -Algorithm SHA256).Hash
+$oldActualVersion=(Get-Item -LiteralPath $oldScheduledExe).VersionInfo.ProductVersion
+if ($ExpectedOldHash -and $oldActualHash -ine $ExpectedOldHash) {
+  throw "Existing SCHEDULED executable differs from Stage 1 evidence; actual=$oldActualHash expected=$ExpectedOldHash. No task changes made."
+}
+Write-Host "Previous scheduled runner: $oldRunnerPath"
+Write-Host "Previous scheduled EXE: $oldScheduledExe"
+Write-Host "Previous scheduled version: $oldActualVersion; SHA256=$oldActualHash"
+
 $priorDisabled=($oldTask.State -eq 'Disabled')
 if ($priorDisabled) { throw 'Old task is disabled. Do not silently re-enable it.' }
 $principal=New-Object Security.Principal.WindowsPrincipal($nowUser)
@@ -129,7 +161,8 @@ try {
     task=$TaskName; runAs=$oldUser; previousExecute=$oldTask.Actions[0].Execute
     previousArguments=$oldTask.Actions[0].Arguments; oldTaskState="$($oldTask.State)"
     previousLastResult=(($oldTask | Get-ScheduledTaskInfo).LastTaskResult)
-    stagingSha=$ExpectedSha; oldBinaryHash=$null; newBinaryHash=$hash; startedAt=$stamp
+    stagingSha=$ExpectedSha; oldScheduledExe=$oldScheduledExe; oldBinaryVersion=$oldActualVersion
+    oldBinaryHash=$oldActualHash; newBinaryHash=$hash; startedAt=$stamp
   }
   $oldAction | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'upgrade-manifest.json') -Encoding UTF8
 
