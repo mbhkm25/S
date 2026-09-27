@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,9 +14,13 @@ import {
   approveSanadAgentAction,
   cancelSanadAgentAction,
   getSanadAgentAction,
+  getSanadActionCapabilities,
   updateSanadAgentActionNote,
   type SanadAgentAction,
 } from './assistantActionApi';
+
+import { isPersonalExpense, supportsExpenseEdit, type ActionCapabilities } from './personalExpenseDraft';
+const ExpenseEditor = lazy(() => import('./SanadPersonalExpenseEditor'));
 
 type Props = {
   card: SanadAssistantActionReviewCard;
@@ -49,18 +53,33 @@ function resultLabel(action: SanadAgentAction | null) {
   return null;
 }
 
-export default function SanadAgentActionCard({ card, onModify, onStatusChange }: Props) {
+export default function SanadAgentActionCard(props: Props) {
+  // A newly selected action cannot inherit verification, in-flight edits or capabilities from the previous ID.
+  return <ActionCardInstance key={props.card.action_id} {...props} />;
+}
+
+function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: string }) {
   const [action, setAction] = useState<SanadAgentAction | null>(null);
   const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | 'save_note' | null>(null);
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
+  const [capabilities, setCapabilities] = useState<ActionCapabilities | null>(null);
+  const [expenseEditing, setExpenseEditing] = useState(false);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let alive = true;
     void getSanadAgentAction(card.action_id)
-      .then((row) => { if (alive) { setAction(row); setVerified(true); } })
+      .then(async (row) => {
+        if (row.id !== card.action_id) throw new Error('action_identity_mismatch');
+        if (alive) { setAction(row); setVerified(true); }
+        if (isPersonalExpense(row)) {
+          try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive) setCapabilities(descriptor); }
+          catch { /* Missing/unverified capability fails closed; note editing remains available. */ }
+        }
+      })
       .catch(() => { if (alive) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
     return () => { alive = false; };
   }, [card.action_id]);
@@ -84,11 +103,13 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   const meta = statusMeta(status, action?.action_type || card.action_type, action?.result || null);
   const locked = status !== 'review' || busy !== null || review.writes_to_erp === true || !verified;
   const target = resultLabel(action);
+  const expense = action ? isPersonalExpense(action) : false;
+  const canEditExpense = action ? supportsExpenseEdit(action, capabilities) : false;
   const noteField = action?.action_type === 'personal_transaction' ? 'description' : 'notes';
   const currentNote = typeof action?.payload?.[noteField] === 'string' ? String(action.payload[noteField]) : '';
 
   const saveNote = async () => {
-    if (locked || !noteEditing || noteDraft.length > 500) return;
+    if (locked || expenseEditing || !noteEditing || noteDraft.length > 500) return;
     setBusy('save_note');
     setError('');
     try {
@@ -109,7 +130,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   };
 
   const approve = async () => {
-    if (locked || noteEditing) return;
+    if (locked || noteEditing || expenseEditing) return;
     const effect = review.approval_effect || 'سيتم تنفيذ الإجراء داخل سند.';
     if (!window.confirm(`هل تعتمد هذا الإجراء؟\n\n${effect}`)) return;
     setBusy('approve');
@@ -127,7 +148,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
   };
 
   const cancel = async (forModify = false) => {
-    if (locked || noteEditing) return;
+    if (locked || noteEditing || expenseEditing) return;
     setBusy(forModify ? 'modify' : 'cancel');
     setError('');
     try {
@@ -216,7 +237,18 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
           </div>
         ) : null}
 
-        {status === 'review' && verified && action ? (
+        {notice ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">{notice}</p> : null}
+
+        {expenseEditing && action ? (
+          <Suspense fallback={<p role="status" className="text-sm text-slate-600">جارٍ فتح محرر المصروف…</p>}>
+            <ExpenseEditor action={action} onSaved={updated => {
+              setAction(updated); setExpenseEditing(false); setError('');
+              setNotice(updated.status === 'review' ? 'حُفظت المسودة نفسها. راجع البيانات قبل أي اعتماد.' : 'حُمّلت الحالة الحالية للمسودة.');
+            }} onClose={current => { setAction(current); setExpenseEditing(false); }} />
+          </Suspense>
+        ) : null}
+
+        {status === 'review' && verified && action && !canEditExpense && !expenseEditing ? (
           <div data-sanad-canonical-note-editor className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             {!noteEditing ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -252,7 +284,7 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              disabled={locked || noteEditing}
+              disabled={locked || noteEditing || expenseEditing}
               onClick={() => void approve()}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[13px] font-medium text-white disabled:opacity-40"
             >
@@ -261,16 +293,19 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
             </button>
             <button
               type="button"
-              disabled={locked || noteEditing}
-              onClick={() => void cancel(true)}
+              disabled={locked || noteEditing || expenseEditing || (expense && !canEditExpense)}
+              onClick={() => {
+                if (expense) { if (canEditExpense) { setExpenseEditing(true); setNotice(''); setError(''); } }
+                else void cancel(true);
+              }}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
-              تعديل بقية البيانات
+              {expense ? 'تعديل المصروف' : 'تعديل بقية البيانات'}
             </button>
             <button
               type="button"
-              disabled={locked || noteEditing}
+              disabled={locked || noteEditing || expenseEditing}
               onClick={() => void cancel(false)}
               className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[13px] font-medium text-rose-700 disabled:opacity-40"
             >
@@ -280,6 +315,8 @@ export default function SanadAgentActionCard({ card, onModify, onStatusChange }:
           </div>
         ) : null}
 
+        {status === 'review' && expense && !canEditExpense ? <p className="text-xs leading-6 text-slate-500">تعديل المبلغ والحساب غير متاح حاليًا؛ يمكنك تعديل الوصف فقط.</p> : null}
+        {verified ? <p className="text-[11px] text-slate-500">إصدار المسودة: {version}</p> : null}
         <p className="text-[11px] leading-5 text-slate-400">
           الاعتماد ينفذ عقدًا محددًا على خادم سند بعد إعادة التحقق من الملكية والحالة والإصدار. لا يملك نموذج الذكاء الاصطناعي صلاحية تنفيذ هذا الزر.
         </p>

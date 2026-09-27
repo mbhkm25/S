@@ -94,3 +94,37 @@ export async function updateSanadAgentActionNote(
   if (error) throw new Error(error.message || 'تعذر تعديل ملاحظة المسودة.');
   return data as SanadAgentAction;
 }
+
+export async function getSanadActionCapabilities(threadId: string): Promise<import('./personalExpenseDraft').ActionCapabilities> {
+  const { data, error } = await supabase.rpc('get_my_sanad_action_capabilities_v1', { p_thread_id: threadId });
+  if (error) throw new Error('تعذر التحقق من صلاحية تعديل المصروف.');
+  return data as import('./personalExpenseDraft').ActionCapabilities;
+}
+
+/** Existing owner RLS tables, only active user accounts and expense categories. No parties/balances. */
+export async function getExpenseEditorOptions(): Promise<import('./personalExpenseDraft').ExpenseOptions> {
+  async function readPages(table: 'personal_finance_accounts' | 'personal_finance_categories') {
+    const rows: Array<{ id: string; name: string; currency?: string }> = [];
+    for (let offset = 0; offset < 10000; offset += 200) {
+      let query = supabase.from(table).select(table === 'personal_finance_accounts' ? 'id,name,currency' : 'id,name')
+        .eq('status', 'active').order('name').order('id').range(offset, offset + 199);
+      query = table === 'personal_finance_accounts' ? query.is('system_role', null) : query.eq('kind', 'expense');
+      const { data, error } = await query;
+      if (error) throw new Error('تعذر تحميل الحسابات والتصنيفات. أعد المحاولة.');
+      const page = (data || []) as unknown as Array<{ id: string; name: string; currency?: string }>;
+      rows.push(...page);
+      if (page.length < 200) return rows;
+    }
+    throw new Error('تعذر تحميل قائمة الحسابات والتصنيفات كاملة.');
+  }
+  const [accounts, categories] = await Promise.all([readPages('personal_finance_accounts'), readPages('personal_finance_categories')]);
+  return { accounts: accounts as import('./personalExpenseDraft').ExpenseAccount[], categories };
+}
+
+export async function updateSanadPersonalExpenseDraft(actionId: string, expectedVersion: number, payload: import('./personalExpenseDraft').ExpensePayload): Promise<SanadAgentAction> {
+  const { data, error } = await supabase.rpc('update_my_sanad_agent_action_draft_v2', {
+    p_action_id: actionId, p_expected_version: expectedVersion, p_payload: payload,
+  });
+  if (error) throw new Error(error.message || 'تعذر حفظ تعديل المصروف.');
+  return data as SanadAgentAction;
+}

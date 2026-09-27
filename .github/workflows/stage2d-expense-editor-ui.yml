@@ -1,0 +1,35 @@
+name: Stage 2D expense editor UI
+on:
+  pull_request:
+    paths:
+      - 'src/features/assistant/**'
+      - 'tests/fixtures/expense-editor/**'
+      - 'scripts/check-stage2d-expense-editor*'
+      - 'supabase/migrations/*expense_editor*'
+      - '.github/workflows/stage2d-expense-editor-ui.yml'
+      - 'package*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:expense-editor
+      - run: npm run lint
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/check-stage2d-expense-editor-browser.mjs
+        env:
+          EXPENSE_QA_OUTPUT: ${{ runner.temp }}/sanad-expense-qa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: expense-editor-screenshots
+          path: ${{ runner.temp }}/sanad-expense-qa
