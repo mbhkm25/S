@@ -171,6 +171,11 @@ try {
   await rejectEdit(before.id,2,changed,/agent_thread_not_found/);
   await db.exec('reset role');
   await db.query("update public.sanad_agent_threads set status='active' where id=$1",[thread]);
+  await denied('update public.sanad_agent_actions set thread_id=$1,business_id=$2 where id=$3',
+    [businessThread,business,before.id],/agent_action_origin_immutable/);
+  await db.exec('set role authenticated');
+  await denied("update public.sanad_agent_actions set payload='{}' where id=$1",[before.id],/permission denied/);
+  await db.exec('reset role');
   for(const status of ['approved','executing','completed','cancelled','failed']) {
     await db.query('update public.sanad_agent_actions set status=$1 where id=$2',[status,second.id]);
     await db.exec('set role authenticated');
@@ -191,6 +196,14 @@ try {
     const a=new pg.Client(config),b=new pg.Client(config);
     await a.connect(); await b.connect();
     try {
+      const blocked = async () => {
+        for(let attempt=0;attempt<200;attempt++) {
+          const waiting=await scalar("select coalesce((select wait_event_type='Lock' from pg_stat_activity where pid=$1),false) as value",[b.processID]);
+          if(waiting) return;
+          await new Promise(resolve=>setTimeout(resolve,10));
+        }
+        assert.fail('Expected second PostgreSQL session to block on the first transaction');
+      };
       for (const c of [a,b]) {
         await c.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);
         await c.query('set role authenticated');
@@ -201,6 +214,7 @@ try {
       await a.query('begin');
       const first=(await a.query(makeSql,args)).rows[0].value;
       const pending=b.query(makeSql,args);
+      await blocked();
       await a.query('commit');
       const other=(await pending).rows[0].value;
       assert.equal(first.id,other.id); checks++;
@@ -209,12 +223,14 @@ try {
       await a.query('begin');
       await a.query(sql,[first.id,1,{...payload,amount:102}]);
       const stale=assert.rejects(b.query(sql,[first.id,1,{...payload,amount:103}]),/agent_action_version_conflict/);
+      await blocked();
       await a.query('commit'); await stale; checks++;
       // Different IDs racing toward an identical payload: unique active index arbitrates.
       const rival=(await a.query(makeSql,[thread,'personal_transaction',{...payload,amount:104}])).rows[0].value;
       await a.query('begin');
       await a.query(sql,[first.id,2,{...payload,amount:105}]);
       const collision=assert.rejects(b.query(sql,[rival.id,1,{...payload,amount:105}]),/identical_active_action_already_exists/);
+      await blocked();
       await a.query('commit'); await collision; checks++;
       assert.equal(await scalar('select count(*)::int as value from public.test_execution_calls'),0);
     } finally {await a.end();await b.end();}

@@ -9,7 +9,7 @@ Status: implementation candidate, not merged or installed. This is the first bac
 - #410 final head `4f2b09c176f7153083532ff4fea101067512bcd2`: all six recorded Actions workflows successful, independently retrieved.
 - Connected `sanad_verify_v3` (`hudbzlgclghlhazlduas`) ACTIVE_HEALTHY. Read-only ledger query confirms `20260926214052`, `20260926214745`, `20260926222117`.
 - Live create/approve/cancel function bodies exactly match the original canonical migration. Actual action/event/work-item constraints and origin/event/work-item-broadcast triggers were inspected.
-- Latest guarded Web deployment run **36262108025** succeeded on **`c14414a9dc24873ee5d8c4dcaede710fd67e22d3`**, before #410. No later Web workflow run appears in the workflow-specific latest-run response. Thus **2D.2-A is source-merged and DB-applied, but not released through this guarded Web workflow**. Direct live served bytes and owner-authenticated smoke are not asserted.
+- Latest guarded Web deployment run **36262108025** succeeded on **`c14414a9dc24873ee5d8c4dcaede710fd67e22d3`**, before #410. No later Web workflow run appears in the workflow-specific latest-run response. Thus **2D.2-A is source-merged and DB-applied, but not released through this guarded Web workflow**. Direct live `/version.json` independently returned `c14414a9dc24` with build time `2026-09-26T18:20:31.492Z`, confirming the same old Web version. Owner-authenticated smoke is not asserted.
 - Prepare the old UI release independently. Do not fold this pending backend candidate into that release. No Web, Edge, database or financial mutation was performed during this audit.
 
 ## Implementation
@@ -32,7 +32,7 @@ Cases cover same ID/version, normalized amount/currency/account/date/full review
 
 `.github/workflows/stage2d-draft-contract.yml` adds disposable **PostgreSQL 17** service tests with separate real sessions: concurrent identical create, stale concurrent edits of one row, and two different IDs racing toward one fingerprint. This mode accepts only a fixed loopback disposable test database, never a Supabase URL. Its final-SHA CI result must be recorded before install.
 
-Local verification: TypeScript PASS; route suite PASS through `node --import tsx` (the environment prevents the tsx CLI IPC socket); production build PASS; bundle budget PASS, Agent Workspace **110.01 KB / 120 KB**. No application UI changes in this backend slice; no visual acceptance or production runtime claim.
+Local verification: 56 isolated runtime cases PASS with zero executor calls; TypeScript PASS; route suite PASS through `node --import tsx` (the environment prevents the tsx CLI IPC socket); production build PASS; bundle budget PASS, Agent Workspace **110.01 KB / 120 KB**. No application UI changes in this backend slice; no visual acceptance or production runtime claim.
 
 ## Install and continuation gate
 
