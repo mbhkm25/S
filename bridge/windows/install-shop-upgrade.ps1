@@ -71,6 +71,7 @@ if (-not (Get-Command Export-ScheduledTask -ErrorAction SilentlyContinue)) {
   throw 'Task Scheduler cmdlets unavailable'
 }
 $oldTask=Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+if ($oldTask.TaskPath -ne '\') { throw 'Only the known root scheduled task is eligible for this upgrade' }
 if (@($oldTask.Actions).Count -ne 1 -or $oldTask.Actions[0].Execute -notmatch '(?i)wscript\.exe$' -or
     $oldTask.Actions[0].Arguments -notmatch 'run-agent-cycle-hidden\.vbs') {
   throw 'Current scheduled task has unexpected launcher. Manual migration review required.'
@@ -133,9 +134,9 @@ try {
   $oldAction | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'upgrade-manifest.json') -Encoding UTF8
 
   # Disable first so a new minute trigger cannot race the quiescence window.
+  $stopped=$true # Rollback must run even if Disable-ScheduledTask fails midway.
   Disable-ScheduledTask -TaskName $TaskName | Out-Null
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-  $stopped=$true
   Wait-BridgeStopped
 
   $versionApp=Join-Path $release 'app'
