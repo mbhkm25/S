@@ -1,6 +1,6 @@
 # Stage 2D.2-A — Canonical same-draft revision: optional text only
 
-**Status:** backend note-edit migration applied to production under verified ledger version `20260926222117`; read-only verification confirmed the exact RPC and its owner-locked/version-aware/work-projection source, anonymous EXECUTE denied and authenticated EXECUTE allowed. **Web UI remains PR #410 DRAFT**, not merged or deployed; owner preview and true role/concurrency runtime fixtures remain open. This is the FIRST controlled same-ID edit slice, not the whole 2D.2 amount/account/party editor.
+**Owner-approved implementation checkpoint:** 2026-09-27. Stage 2D.2-A owner accepted the isolated candidate preview; PR #410 merged into `main` at `7b7368140fbd5c1bdef43a08cb0181c63ccee0b4` after all six exact-head CI workflows succeeded on candidate `4f2b09c176f7153083532ff4fea101067512bcd2`. The backend note-edit migration was independently applied to production at verified ledger version `20260926222117`; read-only verification confirmed RPC presence, original-row lock/expected-version guard/pending work projection, anonymous EXECUTE denied and authenticated EXECUTE allowed. **The newly merged Web UI is not independently verified as deployed to production; main merge is not the guarded Web release trigger.** Real cross-role/concurrent live fixtures are still outstanding. This is the FIRST controlled same-ID edit slice, NOT general amount/account/party editing.
 
 ## Actual baseline
 
