@@ -23,8 +23,8 @@
     "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs",
     "verify:canonical-baseline": "node scripts/verify-supabase-canonical-baseline.mjs",
     "check:bundle-budget": "node scripts/check-production-bundle-budget.mjs",
-    "preview:draft-editor": "vite --config tests/fixtures/expense-editor/vite.config.ts",
-    "test:expense-editor": "node --import tsx scripts/check-stage2d-expense-editor.ts"
+    "test:expense-editor": "node --import tsx scripts/check-stage2d-expense-editor.ts",
+    "preview:local": "vite --host 127.0.0.1 --port 3000 --strictPort"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",

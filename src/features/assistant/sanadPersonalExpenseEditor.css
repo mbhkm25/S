@@ -1,0 +1,73 @@
+/* Actual conversation editor. Inherits SANAD typography and semantic theme tokens.
+   Loaded with its lazy component through the normal application CSS pipeline. */
+.sanad-expense-editor {
+  min-width: 0;
+  padding-block: var(--sanad-space-4);
+  border-block-start: 1px solid var(--sanad-border-subtle);
+  color: var(--sanad-text);
+  font-family: inherit;
+}
+.sanad-expense-editor > * + * { margin-block-start: var(--sanad-space-4); }
+.sanad-expense-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sanad-space-4);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.sanad-expense-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sanad-space-2);
+  min-width: 0;
+  color: var(--sanad-text-muted);
+  font-size: var(--sanad-text-xs);
+  line-height: var(--sanad-leading-body);
+}
+.sanad-expense-field > span:first-child { font-weight: var(--sanad-weight-medium); }
+.sanad-expense-wide { grid-column: 1 / -1; }
+.sanad-expense-control {
+  display: block;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .625rem .75rem;
+  border: 1px solid var(--sanad-border);
+  border-radius: var(--sanad-radius-sm);
+  background: var(--sanad-surface-1);
+  color: var(--sanad-text-strong);
+  font: inherit;
+  font-size: var(--sanad-text-sm);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+textarea.sanad-expense-control { resize: vertical; min-height: 5rem; }
+.sanad-expense-control:focus-visible { border-color: var(--sanad-focus); }
+.sanad-expense-actions { display: flex; flex-wrap: wrap; gap: var(--sanad-space-2); }
+.sanad-expense-button {
+  min-height: 2.75rem;
+  padding: .625rem 1rem;
+  border: 1px solid var(--sanad-border);
+  border-radius: var(--sanad-radius-sm);
+  background: var(--sanad-surface-1);
+  color: var(--sanad-text-strong);
+  font: inherit;
+  font-size: var(--sanad-text-sm);
+  font-weight: var(--sanad-weight-medium);
+  line-height: 1.6;
+  cursor: pointer;
+}
+.sanad-expense-button-primary {
+  border-color: var(--sanad-interactive);
+  background: var(--sanad-interactive);
+  color: #fff;
+}
+.sanad-expense-button-primary:hover:not(:disabled) { background: var(--sanad-interactive-hover); }
+.sanad-expense-editor :disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 639px) {
+  .sanad-expense-fields { grid-template-columns: minmax(0, 1fr); gap: var(--sanad-space-3); }
+  .sanad-expense-actions { align-items: stretch; }
+  .sanad-expense-button { flex: 1 1 auto; }
+}

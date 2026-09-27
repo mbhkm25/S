@@ -18,28 +18,32 @@ Entity choices reuse existing owner-RLS accounts/categories. Fetch only active n
 
 Opening the editor disables approval/cancellation. Version conflicts, fingerprint collision and uncertain save response preserve visible inputs and block another save until an explicit read of latest state; replacing unsaved fields requires confirmation. There is no silent retry or rebase. Reload also refreshes the parent's review/version when closing. Changing action ID remounts the card so previous verification/edit state cannot leak into a different card. Existing non-expense note/legacy editing remains as before.
 
-## Isolated owner preview
+## Owner preview — actual SANAD app only
 
-`npm run preview:draft-editor` opens `http://127.0.0.1:3000` with the **real production card and editor**, but a build-time fixture API adapter. This is a separate Vite entry/config, never a production route or runtime feature flag. It loads no `.env` file, imports no Supabase client, uses no browser credential storage, and has a same-origin CSP. Approval/cancellation adapters reject; all drafts/accounts are synthetic. Fixture state resets on page refresh. This proves UI behavior, not production end-to-end RPC execution.
+Owner rejected the separate fixture screen on 2026-09-27 at 11:25 Yemen. Screenshot showed unstyled card utilities and the separate test entry instead of SANAD. The fixture's separate Vite root did not provide the normal application's Tailwind source discovery. That delivery was invalid for owner acceptance.
 
-Scenario selector includes delayed capability, successful edit, stale version, lost response after save, duplicate-active collision, disabled capability, wrong thread capability, unavailable account, empty accounts, lookup error and commercial non-regression. Native keyboard selects are the bounded foundation; searchable Arabic entity autocomplete and conversation/voice edits remain follow-on slices.
+The entire fixture entry, mock adapter, configuration and preview command have been removed. `npm run preview:local` uses the ORIGINAL root Vite application on `127.0.0.1:3000`, normal auth, routes, conversation cards, real RPCs and the existing `.env.local`. No demo route or runtime substitution. Existing `npm run dev` remains unchanged. Stop the old server before switching, otherwise the old page still owns port 3000; the new command refuses port fallback.
+
+Card uses existing SANAD surface/icon/title tokens; the editor imports scoped CSS with semantic colors, inherited Noto Sans Arabic, 44px controls, consistent spacing and responsive grid. No internal visual preview or browser tests: final visual acceptance belongs to the owner.
+
+**Actual backend blocker, freshly verified:** v2 expense RPC absent and new descriptor not installed. Opening the full application is possible immediately; full expense saves remain correctly disabled until owner explicitly authorizes installation of the #413 migration and this PR's descriptor migration. Do not substitute mock data, hide this blocker or claim functional completion. UI merge/publication is separately performed by the owner after local acceptance.
 
 ## Verification
 
 - 39 executable client/isolated PostgreSQL descriptor cases PASS locally. Includes absent/revoked RPC, owner/foreign/legacy/business scopes, anonymous EXECUTE denial, precise payload/date and invalid entities/amounts.
 - TypeScript, full route regression suite, production build and bundle budgets PASS locally. Workspace 110.06 / 120 KB. No production fixture entry.
 - **Owner workflow correction, 2026-09-27 11:07 Yemen:** the owner explicitly requires no assistant-side UI previews or UI tests. Stop rendered/browser testing. The browser workflow/script and Playwright dependency introduced in early commits are removed from the final candidate. Earlier browser runs are historical, not acceptance evidence. Only compilation, build and operational contract checks continue. All visual/interactive acceptance is performed by the owner locally on port 3000; the owner then merges and publishes through GitHub.
-- The isolated fixture is retained exclusively as an owner-operated preview of the real components while the live v2 contract is absent. No screenshots or visual PASS claim for the final candidate. Do not automatically run the fixture/browser in future development turns.
+- Owner-only UI validation. No separate fixture or mock API remains. Do not launch the app or run browser tests on behalf of the owner.
 - Backend #413 already has its own 59 PostgreSQL cases including actual concurrency. This UI package does not replace that evidence or claim that v2 is deployed.
 
 ## Owner checks before merge
 
-1. Open normal scenario; edit Arabic amount/account/category/date/description; save; verify updated review and version while fixture ID stays constant.
-2. While editing, verify approval/cancellation disabled; cancel an unsaved edit and confirm it does not change the review.
-3. Stale-version scenario: enter a different amount, save, see conflict with input retained; explicitly load latest and see 175 in the newer revision.
-4. Lost-response scenario: save, read current state, see saved amount without another mutation.
-5. Inspect 125/150% browser zoom and narrow width; keyboard through fields; no horizontal clipping.
-6. Disabled capability and lookup error must not allow a full-field save. Commercial scenario must not show the expense editor.
+After separately authorized backend installation:
+1. Open the actual SANAD app, Personal Manager, and an existing unapproved personal expense draft.
+2. Edit fields, save, verify same action ID and updated review/version. Do NOT approve a financial transaction for testing.
+3. Review approval/cancel disabled while editing, cancellation of unsaved fields, currency/account consistency and optional description.
+4. Open the same draft in a second tab; save in one, verify the stale save in the other is blocked and requires an explicit reload.
+5. Check real browser 125/150% zoom, narrow width and keyboard controls; send screenshots/findings to the implementation conversation.
 
 ## Release gates and rollback
 

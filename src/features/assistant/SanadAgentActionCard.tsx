@@ -164,14 +164,14 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   };
 
   return (
-    <section className="overflow-hidden rounded-[1.55rem] border border-indigo-100 bg-white shadow-[0_12px_30px_rgba(15,23,42,.06)]">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-l from-indigo-50/80 to-white p-4">
+    <section className="sanad-surface min-w-0 overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--sanad-border-subtle)] bg-[var(--sanad-surface-1)] p-4">
         <div className="flex min-w-0 items-start gap-2.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
-            <FileCheck2 className="h-4.5 w-4.5" />
+          <span className="sanad-icon-box">
+            <FileCheck2 className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="text-[15px] font-semibold text-slate-950">{review.title || card.title}</p>
+            <p className="sanad-section-title">{review.title || card.title}</p>
             {review.summary ? <p className="mt-1 text-[13px] leading-6 text-slate-500">{review.summary}</p> : null}
           </div>
         </div>
@@ -281,12 +281,12 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
         ) : null}
 
         {status === 'review' ? (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-3">
             <button
               type="button"
               disabled={locked || noteEditing || expenseEditing}
               onClick={() => void approve()}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[13px] font-medium text-white disabled:opacity-40"
+              className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-950 px-2 text-[13px] font-medium text-white disabled:opacity-40"
             >
               {busy === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
               اعتماد
@@ -298,7 +298,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
                 if (expense) { if (canEditExpense) { setExpenseEditing(true); setNotice(''); setError(''); } }
                 else void cancel(true);
               }}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
+              className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
               {expense ? 'تعديل المصروف' : 'تعديل بقية البيانات'}
@@ -307,7 +307,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
               type="button"
               disabled={locked || noteEditing || expenseEditing}
               onClick={() => void cancel(false)}
-              className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[13px] font-medium text-rose-700 disabled:opacity-40"
+              className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-2 text-[13px] font-medium text-rose-700 disabled:opacity-40"
             >
               {busy === 'cancel' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
               إلغاء
