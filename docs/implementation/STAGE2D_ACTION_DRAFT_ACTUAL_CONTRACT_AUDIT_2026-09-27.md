@@ -1,6 +1,6 @@
 # Stage 2D.0 — Actual Action/Draft contract audit and origin guard
 
-**Checkpoint:** 2026-09-27. **State:** First additive security/compatibility candidate, NOT DEPLOYED until review and exact-head CI.  
+**Checkpoint:** 2026-09-27. **Final Stage 2D.0 state:** PR #407 MERGED (`839641ae184333fe3b3e709b412ed4af0277b8a9`), all six exact-head CI checks PASS. Reviewed origin-guard migration applied to production at actual ledger version `20260926214052`; read-only confirmation of enabled trigger. Runtime negative actor/role fixtures remain tracked separately.  
 **Canonical plan:** `docs/roadmaps/SANAD_EXECUTION_PROGRAM_V4_2026-09-25.md` → 2D Unified Action + Draft Intelligence.  
 **Accepted transition:** Owner reported the Stage 2C.5 production features working correctly, with remaining appearance-only observations deliberately postponed. This is acceptance of the scoped UX, not evidence that all cross-business denial or recovery scenarios have been exercised.
 
