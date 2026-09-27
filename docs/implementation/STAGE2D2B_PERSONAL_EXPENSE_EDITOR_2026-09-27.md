@@ -22,14 +22,14 @@ Opening the editor disables approval/cancellation. Version conflicts, fingerprin
 
 `npm run preview:draft-editor` opens `http://127.0.0.1:3000` with the **real production card and editor**, but a build-time fixture API adapter. This is a separate Vite entry/config, never a production route or runtime feature flag. It loads no `.env` file, imports no Supabase client, uses no browser credential storage, and has a same-origin CSP. Approval/cancellation adapters reject; all drafts/accounts are synthetic. Fixture state resets on page refresh. This proves UI behavior, not production end-to-end RPC execution.
 
-Scenario selector includes successful edit, stale version, lost response after save, duplicate-active collision, disabled capability, wrong thread capability, unavailable account, empty accounts, lookup error and commercial non-regression. Native keyboard selects are the bounded foundation; searchable Arabic entity autocomplete and conversation/voice edits remain follow-on slices.
+Scenario selector includes delayed capability, successful edit, stale version, lost response after save, duplicate-active collision, disabled capability, wrong thread capability, unavailable account, empty accounts, lookup error and commercial non-regression. Native keyboard selects are the bounded foundation; searchable Arabic entity autocomplete and conversation/voice edits remain follow-on slices.
 
 ## Verification
 
 - 39 executable client/isolated PostgreSQL descriptor cases PASS locally. Includes absent/revoked RPC, owner/foreign/legacy/business scopes, anonymous EXECUTE denial, precise payload/date and invalid entities/amounts.
 - TypeScript, full route regression suite, production build and bundle budgets PASS locally. Workspace 110.06 / 120 KB. No production fixture entry.
-- Local browser launch blocked by execution environment: Chromium `socket() failed: Operation not permitted`. Browser plugin absent; regular Playwright attempted. Browser checks therefore run in the disposable GitHub Actions runner via `stage2d-expense-editor-ui.yml`; record final exact-head outcome before review readiness.
-- Browser suite covers save/review identity, disabled approvals, account currency reset, stale conflict recovery, uncertain response without duplicate save, unsupported/foreign descriptor, empty/failed lookups, unavailable original account, collision, keyboard Tab, 360/390/768/1280 viewports and CSS zoom 125/150. CSS zoom is not a claim of physical browser zoom or Android keyboard testing. Screenshots are CI artifacts, not product assets.
+- **Owner workflow correction, 2026-09-27 11:07 Yemen:** the owner explicitly requires no assistant-side UI previews or UI tests. Stop rendered/browser testing. The browser workflow/script and Playwright dependency introduced in early commits are removed from the final candidate. Earlier browser runs are historical, not acceptance evidence. Only compilation, build and operational contract checks continue. All visual/interactive acceptance is performed by the owner locally on port 3000; the owner then merges and publishes through GitHub.
+- The isolated fixture is retained exclusively as an owner-operated preview of the real components while the live v2 contract is absent. No screenshots or visual PASS claim for the final candidate. Do not automatically run the fixture/browser in future development turns.
 - Backend #413 already has its own 59 PostgreSQL cases including actual concurrency. This UI package does not replace that evidence or claim that v2 is deployed.
 
 ## Owner checks before merge
@@ -43,7 +43,7 @@ Scenario selector includes successful edit, stale version, lost response after s
 
 ## Release gates and rollback
 
-Owner preview acceptance is required before UI merge. No merge, database install, Web/Edge/Android publication or real financial testing authorized by this document. Resolve #413 dependency and package.json/check:routes integration deliberately when merging; do not overwrite either test suite. Recheck main and #414 release scope before any rollout, since #414 must not accidentally release an unreviewed new package.
+Owner local test results are required before merge. The owner performs the merge and publication personally; the assistant must not perform either action. No merge, database install, Web/Edge/Android publication or real financial testing authorized by this document. Resolve #413 dependency and package.json/check:routes integration deliberately when merging; do not overwrite either test suite. Recheck main and #414 release scope before any rollout, since #414 must not accidentally release an unreviewed new package.
 
 Safe UI rollback: revert this package's UI code and restore previous descriptor definition; retain #413 canonical rows, versions and audit events. Do not undo a user's saved data or revoke unrelated permissions. Revoke v2 edit access only as a separately reviewed backend rollback. Full 2D.2-B remains open for conversational/voice editing and later commercial contracts; this package closes only the personal expense form adapter after owner acceptance.
 
