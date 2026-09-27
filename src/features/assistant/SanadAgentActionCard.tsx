@@ -133,7 +133,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : '';
       setError(detail.includes('agent_action_version_conflict')
-        ? 'تغير إصدار المسودة في مكان آخر. حُمّلت الحالة الأحدث؛ راجعها ثم أعد حفظ تعديلك.'
+        ? 'تغير إصدار المسودة في مكان آخر. حُمّلت الحالة الأحدث؛ أغلق محرر النص وراجِعها، ثم افتحه مجددًا لإعادة تعديلك.'
         : detail.includes('identical_active_action_already_exists')
           ? 'توجد مسودة أخرى مطابقة نشطة. راجعها قبل حفظ هذا التعديل.'
           : detail || 'تعذر تعديل الملاحظة.');
