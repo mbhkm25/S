@@ -37,13 +37,13 @@ function Assert-Exit([string]$Activity) {
   if ($LASTEXITCODE -ne 0) { throw "$Activity failed: exit $LASTEXITCODE" }
 }
 function Wait-BridgeStopped {
-  $limit=(Get-Date).AddSeconds(90)
+  $limit=(Get-Date).AddSeconds(330)
   do {
     $running=@(Get-CimInstance Win32_Process -Filter "Name='Sanad.Bridge.exe'" -ErrorAction Stop)
     if ($running.Count -eq 0) { return }
     Start-Sleep -Seconds 3
   } while ((Get-Date) -lt $limit)
-  throw 'Bridge process still exists after 90 seconds. Do not force-kill or replace loaded binaries. Examine Task Scheduler and local agent log.'
+  throw 'Bridge process still exists after 330 seconds. Do not force-kill or replace loaded binaries. Examine Task Scheduler and local agent log.'
 }
 
 # PRE-FLIGHT: perform all source and build checks BEFORE touching the live task.
@@ -64,7 +64,7 @@ foreach ($path in @($project,$runner,$launcher)) {
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing staging file: $path" }
 }
 $runnerContent=Get-Content -LiteralPath $runner -Raw
-if ($runnerContent -notmatch "\$PSScriptRoot" -or $runnerContent -notmatch "app\\Sanad.Bridge.exe") {
+if ($runnerContent -notmatch '\$PSScriptRoot' -or $runnerContent -notmatch 'app\\Sanad.Bridge.exe') {
   throw 'Staged runner is not the revised stable app-relative runner. Checkout the vetted upgrade PR first.'
 }
 if (-not (Get-Command Export-ScheduledTask -ErrorAction SilentlyContinue)) {
@@ -92,6 +92,9 @@ Write-Host 'Building complete Bridge Release before touching the running task...
 Assert-Exit 'dotnet restore'
 & dotnet build $project --configuration Release --no-restore
 Assert-Exit 'dotnet Release build'
+$builtDirty=@(& git -C $Stage status --porcelain --untracked-files=no)
+Assert-Exit 'post-build git tracked status'
+if ($builtDirty.Count -gt 0) { throw 'Build changed tracked staging files; re-review before install' }
 $bin=Join-Path $Stage 'bridge\windows\Sanad.Bridge\bin\Release\net48'
 $exe=Join-Path $bin 'Sanad.Bridge.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Release EXE missing' }
@@ -112,6 +115,8 @@ if (-not $PSCmdlet.ShouldProcess($TaskName,"Back up task, gracefully stop, insta
 # Keep immutable versioned staging artifacts and a recoverable task definition.
 try {
   New-Item -ItemType Directory -Path $release,$backup -Force | Out-Null
+  & icacls.exe $backup /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+  Assert-Exit 'Secure private task backup'
   # No Bridge state, identity or log is included in these runtime-only backups.
   $oldTaskXml=Join-Path $backup 'scheduled-task-before.xml'
   Export-ScheduledTask -TaskName $TaskName | Set-Content -LiteralPath $oldTaskXml -Encoding Unicode
@@ -125,9 +130,6 @@ try {
     previousLastResult=(($oldTask | Get-ScheduledTaskInfo).LastTaskResult)
     stagingSha=$ExpectedSha; oldBinaryHash=$null; newBinaryHash=$hash; startedAt=$stamp
   }
-  $oldRepoExe=Join-Path $Stage '..\SANAD-DEV\bridge\windows\Sanad.Bridge\bin\Debug\net48\Sanad.Bridge.exe'
-  # This approximate old path is NOT treated as an authority: the original
-  # scheduler XML, not a guessed path, is the rollback source.
   $oldAction | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backup 'upgrade-manifest.json') -Encoding UTF8
 
   # Disable first so a new minute trigger cannot race the quiescence window.
@@ -155,6 +157,8 @@ try {
   # runtime code must be writable only by admins/SYSTEM.
   & icacls.exe $RuntimeRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /T /C | Out-Null
   Assert-Exit 'Lock down runtime folder ACL'
+  & icacls.exe $backup /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+  Assert-Exit 'Restore admin-only ACL on private scheduler backups'
 
   # Local health reads Edaa and the existing local state. Pending outbox code
   # 29 is an advisory: pending sales may need scheduled cloud delivery.
