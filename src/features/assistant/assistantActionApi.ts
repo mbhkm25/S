@@ -75,3 +75,22 @@ export async function cancelSanadAgentAction(
   if (error) throw new Error(error.message || 'تعذر إلغاء الإجراء.');
   return data as SanadAgentAction;
 }
+
+/**
+ * Stage 2D.2-A: edit only the optional description/note of the SAME canonical
+ * review action. Every ownership, project, status and version check remains on
+ * the server. This deliberately cannot change amounts, accounts or parties.
+ */
+export async function updateSanadAgentActionNote(
+  actionId: string,
+  expectedVersion: number,
+  note: string,
+): Promise<SanadAgentAction> {
+  const { data, error } = await supabase.rpc('update_my_sanad_agent_action_note_v1', {
+    p_action_id: actionId,
+    p_expected_version: expectedVersion,
+    p_note: note,
+  });
+  if (error) throw new Error(error.message || 'تعذر تعديل ملاحظة المسودة.');
+  return data as SanadAgentAction;
+}
