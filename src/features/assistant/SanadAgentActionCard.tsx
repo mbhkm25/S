@@ -1,3 +1,4 @@
+import { subscribeSanadActionReviews } from './actionReviewInvalidation';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   AlertTriangle,
@@ -63,6 +64,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | 'save_note' | null>(null);
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
+  const [noteVersion, setNoteVersion] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
   const [capabilities, setCapabilities] = useState<ActionCapabilities | null>(null);
@@ -71,18 +73,28 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
 
   useEffect(() => {
     let alive = true;
-    void getSanadAgentAction(card.action_id)
-      .then(async (row) => {
-        if (row.id !== card.action_id) throw new Error('action_identity_mismatch');
-        if (alive) { setAction(row); setVerified(true); }
-        if (isPersonalExpense(row)) {
-          try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive) setCapabilities(descriptor); }
-          catch { /* Missing/unverified capability fails closed; note editing remains available. */ }
-        }
-      })
-      .catch(() => { if (alive) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
-    return () => { alive = false; };
-  }, [card.action_id]);
+    let request = 0;
+    const refresh = () => {
+      const current = ++request;
+      setVerified(false);
+      void getSanadAgentAction(card.action_id)
+        .then(async (row) => {
+          if (row.id !== card.action_id) throw new Error('action_identity_mismatch');
+          if (!alive || current !== request) return;
+          setAction(row); setVerified(true);
+          setError(previous => previous.startsWith('تعذر التحقق من أحدث حالة') ? '' : previous);
+          if (isPersonalExpense(row)) {
+            try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive && current === request) setCapabilities(descriptor); }
+            catch { if (alive && current === request) setCapabilities(null); }
+          }
+        })
+        .catch(() => { if (alive && current === request) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
+    };
+    const unsubscribe = subscribeSanadActionReviews(refresh);
+    window.addEventListener('focus',refresh);
+    refresh();
+    return () => { alive = false; unsubscribe(); window.removeEventListener('focus',refresh); };
+  }, [card.action_id, card.version]);
 
   const status = action?.status || card.status;
   const version = action?.version || card.version;
@@ -115,7 +127,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
     setBusy('save_note');
     setError('');
     try {
-      const updated = await updateSanadAgentActionNote(card.action_id, version, noteDraft);
+      const updated = await updateSanadAgentActionNote(card.action_id, noteVersion ?? -1, noteDraft);
       setAction(updated);
       setNoteEditing(false);
     } catch (cause) {
@@ -192,7 +204,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           ))}
         </div>
 
-        {review.approval_effect ? (
+        {status === 'review' && review.approval_effect ? (
           <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-amber-900">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
@@ -255,7 +267,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
             {!noteEditing ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-slate-700">{action.action_type === 'personal_transaction' ? 'وصف المسودة' : 'ملاحظات المسودة'}: {currentNote || 'غير محدد'}</p>
-                <button type="button" disabled={locked} onClick={() => { setNoteDraft(currentNote); setNoteEditing(true); setError(''); }}
+                <button type="button" disabled={locked} onClick={() => { setNoteDraft(currentNote); setNoteVersion(version); setNoteEditing(true); setError(''); }}
                   className="sanad-focus-ring min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 disabled:opacity-40">
                   تعديل النص في المسودة نفسها
                 </button>
@@ -319,9 +331,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
 
         {status === 'review' && expense && !canEditExpense ? <p className="text-xs leading-6 text-slate-500">تعديل المبلغ والحساب غير متاح حاليًا؛ يمكنك تعديل الوصف فقط.</p> : null}
         {verified ? <p className="text-[11px] text-slate-500">إصدار المسودة: {version}</p> : null}
-        <p className="text-[11px] leading-5 text-slate-400">
-          الاعتماد ينفذ عقدًا محددًا على خادم سند بعد إعادة التحقق من الملكية والحالة والإصدار. لا يملك نموذج الذكاء الاصطناعي صلاحية تنفيذ هذا الزر.
-        </p>
+
       </div>
     </section>
   );

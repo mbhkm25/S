@@ -1,3 +1,4 @@
+import { assertExpenseRevisionBatch, EXPENSE_REVISION_TOOLS, executeExpenseRevisionTool, type RevisionTurnState } from '../_shared/sanad-expense-revision.ts';
 import { ACTION_PREPARATION_TYPES, assertSetupLookup } from '../_shared/sanad-action-contract.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.110.0";
@@ -30,6 +31,7 @@ import { buildAgentInsights, mergeAgentAttention } from "../_shared/sanad-agent-
 
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
 type ActionToolContext = {
+  revision: RevisionTurnState;
   threadId: string | null;
   businessId: string | null;
   requestId: string;
@@ -472,6 +474,9 @@ function assertActionPreparationResolved(
 
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
+    action_list_expense_drafts: "sanad_agent_actions:current_thread_review",
+    action_get_expense_draft: "sanad_agent_actions:owner_current_thread_exact_amount",
+    action_edit_personal_expense: "update_my_sanad_agent_action_draft_v2:review_only",
     finance_get_overview: "get_ai_financial_context_v2",
     finance_search_transactions: "get_ai_financial_context_v2",
     finance_get_obligations: "get_ai_financial_context_v2",
@@ -504,6 +509,28 @@ async function executeTool(
   adminClient: SupabaseClient,
   actionContext: ActionToolContext,
 ): Promise<unknown> {
+  if (EXPENSE_REVISION_TOOLS.includes(name)) {
+    return await executeExpenseRevisionTool(name,args,actionContext,{
+      rpc:(fn,params)=>rpc(userClient,fn,params),
+      read:async(actionId,threadId)=>{
+        // JSON ->> preserves untouched decimal amounts exactly across JavaScript.
+        const {data,error}=await userClient.from('sanad_agent_actions')
+          .select('id,thread_id,business_id,action_type,status,version,payload,review,amount_text:payload->>amount')
+          .eq('id',actionId).eq('thread_id',threadId).maybeSingle();
+        if(error) throw new Error(error.message);
+        return data;
+      },
+      list:async(threadId)=>{
+        const {data,error}=await userClient.from('sanad_agent_actions')
+          .select('id,version,review').eq('thread_id',threadId).eq('status','review')
+          .eq('action_type','personal_transaction').is('business_id',null)
+          .eq('payload->>transaction_type','expense').order('created_at',{ascending:false}).order('id').limit(21);
+        if(error) throw new Error(error.message);
+        return data??[];
+      },
+    });
+  }
+  if (name.startsWith('action_prepare_') && actionContext.revision.attempted) throw new Error('expense_revision_no_replacement_after_attempt');
   const today = todayIso();
   const from = isoDate(args.from, daysAgoIso(30));
   const to = isoDate(args.to, today);
@@ -787,6 +814,7 @@ function streamAgentResponse(
         const started = requestTiming.startedAt;
         const toolTrace: ToolTrace[] = [];
         const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+        const revision: RevisionTurnState = { attempted:false };
         const aggregateUsage = emptyAgentUsage();
         let totalToolCalls = 0;
         let modelLatencyMs = 0;
@@ -817,6 +845,7 @@ function streamAgentResponse(
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
             const calls = extractToolCalls(interaction);
             if (!calls.length) break;
+            assertExpenseRevisionBatch(calls.map(tool => tool.name));
             if (totalToolCalls + calls.length > MAX_TOOL_CALLS) throw new Error("tool_call_limit_exceeded");
             if (calls.length > MAX_PARALLEL_TOOLS) throw new Error("parallel_tool_limit_exceeded");
             totalToolCalls += calls.length;
@@ -840,6 +869,7 @@ function streamAgentResponse(
                   toolCallId: tool.id,
                   attachmentIds: attachmentContext.ids,
                   priorToolOutputs: toolOutputs,
+                  revision,
                 }),
               );
               send("tool.completed", item.trace);
@@ -1105,6 +1135,7 @@ Deno.serve(async (req) => {
   const started = requestStartedAt;
   const toolTrace: ToolTrace[] = [];
   const toolOutputs: Array<{ name: string; args: Json; output: unknown }> = [];
+  const revision: RevisionTurnState = { attempted:false };
   const aggregateUsage = emptyAgentUsage();
   let totalToolCalls = 0;
   let modelLatencyMs = 0;
@@ -1143,6 +1174,7 @@ Deno.serve(async (req) => {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const calls = extractToolCalls(interaction);
       if (!calls.length) break;
+      assertExpenseRevisionBatch(calls.map(tool => tool.name));
       if (totalToolCalls + calls.length > MAX_TOOL_CALLS) throw new Error("tool_call_limit_exceeded");
       if (calls.length > MAX_PARALLEL_TOOLS) throw new Error("parallel_tool_limit_exceeded");
       totalToolCalls += calls.length;
@@ -1155,6 +1187,7 @@ Deno.serve(async (req) => {
           toolCallId: tool.id,
           attachmentIds: attachmentContext.ids,
           priorToolOutputs: toolOutputs,
+          revision,
         }))
       ));
 

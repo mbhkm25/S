@@ -60,6 +60,10 @@ export type SanadAssistantToolDefinition = {
 };
 
 export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
+  {name:'action_list_expense_drafts',description:'List bounded pending expense drafts in the current personal conversation.',scope:'personal',risk:'read_only',authoritativeSource:'sanad_agent_actions',parameters:{type:'object',properties:{},required:[],additionalProperties:false}},
+  {name:'action_get_expense_draft',description:'Read the canonical pending expense and version before revision.',scope:'personal',risk:'read_only',authoritativeSource:'sanad_agent_actions',parameters:{type:'object',properties:{action_id:{type:'string',description:'Resolved current-thread draft UUID.'}},required:['action_id'],additionalProperties:false}},
+  {name:'action_edit_personal_expense',description:'Revise the same expense draft with expected version; no approval or financial execution.',scope:'personal',risk:'draft_only',authoritativeSource:'update_my_sanad_agent_action_draft_v2',parameters:{type:'object',properties:{action_id:{type:'string',description:'Draft UUID read this turn.'},expected_version:{type:'integer',description:'Observed version.'},patch:{type:'object',description:'Only requested amount, currency, account_id, category_id, description or transaction_at changes.'}},required:['action_id','expected_version','patch'],additionalProperties:false}},
+
   {
     name: 'finance_get_overview',
     description: 'Read the authenticated user personal financial overview, preserving every currency separately. Use for broad personal reviews; pair with finance_get_budgets when the user asks what needs attention.',

@@ -1,3 +1,4 @@
+import { invalidateSanadActionReviews } from './actionReviewInvalidation';
 import { supabase } from '../../lib/supabase';
 
 export type SanadAgentActionStatus = 'review' | 'approved' | 'executing' | 'completed' | 'cancelled' | 'failed';
@@ -61,6 +62,7 @@ export async function approveSanadAgentAction(
     p_expected_version: expectedVersion,
   });
   if (error) throw new Error(error.message || 'تعذر اعتماد الإجراء.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
@@ -73,6 +75,7 @@ export async function cancelSanadAgentAction(
     p_expected_version: expectedVersion,
   });
   if (error) throw new Error(error.message || 'تعذر إلغاء الإجراء.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
@@ -92,6 +95,7 @@ export async function updateSanadAgentActionNote(
     p_note: note,
   });
   if (error) throw new Error(error.message || 'تعذر تعديل ملاحظة المسودة.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
@@ -126,5 +130,6 @@ export async function updateSanadPersonalExpenseDraft(actionId: string, expected
     p_action_id: actionId, p_expected_version: expectedVersion, p_payload: payload,
   });
   if (error) throw new Error(error.message || 'تعذر حفظ تعديل المصروف.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }

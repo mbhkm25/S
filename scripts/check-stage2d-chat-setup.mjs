@@ -1,3 +1,4 @@
+import { executeExpenseRevisionTool } from '../supabase/functions/_shared/sanad-expense-revision.ts';
 // Isolated PostgreSQL runtime tests. Never connects to Supabase or any real ledger.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -145,6 +146,26 @@ try {
   assert.equal(expense.status,'review'); assert.equal(expense.payload.account_id,done.result.account_id); checks+=2;
   const revised=await edit(expense.id,expense.version,{transaction_type:'expense',amount:'15',currency:'YER',account_id:done.result.account_id,category_id:categoryDone.result.category_id,description:'متابعة',transaction_at:payload.transaction_at});
   assert.equal(revised.id,expense.id); assert.equal(revised.version,expense.version+1); checks+=2;
+  // Actual SQL integration: chat revision -> form revision on the SAME canonical row.
+  const revisionContext={threadId:thread,priorToolOutputs:[],revision:{attempted:false}};
+  const revisionGateway={
+    rpc:async(name,p)=>{
+      if(name==='get_my_sanad_action_capabilities_v1') return scalar('select public.get_my_sanad_action_capabilities_v1($1) value',[p.p_thread_id]);
+      if(name==='update_my_sanad_agent_action_draft_v2') return edit(p.p_action_id,p.p_expected_version,p.p_payload);
+      throw new Error('unexpected_adapter_rpc');
+    },
+    read:(id,t)=>scalar("select to_jsonb(a)||jsonb_build_object('amount_text',a.payload->>'amount') value from public.sanad_agent_actions a where id=$1 and thread_id=$2",[id,t]),
+    list:async()=>[],
+  };
+  const chatRead=await executeExpenseRevisionTool('action_get_expense_draft',{action_id:expense.id},revisionContext,revisionGateway);
+  revisionContext.priorToolOutputs.push({name:'action_get_expense_draft',output:chatRead});
+  const chatEdited=await executeExpenseRevisionTool('action_edit_personal_expense',{action_id:expense.id,expected_version:chatRead.version,patch:{amount:'٣٠٠٠٫١٢٣٤٥٦',description:'تعديل من المحادثة'}},revisionContext,revisionGateway);
+  assert.equal(chatEdited.id,expense.id); assert.equal(chatEdited.version,chatRead.version+1); checks+=2;
+  assert.equal(chatEdited.payload.amount,3000.123456); checks++;
+  const chatFields=Object.fromEntries(['transaction_type','amount','currency','account_id','category_id','description','transaction_at'].map(k=>[k,chatEdited.payload[k]]));
+  await rejectEdit(expense.id,chatRead.version,chatFields,/version_conflict/);
+  const formAfterChat=await edit(expense.id,chatEdited.version,{...chatFields,description:'تعديل النموذج بعد المحادثة'});
+  assert.equal(formAfterChat.id,expense.id);assert.equal(formAfterChat.version,chatEdited.version+1);checks+=2;
   for(const bad of [{name:'a',kind:'asset'}, {name:'a',kind:null}, {name:'a'.repeat(81),kind:'expense'}, {name:'a',kind:'expense',parent_id:category}, {name:'a',kind:'expense',currency:'SAR'}]) {
     await denied('select public.create_my_sanad_agent_action_draft_v1($1,$2,$3)',[thread,'personal_category_setup',bad],/invalid_setup|setup_payload_field_not_allowed/);
   }
