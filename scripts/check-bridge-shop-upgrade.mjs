@@ -18,6 +18,8 @@ assert.match(manual, /SANAD\\Bridge\\runtime\\active\\app\\Sanad\.Bridge\.exe/,
 assert.match(manual, /SANAD\\Bridge\\runtime\\active\\run-agent-cycle\.ps1/);
 assert.match(hidden, /shell\.Run\(command, 0, True\)/);
 assert.match(scheduled, /-MultipleInstances IgnoreNew/);
+assert.match(scheduled, /-ExecutionTimeLimit \(New-TimeSpan -Minutes 45\)/,
+  'A 5m scheduled-task kill timeout is too short for a valid <=30m read-only cloud snapshot.');
 assert.match(cycle, /Global\\SANAD\.Bridge\.AgentCycle\.v1/);
 
 for (const invariant of [
