@@ -28,6 +28,7 @@ $Repo = 'C:\SANAD-DEV'
 $Stage = 'C:\SANAD-BRIDGE-UPGRADE-V2'
 $Branch = 'bridge/shop-upgrade-reconcile-and-safe-installer-20260927'
 $SHA = '<EXACT_40_CHARACTER_APPROVED_SHA>'
+$OldHash = '391A09E3532E1E2BD9FCDBCF2AE92693C1527E7BB36868D710AD8211141C9DAA'
 if (Test-Path -LiteralPath $Stage) { throw 'Staging V2 already exists; refuse overwrite.' }
 git -C $Repo fetch origin "+refs/heads/${Branch}:refs/remotes/origin/${Branch}"
 if ($LASTEXITCODE -ne 0) { throw 'fetch failed' }
@@ -36,12 +37,14 @@ if ($Actual -ne $SHA) { throw "Remote branch moved: $Actual" }
 git -C $Repo worktree add --detach $Stage $SHA
 if ($LASTEXITCODE -ne 0) { throw 'worktree add failed' }
 # Use PowerShell as administrator under the SAME current Windows shop account.
-& "$Stage\bridge\windows\install-shop-upgrade.ps1" -Stage $Stage -ExpectedSha $SHA -WhatIf
+& "$Stage\bridge\windows\install-shop-upgrade.ps1" -Stage $Stage -ExpectedSha $SHA -ExpectedOldHash $OldHash -WhatIf
 # -WhatIf builds/verifies pinned output without stopping the service; inspect results.
-& "$Stage\bridge\windows\install-shop-upgrade.ps1" -Stage $Stage -ExpectedSha $SHA -Confirm
+& "$Stage\bridge\windows\install-shop-upgrade.ps1" -Stage $Stage -ExpectedSha $SHA -ExpectedOldHash $OldHash -Confirm
 ```
 
 This does **not** reset or pull the old working tree, wipe local changes or delete the previous Stage 1 snapshot. New `runtime\active` is an installed application copy, not a Git worktree, and application state stays in the original ProgramData root. `-WhatIf` must complete before `-Confirm`.
+
+`-ExpectedOldHash` is the exact old Debug EXE SHA256 recorded by the owner in Stage 1. The installer now parses the EXISTING TASK's runner to locate the executable it actually runs and compares that file's live hash to the recorded baseline. If the task references a different executable/hash, **do not bypass this check**; investigate that precise discrepancy rather than reinstalling against a guessed path. This read-only reconciliation is done before disabling the task.
 
 If the installer safely aborts while another cycle still runs, do NOT kill it or repeatedly rerun: save the bounded error and latest task state and analyze that specific obstruction. Do not manually replace files while the process is active.
 
