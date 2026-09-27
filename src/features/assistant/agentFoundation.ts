@@ -296,6 +296,16 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
     },
   },
   {
+    name: 'action_prepare_personal_account', description: 'Prepare a personal asset account review card with zero opening balance; explicit UI approval required.',
+    scope: 'personal', risk: 'draft_only', authoritativeSource: 'create_my_sanad_agent_action_draft_v1',
+    parameters: { type: 'object', properties: { name: { type: 'string', description: 'User-provided name.' }, currency: { type: 'string', description: 'User-confirmed currency.' } }, required: ['name','currency'], additionalProperties: false },
+  },
+  {
+    name: 'action_prepare_personal_category', description: 'Prepare a personal category review card; explicit UI approval required.',
+    scope: 'personal', risk: 'draft_only', authoritativeSource: 'create_my_sanad_agent_action_draft_v1',
+    parameters: { type: 'object', properties: { name: { type: 'string', description: 'User-provided name.' }, kind: { type: 'string', enum: ['income','expense'], description: 'Category kind.' } }, required: ['name','kind'], additionalProperties: false },
+  },
+  {
     name: 'action_prepare_personal_transaction',
     description: 'Create only a SANAD review draft for personal income, expense, or same-currency transfer. It does not execute the transaction.',
     scope: 'personal',

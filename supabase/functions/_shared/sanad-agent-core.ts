@@ -1,3 +1,4 @@
+import { isPersistedActionReview } from './sanad-action-contract.ts';
 export type Json = Record<string, unknown>;
 export type ToolCall = { id: string; name: string; arguments: Json };
 export type HistoryTurn = { role: "user" | "assistant"; content: string };
@@ -20,7 +21,9 @@ export const SYSTEM_INSTRUCTION = `
 4) بيانات إبداع تقرأ فقط من العقود الدلالية المعتمدة. لا SQL حر ولا جداول خام.
 5) إذا كان اسم العميل ملتبسًا، استخدم البحث عن المرشحين واطلب توضيحًا. لا تختَر حسابًا من نفسك.
 6) بيانات إبداع وERP قراءة فقط دائمًا. لا تكتب إلى إبداع ولا تقترح أن سند فعل ذلك.
-6.1) لديك أداتان فقط مسموحتان لإنشاء «مسودة إجراء للمراجعة» داخل سند: action_prepare_personal_transaction وaction_prepare_commercial_document. هاتان الأداتان لا تنفذان العملية المالية ولا ترحلانها.
+6.1) لديك أدوات محددة لإنشاء «مسودة إجراء للمراجعة» داخل سند: action_prepare_personal_transaction وaction_prepare_commercial_document وaction_prepare_personal_account وaction_prepare_personal_category. جميعها تجهز بطاقة مراجعة فقط ولا تنفذ الكتابة عند تجهيزها.
+6.1.1) عند نقص حساب شخصي أو تصنيف، لا تطلب من المستخدم مغادرة المحادثة إلى الإعدادات: اعرض تجهيزه هنا. اقرأ الحسابات/التصنيفات أولًا لتجنب التكرار. اطلب اسم الحساب وعملته إن لم يحددهما المستخدم، ثم action_prepare_personal_account؛ الحساب الجديد أصول شخصية برصيد افتتاحي صفر فقط. لا تخمن العملة أو الاسم ولا تنشئ متطلبًا لم يطلبه المستخدم. للتصنيف اطلب الاسم والنوع (دخل أو مصروف) ثم action_prepare_personal_category. التصنيف اختياري للمصروف فلا تجعله عائقًا ولا تنشئه تلقائيًا. لا تدّع دعم إنشاء أطراف أو عملات أو أي متطلب آخر غير هذه الأدوات المحددة.
+6.1.2) بعد تجهيز بطاقة حساب/تصنيف، توقف حتى يعتمدها المستخدم من البطاقة. لا تستخدم معرّف الإجراء كمعرّف حساب/تصنيف ولا تجهز المصروف المعتمد عليه في نفس الدور. احتفظ بسياق طلب المصروف في المحادثة وقل للمستخدم: بعد اعتماد البطاقة اكتب «تابع المصروف». عند المتابعة اقرأ الأدوات الفعلية مجددًا لحل المعرّف؛ الموافقة النصية وحدها لا تنشئ الحساب ولا تنفذ المصروف. إذا كان المتطلب موجودًا فاستخدمه بعد التحقق من الاسم والعملة/النوع، وإذا كان غير نشط أو ملتبسًا فاشرح الحاجة للاختيار بدل إنشاء نسخة مكررة.
 6.2) لا توجد لديك أداة اعتماد أو تنفيذ. الاعتماد الصريح يتم فقط من بطاقة المراجعة في واجهة المستخدم، ثم ينفذ الخادم أمرًا deterministic بعد إعادة التحقق.
 6.3) إذا قال المستخدم «اعتمد» نصيًا، لا تعتبر النص وحده تنفيذًا ولا تدّع التنفيذ؛ وجّهه إلى زر الاعتماد في بطاقة المسودة الحالية.
 7) نفّذ أقل عدد من الأدوات اللازمة. يمكن استخدام أدوات مستقلة في الجولة نفسها.
@@ -249,6 +252,18 @@ export const TOOLS = [
   },
   {
     type: "function",
+    name: "action_prepare_personal_account",
+    description: "Prepare a personal asset account review card with zero opening balance. No account is created until explicit UI approval. Read finance_get_accounts first. Never attach an opening balance or invent missing name/currency.",
+    parameters: { type: "object", properties: { name: { type: "string", description: "User-provided personal account name, 1-120 characters." }, currency: { type: "string", description: "User-confirmed three-letter currency code." } }, required: ["name","currency"], additionalProperties: false },
+  },
+  {
+    type: "function",
+    name: "action_prepare_personal_category",
+    description: "Prepare a personal income/expense category review card. No category is created until explicit UI approval. Read finance_get_categories first. Categories are optional for transactions.",
+    parameters: { type: "object", properties: { name: { type: "string", description: "User-provided category name, 1-80 characters." }, kind: { type: "string", enum: ["income","expense"], description: "User-requested category kind." } }, required: ["name","kind"], additionalProperties: false },
+  },
+  {
+    type: "function",
     name: "action_prepare_personal_transaction",
     description: "Prepare a review-only SANAD action draft for a personal income, expense or same-currency transfer. This DOES NOT create or post the financial transaction. Resolve account/category UUIDs first with read tools. The user must explicitly approve the returned review card in the UI before any domain write.",
     parameters: {
@@ -362,8 +377,11 @@ export function inferAgentRoutingHint(message: string, businessId?: string | nul
   if (paymentInbox && businessId) {
     return "توجيه الأدوات: استخدم business_get_payment_inbox للقراءة فقط. لا تستلم ولا تكمل ولا تحرر أي عملية من المساعد.";
   }
+  if (!businessId && explicitAction && /(حساب|محفظة|صندوق|تصنيف|فئة)/i.test(value) && !/(مصروف|تحويل|دخل)/i.test(value)) {
+    return "توجيه الأدوات: لإنشاء حساب أو تصنيف شخصي، اقرأ القائمة أولًا ثم جهّز بطاقة المتطلب بأداة action_prepare_personal_account أو action_prepare_personal_category. اطلب المعلومات الناقصة ولا تنشئ حركة مالية. انتظر اعتماد البطاقة.";
+  }
   if (personalAction) {
-    return "توجيه الأدوات: هذا طلب إجراء شخصي. اقرأ finance_get_accounts أولًا، وfinance_get_categories عند الحاجة، ثم استخدم action_prepare_personal_transaction فقط لإنشاء مسودة مراجعة. لا تنفذ العملية.";
+    return "توجيه الأدوات: هذا طلب إجراء شخصي. اقرأ finance_get_accounts أولًا، وfinance_get_categories عند الحاجة، إذا نقص الحساب اعرض تجهيزه هنا بأداة action_prepare_personal_account وانتظر اعتماد بطاقته. التصنيف اختياري ويمكن تجهيزه عند طلب المستخدم بأداة action_prepare_personal_category. بعد توفر المتطلبات استخدم action_prepare_personal_transaction لإنشاء مسودة مراجعة فقط. لا تنفذ العملية.";
   }
   if (commercialAction && businessId) {
     return "توجيه الأدوات: هذا طلب إجراء تجاري. استخدم business_search_parties إذا ذكر المستخدم طرفًا يحتاج حل هويته، ثم action_prepare_commercial_document لإنشاء مسودة مراجعة فقط. لا ترحّل المستند.";
@@ -590,7 +608,7 @@ export function verifyAndRepair(
   const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
-  const actionPrepared = toolOutputs.some((row) => row.name.startsWith("action_prepare_"));
+  const actionPrepared = toolOutputs.some((row) => isPersistedActionReview(row.name,row.output));
   if (missingCurrencies.length) repairs.push(`العملات الموجودة في المصادر: ${currencies.join("، ")}، وكل عملة معروضة بصورة مستقلة دون دمج.`);
   if (period && !periodVisible) repairs.push(`الفترة المرجعية: ${period.from || "البداية"} — ${period.to || "اليوم"}.`);
   if (actionPrepared) repairs.push("حالة الإجراء: هذه مسودة مراجعة فقط؛ لم تُنفذ أي عملية مالية بعد، والتنفيذ يتطلب اعتمادك الصريح من البطاقة.");

@@ -9,7 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { SanadAssistantActionReviewCard } from './agentFoundation';
-import { describeSanadActionStatus } from './sanadOperationalState';
+import { describePersonalSetupError, describeSanadActionStatus } from './sanadOperationalState';
 import {
   approveSanadAgentAction,
   cancelSanadAgentAction,
@@ -105,6 +105,8 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   const target = resultLabel(action);
   const expense = action ? isPersonalExpense(action) : false;
   const canEditExpense = action ? supportsExpenseEdit(action, capabilities) : false;
+  const setup = action?.action_type === 'personal_account_setup' || action?.action_type === 'personal_category_setup';
+  const supportsNote = action?.action_type === 'personal_transaction' || action?.action_type === 'commercial_document_draft';
   const noteField = action?.action_type === 'personal_transaction' ? 'description' : 'notes';
   const currentNote = typeof action?.payload?.[noteField] === 'string' ? String(action.payload[noteField]) : '';
 
@@ -233,7 +235,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
         {(error || status === 'failed') ? (
           <div role="alert" className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-sm leading-5">{error || action?.error_code || 'تعذر تنفيذ الإجراء.'}</p>
+            <p className="text-sm leading-5">{describePersonalSetupError(error || action?.error_code || 'تعذر تنفيذ الإجراء.')}</p>
           </div>
         ) : null}
 
@@ -248,7 +250,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           </Suspense>
         ) : null}
 
-        {status === 'review' && verified && action && (!canEditExpense || noteEditing) && !expenseEditing ? (
+        {status === 'review' && verified && action && supportsNote && (!canEditExpense || noteEditing) && !expenseEditing ? (
           <div data-sanad-canonical-note-editor className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             {!noteEditing ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -293,7 +295,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
             </button>
             <button
               type="button"
-              disabled={locked || noteEditing || expenseEditing || (expense && !canEditExpense)}
+              disabled={locked || noteEditing || expenseEditing || (expense && !canEditExpense) || (setup && !onModify)}
               onClick={() => {
                 if (expense) { if (canEditExpense) { setExpenseEditing(true); setNotice(''); setError(''); } }
                 else void cancel(true);
@@ -301,7 +303,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
               className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
-              {expense ? 'تعديل المصروف' : 'تعديل بقية البيانات'}
+              {expense ? 'تعديل المصروف' : setup ? 'إلغاء وإعادة تجهيز' : 'تعديل بقية البيانات'}
             </button>
             <button
               type="button"

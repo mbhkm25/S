@@ -1,3 +1,4 @@
+import { ACTION_PREPARATION_TYPES, assertSetupLookup } from '../_shared/sanad-action-contract.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.110.0";
 import {
@@ -430,6 +431,7 @@ function assertActionPreparationResolved(
   args: Json,
   actionContext: ActionToolContext,
 ) {
+  assertSetupLookup(name,actionContext.priorToolOutputs);
   if (name === "action_prepare_personal_transaction") {
     const accounts = resolvedIdsFromToolOutputs(actionContext.priorToolOutputs,"finance_get_accounts","id");
     if (!accounts.size) throw new Error("action_requires_finance_accounts_resolution");
@@ -482,6 +484,8 @@ function sourceForTool(name: string) {
     business_get_dashboard: "get_business_commercial_dashboard_v1",
     business_get_payment_inbox: "get_business_payment_inbox_v3",
     business_search_parties: "business_parties",
+    action_prepare_personal_account: "sanad_agent_actions:review_only",
+    action_prepare_personal_category: "sanad_agent_actions:review_only",
     action_prepare_personal_transaction: "sanad_agent_actions:review_only",
     action_prepare_commercial_document: "sanad_agent_actions:review_only",
     erp_get_replica_status: "get_ai_erp_read_context_v1",
@@ -589,12 +593,10 @@ async function executeTool(
     return { items:data ?? [] };
   }
 
-  if (name === "action_prepare_personal_transaction" || name === "action_prepare_commercial_document") {
+  if (Object.hasOwn(ACTION_PREPARATION_TYPES,name)) {
     if (!actionContext.threadId) throw new Error("action_thread_required");
     assertActionPreparationResolved(name,args,actionContext);
-    const actionType = name === "action_prepare_personal_transaction"
-      ? "personal_transaction"
-      : "commercial_document_draft";
+    const actionType = ACTION_PREPARATION_TYPES[name];
     return await rpc(userClient,"create_my_sanad_agent_action_draft_v1",{
       p_thread_id:actionContext.threadId,
       p_action_type:actionType,

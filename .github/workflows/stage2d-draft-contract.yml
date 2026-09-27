@@ -1,0 +1,59 @@
+name: Stage 2D draft contract
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/check-stage2d-expense-edit.mjs'
+      - 'scripts/check-stage2d-chat-setup*'
+      - 'supabase/functions/_shared/sanad-action-contract.ts'
+      - 'supabase/functions/_shared/sanad-agent-*.ts'
+      - 'supabase/functions/sanad-ai-agent-v1/index.ts'
+      - '.github/workflows/stage2d-draft-contract.yml'
+      - 'package*.json'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/check-stage2d-expense-edit.mjs'
+      - 'scripts/check-stage2d-chat-setup*'
+      - 'supabase/functions/_shared/sanad-action-contract.ts'
+      - 'supabase/functions/_shared/sanad-agent-*.ts'
+      - 'supabase/functions/sanad-ai-agent-v1/index.ts'
+      - '.github/workflows/stage2d-draft-contract.yml'
+      - 'package*.json'
+permissions:
+  contents: read
+jobs:
+  postgres-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: sanad_test
+          POSTGRES_DB: sanad_draft_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:draft-contract
+        env:
+          SANAD_TEST_POSTGRES: '1'
+          SANAD_TEST_SETUP_REGRESSION: '1'
+      - name: Create disposable setup database
+        run: psql -h 127.0.0.1 -U postgres -d postgres -c 'CREATE DATABASE sanad_setup_test'
+        env:
+          PGPASSWORD: sanad_test
+      - run: npm run test:chat-setup
+        env:
+          SANAD_TEST_POSTGRES: '1'
