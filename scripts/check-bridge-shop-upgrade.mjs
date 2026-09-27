@@ -55,6 +55,11 @@ assert.match(install, /-notlike "\*\$installedRunner\*"/);
 assert.match(install, /-notlike "\*\$installedLauncher\*"/);
 assert.match(install, /Get-ChildItem -LiteralPath \$bin -Recurse -Force -Attributes ReparsePoint/);
 assert.match(install, /\$taskSid -ne \$nowUser\.User\.Value/);
+assert.match(install,/\$oldRunnerPath=\$oldRunners\[0\]/);
+assert.match(install,/\$oldActualHash=\(Get-FileHash -LiteralPath \$oldScheduledExe -Algorithm SHA256\)\.Hash/);
+assert.match(install,/\$ExpectedOldHash -and \$oldActualHash -ine \$ExpectedOldHash/);
+assert.match(install,/oldScheduledExe=\$oldScheduledExe/);
+
 assert.match(install, /\$oldTask\.TaskPath -ne '\\'/);
 assert.match(install, /\$healthCode -notin @\(0,29\)/);
 assert.match(install, /INSTALLED_PENDING_CLOUD_FIELD_SMOKE/);
