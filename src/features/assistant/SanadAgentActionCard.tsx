@@ -20,7 +20,7 @@ import {
   type SanadAgentAction,
 } from './assistantActionApi';
 
-import { isPersonalExpense, supportsExpenseEdit, type ActionCapabilities } from './personalExpenseDraft';
+import { isPersonalDraft, supportsPersonalEdit, type ActionCapabilities } from './personalExpenseDraft';
 const ExpenseEditor = lazy(() => import('./SanadPersonalExpenseEditor'));
 
 type Props = {
@@ -83,7 +83,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           if (!alive || current !== request) return;
           setAction(row); setVerified(true);
           setError(previous => previous.startsWith('تعذر التحقق من أحدث حالة') ? '' : previous);
-          if (isPersonalExpense(row)) {
+          if (isPersonalDraft(row)) {
             try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive && current === request) setCapabilities(descriptor); }
             catch { if (alive && current === request) setCapabilities(null); }
           }
@@ -115,8 +115,8 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   const meta = statusMeta(status, action?.action_type || card.action_type, action?.result || null);
   const locked = status !== 'review' || busy !== null || review.writes_to_erp === true || !verified;
   const target = resultLabel(action);
-  const expense = action ? isPersonalExpense(action) : false;
-  const canEditExpense = action ? supportsExpenseEdit(action, capabilities) : false;
+  const expense = action ? isPersonalDraft(action) : false;
+  const canEditExpense = action ? supportsPersonalEdit(action, capabilities) : false;
   const setup = action?.action_type === 'personal_account_setup' || action?.action_type === 'personal_category_setup';
   const supportsNote = action?.action_type === 'personal_transaction' || action?.action_type === 'commercial_document_draft';
   const noteField = action?.action_type === 'personal_transaction' ? 'description' : 'notes';
@@ -254,7 +254,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
         {notice ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">{notice}</p> : null}
 
         {expenseEditing && action ? (
-          <Suspense fallback={<p role="status" className="text-sm text-slate-600">جارٍ فتح محرر المصروف…</p>}>
+          <Suspense fallback={<p role="status" className="text-sm text-slate-600">جارٍ فتح محرر المسودة…</p>}>
             <ExpenseEditor action={action} onSaved={updated => {
               setAction(updated); setExpenseEditing(false); setError('');
               setNotice(updated.status === 'review' ? 'حُفظت المسودة نفسها. راجع البيانات قبل أي اعتماد.' : 'حُمّلت الحالة الحالية للمسودة.');
@@ -315,7 +315,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
               className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
-              {expense ? 'تعديل المصروف' : setup ? 'إلغاء وإعادة تجهيز' : 'تعديل بقية البيانات'}
+              {expense ? 'تعديل المسودة' : setup ? 'إلغاء وإعادة تجهيز' : 'تعديل بقية البيانات'}
             </button>
             <button
               type="button"

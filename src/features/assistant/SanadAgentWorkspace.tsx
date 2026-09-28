@@ -72,9 +72,9 @@ function historyFrom(messages: WorkspaceMessage[]): SanadAiHistoryTurn[] {
 
 function toolLabel(name: string) {
   const revisionLabels: Record<string,string> = {
-    action_list_expense_drafts:'قراءة مسودات المصروف',
-    action_get_expense_draft:'قراءة تفاصيل المسودة',
-    action_edit_personal_expense:'تحديث مسودة المصروف',
+    action_list_personal_drafts:'قراءة المسودات المالية الشخصية',
+    action_get_personal_draft:'قراءة تفاصيل المسودة',
+    action_edit_personal_transaction:'تحديث المسودة المالية',
   };
   if(revisionLabels[name]) return revisionLabels[name];
   const labels: Record<string, string> = {

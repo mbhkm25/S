@@ -6,7 +6,7 @@ export const ACTION_PREPARATION_TYPES: Record<string, string> = {
   action_prepare_personal_category: 'personal_category_setup',
 };
 
-const ACTION_REVIEW_TYPES: Record<string,string> = {...ACTION_PREPARATION_TYPES, action_edit_personal_expense:'personal_transaction'};
+const ACTION_REVIEW_TYPES: Record<string,string> = {...ACTION_PREPARATION_TYPES, action_edit_personal_transaction:'personal_transaction', action_edit_personal_expense:'personal_transaction'};
 
 export function isPersistedActionReview(toolName: string, output: unknown): boolean {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return false;
