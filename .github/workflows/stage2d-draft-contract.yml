@@ -5,6 +5,8 @@ on:
       - 'supabase/migrations/**'
       - 'scripts/check-stage2d-expense-edit.mjs'
       - 'scripts/check-stage2d-chat-setup*'
+      - 'scripts/check-stage2d-expense-chat.ts'
+      - 'supabase/functions/_shared/sanad-expense-revision.ts'
       - 'supabase/functions/_shared/sanad-action-contract.ts'
       - 'supabase/functions/_shared/sanad-agent-*.ts'
       - 'supabase/functions/sanad-ai-agent-v1/index.ts'
@@ -16,6 +18,8 @@ on:
       - 'supabase/migrations/**'
       - 'scripts/check-stage2d-expense-edit.mjs'
       - 'scripts/check-stage2d-chat-setup*'
+      - 'scripts/check-stage2d-expense-chat.ts'
+      - 'supabase/functions/_shared/sanad-expense-revision.ts'
       - 'supabase/functions/_shared/sanad-action-contract.ts'
       - 'supabase/functions/_shared/sanad-agent-*.ts'
       - 'supabase/functions/sanad-ai-agent-v1/index.ts'
@@ -57,3 +61,4 @@ jobs:
       - run: npm run test:chat-setup
         env:
           SANAD_TEST_POSTGRES: '1'
+      - run: npm run test:expense-chat

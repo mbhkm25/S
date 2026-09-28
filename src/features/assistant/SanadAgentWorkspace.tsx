@@ -1,3 +1,4 @@
+import { invalidateSanadActionReviews } from './actionReviewInvalidation';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   BriefcaseBusiness,
@@ -70,7 +71,14 @@ function historyFrom(messages: WorkspaceMessage[]): SanadAiHistoryTurn[] {
 }
 
 function toolLabel(name: string) {
+  const revisionLabels: Record<string,string> = {
+    action_list_personal_drafts:'قراءة المسودات المالية الشخصية',
+    action_get_personal_draft:'قراءة تفاصيل المسودة',
+    action_edit_personal_transaction:'تحديث المسودة المالية',
+  };
+  if(revisionLabels[name]) return revisionLabels[name];
   const labels: Record<string, string> = {
+    business_get_my_relationship: 'التحقق من علاقتك بالنشاط',
     finance_get_overview: 'قراءة النظرة المالية',
     finance_search_transactions: 'البحث في العمليات',
     finance_get_obligations: 'قراءة الالتزامات',
@@ -741,6 +749,7 @@ export default function SanadAgentWorkspace() {
         failed: true,
       }]);
     } finally {
+      invalidateSanadActionReviews();
       setSending(false);
       setLiveStatus('');
       setLiveTools([]);

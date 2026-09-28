@@ -43,7 +43,8 @@ assert.match(canonical,/if v_row\.version<>p_expected_version/);
 assert.match(actionApi,/updateSanadAgentActionNote/);
 assert.match(actionApi,/p_expected_version: expectedVersion/);
 assert.match(card,/data-sanad-canonical-note-editor/);
-assert.match(card,/updateSanadAgentActionNote\(card\.action_id, version, noteDraft\)/);
+assert.match(card,/setNoteVersion\(version\)/);
+assert.match(card,/updateSanadAgentActionNote\(card\.action_id, noteVersion \?\? -1, noteDraft\)/);
 assert.match(card,/status === 'review' && verified && action/);
 assert.match(card,/ملاحظات المسودة/);
 assert.match(responses,/lazy\(\(\) => import\('\.\/SanadAgentActionCard'\)\)/,

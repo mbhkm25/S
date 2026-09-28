@@ -60,7 +60,7 @@ assert.match(architecture, /stateless/i);
 console.log('SANAD Assistant agent foundation contract passed.');
 
 const draftTools = SANAD_ASSISTANT_TOOLS.filter((tool) => tool.risk === 'draft_only').map((tool) => tool.name).sort();
-assert.deepEqual(draftTools, ['action_prepare_commercial_document','action_prepare_personal_account','action_prepare_personal_category','action_prepare_personal_transaction']);
+assert.deepEqual(draftTools, ['action_edit_personal_transaction','action_prepare_commercial_document','action_prepare_personal_account','action_prepare_personal_category','action_prepare_personal_transaction']);
 assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.writeToolsEnabled,false);
 assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.draftToolsEnabled,true);
 assert.equal(SANAD_ASSISTANT_EXECUTION_POLICY.approvalExecutionAvailableOnlyInUi,true);

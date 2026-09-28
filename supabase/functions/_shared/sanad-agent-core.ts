@@ -21,9 +21,12 @@ export const SYSTEM_INSTRUCTION = `
 4) بيانات إبداع تقرأ فقط من العقود الدلالية المعتمدة. لا SQL حر ولا جداول خام.
 5) إذا كان اسم العميل ملتبسًا، استخدم البحث عن المرشحين واطلب توضيحًا. لا تختَر حسابًا من نفسك.
 6) بيانات إبداع وERP قراءة فقط دائمًا. لا تكتب إلى إبداع ولا تقترح أن سند فعل ذلك.
+6.0) سند يخدم بيئة الأعمال والعلاقة بين النشاط ومالكه ومديره وفريقه وعملائه أولًا؛ المدير الشخصي ميزة إضافية مستقلة. صفة مالك المحادثة لا تعني مالك النشاط، والمسمى الوظيفي لا يمنح صلاحية. استخدم business_get_my_relationship لمعرفة علاقتك بالنشاط الحالي. لا تنقل بيانات أو ذاكرة شخصية إلى محادثة الأعمال ولا تقرأ نشاطًا آخر داخلها. إن طُلب ذلك فاطلب الانتقال صراحة إلى المشروع المناسب. العميل ليس عضو فريق؛ أدوات كشف العميل الذاتي ليست متاحة في هذه الحزمة فلا تدّع دعمها. أعضاء الفريق يخضعون لكل صلاحيات الأدوات القائمة، وتجهيز المسودة التجارية ما زال لمالك النشاط في محادثته فقط.
 6.1) لديك أدوات محددة لإنشاء «مسودة إجراء للمراجعة» داخل سند: action_prepare_personal_transaction وaction_prepare_commercial_document وaction_prepare_personal_account وaction_prepare_personal_category. جميعها تجهز بطاقة مراجعة فقط ولا تنفذ الكتابة عند تجهيزها.
 6.1.1) عند نقص حساب شخصي أو تصنيف، لا تطلب من المستخدم مغادرة المحادثة إلى الإعدادات: اعرض تجهيزه هنا. اقرأ الحسابات/التصنيفات أولًا لتجنب التكرار. اطلب اسم الحساب وعملته إن لم يحددهما المستخدم، ثم action_prepare_personal_account؛ الحساب الجديد أصول شخصية برصيد افتتاحي صفر فقط. لا تخمن العملة أو الاسم ولا تنشئ متطلبًا لم يطلبه المستخدم. للتصنيف اطلب الاسم والنوع (دخل أو مصروف) ثم action_prepare_personal_category. التصنيف اختياري للمصروف فلا تجعله عائقًا ولا تنشئه تلقائيًا. لا تدّع دعم إنشاء أطراف أو عملات أو أي متطلب آخر غير هذه الأدوات المحددة.
 6.1.2) بعد تجهيز بطاقة حساب/تصنيف، توقف حتى يعتمدها المستخدم من البطاقة. لا تستخدم معرّف الإجراء كمعرّف حساب/تصنيف ولا تجهز المصروف المعتمد عليه في نفس الدور. احتفظ بسياق طلب المصروف في المحادثة وقل للمستخدم: بعد اعتماد البطاقة اكتب «تابع المصروف». عند المتابعة اقرأ الأدوات الفعلية مجددًا لحل المعرّف؛ الموافقة النصية وحدها لا تنشئ الحساب ولا تنفذ المصروف. إذا كان المتطلب موجودًا فاستخدمه بعد التحقق من الاسم والعملة/النوع، وإذا كان غير نشط أو ملتبسًا فاشرح الحاجة للاختيار بدل إنشاء نسخة مكررة.
+6.1.3) تعديل مسودة دخل أو مصروف أو تحويل موجود بالنص أو النص الصوتي: استخدم action_list_personal_drafts لاكتشاف المسودات في المحادثة الحالية، ثم action_get_personal_draft لقراءة المسودة المختارة وإصدارها في الدور الحالي. إذا التبس المقصود بين مسودات متعددة فاسأل المستخدم ولا تخمن. استخدم action_edit_personal_transaction بالمعرف والإصدار المقروءين وpatch للحقول المطلوبة فقط. اقرأ الحساب/التصنيف بالأدوات إذا طُلب تغييره. احذف التصنيف فقط عند طلب ذلك صراحة بإرسال null. لا تغيّر التاريخ أو الوصف أو أي حقل لم يطلبه المستخدم. التاريخ المعدل يتطلب وقتًا ومنطقة زمنية واضحين؛ اسأل عند الغموض. يمكن تعديل الدخل والمصروف والتحويل بين حسابين بنفس العملة. لا تغيّر نوع المسودة ولا تعدّل إجراءً مكتملًا. التحويل لا يملك تصنيفًا ويحتاج حساب مصدر ووجهة مختلفين؛ لا تنفذ صرف عملات.
+6.1.4) تعديل واحد فقط لكل دور. إذا فشل التعديل أو تعارض الإصدار أو غابت نتيجة موثوقة، لا تعاود التعديل ولا تنشئ مسودة بديلة؛ اقرأ الحالة الحالية واشرح للمستخدم ما حدث وانتظر طلبًا جديدًا. التعديل لا يعتمد الإجراء ولا ينفذ أي حركة مالية. عند النجاح قل بوضوح إن المسودة نفسها حُدّثت وتحتاج مراجعة واعتماد النسخة الجديدة. لا تتعامل مع كلمة «اعتمد» المكتوبة أو المنطوقة كزر اعتماد.
 6.2) لا توجد لديك أداة اعتماد أو تنفيذ. الاعتماد الصريح يتم فقط من بطاقة المراجعة في واجهة المستخدم، ثم ينفذ الخادم أمرًا deterministic بعد إعادة التحقق.
 6.3) إذا قال المستخدم «اعتمد» نصيًا، لا تعتبر النص وحده تنفيذًا ولا تدّع التنفيذ؛ وجّهه إلى زر الاعتماد في بطاقة المسودة الحالية.
 7) نفّذ أقل عدد من الأدوات اللازمة. يمكن استخدام أدوات مستقلة في الجولة نفسها.
@@ -48,6 +51,36 @@ export const SYSTEM_INSTRUCTION = `
 `.trim();
 
 export const TOOLS = [
+  {type:"function",name:"business_get_my_relationship",description:"Read only the authenticated actor relationship to the current conversation business. Conversation owner is NOT business owner. No customer ledger, staff directory or other businesses are returned.",parameters:{type:"object",properties:{},additionalProperties:false}},
+  {
+    type: "function", name: "action_list_personal_drafts",
+    description: "List up to 20 pending personal income, expense or same-currency transfer drafts in the current owned personal thread. has_more means the list is incomplete. Clarify ambiguous targets; never select another thread.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    type: "function", name: "action_get_personal_draft",
+    description: "Read the exact current personal income, expense or same-currency transfer draft and expected version before editing it in this turn. Only current-thread personal transactions in review are supported.",
+    parameters: { type: "object", properties: { action_id: {type:"string",description:"Resolved canonical draft UUID."} }, required:["action_id"], additionalProperties:false },
+  },
+  {
+    type: "function", name: "action_edit_personal_transaction",
+    description: "Revise the SAME personal income, expense or same-currency transfer draft, never approve/post/cancel/recreate. First read action_get_personal_draft in this turn. Only requested fields belong in patch. One attempt per turn; do not retry on errors or uncertain outcomes.",
+    parameters: { type:"object", properties: {
+      action_id: {type:"string",description:"UUID read from the current thread draft."},
+      expected_version: {type:"integer",description:"Exact version from this turn's draft read."},
+      patch: {type:"object",description:"Only user-requested changes. Omitted fields are preserved.",properties:{
+        amount: {type:"string",description:"Positive exact decimal text, at most six fractional digits. No grouping separators or exponent."},
+        currency: {type:"string",description:"Uppercase currency; changing it requires a compatible resolved account, or both resolved transfer accounts."},
+        account_id: {type:"string",description:"Income/expense account UUID resolved this turn."},
+        source_account_id: {type:"string",description:"Transfer source account UUID resolved this turn."},
+        destination_account_id: {type:"string",description:"Transfer destination UUID resolved this turn, distinct and same currency."},
+        category_id: {type:["string","null"],description:"Resolved category UUID; null only if the user explicitly removes the category."},
+        description: {type:["string","null"],description:"Requested description, at most 500 characters."},
+        transaction_at: {type:"string",description:"Explicit ISO datetime including timezone. Preserve date/time unless the user asks to change it."}
+      },additionalProperties:false}
+    },required:["action_id","expected_version","patch"],additionalProperties:false},
+  },
+
   {
     type: "function",
     name: "finance_get_overview",
@@ -124,7 +157,7 @@ export const TOOLS = [
   {
     type: "function",
     name: "business_list_accessible",
-    description: "List businesses the authenticated user can access. Use this before business tools if the business is not already explicit.",
+    description: "Read a minimal projection of the CURRENT conversation business only. Switch projects in the interface to access another business; never enumerate other private business relationships in a shared thread.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -374,6 +407,9 @@ export function inferAgentRoutingHint(message: string, businessId?: string | nul
   const commercialAction = explicitAction && /(فاتور|بيع|شراء|سند قبض|سند صرف|عرض سعر|مصروف تجاري)/i.test(value);
   const paymentInbox = /(وارد المدفوعات|دفعات جديدة|الدفعات الجديدة|عمليات دفع جديدة|دفعة جديدة)/i.test(value);
 
+  if (/(عدل|عدّل|تعديل|غيّر|غير|غيِّر)/i.test(value) && !businessId) {
+    return "توجيه الأدوات: إذا كان المقصود تعديل مسودة مالية شخصية، اقرأ المسودات ثم المسودة المحددة عبر action_get_personal_draft، وعدّل نفس المعرف بأداة action_edit_personal_transaction. اسأل عند غموض المسودة. لا تنشئ بديلًا ولا تعتمد العملية.";
+  }
   if (paymentInbox && businessId) {
     return "توجيه الأدوات: استخدم business_get_payment_inbox للقراءة فقط. لا تستلم ولا تكمل ولا تحرر أي عملية من المساعد.";
   }
@@ -591,6 +627,7 @@ export function verifyAndRepair(
     || row.name.startsWith("business_")
     || row.name.startsWith("erp_")
     || row.name.startsWith("action_prepare_")
+    || row.name === "action_edit_personal_transaction"
   );
   const missingCurrencies = financial ? currencies.filter((currency) => !currencyMentioned(answer, currency)) : [];
 
@@ -605,13 +642,14 @@ export function verifyAndRepair(
     })
     .filter((period): period is { from?: string; to?: string } => Boolean(period?.from || period?.to));
   const period = periods[0];
-  const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
+  const periodVisible = !period || [period.from, period.to].filter((date): date is string => Boolean(date)).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
   const actionPrepared = toolOutputs.some((row) => isPersistedActionReview(row.name,row.output));
   if (missingCurrencies.length) repairs.push(`العملات الموجودة في المصادر: ${currencies.join("، ")}، وكل عملة معروضة بصورة مستقلة دون دمج.`);
   if (period && !periodVisible) repairs.push(`الفترة المرجعية: ${period.from || "البداية"} — ${period.to || "اليوم"}.`);
-  if (actionPrepared) repairs.push("حالة الإجراء: هذه مسودة مراجعة فقط؛ لم تُنفذ أي عملية مالية بعد، والتنفيذ يتطلب اعتمادك الصريح من البطاقة.");
+  const alreadyExplainsReview = /مسودة[\s\S]*مراجعة/.test(answer) && /اعتماد[\s\S]*(?:البطاقة|الواجهة)/.test(answer) && /لم[\s\S]*(?:تنف|تسجيل|إنشاء)/.test(answer);
+  if (actionPrepared && !alreadyExplainsReview) repairs.push("حالة الإجراء: هذه مسودة مراجعة فقط؛ لم تُنفذ أي عملية مالية بعد، والتنفيذ يتطلب اعتمادك الصريح من البطاقة.");
   if (repairs.length) answer = `${answer}\n\n${repairs.join("\n")}`.trim();
 
   return {

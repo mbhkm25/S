@@ -6,14 +6,16 @@ export const ACTION_PREPARATION_TYPES: Record<string, string> = {
   action_prepare_personal_category: 'personal_category_setup',
 };
 
+const ACTION_REVIEW_TYPES: Record<string,string> = {...ACTION_PREPARATION_TYPES, action_edit_personal_transaction:'personal_transaction', action_edit_personal_expense:'personal_transaction'};
+
 export function isPersistedActionReview(toolName: string, output: unknown): boolean {
   if (!output || typeof output !== 'object' || Array.isArray(output)) return false;
   const row = output as Record<string, unknown>;
-  return Boolean(ACTION_PREPARATION_TYPES[toolName])
+  return Boolean(ACTION_REVIEW_TYPES[toolName])
     && !row.error
     && typeof row.id === 'string'
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id)
-    && row.action_type === ACTION_PREPARATION_TYPES[toolName]
+    && row.action_type === ACTION_REVIEW_TYPES[toolName]
     && row.status === 'review'
     && Number.isInteger(row.version) && Number(row.version) > 0
     && Boolean(row.review && typeof row.review === 'object' && !Array.isArray(row.review));

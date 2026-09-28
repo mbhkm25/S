@@ -341,7 +341,7 @@ export function buildAgentPresentation(toolOutputs: AgentToolOutput[]) {
     else if (row.name === "erp_get_documents") built = documentsPresentation(row);
     else if (row.name === "erp_get_replica_status") built = replicaPresentation(row);
     else if (row.name === "business_get_payment_inbox") built = paymentInboxPresentation(row);
-    else if (["action_prepare_personal_transaction", "action_prepare_commercial_document", "action_prepare_personal_account", "action_prepare_personal_category"].includes(row.name)) built = actionReviewPresentation(row);
+    else if (["action_prepare_personal_transaction", "action_prepare_commercial_document", "action_prepare_personal_account", "action_prepare_personal_category", "action_edit_personal_transaction", "action_edit_personal_expense"].includes(row.name)) built = actionReviewPresentation(row);
 
     if (!built) continue;
     cards.push(...built.cards);

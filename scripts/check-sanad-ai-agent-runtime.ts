@@ -67,7 +67,7 @@ assert.match(runtime, /p_usage_metadata: aggregateUsage/);
  
 // Stage 2C.5: bounded source-only terminal synthesis replaces a sixth tool
 // round in both SSE and JSON paths. Do not increase authorized tool limits.
-const terminal = 'round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }';
+const terminal = 'round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS.filter(tool => permitsProjectTool(tool.name, cloud.boundary)) }';
 assert.equal(runtime.split(terminal).length - 1, 2,
   'Both response transports must disable function tools on the terminal round.');
 assert.match(shared, /21\) في طلبات كشف حساب العميل/);
