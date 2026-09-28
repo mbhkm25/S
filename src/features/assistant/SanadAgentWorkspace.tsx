@@ -78,6 +78,7 @@ function toolLabel(name: string) {
   };
   if(revisionLabels[name]) return revisionLabels[name];
   const labels: Record<string, string> = {
+    business_get_my_relationship: 'التحقق من علاقتك بالنشاط',
     finance_get_overview: 'قراءة النظرة المالية',
     finance_search_transactions: 'البحث في العمليات',
     finance_get_obligations: 'قراءة الالتزامات',

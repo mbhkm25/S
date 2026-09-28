@@ -1,3 +1,6 @@
+import { supabase } from '../../lib/supabase';
+import { SANAD_ASSISTANT_TOOLS } from './agentFoundation';
+import { loadProjectBoundary, permitsProjectTool, type ProjectBoundary } from '../../../supabase/functions/_shared/sanad-agent-project-boundary';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { ChevronDown, Plus, Search, X } from 'lucide-react';
 import type { VerifiedAssistantProjectScope } from './sanadProjectQuickPrompts';
@@ -25,7 +28,25 @@ export default function SanadSmartComposerLauncher({
   const [error, setError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const actions = composerActionsForScope(scope);
+  const [boundary, setBoundary] = useState<ProjectBoundary | null>(null);
+  const [boundaryError, setBoundaryError] = useState(false);
+  const verified = open && boundary?.threadId === threadId && boundary.projectKind === scope;
+  const actions = composerActionsForScope(scope, verified
+    ? SANAD_ASSISTANT_TOOLS.filter(tool => permitsProjectTool(tool.name, boundary)) : []);
+
+  // Presentation only. The Edge runtime independently rechecks each operation.
+  useEffect(() => {
+    let active = true;
+    setBoundary(null);
+    setBoundaryError(false);
+    if (open) void loadProjectBoundary(threadId, null, async (name, args) => {
+      const { data, error } = await supabase.rpc(name, args);
+      if (error) throw error;
+      return data;
+    }).then(result => { if (active) setBoundary(result); })
+      .catch(() => { if (active) setBoundaryError(true); });
+    return () => { active = false; };
+  }, [open, threadId, scope]);
   const filtered = actions.filter((action) =>
     `${action.title} ${action.description}`.toLocaleLowerCase('ar').includes(query.trim().toLocaleLowerCase('ar')));
 
@@ -72,7 +93,7 @@ export default function SanadSmartComposerLauncher({
 
   function prepare(event: FormEvent) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || !actions.some(action => action.id === selected.id)) return;
     const prompt = buildGuidedComposerPrompt(selected, values);
     if (!prompt) {
       setError('أكمل الحقول المطلوبة وتحقق من التواريخ قبل المتابعة.');
@@ -101,7 +122,7 @@ export default function SanadSmartComposerLauncher({
         disabled={disabled}
         onClick={() => {
           if (open) close();
-          else setOpen(true);
+          else { setBoundary(null); setOpen(true); }
         }}
         className="sanad-focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-100 bg-cyan-50/70 text-teal-900 transition-colors hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50">
         <Plus aria-hidden="true" className="h-4 w-4" />
@@ -172,7 +193,7 @@ export default function SanadSmartComposerLauncher({
                     </button>
                   </div>
                 ))}
-                {!filtered.length ? <p role="status" className="p-4 text-xs text-slate-500">لا توجد إجراءات مطابقة في هذه المساحة.</p> : null}
+                {!filtered.length ? <p role="status" className="p-4 text-xs text-slate-500">{boundaryError ? 'تعذر التحقق من الإجراءات المتاحة. أغلق القائمة وأعد فتحها للمحاولة.' : !verified ? 'جارٍ التحقق من علاقتك بهذه المساحة…' : 'لا توجد إجراءات مطابقة في هذه المساحة.'}</p> : null}
               </div>
             </>
           ) : (
