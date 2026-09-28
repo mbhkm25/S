@@ -50,6 +50,22 @@
 
 **Done:** project-specific pinned/recent navigation survives reload/two devices and honors RLS/role constraints under old data.
 
+## Mandatory owner amendment — 2026-09-26: capability repositioning audit BEFORE Package 2
+
+**Applies to both 2C.4 and 2C.5.** Read [Capability Repositioning and One Operational Core](../architecture/SANAD_V4_CAPABILITY_REPOSITIONING_2026-09-26.md) first. The older unchecked checklist items for Package 1 and the former global «اليوم/المزيد» menu are **historical planning wording**, not a claim that Package 1 is unimplemented or an instruction to restore removed navigation. Source PRs #391/#392/#395 and guarded Web releases #393/#396 changed that UI; final authorized Web prompt smoke and native patch parity remain evidence-specific.
+
+Complete this **read-only gate** on the current live code/permission contracts before new 2C.4 feature implementation:
+
+- [ ] Inventory prior SANAD payment verification/inbox, personal/business finance, approved drafts, report/statement renderer, notification/Work Item, knowledge, ERP/Bridge and relationship functions **as candidates**; do not treat a matching filename as deployed proof.
+- [ ] For each capability relevant to Package 2, record: current frontend/Edge/RPC, actual permitted actor and personal/business/project scope, canonical record, provenance/freshness, legacy input/output, approval/audit/idempotence, target chat/inspector/form/Today/tool entry points, migration and fallback.
+- [ ] Classify each affected capability **REUSE / ADAPT / REFACTOR / BUILD / DEFER** with a written evidence-based explanation and owner review. Favor reusing an existing secure customer-statement or report *read contract* for the 2C.4 first real interactive card.
+- [ ] Demonstrate that moving business-related legacy features into project navigation does **not** falsely imply their underlying APIs have a business filter. Preserve the original route until permission and feature parity are proved.
+- [ ] Trace all access paths for Personal-vs-Business A/B and team/customer/private thread/file roles. A form/chat/old tool may use different UI components but may **not** create a second authoritative financial/approval path for the same operation.
+- [ ] Define one real low-risk 2C.4 read-only end-to-end slice and one supported 2C.5 guided input slice from capabilities actually authorized today; record why reuse is or is not safe.
+- [ ] Log decisions, negative tests, current vs intended behavior, owner preview and rollback on scoped issues/PRs. Keep live runtime truth, approved direction, proposed adapters and unknowns distinct.
+
+**Done:** owner-reviewed capability ledger, a demonstrably reusable canonical source/authorization path, no duplicate financial truth, explicit unsupported/uncertain capabilities, and approved scoped implementation plan. Do **not** begin new schema migrations or a second report/accounting implementation just because the new chat UI needs data.
+
 ## 2C.4 — Typed Entity + Interactive Output Foundation
 
 1. [ ] Establish canonical typed `EntityLink` resolving authorized business/party/customer/invoice/transaction/document/Work Item by stable ID, visible label and source timestamp; do not reveal forbidden details in link previews.
