@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
-import { expenseFields, expensePayload, supportsExpenseEdit, normalizeExpenseAmount } from '../src/features/assistant/personalExpenseDraft';
+import { expenseFields, expensePayload, supportsExpenseEdit, supportsPersonalEdit, normalizeExpenseAmount } from '../src/features/assistant/personalExpenseDraft';
 import type { SanadAgentAction } from '../src/features/assistant/assistantActionApi';
 let cases = 0;
 function check(name: string, run: () => void) { run(); cases++; console.log('PASS', name); }
@@ -32,6 +32,22 @@ check('bad date', () => assert.throws(() => expensePayload({ ...fields, localDat
 check('empty date', () => assert.throws(() => expensePayload({ ...fields, localDate: '' }, action, options)));
 check('oversized description', () => assert.throws(() => expensePayload({ ...fields, description: 'x'.repeat(501) }, action, options)));
 
+for (const variant of ['income','transfer']) {
+ const original={...action,payload:variant==='income' ? {...action.payload,transaction_type:variant} : {transaction_type:variant,amount:'99999999999998.123456',currency:'SAR',source_account_id:'account',destination_account_id:'second',description:'',transaction_at:action.payload.transaction_at}};
+ const ownOptions={...options,accounts:[...options.accounts,{id:'second',name:'ثان',currency:'SAR'},{id:'otherCurrency',name:'ريال يمني',currency:'YER'}]};
+ const ownDescriptor={...descriptor,actions:[{...descriptor.actions[0],id:'personal_'+variant,variant}]};
+ check(variant+' authorized',()=>assert.equal(supportsPersonalEdit(original,ownDescriptor),true));
+ check(variant+' old descriptor denies',()=>assert.equal(supportsPersonalEdit(original,descriptor),false));
+ const ownFields=expenseFields(original),p=expensePayload(ownFields,original,ownOptions);
+ check(variant+' preserves type and exact amount',()=>{assert.equal(p.transaction_type,variant);assert.equal(p.amount,String(original.payload.amount));});
+ check(variant+' preserves exact date',()=>assert.equal(p.transaction_at,original.payload.transaction_at));
+ if(variant==='transfer') {
+   check('transfer distinct accounts',()=>assert.throws(()=>expensePayload({...ownFields,destinationAccountId:'account'},original,ownOptions)));
+   check('transfer same currency',()=>assert.throws(()=>expensePayload({...ownFields,destinationAccountId:'otherCurrency'},original,ownOptions)));
+   check('transfer no category or account_id',()=>{assert.equal('category_id' in p,false);assert.equal('account_id' in p,false);});
+ }
+}
+
 const db = new PGlite();
 await db.exec(`create role anon; create role authenticated; create schema auth; create schema private;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
@@ -43,7 +59,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth; 
  ('00000000-0000-4000-8000-000000000012','00000000-0000-4000-8000-000000000001','active','business','00000000-0000-4000-8000-000000000099'),
  ('00000000-0000-4000-8000-000000000013','00000000-0000-4000-8000-000000000001','active','legacy',null),
  ('00000000-0000-4000-8000-000000000014','00000000-0000-4000-8000-000000000002','active','business','00000000-0000-4000-8000-000000000099');`);
-await db.exec(readFileSync('supabase/migrations/20260927075434_stage2d_personal_expense_editor_capability_v1.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20260927091045_stage2d_personal_expense_editor_capability_v1.sql','utf8'));
 async function get(id = '11'): Promise<any> { return (await db.query<{ value: unknown }>(`select public.get_my_sanad_action_capabilities_v1('00000000-0000-4000-8000-0000000000${id}') value`)).rows[0].value; }
 let value = await get();
 check('DB absent edit RPC fails closed', () => assert.equal(value.actions[1].form_edit_supported, false));

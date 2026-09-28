@@ -1,3 +1,4 @@
+import { subscribeSanadActionReviews } from './actionReviewInvalidation';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   AlertTriangle,
@@ -9,7 +10,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { SanadAssistantActionReviewCard } from './agentFoundation';
-import { describeSanadActionStatus } from './sanadOperationalState';
+import { describePersonalSetupError, describeSanadActionStatus } from './sanadOperationalState';
 import {
   approveSanadAgentAction,
   cancelSanadAgentAction,
@@ -19,7 +20,7 @@ import {
   type SanadAgentAction,
 } from './assistantActionApi';
 
-import { isPersonalExpense, supportsExpenseEdit, type ActionCapabilities } from './personalExpenseDraft';
+import { isPersonalDraft, supportsPersonalEdit, type ActionCapabilities } from './personalExpenseDraft';
 const ExpenseEditor = lazy(() => import('./SanadPersonalExpenseEditor'));
 
 type Props = {
@@ -63,6 +64,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   const [busy, setBusy] = useState<'approve' | 'cancel' | 'modify' | 'save_note' | null>(null);
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
+  const [noteVersion, setNoteVersion] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
   const [capabilities, setCapabilities] = useState<ActionCapabilities | null>(null);
@@ -71,18 +73,28 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
 
   useEffect(() => {
     let alive = true;
-    void getSanadAgentAction(card.action_id)
-      .then(async (row) => {
-        if (row.id !== card.action_id) throw new Error('action_identity_mismatch');
-        if (alive) { setAction(row); setVerified(true); }
-        if (isPersonalExpense(row)) {
-          try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive) setCapabilities(descriptor); }
-          catch { /* Missing/unverified capability fails closed; note editing remains available. */ }
-        }
-      })
-      .catch(() => { if (alive) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
-    return () => { alive = false; };
-  }, [card.action_id]);
+    let request = 0;
+    const refresh = () => {
+      const current = ++request;
+      setVerified(false);
+      void getSanadAgentAction(card.action_id)
+        .then(async (row) => {
+          if (row.id !== card.action_id) throw new Error('action_identity_mismatch');
+          if (!alive || current !== request) return;
+          setAction(row); setVerified(true);
+          setError(previous => previous.startsWith('تعذر التحقق من أحدث حالة') ? '' : previous);
+          if (isPersonalDraft(row)) {
+            try { const descriptor = await getSanadActionCapabilities(row.thread_id); if (alive && current === request) setCapabilities(descriptor); }
+            catch { if (alive && current === request) setCapabilities(null); }
+          }
+        })
+        .catch(() => { if (alive && current === request) setError('تعذر التحقق من أحدث حالة للإجراء؛ الاعتماد معطّل حتى إعادة تحميل الصفحة.'); });
+    };
+    const unsubscribe = subscribeSanadActionReviews(refresh);
+    window.addEventListener('focus',refresh);
+    refresh();
+    return () => { alive = false; unsubscribe(); window.removeEventListener('focus',refresh); };
+  }, [card.action_id, card.version]);
 
   const status = action?.status || card.status;
   const version = action?.version || card.version;
@@ -103,8 +115,10 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
   const meta = statusMeta(status, action?.action_type || card.action_type, action?.result || null);
   const locked = status !== 'review' || busy !== null || review.writes_to_erp === true || !verified;
   const target = resultLabel(action);
-  const expense = action ? isPersonalExpense(action) : false;
-  const canEditExpense = action ? supportsExpenseEdit(action, capabilities) : false;
+  const expense = action ? isPersonalDraft(action) : false;
+  const canEditExpense = action ? supportsPersonalEdit(action, capabilities) : false;
+  const setup = action?.action_type === 'personal_account_setup' || action?.action_type === 'personal_category_setup';
+  const supportsNote = action?.action_type === 'personal_transaction' || action?.action_type === 'commercial_document_draft';
   const noteField = action?.action_type === 'personal_transaction' ? 'description' : 'notes';
   const currentNote = typeof action?.payload?.[noteField] === 'string' ? String(action.payload[noteField]) : '';
 
@@ -113,13 +127,13 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
     setBusy('save_note');
     setError('');
     try {
-      const updated = await updateSanadAgentActionNote(card.action_id, version, noteDraft);
+      const updated = await updateSanadAgentActionNote(card.action_id, noteVersion ?? -1, noteDraft);
       setAction(updated);
       setNoteEditing(false);
     } catch (cause) {
       const detail = cause instanceof Error ? cause.message : '';
       setError(detail.includes('agent_action_version_conflict')
-        ? 'تغير إصدار المسودة في مكان آخر. حُمّلت الحالة الأحدث؛ راجعها ثم أعد حفظ تعديلك.'
+        ? 'تغير إصدار المسودة في مكان آخر. حُمّلت الحالة الأحدث؛ أغلق محرر النص وراجِعها، ثم افتحه مجددًا لإعادة تعديلك.'
         : detail.includes('identical_active_action_already_exists')
           ? 'توجد مسودة أخرى مطابقة نشطة. راجعها قبل حفظ هذا التعديل.'
           : detail || 'تعذر تعديل الملاحظة.');
@@ -190,7 +204,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           ))}
         </div>
 
-        {review.approval_effect ? (
+        {status === 'review' && review.approval_effect ? (
           <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-amber-900">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
@@ -233,14 +247,14 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
         {(error || status === 'failed') ? (
           <div role="alert" className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-rose-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p className="text-sm leading-5">{error || action?.error_code || 'تعذر تنفيذ الإجراء.'}</p>
+            <p className="text-sm leading-5">{describePersonalSetupError(error || action?.error_code || 'تعذر تنفيذ الإجراء.')}</p>
           </div>
         ) : null}
 
         {notice ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm leading-6 text-emerald-800">{notice}</p> : null}
 
         {expenseEditing && action ? (
-          <Suspense fallback={<p role="status" className="text-sm text-slate-600">جارٍ فتح محرر المصروف…</p>}>
+          <Suspense fallback={<p role="status" className="text-sm text-slate-600">جارٍ فتح محرر المسودة…</p>}>
             <ExpenseEditor action={action} onSaved={updated => {
               setAction(updated); setExpenseEditing(false); setError('');
               setNotice(updated.status === 'review' ? 'حُفظت المسودة نفسها. راجع البيانات قبل أي اعتماد.' : 'حُمّلت الحالة الحالية للمسودة.');
@@ -248,12 +262,12 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
           </Suspense>
         ) : null}
 
-        {status === 'review' && verified && action && (!canEditExpense || noteEditing) && !expenseEditing ? (
+        {status === 'review' && verified && action && supportsNote && (!canEditExpense || noteEditing) && !expenseEditing ? (
           <div data-sanad-canonical-note-editor className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             {!noteEditing ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-slate-700">{action.action_type === 'personal_transaction' ? 'وصف المسودة' : 'ملاحظات المسودة'}: {currentNote || 'غير محدد'}</p>
-                <button type="button" disabled={locked} onClick={() => { setNoteDraft(currentNote); setNoteEditing(true); setError(''); }}
+                <button type="button" disabled={locked} onClick={() => { setNoteDraft(currentNote); setNoteVersion(version); setNoteEditing(true); setError(''); }}
                   className="sanad-focus-ring min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 disabled:opacity-40">
                   تعديل النص في المسودة نفسها
                 </button>
@@ -293,7 +307,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
             </button>
             <button
               type="button"
-              disabled={locked || noteEditing || expenseEditing || (expense && !canEditExpense)}
+              disabled={locked || noteEditing || expenseEditing || (expense && !canEditExpense) || (setup && !onModify)}
               onClick={() => {
                 if (expense) { if (canEditExpense) { setExpenseEditing(true); setNotice(''); setError(''); } }
                 else void cancel(true);
@@ -301,7 +315,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
               className="sanad-focus-ring flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-[13px] font-medium text-slate-700 disabled:opacity-40"
             >
               {busy === 'modify' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
-              {expense ? 'تعديل المصروف' : 'تعديل بقية البيانات'}
+              {expense ? 'تعديل المسودة' : setup ? 'إلغاء وإعادة تجهيز' : 'تعديل بقية البيانات'}
             </button>
             <button
               type="button"
@@ -317,9 +331,7 @@ function ActionCardInstance({ card, onModify, onStatusChange }: Props & { key?: 
 
         {status === 'review' && expense && !canEditExpense ? <p className="text-xs leading-6 text-slate-500">تعديل المبلغ والحساب غير متاح حاليًا؛ يمكنك تعديل الوصف فقط.</p> : null}
         {verified ? <p className="text-[11px] text-slate-500">إصدار المسودة: {version}</p> : null}
-        <p className="text-[11px] leading-5 text-slate-400">
-          الاعتماد ينفذ عقدًا محددًا على خادم سند بعد إعادة التحقق من الملكية والحالة والإصدار. لا يملك نموذج الذكاء الاصطناعي صلاحية تنفيذ هذا الزر.
-        </p>
+
       </div>
     </section>
   );

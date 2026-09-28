@@ -1,3 +1,4 @@
+import { invalidateSanadActionReviews } from './actionReviewInvalidation';
 import { supabase } from '../../lib/supabase';
 
 export type SanadAgentActionStatus = 'review' | 'approved' | 'executing' | 'completed' | 'cancelled' | 'failed';
@@ -35,7 +36,14 @@ export async function getSanadAgentAction(actionId: string): Promise<SanadAgentA
     p_action_id: actionId,
   });
   if (error) throw new Error(error.message || 'تعذر تحميل مسودة الإجراء.');
-  return data as SanadAgentAction;
+  const action = data as SanadAgentAction;
+  if (action.action_type === 'personal_transaction') {
+    // Same-row JSON text avoids rounding an untouched amount in the form.
+    const exact = await supabase.from('sanad_agent_actions').select('version,amount_text:payload->>amount').eq('id',actionId).single();
+    if (exact.error || exact.data.version !== action.version || typeof exact.data.amount_text !== 'string') throw new Error('تعذر التحقق من الإصدار والمبلغ الدقيق؛ أعد تحميل المسودة.');
+    return {...action,payload:{...action.payload,amount:exact.data.amount_text}};
+  }
+  return action;
 }
 
 export async function listSanadAgentActions(
@@ -61,6 +69,7 @@ export async function approveSanadAgentAction(
     p_expected_version: expectedVersion,
   });
   if (error) throw new Error(error.message || 'تعذر اعتماد الإجراء.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
@@ -73,6 +82,7 @@ export async function cancelSanadAgentAction(
     p_expected_version: expectedVersion,
   });
   if (error) throw new Error(error.message || 'تعذر إلغاء الإجراء.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
@@ -92,23 +102,24 @@ export async function updateSanadAgentActionNote(
     p_note: note,
   });
   if (error) throw new Error(error.message || 'تعذر تعديل ملاحظة المسودة.');
+  invalidateSanadActionReviews();
   return data as SanadAgentAction;
 }
 
 export async function getSanadActionCapabilities(threadId: string): Promise<import('./personalExpenseDraft').ActionCapabilities> {
   const { data, error } = await supabase.rpc('get_my_sanad_action_capabilities_v1', { p_thread_id: threadId });
-  if (error) throw new Error('تعذر التحقق من صلاحية تعديل المصروف.');
+  if (error) throw new Error('تعذر التحقق من صلاحية تعديل المسودة.');
   return data as import('./personalExpenseDraft').ActionCapabilities;
 }
 
 /** Existing owner RLS tables, only active user accounts and expense categories. No parties/balances. */
-export async function getExpenseEditorOptions(): Promise<import('./personalExpenseDraft').ExpenseOptions> {
+export async function getExpenseEditorOptions(variant: string = 'expense'): Promise<import('./personalExpenseDraft').ExpenseOptions> {
   async function readPages(table: 'personal_finance_accounts' | 'personal_finance_categories') {
     const rows: Array<{ id: string; name: string; currency?: string }> = [];
     for (let offset = 0; offset < 10000; offset += 200) {
       let query = supabase.from(table).select(table === 'personal_finance_accounts' ? 'id,name,currency' : 'id,name')
         .eq('status', 'active').order('name').order('id').range(offset, offset + 199);
-      query = table === 'personal_finance_accounts' ? query.is('system_role', null) : query.eq('kind', 'expense');
+      query = table === 'personal_finance_accounts' ? query.is('system_role', null) : query.eq('kind', variant === 'income' ? 'income' : 'expense');
       const { data, error } = await query;
       if (error) throw new Error('تعذر تحميل الحسابات والتصنيفات. أعد المحاولة.');
       const page = (data || []) as unknown as Array<{ id: string; name: string; currency?: string }>;
@@ -117,7 +128,7 @@ export async function getExpenseEditorOptions(): Promise<import('./personalExpen
     }
     throw new Error('تعذر تحميل قائمة الحسابات والتصنيفات كاملة.');
   }
-  const [accounts, categories] = await Promise.all([readPages('personal_finance_accounts'), readPages('personal_finance_categories')]);
+  const [accounts, categories] = await Promise.all([readPages('personal_finance_accounts'), variant === 'transfer' ? Promise.resolve([]) : readPages('personal_finance_categories')]);
   return { accounts: accounts as import('./personalExpenseDraft').ExpenseAccount[], categories };
 }
 
@@ -125,6 +136,8 @@ export async function updateSanadPersonalExpenseDraft(actionId: string, expected
   const { data, error } = await supabase.rpc('update_my_sanad_agent_action_draft_v2', {
     p_action_id: actionId, p_expected_version: expectedVersion, p_payload: payload,
   });
-  if (error) throw new Error(error.message || 'تعذر حفظ تعديل المصروف.');
-  return data as SanadAgentAction;
+  if (error) throw new Error(error.message || 'تعذر حفظ تعديل المسودة.');
+  invalidateSanadActionReviews();
+  const action = data as SanadAgentAction;
+  return {...action,payload:{...action.payload,amount:payload.amount}};
 }
