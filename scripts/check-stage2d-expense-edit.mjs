@@ -104,6 +104,7 @@ try {
   for (const args of equivalence) baseline.push(await create(...args));
   await db.exec('reset role');
   await db.exec(read(migration));
+  if(process.env.SANAD_TEST_SETUP_REGRESSION === '1') await db.exec(read('20260927091046_stage2d_chat_personal_setup_v1.sql'));
   await db.exec('set role authenticated');
   // Same input after extraction returns original ID, payload and review exactly.
   assert.deepEqual(await create(), before); checks++;

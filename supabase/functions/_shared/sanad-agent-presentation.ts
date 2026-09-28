@@ -1,3 +1,4 @@
+import { isPersistedActionReview } from './sanad-action-contract.ts';
 import type { Json } from "./sanad-agent-core.ts";
 
 export type AgentToolOutput = { name: string; args: Json; output: unknown };
@@ -276,6 +277,7 @@ function paymentInboxPresentation(row: AgentToolOutput) {
 }
 
 function actionReviewPresentation(row: AgentToolOutput) {
+  if (!isPersistedActionReview(row.name,row.output)) return null;
   const action = object(row.output);
   const review = object(action.review);
   const fields = array(review.fields).map(object).slice(0,12).map((item) => ({
@@ -293,7 +295,10 @@ function actionReviewPresentation(row: AgentToolOutput) {
   const approvalEffect = text(review.approval_effect);
   const writesToErp = review.writes_to_erp === true;
 
-  const modifyPrompt = actionType === "personal_transaction"
+  const setup = actionType === "personal_account_setup" || actionType === "personal_category_setup";
+  const modifyPrompt = setup
+    ? `جهّز بطاقة بديلة بعد إلغاء بطاقة ${actionType === "personal_account_setup" ? "الحساب" : "التصنيف"} ${actionId}: ${summary}`
+    : actionType === "personal_transaction"
     ? `عدّل مسودة الإجراء المالي ${actionId}: ${summary || "المعاملة الشخصية"}`
     : `عدّل مسودة المستند التجاري ${actionId}: ${summary || "المستند"}`;
 
@@ -336,7 +341,7 @@ export function buildAgentPresentation(toolOutputs: AgentToolOutput[]) {
     else if (row.name === "erp_get_documents") built = documentsPresentation(row);
     else if (row.name === "erp_get_replica_status") built = replicaPresentation(row);
     else if (row.name === "business_get_payment_inbox") built = paymentInboxPresentation(row);
-    else if (row.name === "action_prepare_personal_transaction" || row.name === "action_prepare_commercial_document") built = actionReviewPresentation(row);
+    else if (["action_prepare_personal_transaction", "action_prepare_commercial_document", "action_prepare_personal_account", "action_prepare_personal_category", "action_edit_personal_transaction", "action_edit_personal_expense"].includes(row.name)) built = actionReviewPresentation(row);
 
     if (!built) continue;
     cards.push(...built.cards);

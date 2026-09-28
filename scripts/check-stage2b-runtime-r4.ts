@@ -4,6 +4,7 @@ import { describeSanadActionStatus } from '../src/features/assistant/sanadOperat
 import { formatSanadSourceAmount, formatSanadSourceDate } from '../src/utils/sanadSourceDisplay';
 import { describeSanadWorkItem } from '../src/features/shell/sanadWorkItemPresentation';
 import { runInNewContext } from 'node:vm';
+import * as actionContract from '../supabase/functions/_shared/sanad-action-contract.ts';
 import { transpileModule, ModuleKind, ScriptTarget } from 'typescript';
 
 // Exercise the actual Edge presentation source without making frontend tsc
@@ -13,7 +14,10 @@ const edgeSource = readFileSync('supabase/functions/_shared/sanad-agent-presenta
 const edgeJs = transpileModule(edgeSource, {
   compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
 }).outputText;
-runInNewContext(edgeJs, { exports: edgeExports, Intl }, { filename: 'sanad-agent-presentation.fixture.js' });
+runInNewContext(edgeJs, { exports: edgeExports, Intl, require: (name: string) => {
+  if (name === './sanad-action-contract.ts') return actionContract;
+  throw new Error(`Unexpected Edge fixture dependency: ${name}`);
+} }, { filename: 'sanad-agent-presentation.fixture.js' });
 const money = edgeExports.money as (value: unknown) => string;
 const buildAgentPresentation = edgeExports.buildAgentPresentation as (outputs: Array<{
   name: string; args: Record<string, unknown>; output: unknown;
