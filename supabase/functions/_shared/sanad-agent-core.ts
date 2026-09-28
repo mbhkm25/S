@@ -642,7 +642,7 @@ export function verifyAndRepair(
     })
     .filter((period): period is { from?: string; to?: string } => Boolean(period?.from || period?.to));
   const period = periods[0];
-  const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
+  const periodVisible = !period || [period.from, period.to].filter((date): date is string => Boolean(date)).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
   const actionPrepared = toolOutputs.some((row) => isPersistedActionReview(row.name,row.output));

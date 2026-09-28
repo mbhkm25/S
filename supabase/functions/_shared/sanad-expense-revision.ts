@@ -44,7 +44,7 @@ export function buildExpenseRevisionPayload(action: Json, patchValue: unknown, p
   const patch=object(patchValue), keys=Object.keys(patch), original=object(action.payload);
   const fields=fieldsFor(original.transaction_type);
   if (!keys.length || patch!==patchValue || keys.some(k=>!fields.includes(k) || k==='transaction_type')) throw new Error('invalid_expense_revision_patch');
-  const payload=Object.fromEntries(fields.map(k=>[k,original[k] ?? null]));
+  const payload: Json=Object.fromEntries(fields.map(k=>[k,original[k] ?? null]));
   for (const k of keys) payload[k]=patch[k];
   if ('amount' in patch) {
     if (typeof patch.amount!=='string') throw new Error('expense_revision_amount_must_be_decimal_text');

@@ -29,6 +29,7 @@ Two authenticated reads are added to business context and each business tool (on
 - 84 isolated business boundary checks: owner/team/customer, multiple relationships, inactive memberships, thread-owner distinction, cross-business mismatch, malformed/inactive thread, viewer, unscoped thread, personal isolation, RPC failures and both transports.
 - TypeScript lint and production build passed. Workspace bundle 116.39 KiB / 120 KiB.
 - Existing expense chat: 78 cases; setup database: 122 cases; setup tools/presentation: 46 cases, all passed. Only isolated fixtures; zero real financial execution.
+- The legacy Edge audit initially reported two existing strict-type errors as non-blocking warnings. Narrow the optional date to string and annotate the canonical revision payload as Json; runtime behavior is unchanged. Add an obligatory Deno check for the conversation agent before deployment.
 - Existing source-contract assertions updated for filtered tools; terminal tool budget remains unchanged.
 - No browser, screenshots, rendered interface tests or internal preview. User acceptance is outstanding.
 
