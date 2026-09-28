@@ -36,6 +36,13 @@ export function describeSanadActionStatus(
     detail: 'تحقق من سبب الإخفاق قبل إعادة المحاولة.',
     tone: 'danger',
   };
+  if (status === 'completed' && (actionType === 'personal_account_setup' || actionType === 'personal_category_setup')) {
+    const account = actionType === 'personal_account_setup';
+    const reference = result?.[account ? 'account_id' : 'category_id'];
+    return typeof reference === 'string' && reference.trim()
+      ? { label: account ? 'أُضيف الحساب' : 'أُضيف التصنيف', detail: 'لم تُسجّل حركة مالية. اكتب «تابع المصروف» في المحادثة لتجهيز مسودته.', tone: 'success' }
+      : { label: 'المرجع غير متاح', detail: 'تحقق من الحساب أو التصنيف قبل المتابعة؛ لا تفترض نجاح الإضافة.', tone: 'warning' };
+  }
   if (status === 'completed' && actionType === 'commercial_document_draft') {
     const verifiedReference = (typeof result?.document_id === 'string' && result.document_id.trim().length > 0) || (typeof result?.document_id === 'number' && Number.isFinite(result.document_id));
     return verifiedReference
@@ -58,4 +65,10 @@ export function describeSanadActionStatus(
     detail: 'تعذر تفسير الحالة الحالية؛ تحقق من خادم سند.',
     tone: 'warning',
   };
+}
+
+export function describePersonalSetupError(code: string): string {
+  if (code.includes('personal_setup_account_already_exists')) return 'يوجد حساب بالاسم والعملة نفسيهما. اطلب من سند استخدامه، أو تحقق من حالته إذا كان مؤرشفًا.';
+  if (code.includes('personal_setup_category_already_exists')) return 'يوجد تصنيف بالاسم والنوع نفسيهما. اطلب من سند استخدامه، أو تحقق من حالته إذا كان مؤرشفًا.';
+  return code;
 }
