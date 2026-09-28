@@ -48,3 +48,11 @@ Rollback: restore only the two affected function definitions from #419 in a revi
 3. Attempt same-account or different-currency transfer: reject, no fallback duplicate draft.
 4. Edit one draft from two windows: stale save fails; explicit reload is required before another attempt.
 5. Recheck expense edit and existing account/category preparation. Cancel financial test drafts; never approve them for testing.
+
+## Activation record — 2026-09-28
+
+Code candidate `b35bc3bf4fe1bd8ca7bec68ff87f4ba2b87a5cd1`, PR #420: all six GitHub checks passed. PostgreSQL confirmed 124 integration cases + 59 shared expense/concurrency cases, 46 tool contracts and 78 adapter cases. No live user financial records used.
+
+Applied migration: `20260928125720_stage2d_personal_draft_variants_v1`. Repository filename aligned to the actual ledger version (content unchanged); do not apply the old proposed timestamp. Deployed v2 editor and descriptor bodies exactly match source; normalizer, get-action and approve bodies are unchanged. Anonymous denied and authenticated grants unchanged. Security advisor findings identical to baseline: 87 RLS-no-policy INFO, 7 anon SECURITY DEFINER warnings, 235 authenticated SECURITY DEFINER warnings. Existing debt is not asserted resolved.
+
+Assistant Edge v11 ACTIVE, JWT verification enabled, all seven deployed files match source; bundle SHA256 `bae65bda5f99a18bdc0011e1ee58806997bb5ac395358a52c6ecff95299e6574`. Web frontend remains unmerged and unpublished pending owner preview. Final source head differs only by this activation record and migration filename alignment; consult PR for final SHA and CI.
