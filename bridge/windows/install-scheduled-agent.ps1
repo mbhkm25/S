@@ -19,6 +19,10 @@ $Arguments = '//B //NoLogo "' + $LauncherPath + '" "' + $RunnerPath + '"'
 
 $Action = New-ScheduledTaskAction -Execute $WScript -Argument $Arguments
 
+# Full logical snapshot cloud delivery may legitimately take up to 30 minutes.
+# A five-minute Task Scheduler hard limit terminated otherwise healthy
+# read-only owner-requested refreshes before cloud acknowledgement.
+# Keep the minute trigger and IgnoreNew overlap protection; bound at 45m.
 # Task Scheduler rejects TimeSpan::MaxValue because it serializes to an out-of-range
 # ISO-8601 duration (P99999999D...). Use a bounded long-lived duration instead.
 $RepetitionDuration = New-TimeSpan -Days 3650
@@ -33,7 +37,7 @@ $LogonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
 $Settings = New-ScheduledTaskSettingsSet `
   -MultipleInstances IgnoreNew `
   -StartWhenAvailable `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
   -RestartCount 3 `
   -RestartInterval (New-TimeSpan -Minutes 1)
 
