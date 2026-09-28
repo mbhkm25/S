@@ -1,7 +1,7 @@
 import './sanadPersonalExpenseEditor.css';
 import { useEffect, useId, useRef, useState } from 'react';
 import { getExpenseEditorOptions, getSanadAgentAction, updateSanadPersonalExpenseDraft, type SanadAgentAction } from './assistantActionApi';
-import { expenseFields, expensePayload, isPersonalExpense, type ExpenseFields, type ExpenseOptions } from './personalExpenseDraft';
+import { expenseFields, expensePayload, isPersonalDraft, type ExpenseFields, type ExpenseOptions } from './personalExpenseDraft';
 
 type Props = { action: SanadAgentAction; onSaved: (action: SanadAgentAction) => void; onClose: (action: SanadAgentAction) => void };
 const control = 'sanad-focus-ring sanad-expense-control';
@@ -18,16 +18,18 @@ export default function SanadPersonalExpenseEditor({ action, onSaved, onClose }:
   const submitting = useRef(false);
   const mounted = useRef(true);
   const id = useId();
+  const variant = String(original.payload.transaction_type);
+  const label = variant === 'income' ? 'الدخل' : variant === 'transfer' ? 'التحويل' : 'المصروف';
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     let alive = true;
     setBusy('loading');
     setError('');
-    void getExpenseEditorOptions().then(result => { if (alive) setOptions(result); })
+    void getExpenseEditorOptions(variant).then(result => { if (alive) setOptions(result); })
       .catch(() => { if (alive) setError('تعذر تحميل الحسابات والتصنيفات. أعد المحاولة.'); })
       .finally(() => { if (alive) setBusy(null); });
     return () => { alive = false; };
-  }, [attempt]);
+  }, [attempt, variant]);
   const setField = (name: keyof ExpenseFields, value: string) => setFields(previous => ({ ...previous, [name]: value }));
   const currencies = [...new Set(options?.accounts.map(account => account.currency) || [])];
   const availableAccounts = options?.accounts.filter(account => account.currency === fields.currency) || [];
@@ -42,7 +44,7 @@ export default function SanadPersonalExpenseEditor({ action, onSaved, onClose }:
     setBusy('saving'); setError('');
     try {
       const updated = await updateSanadPersonalExpenseDraft(original.id, original.version, payload);
-      if (updated.id !== original.id || updated.thread_id !== original.thread_id || !isPersonalExpense(updated) || updated.status !== 'review') {
+      if (updated.id !== original.id || updated.thread_id !== original.thread_id || !isPersonalDraft(updated) || updated.payload.transaction_type !== original.payload.transaction_type || updated.status !== 'review') {
         throw new Error('unexpected_draft_response');
       }
       if (mounted.current) onSaved(updated);
@@ -66,10 +68,10 @@ export default function SanadPersonalExpenseEditor({ action, onSaved, onClose }:
     setBusy('reload'); setError('');
     try {
       const current = await getSanadAgentAction(original.id);
-      if (current.id !== original.id || current.thread_id !== original.thread_id || !isPersonalExpense(current)) throw new Error('invalid_origin');
+      if (current.id !== original.id || current.thread_id !== original.thread_id || !isPersonalDraft(current) || current.payload.transaction_type !== original.payload.transaction_type) throw new Error('invalid_origin');
       if (!mounted.current) return;
       if (current.status !== 'review') { onSaved(current); return; }
-      const freshOptions = await getExpenseEditorOptions();
+      const freshOptions = await getExpenseEditorOptions(variant);
       if (!mounted.current) return;
       setOriginal(current); setFields(expenseFields(current)); setOptions(freshOptions); setNeedsReload(false);
     } catch { if (mounted.current) setError('تعذر تحميل الحالة الحالية. الحفظ معطّل حتى التحقق؛ يمكنك الاحتفاظ بالحقول والمحاولة لاحقًا.'); }
@@ -77,41 +79,50 @@ export default function SanadPersonalExpenseEditor({ action, onSaved, onClose }:
   };
 
   return (
-    <form aria-label="تعديل المصروف" onSubmit={event => { event.preventDefault(); void save(); }} className="sanad-expense-editor">
+    <form aria-label={`تعديل ${label}`} onSubmit={event => { event.preventDefault(); void save(); }} className="sanad-expense-editor">
       <div>
-        <h3 className="sanad-section-title">تعديل المصروف</h3>
+        <h3 className="sanad-section-title">تعديل {label}</h3>
         <p className="sanad-section-description">تعديل المسودة نفسها · الإصدار {original.version}. الحفظ يحدّث المراجعة ولا يسجّل عملية مالية.</p>
       </div>
-      {busy === 'loading' ? <p role="status" className="text-sm text-slate-600">جارٍ تحميل حساباتك وتصنيفات المصروف…</p> : null}
+      {busy === 'loading' ? <p role="status" className="text-sm text-slate-600">جارٍ تحميل خيارات المسودة…</p> : null}
       {error ? <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm leading-6 text-rose-800">{error}</p> : null}
       {!options && !busy ? <button type="button" className={control} onClick={() => setAttempt(value => value + 1)}>إعادة تحميل الخيارات</button> : null}
       <fieldset disabled={busy !== null || !options || needsReload} className="sanad-expense-fields">
         <label htmlFor={`${id}-amount`} className="sanad-expense-field"><span>المبلغ</span>
           <input autoFocus id={`${id}-amount`} aria-label="المبلغ" inputMode="decimal" dir="ltr" required value={fields.amount} onChange={event => setField('amount', event.target.value)} className={control} /></label>
         <label htmlFor={`${id}-currency`} className="sanad-expense-field"><span>العملة</span>
-          <select id={`${id}-currency`} aria-label="العملة" value={fields.currency} onChange={event => setFields(previous => ({ ...previous, currency: event.target.value, accountId: '' }))} className={control}>
+          <select id={`${id}-currency`} aria-label="العملة" value={fields.currency} onChange={event => setFields(previous => ({ ...previous, currency: event.target.value, accountId: '', destinationAccountId: '' }))} className={control}>
             {!currencies.includes(fields.currency) ? <option value={fields.currency}>{fields.currency || 'اختر العملة'} — غير متاحة</option> : null}
             {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
           </select></label>
-        <label htmlFor={`${id}-account`} className="sanad-expense-field"><span>الحساب</span>
+        <label htmlFor={`${id}-account`} className="sanad-expense-field"><span>{variant === 'transfer' ? 'من حساب' : 'الحساب'}</span>
           <select id={`${id}-account`} aria-label="الحساب" required value={fields.accountId} onChange={event => setField('accountId', event.target.value)} className={control}>
             <option value="">اختر الحساب</option>
             {fields.accountId && !availableAccounts.some(item => item.id === fields.accountId) ? <option value={fields.accountId}>الحساب السابق غير متاح بهذه العملة</option> : null}
             {availableAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
           </select></label>
+        {variant === 'transfer' ? (
+        <label htmlFor={`${id}-destination`} className="sanad-expense-field"><span>إلى حساب</span>
+          <select id={`${id}-destination`} aria-label="إلى حساب" required value={fields.destinationAccountId || ''} onChange={event => setField('destinationAccountId', event.target.value)} className={control}>
+            <option value="">اختر حساب الوجهة</option>
+            {fields.destinationAccountId && !availableAccounts.some(a => a.id === fields.destinationAccountId && a.id !== fields.accountId) ? <option value={fields.destinationAccountId}>الحساب السابق غير متاح</option> : null}
+            {availableAccounts.filter(a => a.id !== fields.accountId).map(a => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}
+          </select></label>
+        ) : (
         <label htmlFor={`${id}-category`} className="sanad-expense-field"><span>التصنيف</span>
           <select id={`${id}-category`} aria-label="التصنيف" value={fields.categoryId} onChange={event => setField('categoryId', event.target.value)} className={control}>
             <option value="">بدون تصنيف</option>
             {fields.categoryId && !options?.categories.some(item => item.id === fields.categoryId) ? <option value={fields.categoryId}>التصنيف السابق غير متاح</option> : null}
             {options?.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select></label>
+        )}
         <label htmlFor={`${id}-date`} className="sanad-expense-field sanad-expense-wide"><span>التاريخ والوقت</span>
           <input id={`${id}-date`} aria-label="التاريخ والوقت" type="datetime-local" dir="ltr" required value={fields.localDate} onChange={event => setField('localDate', event.target.value)} className={control} />
           <span className="block leading-5 text-slate-500">حسب توقيت جهازك: {Intl.DateTimeFormat().resolvedOptions().timeZone}</span></label>
         <label htmlFor={`${id}-description`} className="sanad-expense-field sanad-expense-wide"><span>الوصف (اختياري)</span>
           <textarea id={`${id}-description`} aria-label="الوصف (اختياري)" rows={2} maxLength={500} value={fields.description} onChange={event => setField('description', event.target.value)} className={control} /></label>
       </fieldset>
-      {options && options.accounts.length === 0 ? <p className="text-xs leading-6 text-amber-800">لا توجد حسابات شخصية متاحة. أضف حسابًا من إدارة المالي أولًا.</p> : null}
+      {options && options.accounts.length === 0 ? <p className="text-xs leading-6 text-amber-800">لا توجد حسابات شخصية متاحة. اطلب إضافة حساب من المحادثة أولًا.</p> : null}
       <div className="sanad-expense-actions">
         {needsReload ? <button type="button" onClick={() => void reload()} disabled={busy !== null} className="sanad-focus-ring sanad-expense-button">تحميل أحدث نسخة</button> : null}
         <button type="submit" disabled={blocked || options?.accounts.length === 0} className="sanad-focus-ring sanad-expense-button sanad-expense-button-primary">{busy === 'saving' ? 'جارٍ الحفظ…' : 'حفظ ومراجعة'}</button>

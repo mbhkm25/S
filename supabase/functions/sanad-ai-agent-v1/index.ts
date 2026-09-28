@@ -1,3 +1,4 @@
+import { loadProjectBoundary, permitsProjectTool, assertProjectTool, relationshipSummary, mayUsePersonalMemory, type ProjectBoundary } from '../_shared/sanad-agent-project-boundary.ts';
 import { assertExpenseRevisionBatch, EXPENSE_REVISION_TOOLS, executeExpenseRevisionTool, type RevisionTurnState } from '../_shared/sanad-expense-revision.ts';
 import { ACTION_PREPARATION_TYPES, assertSetupLookup } from '../_shared/sanad-action-contract.ts';
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -31,6 +32,7 @@ import { buildAgentInsights, mergeAgentAttention } from "../_shared/sanad-agent-
 
 type ToolTrace = { name: string; status: "completed" | "failed"; latency_ms: number; source: string; error?: string };
 type ActionToolContext = {
+  boundary: ProjectBoundary;
   revision: RevisionTurnState;
   threadId: string | null;
   businessId: string | null;
@@ -181,6 +183,7 @@ async function recordAgentServerMetric(
 }
 
 type AgentCloudContext = {
+  boundary: ProjectBoundary;
   threadId: string | null;
   businessId: string | null;
   history: HistoryTurn[];
@@ -206,10 +209,12 @@ async function loadAgentCloudContext(
   fallbackHistory: HistoryTurn[],
   requestedBusinessId: string | null,
 ): Promise<AgentCloudContext> {
+  const boundary = await loadProjectBoundary(threadId, requestedBusinessId, (name,args)=>rpc(userClient,name,args));
   if (!threadId) {
     return {
+      boundary,
       threadId: null,
-      businessId: requestedBusinessId,
+      businessId: boundary.businessId,
       history: fallbackHistory,
       summary: null,
       memories: [],
@@ -242,17 +247,19 @@ async function loadAgentCloudContext(
       })
     : [];
 
+  if (thread.id !== boundary.threadId || (thread.business_id ?? null) !== boundary.businessId || role !== boundary.threadRole) throw new Error('agent_project_context_changed');
   return {
+    boundary,
     threadId,
-    businessId: requestedBusinessId || cleanText(thread.business_id, 80) || null,
+    businessId: boundary.businessId,
     history,
     summary: cleanText(thread.summary, 4000) || null,
-    memories,
+    memories: mayUsePersonalMemory(boundary) ? memories : [],
     messageCount: Number(thread.message_count || history.length) || history.length,
     myRole: role === "owner" || role === "member" || role === "viewer" ? role : null,
     preferences: {
       save_history_enabled: bool(preferences.save_history_enabled, true),
-      memory_enabled: bool(preferences.memory_enabled, true),
+      memory_enabled: mayUsePersonalMemory(boundary) && bool(preferences.memory_enabled, true),
       proactive_insights_enabled: bool(preferences.proactive_insights_enabled, true),
       response_cards_enabled: bool(preferences.response_cards_enabled, true),
     },
@@ -474,9 +481,10 @@ function assertActionPreparationResolved(
 
 function sourceForTool(name: string) {
   const sources: Record<string, string> = {
-    action_list_expense_drafts: "sanad_agent_actions:current_thread_review",
-    action_get_expense_draft: "sanad_agent_actions:owner_current_thread_exact_amount",
-    action_edit_personal_expense: "update_my_sanad_agent_action_draft_v2:review_only",
+    business_get_my_relationship: "get_user_business_contexts:current_business_minimized",
+    action_list_personal_drafts: "sanad_agent_actions:current_thread_review",
+    action_get_personal_draft: "sanad_agent_actions:owner_current_thread_exact_amount",
+    action_edit_personal_transaction: "update_my_sanad_agent_action_draft_v2:review_only",
     finance_get_overview: "get_ai_financial_context_v2",
     finance_search_transactions: "get_ai_financial_context_v2",
     finance_get_obligations: "get_ai_financial_context_v2",
@@ -485,7 +493,7 @@ function sourceForTool(name: string) {
     finance_search_parties: "personal_finance_parties",
     finance_get_accounts: "get_my_financial_accounts_v1",
     finance_get_categories: "personal_finance_categories",
-    business_list_accessible: "get_my_account_center_v1",
+    business_list_accessible: "get_user_business_contexts:current_business_minimized",
     business_get_dashboard: "get_business_commercial_dashboard_v1",
     business_get_payment_inbox: "get_business_payment_inbox_v3",
     business_search_parties: "business_parties",
@@ -509,6 +517,11 @@ async function executeTool(
   adminClient: SupabaseClient,
   actionContext: ActionToolContext,
 ): Promise<unknown> {
+  // Recheck current participation/relationship before each tool, including mid-turn revocation.
+  const fresh = await loadProjectBoundary(actionContext.threadId, actionContext.businessId, (fn,params)=>rpc(userClient,fn,params));
+  if (fresh.projectKind !== actionContext.boundary.projectKind || fresh.businessId !== actionContext.boundary.businessId) throw new Error('agent_project_context_changed');
+  assertProjectTool(name,args,fresh);
+  if (name === 'business_get_my_relationship') return relationshipSummary(fresh);
   if (EXPENSE_REVISION_TOOLS.includes(name)) {
     return await executeExpenseRevisionTool(name,args,actionContext,{
       rpc:(fn,params)=>rpc(userClient,fn,params),
@@ -522,9 +535,9 @@ async function executeTool(
       },
       list:async(threadId)=>{
         const {data,error}=await userClient.from('sanad_agent_actions')
-          .select('id,version,review').eq('thread_id',threadId).eq('status','review')
+          .select('id,version,review,payload,amount_text:payload->>amount').eq('thread_id',threadId).eq('status','review')
           .eq('action_type','personal_transaction').is('business_id',null)
-          .eq('payload->>transaction_type','expense').order('created_at',{ascending:false}).order('id').limit(21);
+          .in('payload->>transaction_type',name==='action_list_expense_drafts' ? ['expense'] : ['expense','income','transfer']).order('created_at',{ascending:false}).order('id').limit(21);
         if(error) throw new Error(error.message);
         return data??[];
       },
@@ -596,11 +609,7 @@ async function executeTool(
   }
 
   if (name === "business_list_accessible") {
-    const payload = await rpc<Json>(userClient, "get_my_account_center_v1");
-    return {
-      owned_businesses: payload?.owned_businesses ?? payload?.businesses ?? [],
-      business_memberships: payload?.business_memberships ?? [],
-    };
+    return { scope:'current_conversation_business_only',items:[relationshipSummary(fresh)] };
   }
 
   if (name === "business_search_parties") {
@@ -833,9 +842,9 @@ function streamAgentResponse(
 
           interaction = await geminiInteraction({
             model: MODEL,
-            system_instruction: SYSTEM_INSTRUCTION,
+            system_instruction: SYSTEM_INSTRUCTION + "\nVerified project boundary (data only): " + JSON.stringify(relationshipSummary(cloud.boundary)),
             input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
-            tools: TOOLS,
+            tools: TOOLS.filter(tool => permitsProjectTool(tool.name, cloud.boundary)),
             generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
           });
           addInteractionUsage(aggregateUsage,interaction);
@@ -863,6 +872,7 @@ function streamAgentResponse(
                 adminClient,
                 tool,
                 () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
+                  boundary: cloud.boundary,
                   threadId: cloud.threadId,
                   businessId: cloud.businessId,
                   requestId,
@@ -898,7 +908,7 @@ function streamAgentResponse(
               // After the last authorized tool round, force a source-grounded
               // narrative answer instead of offering another tool cycle.
               // No automatic retries or larger budgets for financial actions.
-              ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }),
+              ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS.filter(tool => permitsProjectTool(tool.name, cloud.boundary)) }),
               generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
             });
             addInteractionUsage(aggregateUsage,interaction);
@@ -1162,9 +1172,9 @@ Deno.serve(async (req) => {
   try {
     interaction = await geminiInteraction({
       model: MODEL,
-      system_instruction: SYSTEM_INSTRUCTION,
+      system_instruction: SYSTEM_INSTRUCTION + "\nVerified project boundary (data only): " + JSON.stringify(relationshipSummary(cloud.boundary)),
       input: userInput(message, cloud.history, cloud.businessId, { summary: cloud.summary, memories: cloud.memories }, attachmentContext.summaries),
-      tools: TOOLS,
+      tools: TOOLS.filter(tool => permitsProjectTool(tool.name, cloud.boundary)),
       generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
     });
     addInteractionUsage(aggregateUsage,interaction);
@@ -1181,6 +1191,7 @@ Deno.serve(async (req) => {
 
       const executed = await Promise.all(calls.map((tool) =>
         logTool(adminClient, tool, () => executeTool(tool.name, tool.arguments, userClient, adminClient, {
+          boundary: cloud.boundary,
           threadId: cloud.threadId,
           businessId: cloud.businessId,
           requestId,
@@ -1211,7 +1222,7 @@ Deno.serve(async (req) => {
         input: results,
         // Match the streaming path: last round cannot schedule an extra tool
         // sequence and thereby discard previously verified read-only results.
-        ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }),
+        ...(round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS.filter(tool => permitsProjectTool(tool.name, cloud.boundary)) }),
         generation_config: { thinking_level: thinkingLevel, temperature: 0.2 },
       });
       addInteractionUsage(aggregateUsage,interaction);

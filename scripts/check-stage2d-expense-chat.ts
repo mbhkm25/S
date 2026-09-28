@@ -64,4 +64,23 @@ for (const names of [['action_prepare_personal_transaction','action_edit_persona
   assert.throws(()=>assertExpenseRevisionBatch(names),/cannot_mix_creation/);checks++;
 }
 assertExpenseRevisionBatch(['action_get_expense_draft','finance_get_accounts']);checks++;
+for(const variant of ['income','transfer']) {
+ capabilities={...cap,actions:[{id:'personal_'+variant,form_edit_supported:true}]};
+ current={...structuredClone(base),payload:variant==='income' ? {...base.payload,transaction_type:'income'} : {transaction_type:'transfer',amount:20,currency:'YER',source_account_id:account,destination_account_id:category,description:'تحويل',transaction_at:base.payload.transaction_at}};
+ ctx=context();
+ const observed:any=await executeExpenseRevisionTool('action_get_personal_draft',{action_id:id},ctx,gateway);
+ ctx.priorToolOutputs.push({name:'action_get_personal_draft',output:observed});
+ const result:any=await executeExpenseRevisionTool('action_edit_personal_transaction',{action_id:id,expected_version:2,patch:{description:'جديد'}},ctx,gateway);
+ assert.equal(result.payload.transaction_type,variant);assert.equal(result.payload.amount,base.amount_text);checks+=2;
+ assert.deepEqual(Object.keys(result.payload).sort(),(variant==='transfer'?['transaction_type','amount','currency','source_account_id','destination_account_id','description','transaction_at']:['transaction_type','amount','currency','account_id','category_id','description','transaction_at']).sort());checks++;
+ for(const patch of variant==='transfer' ? [{category_id:null},{source_account_id:category},{destination_account_id:account}] : [{source_account_id:category},{transaction_type:'expense'}]) {
+   ctx=context();const row=await executeExpenseRevisionTool('action_get_personal_draft',{action_id:id},ctx,gateway);ctx.priorToolOutputs.push({name:'action_get_personal_draft',output:row});
+   await rejects(()=>executeExpenseRevisionTool('action_edit_personal_transaction',{action_id:id,expected_version:2,patch},ctx,gateway),/invalid_|not_resolved|transfer_accounts/);
+ }
+ capabilities=structuredClone(cap);
+ await rejects(()=>executeExpenseRevisionTool('action_get_personal_draft',{action_id:id},context(),gateway),/variant_not_available/);
+ await rejects(()=>read(context()),/requires_current_thread_review/);
+}
+assert.throws(()=>assertExpenseRevisionBatch(['action_prepare_personal_account','action_edit_personal_transaction']),/cannot_mix/);checks++;
+
 console.log(`Expense chat revision: ${checks} operational cases PASS; no rendered UI/model/financial execution.`);
