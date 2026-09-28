@@ -60,6 +60,7 @@ export type SanadAssistantToolDefinition = {
 };
 
 export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
+  {name:'business_get_my_relationship',description:'Read the verified actor relationship to the current business only; never infer authority from conversation role.',scope:'business',risk:'read_only',authoritativeSource:'get_user_business_contexts',parameters:{type:'object',properties:{},additionalProperties:false}},
   {name:'action_list_personal_drafts',description:'List bounded pending personal income, expense or same-currency transfer drafts in the current personal conversation.',scope:'personal',risk:'read_only',authoritativeSource:'sanad_agent_actions',parameters:{type:'object',properties:{},required:[],additionalProperties:false}},
   {name:'action_get_personal_draft',description:'Read the canonical pending expense and version before revision.',scope:'personal',risk:'read_only',authoritativeSource:'sanad_agent_actions',parameters:{type:'object',properties:{action_id:{type:'string',description:'Resolved current-thread draft UUID.'}},required:['action_id'],additionalProperties:false}},
   {name:'action_edit_personal_transaction',description:'Revise the same personal income, expense or same-currency transfer draft with expected version; no approval or financial execution.',scope:'personal',risk:'draft_only',authoritativeSource:'update_my_sanad_agent_action_draft_v2',parameters:{type:'object',properties:{action_id:{type:'string',description:'Draft UUID read this turn.'},expected_version:{type:'integer',description:'Observed version.'},patch:{type:'object',description:'Only requested amount, currency, account_id, source_account_id, destination_account_id, category_id, description or transaction_at changes.'}},required:['action_id','expected_version','patch'],additionalProperties:false}},
@@ -152,10 +153,10 @@ export const SANAD_ASSISTANT_TOOLS: readonly SanadAssistantToolDefinition[] = [
   },
   {
     name: 'business_list_accessible',
-    description: 'List businesses the authenticated user is authorized to access.',
+    description: 'Read the verified relationship to the current conversation business only.',
     scope: 'business',
     risk: 'read_only',
-    authoritativeSource: 'get_my_account_center_v1',
+    authoritativeSource: 'get_user_business_contexts:current_business_minimized',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
   },
   {

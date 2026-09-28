@@ -43,7 +43,7 @@ assert.ok(SANAD_COMPOSER_ACTIONS.every((item) => item.sourceTools.length > 0));
 const launcher = readFileSync('src/features/assistant/SanadSmartComposerLauncher.tsx', 'utf8');
 const workspace = readFileSync('src/features/assistant/SanadAgentWorkspace.tsx', 'utf8');
 const response = readFileSync('src/features/assistant/SanadAgentResponseBlocks.tsx', 'utf8');
-assert.match(launcher, /composerActionsForScope\(scope\)/);
+assert.match(launcher, /composerActionsForScope\(scope, verified/);
 assert.match(launcher, /data-sanad-smart-composer-panel/);
 assert.match(launcher, /role="dialog"/);
 assert.match(launcher, /aria-expanded=\{open\}/);
@@ -65,8 +65,10 @@ assert.ok(response.includes('onModifyAction && context && resolveTarget({'),
 assert.ok(response.includes('onModifyAction('),
   'Follow-ups only stage a reviewable text request, never submit a financial operation.');
 
-assert.doesNotMatch(launcher, /supabase\.|\.rpc\(|create_my_sanad_agent_action_draft_v1/,
-  'The launcher cannot become an independent server/action execution path.');
+assert.doesNotMatch(launcher, /\.from\(|\.functions\.|create_my_sanad_agent_action_draft_v1|approve_my_sanad/,
+  'The launcher may read relationship context, but cannot execute financial actions.');
+assert.match(launcher, /loadProjectBoundary\(threadId, null/);
+assert.match(launcher, /permitsProjectTool\(tool.name, boundary\)/);
 assert.match(workspace, /threadId=\{selectedThreadId\}/);
 assert.match(workspace, /scope=\{verifiedThreadScope\}/);
 assert.match(workspace, /disabled=\{sending \|\| threadReadOnly \|\| threadLoading\}/);

@@ -34,6 +34,12 @@ export type SanadComposerActionDescriptor = {
 
 export const SANAD_COMPOSER_ACTIONS: readonly SanadComposerActionDescriptor[] = [
   {
+    id: 'business_relationship', schemaVersion: 1, title: 'علاقتي بالنشاط',
+    description: 'معرفة علاقتك بالنشاط الحالي وحدود الإجراءات المتاحة لك.',
+    specialist: 'business_health', projectKind: 'business', risk: 'read_only',
+    sourceTools: ['business_get_my_relationship'], state: 'ready', formFields: [],
+  },
+  {
     id: 'personal_review', schemaVersion: 1, title: 'مراجعة الوضع المالي',
     description: 'نظرة شخصية على الحسابات والالتزامات، مع ملاحظات موثقة عند توفر بياناتها.',
     specialist: 'personal_finance', projectKind: 'personal', risk: 'read_only',
@@ -142,6 +148,8 @@ export function buildGuidedComposerPrompt(
     values.to ? `إلى ${values.to}` : '',
   ].filter(Boolean).join(' ');
   switch (action.id) {
+    case 'business_relationship':
+      return 'ما علاقتي بالنشاط الحالي وما الإجراءات المتاحة لي في هذه المحادثة؟ تحقق من العلاقة المسجلة ولا تفترض الصلاحيات من المسمى الوظيفي.';
     case 'personal_review':
       return `راجع وضعي المالي الشخصي ${dates}. اعرض النتيجة الأساسية، ثم فقط الملاحظات المهمة التي تدعمها بيانات الحسابات والالتزامات والميزانيات المتاحة، مع ذكر الفترات والعملات والمصادر.`.trim();
     case 'personal_expense':

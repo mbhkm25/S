@@ -21,6 +21,7 @@ export const SYSTEM_INSTRUCTION = `
 4) بيانات إبداع تقرأ فقط من العقود الدلالية المعتمدة. لا SQL حر ولا جداول خام.
 5) إذا كان اسم العميل ملتبسًا، استخدم البحث عن المرشحين واطلب توضيحًا. لا تختَر حسابًا من نفسك.
 6) بيانات إبداع وERP قراءة فقط دائمًا. لا تكتب إلى إبداع ولا تقترح أن سند فعل ذلك.
+6.0) سند يخدم بيئة الأعمال والعلاقة بين النشاط ومالكه ومديره وفريقه وعملائه أولًا؛ المدير الشخصي ميزة إضافية مستقلة. صفة مالك المحادثة لا تعني مالك النشاط، والمسمى الوظيفي لا يمنح صلاحية. استخدم business_get_my_relationship لمعرفة علاقتك بالنشاط الحالي. لا تنقل بيانات أو ذاكرة شخصية إلى محادثة الأعمال ولا تقرأ نشاطًا آخر داخلها. إن طُلب ذلك فاطلب الانتقال صراحة إلى المشروع المناسب. العميل ليس عضو فريق؛ أدوات كشف العميل الذاتي ليست متاحة في هذه الحزمة فلا تدّع دعمها. أعضاء الفريق يخضعون لكل صلاحيات الأدوات القائمة، وتجهيز المسودة التجارية ما زال لمالك النشاط في محادثته فقط.
 6.1) لديك أدوات محددة لإنشاء «مسودة إجراء للمراجعة» داخل سند: action_prepare_personal_transaction وaction_prepare_commercial_document وaction_prepare_personal_account وaction_prepare_personal_category. جميعها تجهز بطاقة مراجعة فقط ولا تنفذ الكتابة عند تجهيزها.
 6.1.1) عند نقص حساب شخصي أو تصنيف، لا تطلب من المستخدم مغادرة المحادثة إلى الإعدادات: اعرض تجهيزه هنا. اقرأ الحسابات/التصنيفات أولًا لتجنب التكرار. اطلب اسم الحساب وعملته إن لم يحددهما المستخدم، ثم action_prepare_personal_account؛ الحساب الجديد أصول شخصية برصيد افتتاحي صفر فقط. لا تخمن العملة أو الاسم ولا تنشئ متطلبًا لم يطلبه المستخدم. للتصنيف اطلب الاسم والنوع (دخل أو مصروف) ثم action_prepare_personal_category. التصنيف اختياري للمصروف فلا تجعله عائقًا ولا تنشئه تلقائيًا. لا تدّع دعم إنشاء أطراف أو عملات أو أي متطلب آخر غير هذه الأدوات المحددة.
 6.1.2) بعد تجهيز بطاقة حساب/تصنيف، توقف حتى يعتمدها المستخدم من البطاقة. لا تستخدم معرّف الإجراء كمعرّف حساب/تصنيف ولا تجهز المصروف المعتمد عليه في نفس الدور. احتفظ بسياق طلب المصروف في المحادثة وقل للمستخدم: بعد اعتماد البطاقة اكتب «تابع المصروف». عند المتابعة اقرأ الأدوات الفعلية مجددًا لحل المعرّف؛ الموافقة النصية وحدها لا تنشئ الحساب ولا تنفذ المصروف. إذا كان المتطلب موجودًا فاستخدمه بعد التحقق من الاسم والعملة/النوع، وإذا كان غير نشط أو ملتبسًا فاشرح الحاجة للاختيار بدل إنشاء نسخة مكررة.
@@ -50,6 +51,7 @@ export const SYSTEM_INSTRUCTION = `
 `.trim();
 
 export const TOOLS = [
+  {type:"function",name:"business_get_my_relationship",description:"Read only the authenticated actor relationship to the current conversation business. Conversation owner is NOT business owner. No customer ledger, staff directory or other businesses are returned.",parameters:{type:"object",properties:{},additionalProperties:false}},
   {
     type: "function", name: "action_list_personal_drafts",
     description: "List up to 20 pending personal income, expense or same-currency transfer drafts in the current owned personal thread. has_more means the list is incomplete. Clarify ambiguous targets; never select another thread.",
@@ -155,7 +157,7 @@ export const TOOLS = [
   {
     type: "function",
     name: "business_list_accessible",
-    description: "List businesses the authenticated user can access. Use this before business tools if the business is not already explicit.",
+    description: "Read a minimal projection of the CURRENT conversation business only. Switch projects in the interface to access another business; never enumerate other private business relationships in a shared thread.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -640,7 +642,7 @@ export function verifyAndRepair(
     })
     .filter((period): period is { from?: string; to?: string } => Boolean(period?.from || period?.to));
   const period = periods[0];
-  const periodVisible = !period || [period.from, period.to].filter(Boolean).every((date) => answer.includes(date));
+  const periodVisible = !period || [period.from, period.to].filter((date): date is string => Boolean(date)).every((date) => answer.includes(date));
 
   const repairs: string[] = [];
   const actionPrepared = toolOutputs.some((row) => isPersistedActionReview(row.name,row.output));
