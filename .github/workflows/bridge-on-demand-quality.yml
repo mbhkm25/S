@@ -1,0 +1,38 @@
+name: Bridge Immediate and Scheduled Compatibility
+
+on:
+  pull_request:
+    paths:
+      - "bridge/windows/**"
+      - "supabase/functions/sanad-erp-heartbeat-v1/**"
+      - "supabase/migrations/2026092619*"
+      - "src/features/shell/SanadBridgeRefreshControl.tsx"
+      - "src/features/shell/SanadUnifiedEntryRoute.tsx"
+      - "scripts/check-bridge-*.mjs"
+      - ".github/workflows/bridge-on-demand-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "bridge/windows/**"
+      - "supabase/functions/sanad-erp-heartbeat-v1/**"
+      - "supabase/migrations/2026092619*"
+      - "src/features/shell/SanadBridgeRefreshControl.tsx"
+      - "src/features/shell/SanadUnifiedEntryRoute.tsx"
+      - "scripts/check-bridge-*.mjs"
+      - ".github/workflows/bridge-on-demand-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fixed-device-command-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify scheduled and manual mutex coexistence
+        run: node scripts/check-bridge-manual-refresh.mjs
+      - name: Verify remote device capabilities, owner authorization and cloud-confirmed completion
+        run: node scripts/check-bridge-remote-refresh.mjs

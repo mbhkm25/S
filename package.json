@@ -12,7 +12,7 @@
     "cap:sync": "npx cap sync android",
     "preview": "vite preview",
     "preview:admin": "vite preview --config admin/vite.config.ts --port=4174",
-    "check:routes": "tsx scripts/check-app-routes.ts && tsx scripts/check-email-action-entrypoints.ts && tsx scripts/check-financial-workspace-routes.ts && tsx scripts/check-product-navigation-performance.ts && tsx scripts/check-sanad-ai-agent-foundation.ts && tsx scripts/check-sanad-ai-agent-runtime.ts && tsx scripts/check-sanad-agent-workspace.ts && tsx scripts/check-sanad-project-quick-prompts.ts && tsx scripts/check-sanad-agent-message-ordering.ts && tsx scripts/check-sanad-viewport-scroll-contract.ts && tsx scripts/check-sanad-conversation-surface.ts && tsx scripts/check-sanad-settings-geometry.ts && tsx scripts/check-sanad-voice-reliability.ts && tsx scripts/check-sanad-agent-visual-v4.ts && tsx scripts/check-sanad-assistant-identity.tsx && tsx scripts/check-stage1-release-consolidation.ts && tsx scripts/check-stage1g-production-hotfix.ts && tsx scripts/check-stage2a-visual-foundation.ts && tsx scripts/check-stage2b-data-d1.ts && tsx scripts/check-stage2b-data-d2.ts && tsx scripts/check-stage2b-data-d3.ts && tsx scripts/check-stage2b-runtime-r1.ts && tsx scripts/check-stage2b-runtime-r2.ts && tsx scripts/check-stage2b-runtime-r3.ts && tsx scripts/check-stage2b-runtime-r4.ts && tsx scripts/check-stage2c-projects-package1.ts && tsx scripts/check-sanad-launch-home-route.ts && tsx scripts/check-sanad-agent-streaming.ts && tsx scripts/check-sanad-ai-agent-evals.ts && tsx scripts/check-sanad-ai-live-eval-runner.ts && tsx scripts/check-sanad-ai-quality-admin.ts",
+    "check:routes": "tsx scripts/check-app-routes.ts && tsx scripts/check-email-action-entrypoints.ts && tsx scripts/check-financial-workspace-routes.ts && tsx scripts/check-product-navigation-performance.ts && tsx scripts/check-sanad-ai-agent-foundation.ts && tsx scripts/check-sanad-ai-agent-runtime.ts && tsx scripts/check-sanad-agent-workspace.ts && tsx scripts/check-sanad-project-quick-prompts.ts && tsx scripts/check-sanad-agent-message-ordering.ts && tsx scripts/check-sanad-viewport-scroll-contract.ts && tsx scripts/check-sanad-conversation-surface.ts && tsx scripts/check-sanad-settings-geometry.ts && tsx scripts/check-sanad-voice-reliability.ts && tsx scripts/check-sanad-agent-visual-v4.ts && tsx scripts/check-sanad-assistant-identity.tsx && tsx scripts/check-stage1-release-consolidation.ts && tsx scripts/check-stage1g-production-hotfix.ts && tsx scripts/check-stage2a-visual-foundation.ts && tsx scripts/check-stage2b-data-d1.ts && tsx scripts/check-stage2b-data-d2.ts && tsx scripts/check-stage2b-data-d3.ts && tsx scripts/check-stage2b-runtime-r1.ts && tsx scripts/check-stage2b-runtime-r2.ts && tsx scripts/check-stage2b-runtime-r3.ts && tsx scripts/check-stage2b-runtime-r4.ts && tsx scripts/check-stage2c-projects-package1.ts && tsx scripts/check-stage2c-context-entity.ts && tsx scripts/check-stage2c-specialist-composer.ts && node scripts/check-stage2d-action-origin.mjs && node scripts/check-stage2d-capability-descriptor.mjs && node scripts/check-stage2d-same-action-note-edit.mjs && tsx scripts/check-sanad-launch-home-route.ts && tsx scripts/check-sanad-agent-streaming.ts && tsx scripts/check-sanad-ai-agent-evals.ts && tsx scripts/check-sanad-ai-live-eval-runner.ts && tsx scripts/check-sanad-ai-quality-admin.ts && npm run test:draft-contract",
     "check:android-release": "node scripts/android-release-meta.mjs validate",
     "test:pipeline:load": "node scripts/operation-pipeline-db-load.mjs",
     "deploy:production": "gh workflow run deploy-production.yml --ref main",
@@ -22,7 +22,8 @@
     "gate:migrations": "node scripts/audit-supabase-migration-history.mjs --mode deploy-gate",
     "test:migration-audit": "node --test scripts/audit-supabase-migration-history.test.mjs",
     "verify:canonical-baseline": "node scripts/verify-supabase-canonical-baseline.mjs",
-    "check:bundle-budget": "node scripts/check-production-bundle-budget.mjs"
+    "check:bundle-budget": "node scripts/check-production-bundle-budget.mjs",
+    "test:draft-contract": "node scripts/check-stage2d-expense-edit.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
@@ -44,11 +45,13 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/qrcode": "^1.5.6",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "pg": "8.23.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

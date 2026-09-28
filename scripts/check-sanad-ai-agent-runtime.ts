@@ -63,3 +63,15 @@ assert.match(runtime, /contextLoadMs/);
 assert.match(runtime, /attachmentContextMs/);
 assert.match(runtime, /toolTrace\.reduce\(\(sum,item\)=>sum\+item\.latency_ms,0\)/);
 assert.match(runtime, /p_usage_metadata: aggregateUsage/);
+
+ 
+// Stage 2C.5: bounded source-only terminal synthesis replaces a sixth tool
+// round in both SSE and JSON paths. Do not increase authorized tool limits.
+const terminal = 'round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS ? {} : { tools: TOOLS }';
+assert.equal(runtime.split(terminal).length - 1, 2,
+  'Both response transports must disable function tools on the terminal round.');
+assert.match(shared, /21\) في طلبات كشف حساب العميل/);
+assert.match(shared, /23\) لا تعرض أسماء الأدوات/);
+assert.doesNotMatch(runtime, /MAX_TOOL_ROUNDS\s*\+\s*[1-9]/,
+  'Do not hide runaway orchestration by increasing tool budgets.');
+console.log('Stage 2C.5 bounded, source-only final-answer runtime safeguards PASS.');
