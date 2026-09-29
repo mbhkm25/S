@@ -1,0 +1,21 @@
+# SANAD — OAuth activation design and consent acceptance gate (2026-09-29)
+**Status:** DESIGN ONLY; shared Supabase Auth settings and protected function access remain unchanged.
+
+## What is verified
+- Existing Supabase project independently hosts the unauthenticated **synthetic-only** `sanad-mcp-demo` and the separate `sanad-mcp-secure-v1`.
+- The latter's deployment v1 has `verify_jwt:true`. It verifies the bearer identity through the same project's `/auth/v1/user`, advertises four proposed read-only tools after authenticated initialization, and rejects **every** financial tool call, even from a verified owner. Neither protected REST nor MCP calls run actual accounting RPCs.
+- Credential-free GitHub CI made real Internet calls: demo health says `demonstration_only:true`, `production_connected:false`; anonymous, malformed-token and forged-identity-header calls to the protected MCP endpoint each received 401 and no financial payload.
+- Offline CI passed 31 Node tests and 11 Deno handler tests. **Real signed-in OAuth handshake remains untested.**
+
+## OAuth interoperability work before activation
+1. Decide client surface explicitly: near-term private GPT Actions (manually configured OAuth provider) versus portable remote MCP plugin (automatic metadata discovery), then test each independently. A working Actions schema does not prove MCP plugin availability in ordinary Chat.
+2. Review **official Supabase Auth OAuth 2.1 server** configuration. Supabase documents authorization-code + PKCE, an owner-controlled authorization/consent UI, standard discovery, and OAuth JWTs respecting existing RLS. Enable only after the owner approves the application's consent text, callbacks, verified redirect URI, scope and client policy. Do not put any authorization code, JWT, refresh token or service-role key into ChatGPT messages, git, screenshots or CI logs.
+3. The current `verify_jwt:true` platform gateway correctly denies anonymous data calls; it may also intercept unauthenticated MCP protected-resource discovery. A remote MCP implementation needs compliant unauthenticated resource metadata, a 401 challenge with metadata as appropriate, and Auth discovery/registration routes. Do not turn off gateway JWT enforcement solely to display metadata; design and test a separately scoped public metadata endpoint or a properly audited custom-auth front door first. Confirm actual ChatGPT compatibility instead of assuming it.
+4. Verify OAuth access tokens from the correct Supabase issuer, current user subject, client identity/audience and authorized app. A regular SANAD session JWT should not automatically imply third-party consent. Server-side consent and plan entitlement must be bound to both actor and OAuth client and revalidated before *each* business data read.
+5. The **first pilot is owner-only**. Repository migrations `20260917174600_financial_rpc_authorization_hardening_v3.sql` and `20260918141500_erp_customer_statement_read_model_v1.sql` show underlying financial RPC eligibility includes owner OR any active team member. `is_business_owner_v1` must therefore be independently enforced before each owner-pilot call; the offline adapter already demonstrates the intended check with stub transport. Inspect the *actual deployed SQL* and user-token RLS before wiring.
+6. When owner approves an isolated authenticated test, obtain the user JWT inside their trusted local/browser session without displaying it. Test initialize, listing, blocked financial calls, token expiry, logout/revocation, unrelated business and REST/MCP consistency. Do not test with customer data or publish the private GPT.
+
+## Follow-on production readiness
+A separate server-side consent/entitlement store or verified compatible existing SANAD records is required; the current offline policy's `financialReadGrant` and `entitlement.active` values are **not** backed by real database grants. Rate limits, audit, short timeouts, freshness, ERP reconciliation and precision checks must pass before the `owner-only-reader.mjs` prototype is wired into the deployed handler. Keep the deployed version deny-all until then.
+
+References: Supabase Auth OAuth 2.1 Server guide and MCP Authentication guide in official Supabase documentation. These references are architectural guidance, not evidence that the setting is active in this account.
