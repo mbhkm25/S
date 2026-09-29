@@ -40,6 +40,8 @@ jobs:
           npm install --no-audit --no-fund
           npm test
           npm run build
+      - name: Assert hosted OAuth consent route preserves request IDs
+        run: node oauth-consent/hosted-route-check.mjs
       - name: Inspect public OAuth discovery (informational, no secrets)
         run: node secure-candidate/oauth-metadata-probe.mjs
       - name: Probe browser preflight without secrets
