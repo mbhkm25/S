@@ -55,6 +55,15 @@ test("actual Streamable HTTP MCP handshake and synthetic account lookup", { time
       await sleep(150);
     }
     assert.equal(ready, true, "Demo MCP server did not become ready");
+    const rest = await fetch(`http://127.0.0.1:${port}/gpt-demo/statement?business_id=demo-business-001&account_id=1001`);
+    assert.equal(rest.status, 200);
+    const restStatement = await rest.json();
+    assert.equal(restStatement.demonstration_only, true);
+    assert.equal(restStatement.closing_balance, 850);
+    const denied = await fetch(`http://127.0.0.1:${port}/gpt-demo/statement?business_id=invalid&account_id=1001`);
+    assert.equal(denied.status, 400);
+    const deniedPayload = await denied.json();
+    assert.equal(deniedPayload.error, "demo_business_not_found");
     client = new Client({ name: "sanad-mcp-ci", version: "1.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`));
     await client.connect(transport);
