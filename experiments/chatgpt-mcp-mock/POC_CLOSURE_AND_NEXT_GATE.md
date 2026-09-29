@@ -1,0 +1,11 @@
+# SANAD Synthetic ChatGPT Integration — 2026-09-29
+
+Status: DEMO POC PASS; no real data connected.
+
+The owner reported successful calls to all four GPT Actions using synthetic fixture business demo-business-001 and customer 1001. A separate public-network test proved MCP discovery and execution of four tools from the independently hosted Supabase Edge Function sanad-mcp-demo. The statement balances 1000 + 250 - 400 = 850 SAR. Synthetic synchronization is simulated: there is no real ERP connection in this function. Private plugin availability in ordinary Chat remains unverified. The custom GPT is a separate working demonstration interface, not proof of plugin distribution.
+
+The current Edge Function is deliberately unauthenticated and contains only fabricated data. Never connect real SANAD tables or credentials to it. Keep Bridge read-only, and keep the existing application unchanged.
+
+Fast next package: implement a separate protected, un-deployed candidate for owner-only read-only business context, customer search and statement. Reuse existing RPCs get_business_accounting_connections_v1, get_business_erp_customer_candidates_v1, get_business_erp_customer_statement_v1 and review get_ai_erp_read_context_v1. The existing AI contract migration uses auth.uid(), security invoker, can_access_business_financial_v1 and AI access logging; its broad eligibility is not a granular team or customer product policy. Verify live deployed SQL and effective grants before reuse. Require authentication, explicit consent, independently enforced business/role grants, per-tool revalidation, cost limits, redacted audit, source freshness, currency and precision fidelity. Never resolve ERP AccountID by guessing from a customer name or phone.
+
+Acceptance gate: reject anonymous, expired, cross-tenant, customer-only, inactive-member and mismatched-business requests; keep REST/MCP authorization parity. Return stale and ambiguous source signals rather than fabricated facts. Require documented Edaa source reconciliation and an authorized isolated test merchant before any live-data deployment. The owner's faster execution direction permits design and mock tests, not production customer-data exposure, subscription charges, merging the experiment branch or disabling the existing UI.
