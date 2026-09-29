@@ -30,3 +30,10 @@ Canonical Library references at planning checkpoint: `SANAD.md` v1.4.7 (Library 
 4. Distinguish **VERIFIED_RUNTIME**, **OWNER_APPROVED_DIRECTION**, **APPROVED_PLAN** and **PROPOSED_INTERFACE/OPEN_QUESTION**. A docs-only draft cannot be described as shipped feature; v4 becomes accepted only when owner approves and GitHub docs are merged.
 5. Apply only affected files via version-checked Library overwrite, preferably one grouped milestone delivery; record resulting Library version, source commits/issue, approval and rollback notes.
 6. Keep all future incremental changes in this single log; avoid creating per-chat Library version bumps or copying sensitive account data into project-agnostic documentation.
+
+
+## 2026-09-29 candidate — business-first commercial survival overlay
+
+| Target file | Candidate delta | Verification/status | Apply trigger |
+| --- | --- | --- | --- |
+| `SANAD.md` | Record owner-requested *business-first revenue priority*: commercial operating intelligence for authorized business owner/team/customer relationships remains the core product; Personal Manager is secondary. Before expansion, verify existing read-only Edaa/Bridge financial visibility as a narrowly-scoped paid-pilot candidate, subject to live source fidelity, permission and safety checks. Split immediate revenue experiment (including consented manual reporting fallback) from long-term v4 platform. Document pilot funnel, real cost/runway and a 14-day hypothesis test; do not claim committed revenue or a validated USD 15–30 price. Link to `docs/strategy/SANAD_BUSINESS_FIRST_REVENUE_GATE_2026-09-29.md` only **after** the docs PR is merged. | **OWNER_REQUESTED_DIRECTION / DOCS_PROPOSED**; strategy file on isolated docs PR, no runtime or market proof. Current actual SANAD.md Library version must be re-read at batch time. | Owner-accepted docs merge and next approved Library batch; do not modify original Library files during this PR. |
