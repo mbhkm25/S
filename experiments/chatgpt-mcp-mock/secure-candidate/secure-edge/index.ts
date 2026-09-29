@@ -1,5 +1,5 @@
-// SANAD secure candidate: NOT DEPLOYED, no financial database access.
-// A separate future Edge deployment MUST use verify_jwt: true.
+// SANAD secure candidate: restricted deny-all deployment, no financial database access.
+// Deployed separately as sanad-mcp-secure-v1 with verify_jwt: true.
 // JWT validation alone does not grant financial access; every tool call still
 // fails closed pending independently approved consent, entitlement, role grants.
 import {createSecureHandler, type VerifiedIdentity} from "./handler.ts";
