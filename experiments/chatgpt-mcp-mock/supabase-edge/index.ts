@@ -48,6 +48,16 @@ Deno.serve(async(req)=>{
  if(req.method==="GET"&&(url.pathname.endsWith("/health")||url.pathname.endsWith("/sanad-mcp-demo"))){
   return json({name:"sanad-mcp-demo",demonstration_only:true,production_connected:false,tool_count:4,transport:"stateless-streamable-http"});
  }
+ // Read-only synthetic REST adapter for legacy private Custom GPT Actions.
+ if(req.method==="GET" && url.pathname.includes("/gpt-demo/")){
+  const path=url.pathname.split("/gpt-demo/")[1], businessId=url.searchParams.get("business_id")??undefined;
+  const q=url.searchParams.get("query")??undefined, accountId=url.searchParams.get("account_id")??undefined;
+  const names={businesses:"sanad_demo_list_businesses",sync:"sanad_demo_get_sync_status",customers:"sanad_demo_search_customers",statement:"sanad_demo_get_customer_statement"};
+  const chosen=names[path as keyof typeof names];
+  if(!chosen)return json({error:"unknown_demo_route"},404);
+  const result=runTool(chosen,{business_id:businessId,query:q,account_id:accountId});
+  return json(result, "error" in result ? 400 : 200);
+ }
  if(!url.pathname.endsWith("/mcp"))return json({error:"not_found"},404);
  if(req.method==="GET"||req.method==="DELETE")return new Response(null,{status:405,headers:{"allow":"POST, OPTIONS",...cors}});
  if(req.method!=="POST")return json({error:"method_not_allowed"},405);
