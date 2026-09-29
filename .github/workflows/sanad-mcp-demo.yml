@@ -37,7 +37,8 @@ jobs:
           deno-version: v2.x
       - name: Check protected candidate type validity under Deno
         run: |
-          deno check secure-candidate/secure-edge/index.ts
+          deno check secure-candidate/secure-edge/index.ts secure-candidate/secure-edge/handler.test.ts
+          deno test --no-check secure-candidate/secure-edge/handler.test.ts
       - name: Ensure no production configuration or real-data imports
         run: |
           set -euo pipefail
