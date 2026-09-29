@@ -1,0 +1,17 @@
+{
+  "name": "sanad-isolated-oauth-consent-candidate",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "node --test consent-core.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.110.0"
+  },
+  "devDependencies": {
+    "vite": "6.2.3"
+  }
+}
