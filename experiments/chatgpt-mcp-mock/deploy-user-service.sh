@@ -16,7 +16,7 @@ test -f "$PKG" || { echo "Missing deployment archive" >&2; exit 1; }
 mkdir -p "$RELEASE" "$HOME/.config/systemd/user"
 tar -xzf "$PKG" -C "$RELEASE"
 cd "$RELEASE"
-npm ci --omit=dev --no-audit --no-fund
+npm install --omit=dev --no-audit --no-fund
 npm test
 cat > "$UNIT" <<UNIT
 [Unit]
