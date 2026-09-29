@@ -34,6 +34,8 @@ jobs:
         run: npm test
       - name: Verify live protected endpoint denies anonymous and forged requests
         run: node secure-candidate/live-denial-smoke.mjs
+      - name: Probe browser preflight without secrets
+        run: node secure-candidate/preflight-probe.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
