@@ -22,3 +22,14 @@ References: Supabase Auth OAuth 2.1 Server guide and MCP Authentication guide in
 
 ## Browser preflight finding and real-session smoke test
 A credential-free GitHub Actions OPTIONS probe of the live secure MCP endpoint from the SANAD app origin returned HTTP **401** without CORS allow-origin headers. Therefore a browser-console cross-origin POST cannot currently test this deployment: the Edge JWT gateway blocks preflight before the function. Do not weaken `verify_jwt:true` just to pass a browser test. Instead run a local PowerShell smoke from the owner's signed-in workstation, loading a short-lived existing SANAD access token from the local clipboard and clearing the clipboard immediately. The script must never print, upload, commit or log the token. Test real-session initialize and tools/list, followed by both MCP and REST calls that must still deny all financial reads. Do not interpret this direct SANAD-session test as proof that the ChatGPT OAuth 2.1 consent handshake works; that remains a separate later gate.
+
+## Live authenticated session smoke — owner-reported 2026-09-29
+Owner executed the direct-Supabase PowerShell smoke on their own Windows machine after their Hetzner-hosted app became unavailable. A regular SANAD email/password session against Supabase Auth succeeded without needing the SANAD application; token was deliberately omitted from shared output. Observed output:
+- SIGN_IN PASS
+- Authenticated MCP initialize PASS, HTTP 200
+- Authenticated MCP tools/list PASS, HTTP 200
+- Protected MCP tools/call denied as intended PASS, HTTP 200 (JSON-RPC error contained in a successful HTTP transport response; HTTP 200 is **not financial access approval**)
+- Protected REST execute denied as intended PASS, HTTP 403
+- Summary: **4/4 service checks PASS** after sign-in; user-supplied local execution output, not an independently inspected token or backend authorization audit.
+
+**Decision:** Signed-in Supabase user token is accepted by deployed secure function; it still blocks all financial reads. This test does not prove OAuth authorization-code/PKCE, third-party per-client consent, token revocation, subscriptions, business tenant scoping under live data, or ChatGPT plugin connection. Do not commit user login details, share access tokens or connect production ERP yet. Next independent gate: configure/test third-party OAuth client with a trusted consent UI, and verify client identity plus per-business consent/entitlement before enabling owner-only RPC adapter. Existing app hosting outage need not block the Supabase-only adapter development, but its login UI requires an independent authorization route for OAuth.
