@@ -1,0 +1,41 @@
+name: SANAD ChatGPT MCP synthetic prototype
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/chatgpt-mcp-mock/**'
+      - '.github/workflows/sanad-mcp-demo.yml'
+  push:
+    branches:
+      - 'experiment/sanad-chatgpt-mcp-mock-20260929'
+    paths:
+      - 'experiments/chatgpt-mcp-mock/**'
+      - '.github/workflows/sanad-mcp-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-synthetic-contract:
+    name: MCP synthetic contract and HTTP smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: experiments/chatgpt-mcp-mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated dependencies
+        run: npm install --no-audit --no-fund
+      - name: Unit and isolated HTTP MCP integration tests
+        run: npm test
+      - name: Ensure no production configuration or real-data imports
+        run: |
+          set -euo pipefail
+          if grep -ERin 'SUPABASE_(URL|SERVICE_ROLE|ACCESS_TOKEN)|GEMINI_API_KEY|OPENAI_API_KEY|production-recovery-trigger|\.env\.production' --include='*.mjs' .; then
+            echo 'Unexpected production credential reference in synthetic MCP proof-of-concept' >&2
+            exit 1
+          fi
