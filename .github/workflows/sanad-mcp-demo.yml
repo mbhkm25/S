@@ -32,6 +32,12 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Unit and isolated HTTP MCP integration tests
         run: npm test
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check protected candidate type validity under Deno
+        run: |
+          deno check secure-candidate/secure-edge/index.ts
       - name: Ensure no production configuration or real-data imports
         run: |
           set -euo pipefail
