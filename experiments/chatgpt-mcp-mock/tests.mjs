@@ -27,13 +27,14 @@ test("isolated demo server cannot import SANAD secret handling or paid models", 
 });
 
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 test("actual Streamable HTTP MCP handshake and synthetic account lookup", { timeout: 20000 }, async () => {
   const port = 18787;
-  const child = spawn(process.execPath, [new URL("./server.mjs", import.meta.url).pathname], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./server.mjs", import.meta.url))], {
     env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
     stdio: "ignore",
   });
