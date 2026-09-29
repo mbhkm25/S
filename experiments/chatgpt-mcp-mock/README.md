@@ -70,3 +70,25 @@ To try an existing *editable* custom GPT on Plus:
 **Current product warning:** Custom GPTs are scheduled to retire and migrate to Plugins. GPT custom Actions are **not** transferred automatically to migrated plugins. This REST adapter is a short-lived **private proof of concept**, not our long-term distribution architecture. Preserve the existing MCP route for the future product.
 
 **Security:** `None` authentication is acceptable only because these routes have *synthetic fabricated fixtures and no production imports*. Never expose a real financial API through these unauthenticated endpoints, and never publish/share the GPT until independent authentication, privacy and policy review.
+
+## Stable synthetic-only MCP experiment on Supabase Edge Functions (September 29, 2026)
+
+An **independent new function** was deployed to the existing Supabase project `sanad_verify_v3`, slug `sanad-mcp-demo`, version 1. It has **no imports from the production database, Supabase client, credentials, Edaa, or any real account**. All outputs are hard-coded fabricated fixtures and explicitly flagged as synthetic. The original production functions and database were not changed. Because this POC is unauthenticated, **NEVER put production data or credentials inside it**. Hosting on the existing project can still incur platform usage and quota consumption.
+
+Public demo health endpoint:
+`https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-mcp-demo/health`
+
+MCP Streamable HTTP endpoint:
+`https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-mcp-demo/mcp`
+
+Code: `supabase-edge/index.ts` and `supabase-edge/deno.json`. Do not connect Supabase's *administrative* MCP server to customer-facing agents; this is SANAD's own four-tool, synthetic-only function.
+
+After fetching the experiment branch and running `npm install` inside this isolated experiment folder:
+```powershell
+node .\\test-supabase-remote.mjs
+```
+This verifies real public-network HTTP health, MCP initialization, dynamic tool discovery and calls **each** of the four tools; the statement balance must be SAR 850. Successful deployment status alone is not a remote smoke test, and a connected MCP client does **not** by itself establish that ChatGPT exposes it inside normal conversations.
+
+To point the already-private SANAD plugin at this endpoint, update its **`mcp.json` and `.mcp.json` URLs** from the disposable Cloudflare tunnel to the fixed URL above and increment the plugin version. Do this only after the remote smoke test succeeds. This change does not automatically solve model-side/plugin tool availability; test that separately using a fresh ChatGPT Work task. Do not merge the experiment PR or trigger production app deployment as part of this POC.
+
+Future real access gate: OAuth 2.1, authenticated user binding, per-business access isolation, authorization on every tool call, auditing, and approved data contracts. The live-data implementation should be a separate function/release.
