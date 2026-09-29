@@ -42,7 +42,8 @@ const cors={"access-control-allow-origin":"*","access-control-allow-methods":"GE
 function json(data,status=200,extra={}){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...cors,...extra}})}
 const rpc=(id,result)=>({jsonrpc:"2.0",id,result});
 const rpcError=(id,code,message)=>({jsonrpc:"2.0",id,error:{code,message}});
-Deno.serve(async(req)=>{
+const edgeRuntime = Deno as typeof Deno & { serve: (handler: (request: Request) => Promise<Response>) => void };
+edgeRuntime.serve(async(req: Request)=>{
  const url=new URL(req.url);
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
  if(req.method==="GET"&&(url.pathname.endsWith("/health")||url.pathname.endsWith("/sanad-mcp-demo"))){
