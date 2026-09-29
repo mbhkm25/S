@@ -50,3 +50,23 @@ Once the PR's **MCP-specific** test is green, merge only after owner approval. I
 Only after the public health check passes, connect `MCP_DEMO_PUBLIC_URL/mcp` to a **private** ChatGPT plugin/developer connection if that feature is available to this account. The mock endpoint has no authentication and is appropriate for fabricated fixtures **only**. Do not add real customer data or financial credentials to it.
 
 To stop: `systemctl --user stop sanad-mcp-demo.service` on the isolated SSH account. To restore the previous release, inspect `$HOME/sanad-mcp-demo/releases`, repoint the `current` symlink, then restart that dedicated service. This is independent of SANAD Web, Edge, and Bridge rollbacks.
+
+## Private custom GPT trial on ChatGPT Plus (GPT Actions, not Plugins)
+This experiment also exposes **synthetic-only REST routes** for the existing custom GPT Actions editor:
+- `GET /gpt-demo/businesses`
+- `GET /gpt-demo/sync?business_id=demo-business-001`
+- `GET /gpt-demo/customers?business_id=demo-business-001&query=1001`
+- `GET /gpt-demo/statement?business_id=demo-business-001&account_id=1001`
+
+Do **not** paste `/mcp` in the GPT Actions editor. Actions uses **OpenAPI REST**, while the independent `/mcp` route remains available for Plugins/MCP.
+
+To try an existing *editable* custom GPT on Plus:
+1. Fetch the latest experiment branch, stop and restart the local Node server to activate REST routes, and keep the Cloudflare tunnel running. A restarted tunnel may have a new hostname.
+2. Test from another PowerShell window: `Invoke-RestMethod "https://YOUR-TUNNEL.trycloudflare.com/gpt-demo/statement?business_id=demo-business-001&account_id=1001"`; ensure 850 SAR and `demonstration_only=true`.
+3. Open the existing GPT editor -> Configure -> Actions -> Create new action. Choose **Authentication: None** for this synthetic fixture only.
+4. Copy the contents of `openapi-gpt-actions.json` into the OpenAPI schema editor; replace the placeholder server URL with the **current** Cloudflare HTTPS tunnel origin (no `/mcp`).
+5. Preview your private GPT with the prompt: «استخدم إجراءات سند: ابحث عن الحساب 1001 في demo-business-001 ثم استخرج كشف حسابه، وأكد أنها بيانات تجريبية». Verify the model calls the actual `sanadDemo...` Action and returns opening 1000, sale +250, receipt -400, closing 850 SAR. Do not assume a plausible text answer proves an Action ran.
+
+**Current product warning:** Custom GPTs are scheduled to retire and migrate to Plugins. GPT custom Actions are **not** transferred automatically to migrated plugins. This REST adapter is a short-lived **private proof of concept**, not our long-term distribution architecture. Preserve the existing MCP route for the future product.
+
+**Security:** `None` authentication is acceptable only because these routes have *synthetic fabricated fixtures and no production imports*. Never expose a real financial API through these unauthenticated endpoints, and never publish/share the GPT until independent authentication, privacy and policy review.
