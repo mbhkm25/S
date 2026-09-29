@@ -32,6 +32,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Unit and isolated HTTP MCP integration tests
         run: npm test
+      - name: Verify live protected endpoint denies anonymous and forged requests
+        run: node secure-candidate/live-denial-smoke.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
