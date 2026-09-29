@@ -34,6 +34,12 @@ jobs:
         run: npm test
       - name: Verify live protected endpoint denies anonymous and forged requests
         run: node secure-candidate/live-denial-smoke.mjs
+      - name: Verify isolated OAuth consent UI and callback guards
+        run: |
+          cd oauth-consent
+          npm install --no-audit --no-fund
+          npm test
+          npm run build
       - name: Inspect public OAuth discovery (informational, no secrets)
         run: node secure-candidate/oauth-metadata-probe.mjs
       - name: Probe browser preflight without secrets
