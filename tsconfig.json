@@ -27,6 +27,7 @@
     "landing",
     "supabase/functions",
     "services/push-worker",
-    "services/sanad-fast-analyzer"
+    "services/sanad-fast-analyzer",
+    "experiments/chatgpt-mcp-mock"
   ]
 }

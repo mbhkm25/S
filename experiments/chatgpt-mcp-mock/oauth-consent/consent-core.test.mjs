@@ -1,0 +1,12 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {authorizationId,displayAuthorizationDetails,safeSupabaseRedirect} from "./consent-core.mjs";
+const d={authorization_id:"approved_123",client:{id:"test-client",name:"SANAD test"},redirect_uri:"https://chatgpt.com/aip/g-abc/oauth/callback",scope:"email profile"};
+test("accepts bounded authorization ID",()=>assert.equal(authorizationId("?authorization_id=approved_123"),"approved_123"));
+test("rejects malformed authorization ID",()=>assert.equal(authorizationId("?authorization_id=http%3A%2F%2Fbad"),null));
+test("displays only server-returned client identity and scopes",()=>assert.deepEqual(displayAuthorizationDetails(d),{alreadyConsented:false,clientName:"SANAD test",clientId:"test-client",redirectUri:d.redirect_uri,scopes:["email","profile"]}));
+test("rejects unsafe redirect request",()=>assert.throws(()=>displayAuthorizationDetails({...d,redirect_uri:"javascript:alert(1)"}),/untrusted/));
+test("accepts legitimate authorization-code callback",()=>assert.match(safeSupabaseRedirect({redirect_url:d.redirect_uri+"?code=one&state=two"},d.redirect_uri),/code=one/));
+test("accepts legitimate denial callback to same client",()=>assert.match(safeSupabaseRedirect({redirect_url:d.redirect_uri+"?error=access_denied"},d.redirect_uri),/access_denied/));
+test("rejects changed client domain",()=>assert.throws(()=>safeSupabaseRedirect({redirect_url:"https://example.net/?code=x"},d.redirect_uri),/mismatch/));
+test("rejects changed client callback path",()=>assert.throws(()=>safeSupabaseRedirect({redirect_url:"https://chatgpt.com/wrong?code=x"},d.redirect_uri),/mismatch/));
+test("rejects arbitrary already consented location until reviewed",()=>{const x=displayAuthorizationDetails({redirect_url:"https://attacker.invalid"});assert.equal(x.alreadyConsented,true)});

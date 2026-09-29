@@ -1,0 +1,130 @@
+name: Deploy isolated SANAD MCP synthetic demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: 'Optional full SHA on main. Empty uses current main.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanad-mcp-demo-deployment
+  cancel-in-progress: false
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: ref
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          SHA="${REQUESTED_SHA:-$(git rev-parse origin/main)}"
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$SHA^{commit}"
+          git merge-base --is-ancestor "$SHA" origin/main
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install, unit-test, and smoke-test MCP
+        working-directory: experiments/chatgpt-mcp-mock
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: Package synthetic-only MCP service
+        run: |
+          set -euo pipefail
+          test -f experiments/chatgpt-mcp-mock/server.mjs
+          mkdir -p /tmp/mcp-pkg
+          tar -C experiments/chatgpt-mcp-mock \
+            --exclude='node_modules' --exclude='.env*' \
+            -czf /tmp/mcp-pkg/sanad-mcp-demo.tar.gz \
+            package.json server.mjs mock-data.mjs tests.mjs
+          cp experiments/chatgpt-mcp-mock/deploy-user-service.sh /tmp/mcp-pkg/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sanad-mcp-synthetic-release
+          path: /tmp/mcp-pkg/
+          retention-days: 3
+
+  deploy-isolated-demo:
+    needs: build-and-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: mcp-demo
+    env:
+      RELEASE_SHA: ${{ needs.build-and-verify.outputs.sha }}
+      SSH_HOST: ${{ secrets.MCP_DEMO_SSH_HOST }}
+      SSH_USER: ${{ secrets.MCP_DEMO_SSH_USER }}
+      SSH_PORT: ${{ secrets.MCP_DEMO_SSH_PORT }}
+      SSH_KEY: ${{ secrets.MCP_DEMO_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.MCP_DEMO_SSH_KNOWN_HOSTS }}
+      DEMO_PUBLIC_URL: ${{ secrets.MCP_DEMO_PUBLIC_URL }}
+    steps:
+      - name: Require isolated target and configured public HTTPS endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in SSH_HOST SSH_USER SSH_KEY SSH_KNOWN_HOSTS DEMO_PUBLIC_URL; do
+            test -n "${!key:-}" || { echo "Missing MCP demo configuration: $key" >&2; exit 1; }
+          done
+          [[ "$DEMO_PUBLIC_URL" == https://* ]] || { echo 'Public URL must use HTTPS' >&2; exit 1; }
+          [[ "$DEMO_PUBLIC_URL" != *app.sanadflow.com* ]] || { echo 'Demo must not use the production app hostname' >&2; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          name: sanad-mcp-synthetic-release
+          path: /tmp/mcp-pkg
+      - name: Configure strict SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Deploy to dedicated non-root user service
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_PORT="${SSH_PORT:-22}"
+          REMOTE="$SSH_USER@$SSH_HOST"
+          ssh -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE" \
+            'mkdir -p "$HOME/sanad-mcp-demo/incoming"'
+          scp -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            /tmp/mcp-pkg/sanad-mcp-demo.tar.gz "$REMOTE:sanad-mcp-demo/incoming/$RELEASE_SHA.tar.gz"
+          scp -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            /tmp/mcp-pkg/deploy-user-service.sh "$REMOTE:sanad-mcp-demo/incoming/deploy-user-service.sh"
+          ssh -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE" \
+            "RELEASE_SHA='$RELEASE_SHA' bash sanad-mcp-demo/incoming/deploy-user-service.sh"
+      - name: Verify HTTPS synthetic-only public endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 5 "$DEMO_PUBLIC_URL/" |
+              jq -e '.demonstration_only == true and .production_connected == false' >/dev/null; then
+              echo "MCP synthetic demo HTTPS health PASS"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'HTTPS mapping absent or demo public health failed; do not connect ChatGPT yet.' >&2
+          exit 1

@@ -1,0 +1,69 @@
+name: SANAD ChatGPT MCP synthetic prototype
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/chatgpt-mcp-mock/**'
+      - '.github/workflows/sanad-mcp-demo.yml'
+  push:
+    branches:
+      - 'experiment/sanad-chatgpt-mcp-mock-20260929'
+    paths:
+      - 'experiments/chatgpt-mcp-mock/**'
+      - '.github/workflows/sanad-mcp-demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-synthetic-contract:
+    name: MCP synthetic contract and HTTP smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: experiments/chatgpt-mcp-mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated dependencies
+        run: npm install --no-audit --no-fund
+      - name: Unit and isolated HTTP MCP integration tests
+        run: npm test
+      - name: Verify live protected endpoint denies anonymous and forged requests
+        run: node secure-candidate/live-denial-smoke.mjs
+      - name: Verify isolated OAuth consent UI and callback guards
+        run: |
+          cd oauth-consent
+          npm install --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Assert hosted OAuth consent route preserves request IDs
+        run: node oauth-consent/hosted-route-check.mjs
+      - name: Inspect public OAuth discovery (informational, no secrets)
+        run: node secure-candidate/oauth-metadata-probe.mjs
+      - name: Probe browser preflight without secrets
+        run: node secure-candidate/preflight-probe.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check protected candidate type validity under Deno
+        run: |
+          deno check secure-candidate/secure-edge/index.ts secure-candidate/secure-edge/handler.test.ts
+          deno test --no-check secure-candidate/secure-edge/handler.test.ts
+      - name: Ensure no production configuration or real-data imports
+        run: |
+          set -euo pipefail
+          if grep -ERin 'SUPABASE_(URL|SERVICE_ROLE|ACCESS_TOKEN)|GEMINI_API_KEY|OPENAI_API_KEY|production-recovery-trigger|\.env\.production' --include='*.mjs' --exclude='tests.mjs' --exclude='*.test.mjs' --exclude-dir='oauth-consent' .; then
+            echo 'Unexpected production credential reference in synthetic MCP proof-of-concept' >&2
+            exit 1
+          fi
+      - name: Assert consent build references public configuration only
+        run: |
+          set -euo pipefail
+          if grep -ERin 'SERVICE_ROLE|SECRET_KEY|OPENAI_API_KEY|GEMINI_API_KEY' --include='*.mjs' --exclude-dir=node_modules --exclude-dir=dist oauth-consent; then
+            echo 'Unexpected confidential credential reference in OAuth UI' >&2
+            exit 1
+          fi
