@@ -8,6 +8,8 @@ import { listDemoBusinesses, demoSyncStatus, searchDemoCustomers, demoCustomerSt
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "127.0.0.1";
 const MCP_PATH = "/mcp";
+const apiHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "*" };
+const demoJson = (res, data, status = 200) => { res.writeHead(status, apiHeaders); res.end(JSON.stringify(data)); };
 const respond = (data) => ({
   content: [{ type: "text", text: JSON.stringify(data) }],
   structuredContent: data,
@@ -47,6 +49,24 @@ const httpServer = createServer(async (req, res) => {
   if (url.pathname === "/" && req.method === "GET") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     return void res.end(JSON.stringify({ name: "sanad-chatgpt-mcp-mock", demonstration_only: true, production_connected: false }));
+  }
+  // GPT Actions compatibility adapter. This namespace exposes SYNTHETIC DEMO FIXTURES ONLY.
+  // It is intentionally separate from MCP and never reads a production account.
+  if (req.method === "GET" && url.pathname.startsWith("/gpt-demo/")) {
+    const route = url.pathname;
+    const businessId = url.searchParams.get("business_id");
+    const accountId = url.searchParams.get("account_id");
+    let result;
+    if (route === "/gpt-demo/businesses") result = listDemoBusinesses();
+    else if (route === "/gpt-demo/sync") result = demoSyncStatus(businessId);
+    else if (route === "/gpt-demo/customers") result = businessId
+      ? searchDemoCustomers(businessId, url.searchParams.get("query") ?? "")
+      : { error: "business_id_required" };
+    else if (route === "/gpt-demo/statement") result = businessId && accountId
+      ? demoCustomerStatement(businessId, accountId)
+      : { error: "business_id_and_account_id_required" };
+    else return void demoJson(res, { error: "unknown_demo_endpoint" }, 404);
+    return void demoJson(res, result, result.error ? 400 : 200);
   }
   if (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-authorization-server") {
     return void res.writeHead(404).end("OAuth not configured: synthetic demo only");
