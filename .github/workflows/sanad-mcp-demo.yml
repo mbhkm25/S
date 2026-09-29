@@ -54,7 +54,14 @@ jobs:
       - name: Ensure no production configuration or real-data imports
         run: |
           set -euo pipefail
-          if grep -ERin 'SUPABASE_(URL|SERVICE_ROLE|ACCESS_TOKEN)|GEMINI_API_KEY|OPENAI_API_KEY|production-recovery-trigger|\.env\.production' --include='*.mjs' --exclude='tests.mjs' --exclude='*.test.mjs' .; then
+          if grep -ERin 'SUPABASE_(URL|SERVICE_ROLE|ACCESS_TOKEN)|GEMINI_API_KEY|OPENAI_API_KEY|production-recovery-trigger|\.env\.production' --include='*.mjs' --exclude='tests.mjs' --exclude='*.test.mjs' --exclude-dir='oauth-consent' .; then
             echo 'Unexpected production credential reference in synthetic MCP proof-of-concept' >&2
+            exit 1
+          fi
+      - name: Assert consent build references public configuration only
+        run: |
+          set -euo pipefail
+          if grep -ERin 'SERVICE_ROLE|SECRET_KEY|OPENAI_API_KEY|GEMINI_API_KEY' --include='*.mjs' oauth-consent; then
+            echo 'Unexpected confidential credential reference in OAuth UI' >&2
             exit 1
           fi
