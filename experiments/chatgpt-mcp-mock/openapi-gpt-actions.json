@@ -1,0 +1,138 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SANAD Synthetic Accounting Demo — GPT Actions",
+    "version": "0.0.1",
+    "description": "Demonstration ONLY: fabricated business and accounts. No connection to real SANAD/Supabase/Edaa data."
+  },
+  "servers": [
+    {
+      "url": "https://REPLACE-WITH-CURRENT-TUNNEL.trycloudflare.com"
+    }
+  ],
+  "paths": {
+    "/gpt-demo/businesses": {
+      "get": {
+        "operationId": "sanadDemoListBusinesses",
+        "summary": "List fabricated demonstration businesses",
+        "description": "Returns fabricated test business. Always label results as demo.",
+        "responses": {
+          "200": {
+            "description": "Synthetic businesses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gpt-demo/sync": {
+      "get": {
+        "operationId": "sanadDemoSyncStatus",
+        "summary": "Simulated sync status for demo business",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synthetic sync status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gpt-demo/customers": {
+      "get": {
+        "operationId": "sanadDemoSearchCustomers",
+        "summary": "Search fabricated customer accounts",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synthetic customer matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gpt-demo/statement": {
+      "get": {
+        "operationId": "sanadDemoGetCustomerStatement",
+        "summary": "Retrieve synthetic account statement with deterministically computed balances",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Synthetic statement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
