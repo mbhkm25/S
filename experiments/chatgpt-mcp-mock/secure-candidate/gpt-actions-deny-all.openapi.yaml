@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: SANAD protected OAuth integration — DENY-ALL TEST ONLY
+  version: 0.1.0
+  description: >
+    Isolated authentication test against a deployed fail-closed service.
+    Every financial tool call MUST be rejected. Not a commercial integration.
+servers:
+  - url: https://hudbzlgclghlhazlduas.supabase.co/functions/v1/sanad-mcp-secure-v1
+paths:
+  /execute:
+    post:
+      operationId: testSanadProtectedReadDenial
+      summary: Test whether a signed-in SANAD user is denied financial data before consent and entitlement
+      description: >
+        Use on a separate PRIVATE test GPT after Supabase OAuth is enabled.
+        Do not replace the four already-proven synthetic GPT Actions.
+        A successful test must yield HTTP 403 financial_access_not_configured.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - tool
+                - arguments
+              properties:
+                tool:
+                  type: string
+                  enum:
+                    - sanad_secure_list_businesses
+                    - sanad_secure_get_sync_status
+                    - sanad_secure_search_customers
+                    - sanad_secure_get_customer_statement
+                arguments:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    business_id:
+                      type: string
+                    query:
+                      type: string
+                    account_id:
+                      type: string
+      responses:
+        '403':
+          description: Correct fail-closed response. No financial data returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - financial_access_not_configured
+                      - unsupported_tool
+        '401':
+          description: No valid authenticated session.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
