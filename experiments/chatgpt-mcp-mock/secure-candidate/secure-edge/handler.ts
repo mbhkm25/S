@@ -29,8 +29,10 @@ export function createSecureHandler(verifyUser: (token: string) => Promise<Verif
   if (!matches) {
     return json({ error: "authentication_required" }, 401);
   }
-  const user = await verifyUser(matches[1]);
-  if (!user) return json({ error: "authentication_required" }, 401);
+  let user: VerifiedIdentity | null;
+  try { user = await verifyUser(matches[1]); }
+  catch { return json({ error: "authentication_unavailable" }, 503); }
+  if (!user || !/^[a-f0-9-]{36}$/i.test(user.id)) return json({ error: "authentication_required" }, 401);
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const url = new URL(req.url);
   if (!url.pathname.endsWith("/mcp") && !url.pathname.endsWith("/execute")) {
