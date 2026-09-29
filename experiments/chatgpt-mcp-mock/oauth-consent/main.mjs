@@ -56,7 +56,7 @@ async function decision(kind){
  message("جارٍ معالجة القرار بشكل آمن...");
  try{
   const api=kind==="approve"?supabase.auth.oauth.approveAuthorization:supabase.auth.oauth.denyAuthorization;
-  const {data,error}=await api.call(supabase.auth.oauth,id);
+  const {data,error}=await api.call(supabase.auth.oauth,id,{skipBrowserRedirect:true});
   if(error||!data)throw Error("تعذر إتمام الطلب. لم يتم السماح بأي وصول.");
   location.assign(safeSupabaseRedirect(data,requestedCallback));
  }catch(e){
